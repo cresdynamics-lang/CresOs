@@ -3,6 +3,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 
 export default function financeRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -10,7 +11,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Invoices
   router.get(
     "/invoices",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const invoices = await prisma.invoice.findMany({
@@ -23,7 +24,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/invoices",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { clientId, projectId, number, issueDate, dueDate, currency, items } =
@@ -105,7 +106,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Payments
   router.get(
     "/payments",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const payments = await prisma.payment.findMany({
@@ -118,7 +119,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/payments",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const {
@@ -144,10 +145,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      const userId = req.auth!.userId;
       const payment = await prisma.payment.create({
         data: {
           orgId,
           invoiceId,
+          createdByUserId: userId,
           amount: new Prisma.Decimal(amount),
           currency: currency ?? "USD",
           method,
@@ -171,10 +174,48 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Confirm payment (separate from creation)
+  router.post(
+    "/payments/:id/confirm",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+
+      try {
+        await enforcePaymentConfirmationConflicts(prisma, {
+          orgId,
+          userId,
+          paymentId: id
+        });
+      } catch {
+        res.status(403).json({ error: "Payment confirmation blocked due to conflict of interest" });
+        return;
+      }
+
+      const updated = await prisma.payment.update({
+        where: { id },
+        data: { status: "confirmed" }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          type: "payment.confirmed",
+          entityType: "payment",
+          entityId: id
+        }
+      });
+
+      res.json(updated);
+    }
+  );
+
   // Expenses
   router.get(
     "/expenses",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const expenses = await prisma.expense.findMany({
@@ -187,7 +228,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/expenses",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { category, description, amount, currency, spentAt } = req.body as {
@@ -230,7 +271,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Payouts
   router.get(
     "/payouts",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const payouts = await prisma.payout.findMany({
@@ -243,7 +284,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/payouts",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { recipientId, description, amount, currency, scheduledAt } =
@@ -287,7 +328,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Approvals for finance-related entities
   router.get(
     "/approvals",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const approvals = await prisma.approval.findMany({
@@ -342,7 +383,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/approvals/:id/decision",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.director]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -357,6 +398,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      const existing = await prisma.approval.findUnique({ where: { id } });
+      if (!existing || existing.orgId !== orgId) {
+        res.status(404).json({ error: "Approval not found" });
+        return;
+      }
+
+      if (status === "approved") {
+        try {
+          await enforceApprovalConflicts(prisma, {
+            orgId,
+            userId,
+            approval: existing
+          });
+        } catch {
+          res.status(403).json({ error: "Approval blocked due to financial conflict of interest" });
+          return;
+        }
+      }
+
       const approval = await prisma.approval.update({
         where: { id },
         data: {
@@ -366,22 +426,6 @@ export default function financeRouter(prisma: PrismaClient): Router {
           decidedAt: new Date()
         }
       });
-
-      // Enforce: Finance cannot approve own payouts
-      if (approval.entityType === "payout" && status === "approved") {
-        const payout = await prisma.payout.findUnique({
-          where: { id: approval.entityId }
-        });
-        if (payout && payout.recipientId && payout.recipientId === approval.approverId) {
-          // revert approval
-          await prisma.approval.update({
-            where: { id: approval.id },
-            data: { status: "rejected", decisionNote: "Auto-rejected: approver is payout recipient" }
-          });
-          res.status(403).json({ error: "Approver cannot be payout recipient" });
-          return;
-        }
-      }
 
       await prisma.eventLog.create({
         data: {

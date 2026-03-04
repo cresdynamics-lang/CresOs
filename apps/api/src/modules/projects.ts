@@ -196,18 +196,21 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
-    const { taskId } = req.params;
-    const { body } = req.body as { body: string };
+      const { taskId } = req.params;
+      const { body, type } = req.body as { body: string; type?: string };
     if (!body) {
       res.status(400).json({ error: "Body is required" });
       return;
     }
+      const allowedTypes = ["progress", "blocker", "completion", "scope_issue"];
+      const commentType = type && allowedTypes.includes(type) ? type : "progress";
     const comment = await prisma.taskComment.create({
       data: {
         orgId,
         taskId,
         authorId: userId,
-        body
+          body,
+          type: commentType
       }
     });
 
@@ -297,10 +300,16 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
     const { id } = req.params;
+    const { acceptanceCriteria } = req.body as {
+      acceptanceCriteria?: string;
+    };
 
     const milestone = await prisma.milestone.update({
       where: { id },
-      data: { status: "pending" }
+      data: {
+        status: "pending",
+        acceptanceCriteria: acceptanceCriteria ?? null
+      }
     });
 
     const approval = await prisma.approval.create({
@@ -326,6 +335,64 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     });
 
     res.status(201).json({ milestone, approval });
+    }
+  );
+
+  // Director approval for milestone completion (Definition of Done)
+  router.post(
+    "/milestones/:id/complete",
+    requireRoles([ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { completionNotes } = req.body as {
+        completionNotes: string;
+      };
+
+      if (!completionNotes) {
+        res.status(400).json({ error: "completionNotes is required" });
+        return;
+      }
+
+      const milestone = await prisma.milestone.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: { tasks: true }
+      });
+
+      if (!milestone) {
+        res.status(404).json({ error: "Milestone not found" });
+        return;
+      }
+
+      const hasOpenTasks = milestone.tasks.some(
+        (t) => t.status !== "done" && !t.deletedAt
+      );
+      if (hasOpenTasks) {
+        res.status(400).json({ error: "All tasks must be done before milestone completion" });
+        return;
+      }
+
+      const updated = await prisma.milestone.update({
+        where: { id },
+        data: {
+          status: "completed",
+          completionNotes
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "milestone.completed",
+          entityType: "milestone",
+          entityId: id,
+          metadata: { completionNotes }
+        }
+      });
+
+      res.json(updated);
     }
   );
 

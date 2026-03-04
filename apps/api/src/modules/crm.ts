@@ -204,6 +204,17 @@ export default function crmRouter(prisma: PrismaClient): Router {
       res.status(400).json({ error: "type and summary are required" });
       return;
     }
+    const allowedTypes = [
+      "follow_up",
+      "proposal",
+      "negotiation",
+      "close",
+      "lost"
+    ];
+    if (!allowedTypes.includes(type)) {
+      res.status(400).json({ error: "Invalid activity type" });
+      return;
+    }
     const activity = await prisma.dealActivity.create({
       data: {
         orgId,

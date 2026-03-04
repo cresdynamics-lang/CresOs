@@ -13,12 +13,14 @@ function signTokens(payload: {
   userId: string;
   orgId: string;
   roleKeys: string[];
+  sessionId: string;
 }) {
   const accessToken = jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN
+    // Actual expiry is enforced via SecurityConfig in auth middleware
+    expiresIn: "1h"
   });
   const refreshToken = jwt.sign(
-    { userId: payload.userId, orgId: payload.orgId },
+    { userId: payload.userId, orgId: payload.orgId, sessionId: payload.sessionId },
     JWT_SECRET,
     { expiresIn: REFRESH_EXPIRES_IN }
   );
@@ -107,17 +109,26 @@ export default function authRouter(prisma: PrismaClient): Router {
         }
       });
 
+      const session = await tx.session.create({
+        data: {
+          orgId: org.id,
+          userId: user.id
+        }
+      });
+
       return {
         org,
         user,
-        roleKeys: [directorRole.key]
+        roleKeys: [directorRole.key],
+        sessionId: session.id
       };
     });
 
     const tokens = signTokens({
       userId: result.user.id,
       orgId: result.org.id,
-      roleKeys: result.roleKeys
+      roleKeys: result.roleKeys,
+      sessionId: result.sessionId
     });
 
     res.json({
@@ -152,6 +163,16 @@ export default function authRouter(prisma: PrismaClient): Router {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      if (user.orgId) {
+        await prisma.adminAlert.create({
+          data: {
+            orgId: user.orgId,
+            type: "failed_login",
+            severity: "warning",
+            details: { userId: user.id, email }
+          }
+        });
+      }
       res.status(400).json({ error: "Invalid credentials" });
       return;
     }
@@ -169,10 +190,18 @@ export default function authRouter(prisma: PrismaClient): Router {
       ])
     ] as string[];
 
+    const session = await prisma.session.create({
+      data: {
+        orgId: primaryOrg,
+        userId: user.id
+      }
+    });
+
     const tokens = signTokens({
       userId: user.id,
       orgId: primaryOrg,
-      roleKeys
+      roleKeys,
+      sessionId: session.id
     });
 
     res.json({
@@ -194,13 +223,15 @@ export default function authRouter(prisma: PrismaClient): Router {
       const decoded = jwt.verify(refreshToken, JWT_SECRET) as {
         userId: string;
         orgId: string;
+        sessionId?: string;
       };
-      // For simplicity we recompute roles on next login; here just issue a basic token
+      // For simplicity we reuse the existing session if present
       const accessToken = jwt.sign(
         {
           userId: decoded.userId,
           orgId: decoded.orgId,
-          roleKeys: []
+          roleKeys: [],
+          sessionId: decoded.sessionId ?? ""
         },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }

@@ -34,6 +34,9 @@ model Org {
   notifications Notification[]
   events       EventLog[]
 
+  directorConfig DirectorConfig?
+  securityConfig SecurityConfig?
+
   @@index([slug])
 }
 
@@ -45,6 +48,7 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
+  status       String       @default("active") // active, locked, suspended
 
   memberships  OrgMember[]
   roles        UserRole[]
@@ -53,6 +57,7 @@ model User {
   orgId        String?
 
   events       EventLog[]
+  sessions     Session[]
 }
 
 model OrgMember {
@@ -79,8 +84,9 @@ model Role {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  org       Org       @relation(fields: [orgId], references: [id])
-  users     UserRole[]
+  org             Org              @relation(fields: [orgId], references: [id])
+  users           UserRole[]
+  rolePermissions RolePermission[]
 
   @@unique([orgId, key])
 }
@@ -203,6 +209,7 @@ model Project {
   dealId      String?
   name        String
   status      String      // planned, active, paused, completed, cancelled
+  priority    String      @default("medium") // low, medium, high, critical
   ownerUserId String?
   createdByUserId String?
   startDate   DateTime?
@@ -230,6 +237,8 @@ model Milestone {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   deletedAt   DateTime?
+  acceptanceCriteria String?
+  completionNotes    String?
 
   org         Org         @relation(fields: [orgId], references: [id])
   project     Project     @relation(fields: [projectId], references: [id])
@@ -266,6 +275,7 @@ model TaskComment {
   taskId    String
   authorId  String?
   body      String
+  type      String   @default("progress") // progress, blocker, completion, scope_issue
   createdAt DateTime @default(now())
   deletedAt DateTime?
 
@@ -327,6 +337,7 @@ model Payment {
   id            String          @id @default(cuid())
   orgId         String
   invoiceId     String?
+  createdByUserId String?
   amount        Decimal         @db.Decimal(14, 2)
   currency      String          @default("USD")
   method        String          // mpesa, bank_transfer, card, cash
@@ -339,6 +350,7 @@ model Payment {
 
   org           Org            @relation(fields: [orgId], references: [id])
   invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
+  createdBy     User?          @relation(fields: [createdByUserId], references: [id])
 }
 
 model Expense {
@@ -422,5 +434,170 @@ model EventLog {
 
   @@index([orgId, entityType, entityId])
   @@index([orgId, type])
+}
+
+model Risk {
+  id              String   @id @default(cuid())
+  orgId           String
+  type            String   // financial, operational, sales, compliance
+  severity        String   // low, medium, high, critical
+  description     String
+  detectedAt      DateTime @default(now())
+  ownerUserId     String?
+  mitigationNotes String?
+  status          String   // open, mitigated, resolved
+  source          String?  // automatic, manual
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  org             Org      @relation(fields: [orgId], references: [id])
+  owner           User?    @relation(fields: [ownerUserId], references: [id])
+
+  @@index([orgId, type, severity])
+  @@index([orgId, status])
+}
+
+model DirectorDecision {
+  id              String   @id @default(cuid())
+  orgId           String
+  actorUserId     String
+  action          String
+  entityType      String
+  entityId        String
+  approvalTimeMs  Int?
+  rejectionReason String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  org             Org      @relation(fields: [orgId], references: [id])
+  actor           User     @relation(fields: [actorUserId], references: [id])
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, action])
+}
+
+model DirectorConfig {
+  id        String   @id @default(cuid())
+  orgId     String   @unique
+  thresholds Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org       Org      @relation(fields: [orgId], references: [id])
+}
+
+model DirectorCommunication {
+  id              String   @id @default(cuid())
+  orgId           String
+  fromUserId      String
+  toUserId        String?
+  type            String   // StrategicDirective, ApprovalNote, RejectionExplanation, RiskAssignment, PriorityChange
+  entityType      String?
+  entityId        String?
+  message         String
+  createdAt       DateTime @default(now())
+
+  org             Org      @relation(fields: [orgId], references: [id])
+  fromUser        User     @relation("DirectorCommunicationFrom", fields: [fromUserId], references: [id])
+  toUser          User?    @relation("DirectorCommunicationTo", fields: [toUserId], references: [id])
+
+  @@index([orgId, entityType, entityId])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  orgId        String
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  org          Org      @relation(fields: [orgId], references: [id])
+  role         Role     @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model ConflictLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  type      String
+  context   Json?
+  blocked   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([orgId, userId, type])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  ip         String?
+  userAgent  String?
+  revokedAt  DateTime?
+
+  org        Org      @relation(fields: [orgId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([orgId, userId])
+}
+
+model OverrideAction {
+  id           String   @id @default(cuid())
+  orgId        String
+  adminUserId  String
+  overrideType String
+  entityType   String
+  entityId     String
+  reason       String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  org          Org      @relation(fields: [orgId], references: [id])
+  adminUser    User     @relation(fields: [adminUserId], references: [id])
+
+  @@index([orgId, overrideType])
+}
+
+model AdminAlert {
+  id        String   @id @default(cuid())
+  orgId     String
+  type      String
+  severity  String   // info, warning, critical
+  details   Json?
+  status    String   @default("open") // open, acknowledged, closed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, type, status])
+}
+
+model SecurityConfig {
+  id                 String   @id @default(cuid())
+  orgId              String   @unique
+  passwordMinLength  Int      @default(8)
+  requireMixedCase   Boolean  @default(false)
+  requireNumbers     Boolean  @default(false)
+  tokenExpiryMinutes Int      @default(60)
+  mfaRequired        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  org                Org      @relation(fields: [orgId], references: [id])
 }
 

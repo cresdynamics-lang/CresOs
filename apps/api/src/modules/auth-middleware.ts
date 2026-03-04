@@ -1,10 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { PrismaClient } from "@prisma/client";
 
 export interface AuthContext {
   userId: string;
   orgId: string;
   roleKeys: string[];
+  sessionId?: string;
 }
 
 declare module "express-serve-static-core" {
@@ -24,6 +26,7 @@ export const ROLE_KEYS = {
 } as const;
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+const prisma = new PrismaClient();
 
 export function authMiddleware(
   req: Request,
@@ -40,8 +43,40 @@ export function authMiddleware(
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthContext;
-    req.auth = payload;
-    next();
+
+    if (!payload.sessionId) {
+      res.status(401).json({ error: "Invalid session" });
+      return;
+    }
+
+    prisma.session
+      .findUnique({ where: { id: payload.sessionId } })
+      .then(async (session) => {
+        if (!session || session.revokedAt) {
+          res.status(401).json({ error: "Session revoked" });
+          return;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { id: session.userId }
+        });
+
+        if (!user || user.status !== "active") {
+          res.status(401).json({ error: "User is not active" });
+          return;
+        }
+
+        void prisma.session.update({
+          where: { id: session.id },
+          data: { lastSeenAt: new Date() }
+        });
+
+        req.auth = payload;
+        next();
+      })
+      .catch(() => {
+        res.status(401).json({ error: "Invalid token" });
+      });
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }

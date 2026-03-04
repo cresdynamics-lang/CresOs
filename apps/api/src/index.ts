@@ -9,6 +9,9 @@ import projectsRouter from "./modules/projects";
 import financeRouter from "./modules/finance";
 import analyticsRouter from "./modules/analytics";
 import notificationsRouter from "./modules/notifications";
+import directorRouter from "./modules/director";
+import adminRouter from "./modules/admin";
+import clientRouter from "./modules/client";
 import { authMiddleware } from "./modules/auth-middleware";
 
 const app = express();
@@ -35,6 +38,9 @@ app.use("/projects", projectsRouter(prisma));
 app.use("/finance", financeRouter(prisma));
 app.use("/analytics", analyticsRouter(prisma));
 app.use("/notifications", notificationsRouter(prisma));
+app.use("/director", directorRouter(prisma));
+app.use("/admin", adminRouter(prisma));
+app.use("/client", clientRouter(prisma));
 
 const PORT = process.env.PORT || 4000;
 
