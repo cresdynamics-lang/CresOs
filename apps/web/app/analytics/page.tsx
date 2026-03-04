@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
+import { formatMoney } from "../format-money";
 
 type CeoAnalytics = {
   revenueHealth: {
@@ -64,13 +65,13 @@ export default function AnalyticsPage() {
               <li>
                 Revenue this month:{" "}
                 <span className="text-emerald-400">
-                  ${data.revenueHealth.revenueReceivedThisMonth.toLocaleString()}
+                  {formatMoney(data.revenueHealth.revenueReceivedThisMonth)}
                 </span>
               </li>
               <li>
                 Outstanding invoices:{" "}
                 <span className="text-amber-400">
-                  ${data.revenueHealth.outstandingInvoices.toLocaleString()}
+                  {formatMoney(data.revenueHealth.outstandingInvoices)}
                 </span>
               </li>
               <li>
@@ -80,8 +81,8 @@ export default function AnalyticsPage() {
                 </span>
               </li>
               <li>
-                Expenses this month: $
-                {data.revenueHealth.expensesThisMonth.toLocaleString()}
+                Expenses this month:{" "}
+                {formatMoney(data.revenueHealth.expensesThisMonth)}
               </li>
             </ul>
           </div>

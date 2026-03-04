@@ -146,12 +146,12 @@ export default function DeveloperReportsPage() {
       <div className="shell flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="mb-2 text-lg font-semibold text-slate-50">
-            {isDirector ? "Developer daily reports" : "My daily reports"}
+            {isDirector ? "Developer reports" : "My reports"}
           </h2>
           <p className="text-sm text-slate-300">
             {isDirector
-              ? "View daily reports from developers: what worked, blockers, implemented, pending, and next plan."
-              : "Submit daily reports: what worked, blockers, what needs attention, what's implemented, pending, and next plan."}
+              ? "View reports from developers: what worked, blockers, implemented, pending, and next plan."
+              : "Submit reports: what worked, blockers, what needs attention, what's implemented, pending, and next plan."}
           </p>
         </div>
         {isDeveloper && (
@@ -160,7 +160,7 @@ export default function DeveloperReportsPage() {
             onClick={startNew}
             className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
           >
-            New daily report
+            New report
           </button>
         )}
       </div>
@@ -168,7 +168,7 @@ export default function DeveloperReportsPage() {
       {showForm && isDeveloper && (
         <div className="shell max-w-2xl border-sky-600/30">
           <h3 className="mb-3 text-sm font-semibold text-slate-200">
-            {editingId ? "Edit report" : "Submit daily report"}
+            {editingId ? "Edit report" : "Submit report"}
           </h3>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             {!editingId && (
@@ -212,7 +212,7 @@ export default function DeveloperReportsPage() {
         </h3>
         {list.length === 0 ? (
           <p className="text-sm text-slate-400">
-            No daily reports yet. {isDeveloper && "Use “New daily report” to add one."}
+            No reports yet. {isDeveloper && "Use “New report” to add one."}
           </p>
         ) : (
           <ul className="space-y-3">

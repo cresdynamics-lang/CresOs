@@ -8,10 +8,10 @@ import { enforceApprovalConflicts } from "./conflict-engine";
 export default function directorRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
-  // Strategic dashboard view for Director
+  // Strategic dashboard view for Director (and Admin for alignment)
   router.get(
     "/dashboard",
-    requireRoles([ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const now = new Date();

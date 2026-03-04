@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { logAdminActivity } from "./admin-activity";
 
 const ROLE_KEYS_DIRECTOR = ["director_admin", "admin"];
 
@@ -42,6 +43,7 @@ export async function notifyDirectors(
   const directors = await getDirectorUsers(prisma, orgId);
   if (directors.length === 0) return;
   const type = options?.type ?? NOTIFICATION_TYPE;
+  const emailSubject = `[CresOS] ${subject}`;
   await prisma.notification.createMany({
     data: directors.flatMap((d) => [
       {
@@ -58,7 +60,7 @@ export async function notifyDirectors(
         orgId,
         channel: "email",
         to: d.email,
-        subject: `[CresOS] ${subject}`,
+        subject: emailSubject,
         body,
         status: "queued",
         type,
@@ -66,4 +68,13 @@ export async function notifyDirectors(
       }
     ])
   });
+  if (directors.length > 0) {
+    await logAdminActivity(prisma, {
+      orgId,
+      type: "email_sent",
+      summary: `Email to ${directors.length} director(s): ${subject}`,
+      body: body.slice(0, 300) + (body.length > 300 ? "…" : ""),
+      metadata: { type, recipientCount: directors.length }
+    });
+  }
 }

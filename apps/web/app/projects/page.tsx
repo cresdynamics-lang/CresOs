@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { formatMoney } from "../format-money";
 
 type Developer = { id: string; name: string | null; email: string };
 
@@ -198,7 +199,7 @@ export default function ProjectsPage() {
             )}
             {project.price != null && project.price > 0 && (
               <p className="text-xs text-emerald-400">
-                {typeof project.price === "number" ? `$${project.price.toLocaleString()}` : project.price}
+                {typeof project.price === "number" ? formatMoney(project.price) : project.price}
               </p>
             )}
             {project.assignedDeveloper && (

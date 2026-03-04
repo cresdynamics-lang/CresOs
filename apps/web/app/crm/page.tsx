@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatMoney } from "../format-money";
 import { useAuth } from "../auth-context";
 
 type Lead = {
@@ -167,7 +168,7 @@ export default function CrmPage() {
                 </div>
                 {deal.value !== undefined && (
                   <span className="text-emerald-400">
-                    ${deal.value.toLocaleString()}
+                    {formatMoney(deal.value)}
                   </span>
                 )}
               </li>

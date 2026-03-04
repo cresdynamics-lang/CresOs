@@ -17,6 +17,7 @@ import dashboardRouter from "./modules/dashboard";
 import accountRouter from "./modules/account";
 import scheduleRouter from "./modules/schedule";
 import developerReportsRouter from "./modules/developer-reports";
+import meetingRequestsRouter from "./modules/meeting-requests";
 import { authMiddleware } from "./modules/auth-middleware";
 
 const app = express();
@@ -51,6 +52,7 @@ app.use("/dashboard", dashboardRouter(prisma));
 app.use("/account", accountRouter(prisma));
 app.use("/schedule", scheduleRouter(prisma));
 app.use("/developer-reports", developerReportsRouter(prisma));
+app.use("/meeting-requests", meetingRequestsRouter(prisma));
 
 const PORT = process.env.PORT || 4000;
 

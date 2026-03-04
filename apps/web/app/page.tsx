@@ -101,13 +101,13 @@ export default function HomePage() {
               <div>
                 <dt className="text-slate-400">Revenue received</dt>
                 <dd className="text-xl font-semibold text-emerald-400">
-                  $42,300
+                  KES 5,400,000
                 </dd>
               </div>
               <div>
                 <dt className="text-slate-400">Invoices outstanding</dt>
                 <dd className="text-xl font-semibold text-amber-400">
-                  $18,900
+                  KES 2,400,000
                 </dd>
               </div>
               <div>

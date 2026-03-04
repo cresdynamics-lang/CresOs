@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 
 type Summary = {
@@ -11,6 +12,36 @@ type Summary = {
   revenueReceived: number;
   invoiceOutstanding: number;
   activeProjects: number;
+};
+
+type DirectorDashboard = {
+  financialHealth: {
+    revenueThisPeriod: number;
+    outstandingInvoices: number;
+    overdueInvoices: number;
+    cashIn: number;
+    cashOut: number;
+    netFlow: number;
+    forecast30Day: { cashIn: number; cashOut: number; netFlow: number };
+    pendingPayouts: number;
+    pendingExpenseApprovals: number;
+  };
+  salesHealth: {
+    totalPipelineValue: number;
+    weightedForecast: number;
+    winRate: number;
+    stalledDealsCount: number;
+    averageDealCycleDays: number;
+  };
+  operationalHealth: {
+    activeProjects: number;
+    projectsAtRisk: number;
+    blockedTasksAboveThreshold: number;
+    milestonesPendingApproval: number;
+    teamOverload: unknown;
+  };
+  approvalQueue: { totalPending: number };
+  riskSummary: { financial: unknown[]; operational: unknown[]; sales: unknown[] };
 };
 
 type Attention = {
@@ -25,6 +56,10 @@ type Attention = {
     dueCount: number;
     workProgressPercent: number;
     reportStreakDays: number;
+    tasksOverdue?: number;
+    tasksDueSoon?: number;
+    developerReportStreakDays?: number;
+    needsAttentionCount?: number;
   };
   messages?: { id: string; reportId: string; content: string; askedAt: string }[];
   dueToday?: { id: string; type: string; scheduledAt: string; lead: { id: string; title: string } }[];
@@ -32,6 +67,8 @@ type Attention = {
   lastReportSubmittedAt?: string | null;
   projectsNeedingReview?: { id: string; name: string }[];
   handoffRequestsReceived?: { id: string; projectId: string; project: { name: string }; fromUser: { name: string | null; email: string } }[];
+  overdueTasks?: { id: string; title: string; projectId: string; dueDate: string }[];
+  latestDeveloperReportNeedsAttention?: string | null;
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -46,8 +83,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   sales: [{ href: "/crm", label: "CRM" }, { href: "/leads", label: "Leads" }],
-  developer: [{ href: "/projects", label: "Projects" }],
-  director_admin: [{ href: "/analytics", label: "Analytics" }, { href: "/approvals", label: "Approvals" }, { href: "/leads", label: "Leads" }],
+  developer: [{ href: "/projects", label: "Projects" }, { href: "/developer-reports", label: "Reports" }],
+  director_admin: [
+    { href: "/approvals", label: "Approvals" },
+    { href: "/analytics", label: "Analytics" },
+    { href: "/leads", label: "Leads" },
+    { href: "/developer-reports", label: "Reports" },
+    { href: "/meeting-requests", label: "Meeting requests" },
+    { href: "/finance", label: "Finance" }
+  ],
   finance: [{ href: "/finance", label: "Finance" }, { href: "/approvals", label: "Approvals" }],
   analyst: [{ href: "/analytics", label: "Analytics" }, { href: "/crm", label: "CRM" }],
   admin: [{ href: "/admin", label: "Users & org" }, { href: "/analytics", label: "Analytics" }],
@@ -65,8 +109,10 @@ export default function DashboardPage() {
     const until = sessionStorage.getItem(REPORT_REMINDER_DISMISS_KEY);
     return until ? Date.now() < parseInt(until, 10) : false;
   });
+  const [directorDashboard, setDirectorDashboard] = useState<DirectorDashboard | null>(null);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const { apiFetch, auth } = useAuth();
+  const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
 
   useEffect(() => {
     void requestNotificationPermission();
@@ -116,6 +162,21 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [apiFetch]);
 
+  useEffect(() => {
+    if (!isDirectorOrAdmin) return;
+    let cancelled = false;
+    apiFetch("/director/dashboard")
+      .then((res) => {
+        if (!cancelled && res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        if (!cancelled && data) setDirectorDashboard(data as DirectorDashboard);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isDirectorOrAdmin, apiFetch]);
+
   const quickLinks = Array.from(
     new Map(
       auth.roleKeys.flatMap((r) => ROLE_QUICK_LINKS[r] ?? []).map((l) => [l.href, l])
@@ -128,10 +189,27 @@ export default function DashboardPage() {
   const dueCount = attention?.stats?.dueCount ?? attention?.dueToday?.length ?? 0;
   const workProgress = attention?.stats?.workProgressPercent ?? 0;
   const reportStreak = attention?.stats?.reportStreakDays ?? 0;
+  const tasksOverdue = attention?.stats?.tasksOverdue ?? 0;
+  const tasksDueSoon = attention?.stats?.tasksDueSoon ?? 0;
+  const developerReportStreak = attention?.stats?.developerReportStreakDays ?? 0;
+  const needsAttentionCount = attention?.stats?.needsAttentionCount ?? 0;
   const reportReminderDue = attention?.reportReminderDue === true && auth.roleKeys.includes("sales") && !reportReminderDismissed;
   const projectsNeedingReview = attention?.projectsNeedingReview ?? [];
   const handoffRequests = attention?.handoffRequestsReceived ?? [];
-  const hasAttention = unreadCount > 0 || messagesCount > 0 || dueCount > 0 || (attention?.upcomingMeetings?.length ?? 0) > 0 || (attention?.upcomingCalls?.length ?? 0) > 0 || (attention?.leadsPendingApproval?.length ?? 0) > 0 || (attention?.approvalsPending?.length ?? 0) > 0 || projectsNeedingReview.length > 0 || handoffRequests.length > 0;
+  const overdueTasks = attention?.overdueTasks ?? [];
+  const latestDeveloperReportNeedsAttention = attention?.latestDeveloperReportNeedsAttention ?? null;
+  const isDeveloper = auth.roleKeys.includes("developer");
+  const hasAttention =
+    unreadCount > 0 ||
+    messagesCount > 0 ||
+    dueCount > 0 ||
+    (attention?.upcomingMeetings?.length ?? 0) > 0 ||
+    (attention?.upcomingCalls?.length ?? 0) > 0 ||
+    (attention?.leadsPendingApproval?.length ?? 0) > 0 ||
+    (attention?.approvalsPending?.length ?? 0) > 0 ||
+    projectsNeedingReview.length > 0 ||
+    handoffRequests.length > 0 ||
+    (isDeveloper && (needsAttentionCount > 0 || (latestDeveloperReportNeedsAttention?.length ?? 0) > 0));
 
   return (
     <section className="flex flex-col gap-4">
@@ -209,7 +287,8 @@ export default function DashboardPage() {
         <StatCard label="Messages" value={messagesCount} sub="to respond" />
         <StatCard label="Due today" value={dueCount} />
         <StatCard label="Work progress" value={`${workProgress}%`} />
-        <StatCard label="Report streak" value={reportStreak} sub="days" />
+        <StatCard label="Report streak" value={isDeveloper ? developerReportStreak : reportStreak} sub="days" />
+        {isDeveloper && <StatCard label="Needs attention" value={needsAttentionCount} />}
       </div>
 
       {hasAttention && attention && (
@@ -320,6 +399,92 @@ export default function DashboardPage() {
                 </ul>
               </div>
             )}
+            {isDeveloper && overdueTasks.length > 0 && (
+              <div>
+                <p className="mb-1 text-xs text-slate-400">Overdue tasks</p>
+                <ul className="space-y-1 text-sm">
+                  {overdueTasks.slice(0, 5).map((t) => (
+                    <li key={t.id}>
+                      <Link href={`/projects/${t.projectId}`} className="text-brand hover:underline">
+                        {t.title}
+                      </Link>
+                      <span className="ml-1 text-slate-400">Due {new Date(t.dueDate).toLocaleDateString()}</span>
+                    </li>
+                  ))}
+                  {overdueTasks.length > 5 && <li className="text-slate-400">+{overdueTasks.length - 5} more</li>}
+                </ul>
+              </div>
+            )}
+            {isDeveloper && latestDeveloperReportNeedsAttention && (
+              <div>
+                <p className="mb-1 text-xs text-slate-400">From your last report — needs attention</p>
+                <p className="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-sm text-slate-200">
+                  {latestDeveloperReportNeedsAttention.slice(0, 200)}
+                  {latestDeveloperReportNeedsAttention.length > 200 ? "…" : ""}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isDeveloper && (workProgress > 0 || developerReportStreak > 0 || tasksOverdue > 0 || tasksDueSoon > 0) && (
+        <div className="shell border-sky-800/40 bg-sky-950/20">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Performance</h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs text-slate-400">Work progress</p>
+              <p className="mt-1 text-2xl font-semibold text-sky-400">{workProgress}%</p>
+              <p className="text-xs text-slate-500">Tasks done vs assigned</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Report streak</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-400">{developerReportStreak} day{developerReportStreak !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-slate-500">Consecutive days with reports</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Tasks overdue</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-400">{tasksOverdue}</p>
+              <p className="text-xs text-slate-500">Past due date</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Tasks due soon</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-400">{tasksDueSoon}</p>
+              <p className="text-xs text-slate-500">Next 7 days</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDirectorOrAdmin && directorDashboard && (
+        <div className="shell border-sky-800/50 bg-sky-950/30">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Director overview — aligned view</h3>
+          <p className="mb-4 text-xs text-slate-400">Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES).</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs text-slate-400">Financial health</p>
+              <p className="mt-1 text-sm text-slate-200">Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}</p>
+              <p className="text-sm text-slate-200">Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}</p>
+              <p className="text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
+              <p className="text-xs text-slate-400">Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Sales health</p>
+              <p className="mt-1 text-sm text-slate-200">Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}</p>
+              <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
+              <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Operational health</p>
+              <p className="mt-1 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
+              <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
+              <p className="text-sm text-slate-200">Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Approval queue</p>
+              <p className="mt-1 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
+              <Link href="/approvals" className="mt-1 inline-block text-sm text-sky-400 hover:underline">View approvals →</Link>
+            </div>
           </div>
         </div>
       )}
@@ -329,8 +494,8 @@ export default function DashboardPage() {
           <Metric label="Leads this week" value={summary!.leadsThisWeek} tone="green" />
           <Metric label="Deals won" value={summary!.dealsWon} tone="green" />
           <Metric label="Active projects" value={summary!.activeProjects} tone="blue" />
-          <Metric label="Revenue received" value={`$${summary!.revenueReceived.toLocaleString()}`} tone="green" />
-          <Metric label="Invoices outstanding" value={`$${summary!.invoiceOutstanding.toLocaleString()}`} tone="amber" />
+          <Metric label="Revenue received" value={formatMoney(summary!.revenueReceived)} tone="green" />
+          <Metric label="Invoices outstanding" value={formatMoney(summary!.invoiceOutstanding)} tone="amber" />
         </div>
       )}
 

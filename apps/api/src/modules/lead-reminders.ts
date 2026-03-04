@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { generateCallReminder, generateMeetingReminder } from "./ai-reminders";
+import { logEmailSent } from "./admin-activity";
 
 const REMINDER_KEYS: Record<number, string> = {
   2880: "2d",
@@ -85,6 +86,8 @@ export async function processDueReminders(prisma: PrismaClient): Promise<void> {
           }
         })
       ]);
+      const toEmail = fu.assignedTo?.notificationEmail ?? fu.assignedTo?.email ?? "";
+      if (toEmail) await logEmailSent(prisma, { orgId: fu.orgId, to: toEmail, subject: `Reminder: ${title}`, body, type: "lead.follow_up_reminder" });
     }
   }
 }

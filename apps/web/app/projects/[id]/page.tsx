@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { formatMoney } from "../../format-money";
 import { useAuth } from "../../auth-context";
 
 type Task = { id: string; title: string; status: string; dueDate?: string | null };
@@ -226,7 +227,7 @@ export default function ProjectDetailPage() {
             {project.clientOrOwnerName && <li>Name: {project.clientOrOwnerName}</li>}
             {project.phone && <li>Phone: {project.phone}</li>}
             {project.email && <li>Email: {project.email}</li>}
-            {project.price != null && <li>Price: ${Number(project.price).toLocaleString()}</li>}
+            {project.price != null && <li>Price: {formatMoney(Number(project.price))}</li>}
           </ul>
         </div>
       )}

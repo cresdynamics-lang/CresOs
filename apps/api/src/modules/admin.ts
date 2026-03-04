@@ -698,6 +698,25 @@ export default function adminRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Admin activity messages: all things happening (meeting requests, emails sent, etc.) for admin to stay on track
+  router.get(
+    "/messages",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const limit = Math.min(parseInt((req.query.limit as string) || "100", 10), 500);
+      const messages = await prisma.adminActivityMessage.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+          actor: { select: { id: true, name: true, email: true } }
+        }
+      });
+      res.json(messages);
+    }
+  );
+
   // Governance reports
   router.get(
     "/reports/roles",

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
+import { formatMoney } from "../format-money";
 
 type UserRow = {
   id: string;
@@ -21,6 +22,16 @@ type PerformanceData = {
   responsibilities: { roleKey: string; roleName: string; description: string }[];
 };
 
+type AdminMessage = {
+  id: string;
+  type: string;
+  summary: string;
+  body: string | null;
+  actorId: string | null;
+  createdAt: string;
+  actor: { id: string; name: string | null; email: string } | null;
+};
+
 export default function AdminPage() {
   const { auth, apiFetch } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -30,7 +41,8 @@ export default function AdminPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"users" | "performance">("users");
+  const [tab, setTab] = useState<"users" | "performance" | "messages">("users");
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
   const isAdmin = auth.roleKeys.includes("admin");
 
   const load = async () => {
@@ -57,6 +69,18 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isAdmin && tab === "performance") loadPerformance();
+  }, [isAdmin, tab, apiFetch]);
+
+  const loadMessages = async () => {
+    try {
+      const res = await apiFetch("/admin/messages");
+      if (res.ok) setMessages((await res.json()) as AdminMessage[]);
+    } catch {
+      setMessages([]);
+    }
+  };
+  useEffect(() => {
+    if (isAdmin && tab === "messages") loadMessages();
   }, [isAdmin, tab, apiFetch]);
 
   const openEdit = (u: UserRow) => {
@@ -120,8 +144,45 @@ export default function AdminPage() {
           >
             Performance & activity
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("messages")}
+            className={`rounded px-3 py-1.5 text-sm ${tab === "messages" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+          >
+            Messages
+          </button>
         </div>
       </div>
+
+      {tab === "messages" && (
+        <div className="shell">
+          <h3 className="mb-3 text-sm font-semibold text-slate-200">Activity & messages</h3>
+          <p className="mb-4 text-xs text-slate-400">
+            Things happening in the system: meeting requests, emails sent, and other activity. Keeps you on track.
+          </p>
+          {messages.length === 0 ? (
+            <p className="text-slate-400">No activity messages yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {messages.map((m) => (
+                <li key={m.id} className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase text-slate-500">{m.type.replace(/_/g, " ")}</span>
+                    <span className="text-xs text-slate-400">{new Date(m.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-slate-200">{m.summary}</p>
+                  {m.body && <p className="mt-1 text-xs text-slate-400 line-clamp-2">{m.body}</p>}
+                  {m.actor && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      By {m.actor.name ?? m.actor.email}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {tab === "performance" && performance && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -139,10 +200,10 @@ export default function AdminPage() {
           <div className="shell">
             <h3 className="mb-3 text-sm font-semibold text-slate-200">Finance</h3>
             <p className="text-sm text-slate-300">
-              Revenue (confirmed payments): <span className="text-emerald-400">${performance.finance.revenue.toLocaleString()}</span>
+              Revenue (confirmed payments): <span className="text-emerald-400">{formatMoney(performance.finance.revenue)}</span>
             </p>
             <p className="text-sm text-slate-300">
-              Expenditure (expenses): <span className="text-amber-400">${performance.finance.expenditure.toLocaleString()}</span>
+              Expenditure (expenses): <span className="text-amber-400">{formatMoney(performance.finance.expenditure)}</span>
             </p>
           </div>
           <div className="shell md:col-span-2">

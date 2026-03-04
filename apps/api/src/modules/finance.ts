@@ -2,6 +2,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 
@@ -59,7 +60,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
             status: "sent",
             issueDate: new Date(issueDate),
             dueDate: dueDate ? new Date(dueDate) : null,
-            currency: currency ?? "USD",
+            currency: currency ?? "KES",
             totalAmount: new Prisma.Decimal(totalAmount.toFixed(2))
           }
         });
@@ -99,6 +100,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return invoice;
       });
 
+      await logEmailSent(prisma, {
+        orgId,
+        to: "client",
+        subject: `Invoice ${result.number}`,
+        body: `Invoice ${result.number} has been sent.`,
+        type: "invoice.sent"
+      });
       res.status(201).json(result);
     }
   );
@@ -152,7 +160,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           invoiceId,
           createdByUserId: userId,
           amount: new Prisma.Decimal(amount),
-          currency: currency ?? "USD",
+          currency: currency ?? "KES",
           method,
           reference,
           mpesaRef,
@@ -250,7 +258,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           category,
           description,
           amount: new Prisma.Decimal(amount),
-          currency: currency ?? "USD",
+          currency: currency ?? "KES",
           spentAt: new Date(spentAt)
         }
       });
@@ -307,7 +315,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           recipientId,
           description,
           amount: new Prisma.Decimal(amount),
-          currency: currency ?? "USD",
+          currency: currency ?? "KES",
           scheduledAt: scheduledAt ? new Date(scheduledAt) : null
         }
       });

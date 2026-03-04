@@ -2,6 +2,8 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { logEmailSent } from "./admin-activity";
+import { processAiAlignmentNotifications } from "./ai-alignment-notifications";
 import { processDueReminders } from "./lead-reminders";
 import { processScheduleReminders } from "./schedule-reminders";
 import { processTaskDueReminders } from "./task-reminders";
@@ -37,6 +39,7 @@ async function ensureReportSubmissionReminder(
 
   const subject = "Submit your report";
   const body = "It's been 11+ hours since your last report. Submit a report on the dashboard to keep your streak and stay on track.";
+  const emailSubject = `Reminder: ${subject}`;
   await prisma.$transaction([
     prisma.notification.create({
       data: {
@@ -55,7 +58,7 @@ async function ensureReportSubmissionReminder(
         orgId,
         channel: "email",
         to: userEmail,
-        subject: `Reminder: ${subject}`,
+        subject: emailSubject,
         body,
         status: "queued",
         type: "report_submission_reminder",
@@ -63,6 +66,7 @@ async function ensureReportSubmissionReminder(
       }
     })
   ]);
+  if (userEmail) await logEmailSent(prisma, { orgId, to: userEmail, subject: emailSubject, body, type: "report_submission_reminder" });
 }
 
 async function reportSubmissionStreak(prisma: PrismaClient, userId: string): Promise<number> {
@@ -100,6 +104,8 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         processTaskDueReminders(prisma),
         processScheduleReminders(prisma)
       ]);
+      // AI alignment notifications (throttled); run in background so dashboard responds quickly
+      void processAiAlignmentNotifications(prisma, orgId).catch(() => {});
 
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -227,6 +233,65 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         );
       }
 
+      let workProgressPercent = 0;
+      let tasksOverdue = 0;
+      let tasksDueSoon = 0;
+      let developerReportStreakDays = 0;
+      let overdueTasks: { id: string; title: string; projectId: string; dueDate: string }[] = [];
+      let latestDeveloperReportNeedsAttention: string | null = null;
+
+      if (isDeveloper) {
+        const myTasks = await prisma.task.findMany({
+          where: { orgId, assigneeId: userId, deletedAt: null },
+          select: { id: true, title: true, projectId: true, dueDate: true, status: true }
+        });
+        const totalTasks = myTasks.length;
+        const doneTasks = myTasks.filter((t) => t.status === "done").length;
+        workProgressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+        const nowMs = now.getTime();
+        const sevenDaysMs = 7 * ONE_DAY_MS;
+        const overdue = myTasks.filter(
+          (t) => t.dueDate && t.status !== "done" && t.dueDate.getTime() < nowMs
+        );
+        const dueSoon = myTasks.filter(
+          (t) =>
+            t.dueDate &&
+            t.status !== "done" &&
+            t.dueDate.getTime() >= nowMs &&
+            t.dueDate.getTime() <= nowMs + sevenDaysMs
+        );
+        tasksOverdue = overdue.length;
+        tasksDueSoon = dueSoon.length;
+        overdueTasks = overdue.map((t) => ({
+          id: t.id,
+          title: t.title,
+          projectId: t.projectId,
+          dueDate: t.dueDate!.toISOString()
+        }));
+
+        const devReports = await prisma.developerReport.findMany({
+          where: { orgId, submittedById: userId },
+          orderBy: { reportDate: "desc" },
+          select: { reportDate: true, needsAttention: true }
+        });
+        if (devReports.length > 0 && devReports[0].needsAttention?.trim()) {
+          latestDeveloperReportNeedsAttention = devReports[0].needsAttention.trim();
+        }
+        const todayKey = toDateKey(now);
+        let streak = 0;
+        let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const reportDates = new Set(devReports.map((r) => toDateKey(r.reportDate)));
+        while (reportDates.has(toDateKey(d))) {
+          streak++;
+          d.setDate(d.getDate() - 1);
+        }
+        developerReportStreakDays = streak;
+      }
+
+      const needsAttentionCount =
+        (isDeveloper ? projectsNeedingReview.length + handoffRequestsReceived.length + tasksOverdue : 0) ||
+        0;
+
       res.json({
         notifications: inAppNotifications,
         upcomingMeetings,
@@ -237,15 +302,21 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
           notificationsCount: unreadNotifications.length,
           messagesCount: overdueReportQuestions.length,
           dueCount: dueToday.length,
-          workProgressPercent: 0,
-          reportStreakDays: reportStreak
+          workProgressPercent: isDeveloper ? workProgressPercent : 0,
+          reportStreakDays: reportStreak,
+          tasksOverdue: isDeveloper ? tasksOverdue : undefined,
+          tasksDueSoon: isDeveloper ? tasksDueSoon : undefined,
+          developerReportStreakDays: isDeveloper ? developerReportStreakDays : undefined,
+          needsAttentionCount: isDeveloper ? needsAttentionCount : undefined
         },
         messages: overdueReportQuestions,
         dueToday,
         reportReminderDue: reportReminderDue ?? false,
         lastReportSubmittedAt: lastReportSubmittedAt?.toISOString() ?? null,
         projectsNeedingReview,
-        handoffRequestsReceived
+        handoffRequestsReceived,
+        overdueTasks: isDeveloper ? overdueTasks : undefined,
+        latestDeveloperReportNeedsAttention: isDeveloper ? latestDeveloperReportNeedsAttention : undefined
       });
     }
   );

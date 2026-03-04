@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
+import { formatMoney } from "../format-money";
 
 type Invoice = {
   id: string;
@@ -85,7 +86,7 @@ export default function FinancePage() {
                   </p>
                 </div>
                 <span className="text-emerald-400">
-                  ${inv.totalAmount.toLocaleString()}
+                  {formatMoney(inv.totalAmount)}
                 </span>
               </li>
             ))}
@@ -106,7 +107,7 @@ export default function FinancePage() {
               >
                 <span className="text-slate-100">{exp.category}</span>
                 <span className="text-amber-400">
-                  ${exp.amount.toLocaleString()}
+                  {formatMoney(exp.amount)}
                 </span>
               </li>
             ))}

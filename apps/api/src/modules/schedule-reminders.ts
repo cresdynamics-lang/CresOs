@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { logEmailSent } from "./admin-activity";
 
 /**
  * Process schedule item reminders: for items with reminderMinutesBefore set,
@@ -61,18 +62,20 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       }
     });
     if (userEmail) {
+      const emailSubject = `Reminder: ${subject}`;
       await prisma.notification.create({
         data: {
           orgId: item.orgId,
           channel: "email",
           to: userEmail,
-          subject: `Reminder: ${subject}`,
+          subject: emailSubject,
           body,
           status: "queued",
           type: "schedule_reminder",
           tier: "execution"
         }
       });
+      await logEmailSent(prisma, { orgId: item.orgId, to: userEmail, subject: emailSubject, body, type: "schedule_reminder" });
     }
   }
 }

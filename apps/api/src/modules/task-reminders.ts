@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { generateTaskReminder } from "./ai-reminders";
+import { logEmailSent } from "./admin-activity";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,6 +70,7 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
             }
           })
         ]);
+        await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
       }
       continue;
     }
@@ -120,6 +122,7 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
             }
           })
         ]);
+        await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
       }
       continue;
     }
@@ -169,6 +172,7 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
             }
           })
         ]);
+        await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
       }
     }
   }
