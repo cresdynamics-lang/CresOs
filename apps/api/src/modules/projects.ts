@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 
 export default function projectsRouter(prisma: PrismaClient): Router {
@@ -236,12 +237,15 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
     const { taskId } = req.params;
-    const { status, priority, blockedReason, dueDate } = req.body as {
-      status?: string;
-      priority?: string;
-      blockedReason?: string;
-      dueDate?: string;
-    };
+    const { status, priority, blockedReason, dueDate, estimatedHours, actualHours } =
+      req.body as {
+        status?: string;
+        priority?: string;
+        blockedReason?: string;
+        dueDate?: string;
+        estimatedHours?: string;
+        actualHours?: string;
+      };
 
     if (status === "blocked" && !blockedReason) {
       res.status(400).json({ error: "blockedReason is required when status is blocked" });
@@ -259,14 +263,34 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       return;
     }
 
+    const data: any = {
+      status,
+      priority,
+      blockedReason,
+      dueDate: dueDate ? new Date(dueDate) : undefined
+    };
+
+    if (estimatedHours !== undefined) {
+      const parsed = Number(estimatedHours);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        res.status(400).json({ error: "estimatedHours must be a non-negative number" });
+        return;
+      }
+      data.estimatedHours = new Prisma.Decimal(parsed.toFixed(2));
+    }
+
+    if (actualHours !== undefined) {
+      const parsed = Number(actualHours);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        res.status(400).json({ error: "actualHours must be a non-negative number" });
+        return;
+      }
+      data.actualHours = new Prisma.Decimal(parsed.toFixed(2));
+    }
+
     const task = await prisma.task.update({
       where: { id: taskId },
-      data: {
-        status,
-        priority,
-        blockedReason,
-        dueDate: dueDate ? new Date(dueDate) : undefined
-      }
+      data
     });
 
     const events: string[] = ["task.updated"];
@@ -393,6 +417,78 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       });
 
       res.json(updated);
+    }
+  );
+
+  // Change requests
+  router.get(
+    "/:projectId/change-requests",
+    requireRoles([ROLE_KEYS.ops, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { projectId } = req.params;
+
+      const items = await prisma.changeRequest.findMany({
+        where: {
+          orgId,
+          projectId
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      res.json(items);
+    }
+  );
+
+  router.post(
+    "/:projectId/change-requests",
+    requireRoles([ROLE_KEYS.ops]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const { taskId, description, impact } = req.body as {
+        taskId?: string;
+        description: string;
+        impact?: string;
+      };
+
+      if (!description) {
+        res.status(400).json({ error: "description is required" });
+        return;
+      }
+
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+
+      const changeRequest = await prisma.changeRequest.create({
+        data: {
+          orgId,
+          projectId,
+          taskId: taskId ?? null,
+          description,
+          impact,
+          createdByUserId: userId
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "change_request.created",
+          entityType: "change_request",
+          entityId: changeRequest.id,
+          metadata: { projectId, taskId, impact }
+        }
+      });
+
+      res.status(201).json(changeRequest);
     }
   );
 

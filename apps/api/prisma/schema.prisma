@@ -15,24 +15,43 @@ model Org {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  members     OrgMember[]
-  roles       Role[]
-  users       User[]        @relation("OrgUsers")
+  members       OrgMember[]
+  roles         Role[]
+  users         User[]        @relation("OrgUsers")
 
-  leads       Lead[]
-  deals       Deal[]
-  clients     Client[]
+  leads         Lead[]
+  deals         Deal[]
+  clients       Client[]
+  invites       Invite[]
 
-  projects    Project[]
+  projects      Project[]
+  milestones    Milestone[]
+  tasks         Task[]
+  taskComments  TaskComment[]
+  attachments   Attachment[]
 
-  invoices    Invoice[]
-  payments    Payment[]
-  expenses    Expense[]
-  payouts     Payout[]
+  invoices      Invoice[]
+  payments      Payment[]
+  expenses      Expense[]
+  payouts       Payout[]
 
-  approvals   Approval[]
+  approvals     Approval[]
   notifications Notification[]
-  events       EventLog[]
+  events        EventLog[]
+
+  leadActivities DealActivity[]
+  dealActivities LeadActivity[]
+
+  risks         Risk[]
+  directorDecisions DirectorDecision[]
+  directorCommunications DirectorCommunication[]
+
+  rolePermissions RolePermission[]
+  conflicts      ConflictLog[]
+  sessions       Session[]
+  overrides      OverrideAction[]
+  adminAlerts    AdminAlert[]
+  changeRequests ChangeRequest[]
 
   directorConfig DirectorConfig?
   securityConfig SecurityConfig?
@@ -58,6 +77,25 @@ model User {
 
   events       EventLog[]
   sessions     Session[]
+
+  leadsOwned   Lead[]       @relation("LeadOwner")
+  dealsOwned   Deal[]       @relation("DealOwner")
+  projectsOwned Project[]   @relation("ProjectOwner")
+  projectsCreated Project[] @relation("ProjectCreatedBy")
+  tasksAssigned Task[]      @relation("TaskAssignee")
+  taskCommentsAuthored TaskComment[] @relation("TaskCommentAuthor")
+  paymentsCreated Payment[] @relation("PaymentCreatedBy")
+  payoutsReceived Payout[]  @relation("PayoutRecipient")
+  risksOwned    Risk[]      @relation("RiskOwner")
+  approvalsRequested Approval[] @relation("Requester")
+  approvalsApproved  Approval[] @relation("Approver")
+  directorDecisions  DirectorDecision[] @relation("DirectorDecisionActor")
+  directorCommsFrom  DirectorCommunication[] @relation("DirectorCommunicationFrom")
+  directorCommsTo    DirectorCommunication[] @relation("DirectorCommunicationTo")
+  conflictLogs       ConflictLog[]
+  overrideActions    OverrideAction[]
+  changeRequestsCreated ChangeRequest[] @relation("ChangeRequestCreatedBy")
+  changeRequestsApproved ChangeRequest[] @relation("ChangeRequestApprovedBy")
 }
 
 model OrgMember {
@@ -86,6 +124,8 @@ model Role {
 
   org             Org              @relation(fields: [orgId], references: [id])
   users           UserRole[]
+  orgMembers      OrgMember[]
+  invites         Invite[]
   rolePermissions RolePermission[]
 
   @@unique([orgId, key])
@@ -148,7 +188,7 @@ model Lead {
 
   org          Org             @relation(fields: [orgId], references: [id])
   client       Client?         @relation(fields: [clientId], references: [id])
-  owner        User?           @relation(fields: [ownerId], references: [id])
+  owner        User?           @relation("LeadOwner", fields: [ownerId], references: [id])
   activities   LeadActivity[]
   deals        Deal[]
 }
@@ -171,7 +211,7 @@ model Deal {
   org          Org             @relation(fields: [orgId], references: [id])
   client       Client?         @relation(fields: [clientId], references: [id])
   lead         Lead?           @relation(fields: [leadId], references: [id])
-  owner        User?           @relation(fields: [ownerId], references: [id])
+  owner        User?           @relation("DealOwner", fields: [ownerId], references: [id])
   activities   DealActivity[]
   projects     Project[]
 }
@@ -221,10 +261,12 @@ model Project {
   org         Org         @relation(fields: [orgId], references: [id])
   client      Client?     @relation(fields: [clientId], references: [id])
   deal        Deal?       @relation(fields: [dealId], references: [id])
-  owner       User?       @relation(fields: [ownerUserId], references: [id])
+  owner       User?       @relation("ProjectOwner", fields: [ownerUserId], references: [id])
   createdBy   User?       @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id])
   milestones  Milestone[]
   tasks       Task[]
+  invoices    Invoice[]
+  changeRequests ChangeRequest[]
 }
 
 model Milestone {
@@ -257,6 +299,8 @@ model Task {
   blockedReason String?
   assigneeId    String?
   dueDate       DateTime?
+  estimatedHours Decimal?       @db.Decimal(8, 2)
+  actualHours    Decimal?       @db.Decimal(8, 2)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   deletedAt     DateTime?
@@ -264,9 +308,10 @@ model Task {
   org           Org             @relation(fields: [orgId], references: [id])
   project       Project         @relation(fields: [projectId], references: [id])
   milestone     Milestone?      @relation(fields: [milestoneId], references: [id])
-  assignee      User?           @relation(fields: [assigneeId], references: [id])
+  assignee      User?           @relation("TaskAssignee", fields: [assigneeId], references: [id])
   comments      TaskComment[]
   attachments   Attachment[]
+  changeRequests ChangeRequest[]
 }
 
 model TaskComment {
@@ -281,7 +326,7 @@ model TaskComment {
 
   org       Org      @relation(fields: [orgId], references: [id])
   task      Task     @relation(fields: [taskId], references: [id])
-  author    User?    @relation(fields: [authorId], references: [id])
+  author    User?    @relation("TaskCommentAuthor", fields: [authorId], references: [id])
 }
 
 model Attachment {
@@ -350,7 +395,7 @@ model Payment {
 
   org           Org            @relation(fields: [orgId], references: [id])
   invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
-  createdBy     User?          @relation(fields: [createdByUserId], references: [id])
+  createdBy     User?          @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id])
 }
 
 model Expense {
@@ -381,7 +426,7 @@ model Payout {
   deletedAt   DateTime?
 
   org         Org            @relation(fields: [orgId], references: [id])
-  recipient   User?          @relation(fields: [recipientId], references: [id])
+  recipient   User?          @relation("PayoutRecipient", fields: [recipientId], references: [id])
 }
 
 model Approval {
@@ -451,7 +496,7 @@ model Risk {
   updatedAt       DateTime @updatedAt
 
   org             Org      @relation(fields: [orgId], references: [id])
-  owner           User?    @relation(fields: [ownerUserId], references: [id])
+  owner           User?    @relation("RiskOwner", fields: [ownerUserId], references: [id])
 
   @@index([orgId, type, severity])
   @@index([orgId, status])
@@ -470,7 +515,7 @@ model DirectorDecision {
   createdAt       DateTime @default(now())
 
   org             Org      @relation(fields: [orgId], references: [id])
-  actor           User     @relation(fields: [actorUserId], references: [id])
+  actor           User     @relation("DirectorDecisionActor", fields: [actorUserId], references: [id])
 
   @@index([orgId, entityType, entityId])
   @@index([orgId, action])
@@ -508,6 +553,8 @@ model Permission {
   id          String   @id @default(cuid())
   key         String   @unique
   description String
+
+  rolePermissions RolePermission[]
 }
 
 model RolePermission {
@@ -599,5 +646,27 @@ model SecurityConfig {
   updatedAt          DateTime @updatedAt
 
   org                Org      @relation(fields: [orgId], references: [id])
+}
+
+model ChangeRequest {
+  id             String   @id @default(cuid())
+  orgId          String
+  projectId      String
+  taskId         String?
+  description    String
+  impact         String?
+  status         String   @default("proposed") // proposed, approved, rejected
+  createdByUserId String
+  approvedByUserId String?
+  createdAt      DateTime @default(now())
+  decidedAt      DateTime?
+
+  org            Org      @relation(fields: [orgId], references: [id])
+  project        Project  @relation(fields: [projectId], references: [id])
+  task           Task?    @relation(fields: [taskId], references: [id])
+  createdBy      User     @relation("ChangeRequestCreatedBy", fields: [createdByUserId], references: [id])
+  approvedBy     User?    @relation("ChangeRequestApprovedBy", fields: [approvedByUserId], references: [id])
+
+  @@index([orgId, projectId, status])
 }
 

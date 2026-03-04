@@ -694,6 +694,67 @@ export default function directorRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Change request decisions
+  router.post(
+    "/change-requests/:id/decision",
+    requireRoles([ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { decision, reason } = req.body as {
+        decision: "approved" | "rejected";
+        reason?: string;
+      };
+
+      if (!decision) {
+        res.status(400).json({ error: "decision is required" });
+        return;
+      }
+
+      const existing = await prisma.changeRequest.findFirst({
+        where: { id, orgId }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Change request not found" });
+        return;
+      }
+
+      const updated = await prisma.changeRequest.update({
+        where: { id },
+        data: {
+          status: decision,
+          approvedByUserId: userId,
+          decidedAt: new Date()
+        }
+      });
+
+      await prisma.directorDecision.create({
+        data: {
+          orgId,
+          actorUserId: userId,
+          action: `change_request.${decision}`,
+          entityType: "change_request",
+          entityId: id,
+          rejectionReason: decision === "rejected" ? reason ?? undefined : undefined
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: `change_request.${decision}`,
+          entityType: "change_request",
+          entityId: id,
+          metadata: { reason }
+        }
+      });
+
+      res.json(updated);
+    }
+  );
+
   router.post(
     "/risks/:id/assign-owner",
     requireRoles([ROLE_KEYS.director]),

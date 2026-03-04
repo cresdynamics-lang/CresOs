@@ -11,7 +11,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "latest",
+    "@prisma/client": "^5.20.0",
     "bcryptjs": "latest",
     "cors": "latest",
     "dotenv": "latest",
@@ -25,7 +25,7 @@
     "@types/express": "latest",
     "@types/jsonwebtoken": "latest",
     "@types/node": "latest",
-    "prisma": "latest",
+    "prisma": "^5.20.0",
     "ts-node-dev": "latest",
     "typescript": "latest"
   }
