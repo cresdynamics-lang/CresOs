@@ -1,0 +1,426 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Org {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  members     OrgMember[]
+  roles       Role[]
+  users       User[]        @relation("OrgUsers")
+
+  leads       Lead[]
+  deals       Deal[]
+  clients     Client[]
+
+  projects    Project[]
+
+  invoices    Invoice[]
+  payments    Payment[]
+  expenses    Expense[]
+  payouts     Payout[]
+
+  approvals   Approval[]
+  notifications Notification[]
+  events       EventLog[]
+
+  @@index([slug])
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  memberships  OrgMember[]
+  roles        UserRole[]
+
+  org          Org?         @relation("OrgUsers", fields: [orgId], references: [id])
+  orgId        String?
+
+  events       EventLog[]
+}
+
+model OrgMember {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  roleId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role?    @relation(fields: [roleId], references: [id])
+
+  @@unique([orgId, userId])
+}
+
+model Role {
+  id        String    @id @default(cuid())
+  orgId     String
+  name      String
+  key       String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  org       Org       @relation(fields: [orgId], references: [id])
+  users     UserRole[]
+
+  @@unique([orgId, key])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  orgId     String
+  email     String
+  roleId    String?
+  token     String   @unique
+  status    String   // pending, accepted, expired, cancelled
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  role      Role?    @relation(fields: [roleId], references: [id])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  leads     Lead[]
+  deals     Deal[]
+  projects  Project[]
+  invoices  Invoice[]
+}
+
+model Lead {
+  id           String          @id @default(cuid())
+  orgId        String
+  clientId     String?
+  title        String
+  source       String?
+  status       String          // new, contacted, qualified, disqualified
+  ownerId      String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+
+  org          Org             @relation(fields: [orgId], references: [id])
+  client       Client?         @relation(fields: [clientId], references: [id])
+  owner        User?           @relation(fields: [ownerId], references: [id])
+  activities   LeadActivity[]
+  deals        Deal[]
+}
+
+model Deal {
+  id           String          @id @default(cuid())
+  orgId        String
+  clientId     String?
+  leadId       String?
+  title        String
+  value        Decimal?        @db.Decimal(14, 2)
+  currency     String?         @default("USD")
+  stage        String          // prospect, proposal, won, lost
+  ownerId      String?
+  closeDate    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+
+  org          Org             @relation(fields: [orgId], references: [id])
+  client       Client?         @relation(fields: [clientId], references: [id])
+  lead         Lead?           @relation(fields: [leadId], references: [id])
+  owner        User?           @relation(fields: [ownerId], references: [id])
+  activities   DealActivity[]
+  projects     Project[]
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  orgId     String
+  leadId    String
+  type      String   // call, meeting, note, whatsapp, email
+  summary   String
+  occurredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  lead      Lead     @relation(fields: [leadId], references: [id])
+}
+
+model DealActivity {
+  id        String   @id @default(cuid())
+  orgId     String
+  dealId    String
+  type      String   // call, meeting, note, whatsapp, email
+  summary   String
+  occurredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  deal      Deal     @relation(fields: [dealId], references: [id])
+}
+
+model Project {
+  id          String      @id @default(cuid())
+  orgId       String
+  clientId    String?
+  dealId      String?
+  name        String
+  status      String      // planned, active, paused, completed, cancelled
+  ownerUserId String?
+  createdByUserId String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  org         Org         @relation(fields: [orgId], references: [id])
+  client      Client?     @relation(fields: [clientId], references: [id])
+  deal        Deal?       @relation(fields: [dealId], references: [id])
+  owner       User?       @relation(fields: [ownerUserId], references: [id])
+  createdBy   User?       @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id])
+  milestones  Milestone[]
+  tasks       Task[]
+}
+
+model Milestone {
+  id          String      @id @default(cuid())
+  orgId       String
+  projectId   String
+  name        String
+  dueDate     DateTime?
+  status      String      // pending, in_progress, completed, rejected
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  org         Org         @relation(fields: [orgId], references: [id])
+  project     Project     @relation(fields: [projectId], references: [id])
+  tasks       Task[]
+}
+
+model Task {
+  id            String          @id @default(cuid())
+  orgId         String
+  projectId     String
+  milestoneId   String?
+  title         String
+  description   String?
+  status        String          // todo, in_progress, blocked, done
+  priority      String          @default("medium")
+  blockedReason String?
+  assigneeId    String?
+  dueDate       DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+
+  org           Org             @relation(fields: [orgId], references: [id])
+  project       Project         @relation(fields: [projectId], references: [id])
+  milestone     Milestone?      @relation(fields: [milestoneId], references: [id])
+  assignee      User?           @relation(fields: [assigneeId], references: [id])
+  comments      TaskComment[]
+  attachments   Attachment[]
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  orgId     String
+  taskId    String
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id])
+  author    User?    @relation(fields: [authorId], references: [id])
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  orgId       String
+  taskId      String?
+  entityType  String   // task, project, deal, invoice, etc.
+  entityId    String
+  filename    String
+  contentType String
+  url         String
+  createdAt   DateTime @default(now())
+
+  org         Org      @relation(fields: [orgId], references: [id])
+  task        Task?    @relation(fields: [taskId], references: [id])
+}
+
+model Invoice {
+  id          String          @id @default(cuid())
+  orgId       String
+  clientId    String
+  projectId   String?
+  number      String
+  status      String          // draft, sent, partial, paid, overdue, cancelled
+  issueDate   DateTime
+  dueDate     DateTime?
+  currency    String          @default("USD")
+  totalAmount Decimal         @db.Decimal(14, 2)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  org         Org            @relation(fields: [orgId], references: [id])
+  client      Client         @relation(fields: [clientId], references: [id])
+  project     Project?       @relation(fields: [projectId], references: [id])
+  items       InvoiceItem[]
+  payments    Payment[]
+
+  @@unique([orgId, number])
+}
+
+model InvoiceItem {
+  id          String          @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int             @default(1)
+  unitPrice   Decimal         @db.Decimal(14, 2)
+
+  invoice     Invoice         @relation(fields: [invoiceId], references: [id])
+}
+
+model Payment {
+  id            String          @id @default(cuid())
+  orgId         String
+  invoiceId     String?
+  amount        Decimal         @db.Decimal(14, 2)
+  currency      String          @default("USD")
+  method        String          // mpesa, bank_transfer, card, cash
+  reference     String?
+  mpesaRef      String?
+  receivedAt    DateTime
+  status        String          @default("pending") // pending, confirmed, failed
+  createdAt     DateTime        @default(now())
+  deletedAt     DateTime?
+
+  org           Org            @relation(fields: [orgId], references: [id])
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  orgId       String
+  category    String
+  description String?
+  amount      Decimal         @db.Decimal(14, 2)
+  currency    String          @default("USD")
+  spentAt     DateTime
+  status      String          @default("pending") // pending, approved, paid
+  createdAt   DateTime        @default(now())
+  deletedAt   DateTime?
+
+  org         Org            @relation(fields: [orgId], references: [id])
+}
+
+model Payout {
+  id          String          @id @default(cuid())
+  orgId       String
+  recipientId String?
+  description String?
+  amount      Decimal         @db.Decimal(14, 2)
+  currency    String          @default("USD")
+  scheduledAt DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  deletedAt   DateTime?
+
+  org         Org            @relation(fields: [orgId], references: [id])
+  recipient   User?          @relation(fields: [recipientId], references: [id])
+}
+
+model Approval {
+  id            String   @id @default(cuid())
+  orgId         String
+  requesterId   String?
+  approverId    String?
+  entityType    String   // invoice, payment, expense, payout, milestone, etc.
+  entityId      String
+  status        String   // pending, approved, rejected, cancelled
+  reason        String?
+  decisionNote  String?
+  createdAt     DateTime @default(now())
+  decidedAt     DateTime?
+
+  org           Org      @relation(fields: [orgId], references: [id])
+  requester     User?    @relation("Requester", fields: [requesterId], references: [id])
+  approver      User?    @relation("Approver", fields: [approverId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  orgId       String
+  channel     String   // email, whatsapp, in_app
+  to          String
+  subject     String?
+  body        String
+  status      String   // queued, sent, failed
+  error       String?
+  type        String   // e.g. invoice.sent, task.assigned
+  tier        String   // execution, financial, governance, structural
+  createdAt   DateTime @default(now())
+  sentAt      DateTime?
+
+  org         Org      @relation(fields: [orgId], references: [id])
+}
+
+model EventLog {
+  id          String   @id @default(cuid())
+  orgId       String
+  actorId     String?
+  type        String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  org         Org      @relation(fields: [orgId], references: [id])
+  actor       User?    @relation(fields: [actorId], references: [id])
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, type])
+}
+
