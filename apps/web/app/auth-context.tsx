@@ -18,6 +18,7 @@ type AuthContextValue = {
   auth: AuthState;
   setAuth: (next: AuthState) => void;
   apiFetch: (input: string, init?: RequestInit) => Promise<Response>;
+  hydrated: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     accessToken: null,
     roleKeys: []
   });
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("cresos_auth");
@@ -38,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
+    setHydrated(true);
   }, []);
 
   const setAuth = (next: AuthState) => {
@@ -67,9 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       auth,
       setAuth,
-      apiFetch
+      apiFetch,
+      hydrated
     }),
-    [auth]
+    [auth, hydrated]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

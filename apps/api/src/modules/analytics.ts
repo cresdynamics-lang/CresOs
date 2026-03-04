@@ -63,7 +63,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
       invoiceOutstanding: invoiceOutstanding._sum.totalAmount?.toNumber() ?? 0,
       activeProjects
     });
-    });
+    }
   );
 
   // CEO-level dashboard: revenue, projects, lead conversion, workload

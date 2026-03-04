@@ -44,7 +44,8 @@ export default function LoginPage() {
   };
 
   return (
-    <section className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <section className="w-full max-w-md flex flex-col gap-4">
       <div className="shell">
         <h1 className="mb-2 text-lg font-semibold text-slate-50">
           Sign in to CresOS
@@ -87,7 +88,8 @@ export default function LoginPage() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
-    </section>
+      </section>
+    </div>
   );
 }
 
