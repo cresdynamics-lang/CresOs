@@ -7,7 +7,7 @@ const ROLE_KEYS = {
   admin: "admin",
   director: "director_admin",
   finance: "finance",
-  ops: "ops",
+  developer: "developer",
   sales: "sales",
   analyst: "analyst",
   client: "client"
@@ -18,7 +18,7 @@ const PASSWORD = "Cres@Team2026#";
 const USERS = [
   { email: "admin@cresdynamics.com", name: "Admin", roleKey: ROLE_KEYS.admin },
   { email: "director@cresdynamics.com", name: "Director", roleKey: ROLE_KEYS.director },
-  { email: "wilson.developer@cresdynamics.com", name: "Wilson Developer", roleKey: ROLE_KEYS.ops },
+  { email: "wilson.developer@cresdynamics.com", name: "Wilson Developer", roleKey: ROLE_KEYS.developer },
   { email: "finance@cresdynamics.com", name: "Finance", roleKey: ROLE_KEYS.finance },
   { email: "salim.sales@cresdynamics.com", name: "Salim Sales", roleKey: ROLE_KEYS.sales }
 ] as const;
@@ -38,7 +38,7 @@ async function main() {
     ROLE_KEYS.admin,
     ROLE_KEYS.director,
     ROLE_KEYS.finance,
-    ROLE_KEYS.ops,
+    ROLE_KEYS.developer,
     ROLE_KEYS.sales,
     ROLE_KEYS.analyst,
     ROLE_KEYS.client
@@ -47,7 +47,7 @@ async function main() {
     [ROLE_KEYS.admin]: "Admin",
     [ROLE_KEYS.director]: "Director",
     [ROLE_KEYS.finance]: "Finance",
-    [ROLE_KEYS.ops]: "Ops",
+    [ROLE_KEYS.developer]: "Developer",
     [ROLE_KEYS.sales]: "Sales",
     [ROLE_KEYS.analyst]: "Analyst",
     [ROLE_KEYS.client]: "Client"

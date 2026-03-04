@@ -17,8 +17,9 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
       const res = await fetch(
-        process.env.NEXT_PUBLIC_API_URL + "/auth/login",
+        apiBase + "/auth/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -32,13 +33,20 @@ export default function LoginPage() {
         return;
       }
       const data = await res.json();
+      const roleKeys = data.roleKeys ?? [];
       setAuth({
         accessToken: data.accessToken,
-        roleKeys: data.roleKeys ?? []
+        roleKeys,
+        userId: data.user?.id
       });
+      // Role detected from API; redirect to dashboard (content is role-specific)
       router.push("/dashboard");
     } catch (err) {
-      setError("Network error");
+      const msg =
+        err instanceof TypeError && err.message === "Failed to fetch"
+          ? "Can't reach the API. Start it: cd apps/api && npm run dev"
+          : "Network error. Start the API: cd apps/api && npm run dev";
+      setError(msg);
       setLoading(false);
     }
   };

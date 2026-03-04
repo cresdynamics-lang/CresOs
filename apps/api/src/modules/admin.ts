@@ -778,6 +778,126 @@ export default function adminRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Performance overview: roles, activity, finance, responsibilities
+  router.get(
+    "/performance",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+
+      const [rolesWithUsers, recentEvents, payments, expenses, projectsByStatus, roleList] = await Promise.all([
+        prisma.role.findMany({
+          where: { orgId },
+          include: { users: { select: { userId: true } } }
+        }),
+        prisma.eventLog.findMany({
+          where: { orgId },
+          orderBy: { createdAt: "desc" },
+          take: 50
+        }),
+        prisma.payment.findMany({
+          where: { orgId, deletedAt: null, status: "confirmed" },
+          select: { amount: true }
+        }),
+        prisma.expense.findMany({
+          where: { orgId, deletedAt: null },
+          select: { amount: true }
+        }),
+        prisma.project.groupBy({
+          by: ["status"],
+          where: { orgId, deletedAt: null },
+          _count: true
+        }),
+        prisma.role.findMany({
+          where: { orgId },
+          select: { id: true, key: true, name: true }
+        })
+      ]);
+
+      const revenue = payments.reduce((s, p) => s + Number(p.amount), 0);
+      const expenditure = expenses.reduce((s, e) => s + Number(e.amount), 0);
+
+      const rolePerformance = rolesWithUsers.map((r) => ({
+        roleKey: r.key,
+        roleName: r.name,
+        userCount: r.users.length
+      }));
+
+      const responsibilities: Record<string, string> = {
+        admin: "Full access: users, org, security, performance, finance overview",
+        director_admin: "Approve leads & projects, comment, view all projects and reports",
+        sales: "Create leads & projects, submit reports, manage CRM contacts",
+        developer: "Delivery: tasks, milestones; assigned as developer on approved projects",
+        finance: "View approved projects (contact & price), update contact/price; invoices & payments",
+        analyst: "View projects, leads, reports; analytics"
+      };
+
+      res.json({
+        rolePerformance,
+        recentActivity: recentEvents,
+        finance: { revenue, expenditure },
+        projectCountByStatus: Object.fromEntries(projectsByStatus.map((p) => [p.status, p._count])),
+        responsibilities: roleList.map((r) => ({ roleKey: r.key, roleName: r.name, description: responsibilities[r.key] ?? r.name }))
+      });
+    }
+  );
+
+  // Users list with profile details (for admin to view/edit)
+  router.get(
+    "/users",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const users = await prisma.user.findMany({
+        where: { orgId, deletedAt: null },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          notificationEmail: true,
+          profileCompletedAt: true,
+          status: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      res.json(users);
+    }
+  );
+
+  router.patch(
+    "/users/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const body = req.body as { name?: string; phone?: string; notificationEmail?: string | null };
+      const user = await prisma.user.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const data: { name?: string; phone?: string; notificationEmail?: string | null } = {};
+      if (body.name !== undefined) data.name = body.name?.trim() || null;
+      if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
+      if (body.notificationEmail !== undefined) data.notificationEmail = body.notificationEmail?.trim() || null;
+      const updated = await prisma.user.update({
+        where: { id },
+        data,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          notificationEmail: true,
+          profileCompletedAt: true,
+          status: true
+        }
+      });
+      res.json(updated);
+    }
+  );
+
   // Alerts
   router.get(
     "/alerts",

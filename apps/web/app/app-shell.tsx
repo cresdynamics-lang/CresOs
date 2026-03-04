@@ -1,9 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
+import { OnboardingPrompt } from "./onboarding-prompt";
+import { SettingsPanel } from "./settings-panel";
 
 type NavSection = {
   title: string;
@@ -14,19 +16,23 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", roles: ["admin", "director_admin", "finance", "ops", "sales", "analyst", "client"] }
+      { href: "/dashboard", label: "Dashboard", roles: ["admin", "director_admin", "finance", "developer", "sales", "analyst", "client"] },
+      { href: "/schedule", label: "Tasks", roles: ["admin", "director_admin", "developer", "sales", "analyst"] }
     ]
   },
   {
-    title: "Sales & CRM",
+    title: "Sales",
     items: [
+      { href: "/reports", label: "Reports", roles: ["admin", "director_admin", "sales"] },
+      { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "analyst"] },
       { href: "/crm", label: "CRM", roles: ["admin", "director_admin", "sales", "analyst"] }
     ]
   },
   {
     title: "Delivery",
     items: [
-      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "ops", "analyst"] }
+      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
+      { href: "/developer-reports", label: "Daily reports", roles: ["admin", "director_admin", "developer"] }
     ]
   },
   {
@@ -55,7 +61,7 @@ function roleLabel(key: string): string {
     admin: "Admin",
     director_admin: "Director",
     finance: "Finance",
-    ops: "Ops",
+    developer: "Developer",
     sales: "Sales",
     analyst: "Analyst",
     client: "Client"
@@ -64,10 +70,25 @@ function roleLabel(key: string): string {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { auth, setAuth } = useAuth();
+  const { auth, setAuth, apiFetch } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const roles = auth.roleKeys;
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"preferences" | "account">("account");
+
+  useEffect(() => {
+    if (!roles.includes("sales")) return;
+    let cancelled = false;
+    apiFetch("/reports/alarms/overdue")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.overdue?.length != null) setOverdueCount(data.overdue.length);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [roles, apiFetch]);
 
   const visibleSections = SIDEBAR_SECTIONS.map((section) => ({
     ...section,
@@ -78,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   })).filter((s) => s.items.length > 0);
 
   const handleLogout = () => {
-    setAuth({ accessToken: null, roleKeys: [] });
+    setAuth({ accessToken: null, roleKeys: [], userId: undefined });
     router.replace("/login");
   };
 
@@ -103,17 +124,23 @@ export function AppShell({ children }: { children: ReactNode }) {
               <nav className="flex flex-col gap-0.5">
                 {section.items.map((item) => {
                   const isActive = pathname === item.href;
+                  const showAlarm = item.href === "/reports" && overdueCount > 0;
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
                           ? "bg-brand/15 text-brand border border-brand/40"
                           : "text-slate-300 hover:bg-slate-800 hover:text-white"
                       }`}
                     >
                       {item.label}
+                      {showAlarm && (
+                        <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {overdueCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -133,18 +160,35 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full rounded-lg border border-slate-700 px-3 py-2 text-left text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              aria-label="Settings"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Settings
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
+
       {/* Main content */}
       <main className="flex-1 overflow-auto">
+        <OnboardingPrompt onOpenAccountSettings={() => { setSettingsOpen(true); setSettingsInitialTab("account"); }} />
         <div className="mx-auto max-w-5xl px-6 py-6">{children}</div>
       </main>
     </div>

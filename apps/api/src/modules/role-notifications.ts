@@ -10,7 +10,7 @@ export const NOTIFICATION_TIERS = {
 const ROLE_TIER_ACCESS: Record<string, string[]> = {
   director_admin: [NOTIFICATION_TIERS.governance],
   finance: [NOTIFICATION_TIERS.financial],
-  ops: [NOTIFICATION_TIERS.execution],
+  developer: [NOTIFICATION_TIERS.execution],
   sales: [NOTIFICATION_TIERS.execution],
   analyst: [],
   admin: [NOTIFICATION_TIERS.structural],

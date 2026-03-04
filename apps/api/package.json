@@ -19,6 +19,7 @@
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
+    "groq-sdk": "^0.37.0",
     "jsonwebtoken": "latest",
     "zod": "latest"
   },

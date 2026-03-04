@@ -12,6 +12,11 @@ import notificationsRouter from "./modules/notifications";
 import directorRouter from "./modules/director";
 import adminRouter from "./modules/admin";
 import clientRouter from "./modules/client";
+import reportsRouter from "./modules/reports";
+import dashboardRouter from "./modules/dashboard";
+import accountRouter from "./modules/account";
+import scheduleRouter from "./modules/schedule";
+import developerReportsRouter from "./modules/developer-reports";
 import { authMiddleware } from "./modules/auth-middleware";
 
 const app = express();
@@ -41,6 +46,11 @@ app.use("/notifications", notificationsRouter(prisma));
 app.use("/director", directorRouter(prisma));
 app.use("/admin", adminRouter(prisma));
 app.use("/client", clientRouter(prisma));
+app.use("/reports", reportsRouter(prisma));
+app.use("/dashboard", dashboardRouter(prisma));
+app.use("/account", accountRouter(prisma));
+app.use("/schedule", scheduleRouter(prisma));
+app.use("/developer-reports", developerReportsRouter(prisma));
 
 const PORT = process.env.PORT || 4000;
 

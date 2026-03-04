@@ -19,7 +19,7 @@ export const ROLE_KEYS = {
   admin: "admin",
   director: "director_admin",
   finance: "finance",
-  ops: "ops",
+  developer: "developer",
   sales: "sales",
   analyst: "analyst",
   client: "client"

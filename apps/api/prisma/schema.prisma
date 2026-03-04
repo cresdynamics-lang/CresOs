@@ -55,19 +55,66 @@ model Org {
 
   directorConfig DirectorConfig?
   securityConfig SecurityConfig?
+  salesReports   SalesReport[]
+  leadComments   LeadComment[]
+  leadFollowUps  LeadFollowUp[]
+  crmContacts   CrmContact[]
+  handoffRequests ProjectHandoffRequest[]
+  scheduleItems   ScheduleItem[]
+  developerReports DeveloperReport[]
 
   @@index([slug])
 }
 
+model ScheduleItem {
+  id                    String    @id @default(cuid())
+  orgId                 String
+  userId                String
+  title                 String
+  type                  String    // meeting, call, report, task, other
+  scheduledAt           DateTime
+  completedAt           DateTime?
+  notes                 String?   @db.Text
+  reminderMinutesBefore Int?     // e.g. 5, 15, 30, 60, 120 — remind user this many minutes before
+  reminderSentAt        DateTime? // when the reminder was sent (so we only send once)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  org                   Org       @relation(fields: [orgId], references: [id])
+  user                  User      @relation(fields: [userId], references: [id])
+
+  @@index([orgId, userId])
+  @@index([userId, scheduledAt])
+}
+
+model CrmContact {
+  id        String   @id @default(cuid())
+  orgId     String
+  email     String?
+  phone     String?
+  name      String?
+  addedById String
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  org       Org      @relation(fields: [orgId], references: [id])
+  addedBy   User     @relation(fields: [addedById], references: [id])
+
+  @@index([orgId])
+}
+
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String?
-  passwordHash String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  deletedAt    DateTime?
-  status       String       @default("active") // active, locked, suspended
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String?
+  passwordHash       String
+  phone              String?
+  notificationEmail  String?   // personal email for notifications; if null, use email
+  profileCompletedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+  status             String    @default("active") // active, locked, suspended
 
   memberships  OrgMember[]
   roles        UserRole[]
@@ -80,9 +127,14 @@ model User {
 
   leadsOwned   Lead[]       @relation("LeadOwner")
   dealsOwned   Deal[]       @relation("DealOwner")
-  projectsOwned Project[]   @relation("ProjectOwner")
-  projectsCreated Project[] @relation("ProjectCreatedBy")
-  tasksAssigned Task[]      @relation("TaskAssignee")
+  projectsOwned       Project[]   @relation("ProjectOwner")
+  projectsCreated     Project[]   @relation("ProjectCreatedBy")
+  projectsApproved    Project[]   @relation("ProjectApprovedBy")
+  projectsAssignedAsDev Project[]  @relation("ProjectAssignedDeveloper")
+  handoffsSent         ProjectHandoffRequest[] @relation("HandoffFrom")
+  handoffsReceived     ProjectHandoffRequest[] @relation("HandoffTo")
+  scheduleItems       ScheduleItem[]
+  tasksAssigned       Task[]      @relation("TaskAssignee")
   taskCommentsAuthored TaskComment[] @relation("TaskCommentAuthor")
   paymentsCreated Payment[] @relation("PaymentCreatedBy")
   payoutsReceived Payout[]  @relation("PayoutRecipient")
@@ -96,6 +148,13 @@ model User {
   overrideActions    OverrideAction[]
   changeRequestsCreated ChangeRequest[] @relation("ChangeRequestCreatedBy")
   changeRequestsApproved ChangeRequest[] @relation("ChangeRequestApprovedBy")
+  salesReportsSubmitted SalesReport[]
+  salesReportComments   SalesReportComment[]
+  developerReportsSubmitted DeveloperReport[]
+  leadComments          LeadComment[]
+  leadsApproved         Lead[]           @relation("LeadApprovedBy")
+  leadFollowUpsAssigned LeadFollowUp[]
+  crmContactsAdded     CrmContact[]
 }
 
 model OrgMember {
@@ -175,22 +234,80 @@ model Client {
 }
 
 model Lead {
-  id           String          @id @default(cuid())
-  orgId        String
-  clientId     String?
-  title        String
-  source       String?
-  status       String          // new, contacted, qualified, disqualified
-  ownerId      String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  deletedAt    DateTime?
+  id              String          @id @default(cuid())
+  orgId           String
+  clientId        String?
+  title           String
+  source         String?
+  status         String          // new, contacted, qualified, disqualified
+  ownerId         String?
+  approvalStatus String          @default("pending_approval") // pending_approval, approved, rejected
+  approvedById    String?
+  approvedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
 
-  org          Org             @relation(fields: [orgId], references: [id])
-  client       Client?         @relation(fields: [clientId], references: [id])
-  owner        User?           @relation("LeadOwner", fields: [ownerId], references: [id])
-  activities   LeadActivity[]
-  deals        Deal[]
+  org             Org             @relation(fields: [orgId], references: [id])
+  client          Client?         @relation(fields: [clientId], references: [id])
+  owner           User?           @relation("LeadOwner", fields: [ownerId], references: [id])
+  approvedBy      User?           @relation("LeadApprovedBy", fields: [approvedById], references: [id])
+  activities      LeadActivity[]
+  deals           Deal[]
+  comments        LeadComment[]
+  followUps       LeadFollowUp[]
+
+  @@index([orgId, approvalStatus])
+}
+
+model LeadComment {
+  id        String   @id @default(cuid())
+  leadId    String
+  orgId     String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  org       Org      @relation(fields: [orgId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([leadId])
+}
+
+model LeadFollowUp {
+  id           String    @id @default(cuid())
+  leadId       String
+  orgId        String
+  type         String    // meeting, call
+  name         String?
+  business     String?
+  reason       String?
+  phone        String?
+  scheduledAt  DateTime
+  assignedToId String
+  reminderSlots Json?    // [2880, 1440, 60, 30, 5] minutes before
+  createdAt    DateTime  @default(now())
+
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  org          Org      @relation(fields: [orgId], references: [id])
+  assignedTo   User     @relation(fields: [assignedToId], references: [id])
+  remindersSent LeadFollowUpReminder[]
+
+  @@index([leadId])
+  @@index([orgId, assignedToId, scheduledAt])
+}
+
+model LeadFollowUpReminder {
+  id          String   @id @default(cuid())
+  followUpId  String
+  reminderKey String   // 2d, 1d, 1h, 30m, 5m
+  sentAt      DateTime @default(now())
+
+  followUp    LeadFollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+
+  @@unique([followUpId, reminderKey])
+  @@index([followUpId])
 }
 
 model Deal {
@@ -243,30 +360,66 @@ model DealActivity {
 }
 
 model Project {
-  id          String      @id @default(cuid())
-  orgId       String
-  clientId    String?
-  dealId      String?
-  name        String
-  status      String      // planned, active, paused, completed, cancelled
-  priority    String      @default("medium") // low, medium, high, critical
-  ownerUserId String?
-  createdByUserId String?
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  deletedAt   DateTime?
+  id                  String    @id @default(cuid())
+  orgId               String
+  clientId            String?
+  dealId              String?
+  name                String
+  status              String    // planned, active, paused, completed, cancelled
+  priority            String    @default("medium") // low, medium, high, critical
+  ownerUserId         String?
+  createdByUserId     String?
+  startDate           DateTime?
+  endDate             DateTime?
+  clientLink          String?
+  // Sales-created project fields (director approval required for dev/finance visibility)
+  type                String?   // demo | project
+  clientOrOwnerName   String?   // name of client or project owner
+  phone               String?
+  email               String?
+  price               Decimal?  @db.Decimal(14, 2) // optional when type=demo
+  projectDetails      String?  @db.Text
+  approvalStatus      String   @default("pending_approval") // pending_approval, approved, rejected
+  approvedById        String?
+  approvedAt          DateTime?
+  assignedDeveloperId String?
+  timeline            Json?    // optional [{ date, title, ... }]
+  developerReviewedAt DateTime? // set when assigned dev reviews and adds tasks
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
-  org         Org         @relation(fields: [orgId], references: [id])
-  client      Client?     @relation(fields: [clientId], references: [id])
-  deal        Deal?       @relation(fields: [dealId], references: [id])
-  owner       User?       @relation("ProjectOwner", fields: [ownerUserId], references: [id])
-  createdBy   User?       @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id])
-  milestones  Milestone[]
-  tasks       Task[]
-  invoices    Invoice[]
-  changeRequests ChangeRequest[]
+  org                 Org         @relation(fields: [orgId], references: [id])
+  client              Client?     @relation(fields: [clientId], references: [id])
+  deal                Deal?       @relation(fields: [dealId], references: [id])
+  owner               User?       @relation("ProjectOwner", fields: [ownerUserId], references: [id])
+  createdBy           User?       @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id])
+  approvedBy          User?       @relation("ProjectApprovedBy", fields: [approvedById], references: [id])
+  assignedDeveloper   User?       @relation("ProjectAssignedDeveloper", fields: [assignedDeveloperId], references: [id])
+  milestones          Milestone[]
+  tasks               Task[]
+  invoices            Invoice[]
+  changeRequests      ChangeRequest[]
+  handoffRequests     ProjectHandoffRequest[]
+}
+
+model ProjectHandoffRequest {
+  id         String   @id @default(cuid())
+  projectId  String
+  orgId      String
+  fromUserId String   // current assigned developer
+  toUserId   String   // fellow developer to hand off to
+  status     String   @default("pending") // pending, accepted, rejected
+  respondedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  org        Org      @relation(fields: [orgId], references: [id])
+  fromUser   User     @relation("HandoffFrom", fields: [fromUserId], references: [id])
+  toUser     User     @relation("HandoffTo", fields: [toUserId], references: [id])
+
+  @@index([projectId])
+  @@index([toUserId, status])
 }
 
 model Milestone {
@@ -312,6 +465,19 @@ model Task {
   comments      TaskComment[]
   attachments   Attachment[]
   changeRequests ChangeRequest[]
+  dueReminders  TaskDueReminder[]
+}
+
+model TaskDueReminder {
+  id          String   @id @default(cuid())
+  taskId      String
+  reminderKey String   // 1d, 1h, overdue
+  sentAt      DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, reminderKey])
+  @@index([taskId])
 }
 
 model TaskComment {
@@ -448,20 +614,23 @@ model Approval {
 }
 
 model Notification {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   orgId       String
-  channel     String   // email, whatsapp, in_app
-  to          String
+  channel     String    // email, whatsapp, in_app
+  to          String    // userId for in_app, email for email
   subject     String?
   body        String
-  status      String   // queued, sent, failed
+  status      String    @default("queued") // queued, sent, failed
   error       String?
-  type        String   // e.g. invoice.sent, task.assigned
-  tier        String   // execution, financial, governance, structural
-  createdAt   DateTime @default(now())
+  type        String    // e.g. lead.follow_up_reminder, task.assigned
+  tier        String    // execution, financial, governance, structural
+  createdAt   DateTime  @default(now())
   sentAt      DateTime?
+  readAt      DateTime? // for in_app: when user read it
 
-  org         Org      @relation(fields: [orgId], references: [id])
+  org         Org       @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, channel, to])
 }
 
 model EventLog {
@@ -668,5 +837,62 @@ model ChangeRequest {
   approvedBy     User?    @relation("ChangeRequestApprovedBy", fields: [approvedByUserId], references: [id])
 
   @@index([orgId, projectId, status])
+}
+
+model SalesReport {
+  id            String    @id @default(cuid())
+  orgId         String
+  submittedById String
+  title         String
+  body          String
+  status        String    @default("draft") // draft, submitted
+  submittedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  org           Org                   @relation(fields: [orgId], references: [id])
+  submittedBy   User                   @relation(fields: [submittedById], references: [id])
+  comments      SalesReportComment[]
+
+  @@index([orgId, submittedById, status])
+}
+
+model SalesReportComment {
+  id        String   @id @default(cuid())
+  reportId  String
+  authorId  String
+  kind      String   // question, comment, response
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+
+  report    SalesReport         @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author    User                @relation(fields: [authorId], references: [id])
+  parent    SalesReportComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies   SalesReportComment[] @relation("CommentReplies")
+
+  @@index([reportId])
+  @@index([parentId])
+}
+
+model DeveloperReport {
+  id              String    @id @default(cuid())
+  orgId           String
+  submittedById   String
+  reportDate      DateTime  // the day this report is for (e.g. 2026-03-04)
+  whatWorked      String?   @db.Text
+  blockers        String?   @db.Text
+  needsAttention  String?   @db.Text
+  implemented     String?   @db.Text
+  pending         String?   @db.Text
+  nextPlan        String?   @db.Text  // what's planned for next day
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org             Org    @relation(fields: [orgId], references: [id])
+  submittedBy     User   @relation(fields: [submittedById], references: [id])
+
+  @@index([orgId, submittedById])
+  @@index([orgId, reportDate])
 }
 

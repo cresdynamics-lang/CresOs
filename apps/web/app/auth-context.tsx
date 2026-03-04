@@ -12,6 +12,7 @@ import {
 type AuthState = {
   accessToken: string | null;
   roleKeys: string[];
+  userId?: string;
 };
 
 type AuthContextValue = {
@@ -23,10 +24,15 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const API_BASE = typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL
+  ? process.env.NEXT_PUBLIC_API_URL
+  : "http://localhost:4000";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuthState] = useState<AuthState>({
     accessToken: null,
-    roleKeys: []
+    roleKeys: [],
+    userId: undefined
   });
   const [hydrated, setHydrated] = useState(false);
 
@@ -57,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers.Authorization = `Bearer ${auth.accessToken}`;
     }
     const res = await fetch(
-      process.env.NEXT_PUBLIC_API_URL + input,
+      API_BASE + input,
       {
         ...init,
         headers

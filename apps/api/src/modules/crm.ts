@@ -3,6 +3,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { notifyDirectors } from "./director-notifications";
 
 export default function crmRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -79,10 +80,155 @@ export default function crmRouter(prisma: PrismaClient): Router {
         clientId,
         source,
         status: "new",
-        ownerId: userId
+        ownerId: userId,
+        approvalStatus: "pending_approval"
       }
     });
+    await notifyDirectors(prisma, orgId, "New lead created", `Lead "${lead.title}" was added and is pending your approval.`);
     res.status(201).json(lead);
+    }
+  );
+
+  // Single lead (with comments, follow-ups)
+  router.get(
+    "/leads/:id",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const lead = await prisma.lead.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: {
+          client: true,
+          owner: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, email: true } },
+          comments: { include: { author: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" } },
+          followUps: { include: { assignedTo: { select: { id: true, name: true, email: true } } }, orderBy: { scheduledAt: "asc" } }
+        }
+      });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      res.json(lead);
+    }
+  );
+
+  // Director: approve or reject lead
+  router.patch(
+    "/leads/:id",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const body = req.body as { approvalStatus?: string; status?: string; title?: string; source?: string };
+      const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+      const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+      if (body.approvalStatus != null && (body.approvalStatus === "approved" || body.approvalStatus === "rejected")) {
+        if (!isDirector) return res.status(403).json({ error: "Only director can approve or reject leads" });
+        const updated = await prisma.lead.update({
+          where: { id },
+          data: {
+            approvalStatus: body.approvalStatus,
+            approvedById: userId,
+            approvedAt: new Date()
+          }
+        });
+        await notifyDirectors(prisma, orgId, "Lead approval updated", `Lead "${lead.title}" was ${body.approvalStatus}.`);
+        return res.json(updated);
+      }
+      // Sales/owner: update status, title, source only
+      if (lead.ownerId !== userId && !isDirector) return res.status(403).json({ error: "Not your lead" });
+      const updated = await prisma.lead.update({
+        where: { id },
+        data: {
+          ...(body.status != null && { status: body.status }),
+          ...(body.title != null && { title: body.title }),
+          ...(body.source != null && { source: body.source })
+        }
+      });
+      res.json(updated);
+    }
+  );
+
+  // Director: comment on lead
+  router.post(
+    "/leads/:id/comments",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { content } = req.body as { content?: string };
+      if (!content || !content.trim()) return res.status(400).json({ error: "Content is required" });
+      const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      const comment = await prisma.leadComment.create({
+        data: { leadId: id, orgId, authorId: userId, content: content.trim() },
+        include: { author: { select: { id: true, name: true, email: true } } }
+      });
+      res.status(201).json(comment);
+    }
+  );
+
+  // Follow-up: schedule meeting or call (sales or director)
+  const REMINDER_SLOTS_DEFAULT = [2880, 1440, 60, 30, 5, 0]; // 2d, 1d, 1h, 30m, 5m, at time
+  router.post(
+    "/leads/:id/follow-ups",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const body = req.body as {
+        type: string;
+        name?: string;
+        business?: string;
+        reason?: string;
+        phone?: string;
+        scheduledAt: string;
+        assignedToId?: string;
+        reminderSlots?: number[];
+      };
+      if (!body.type || !body.scheduledAt) return res.status(400).json({ error: "type and scheduledAt are required" });
+      if (!["meeting", "call"].includes(body.type)) return res.status(400).json({ error: "type must be meeting or call" });
+      const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      const assignedToId = body.assignedToId ?? lead.ownerId ?? req.auth!.userId;
+      const scheduledAt = new Date(body.scheduledAt);
+      if (isNaN(scheduledAt.getTime())) return res.status(400).json({ error: "Invalid scheduledAt" });
+      const followUp = await prisma.leadFollowUp.create({
+        data: {
+          leadId: id,
+          orgId,
+          type: body.type,
+          name: body.name,
+          business: body.business,
+          reason: body.reason,
+          phone: body.phone,
+          scheduledAt,
+          assignedToId,
+          reminderSlots: body.reminderSlots ?? REMINDER_SLOTS_DEFAULT
+        },
+        include: { assignedTo: { select: { id: true, name: true, email: true } }, lead: { select: { id: true, title: true } } }
+      });
+      res.status(201).json(followUp);
+    }
+  );
+
+  router.get(
+    "/leads/:id/follow-ups",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      const list = await prisma.leadFollowUp.findMany({
+        where: { leadId: id },
+        orderBy: { scheduledAt: "asc" },
+        include: { assignedTo: { select: { id: true, name: true, email: true } } }
+      });
+      res.json(list);
     }
   );
 
@@ -179,6 +325,61 @@ export default function crmRouter(prisma: PrismaClient): Router {
   );
 
   // Deal activities
+  // Outreach contacts (emails/phones for sending service communications)
+  router.get(
+    "/contacts",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const contacts = await prisma.crmContact.findMany({
+        where: { orgId, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        include: { addedBy: { select: { id: true, name: true, email: true } } }
+      });
+      res.json(contacts);
+    }
+  );
+
+  router.post(
+    "/contacts",
+    requireRoles([ROLE_KEYS.sales]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const body = req.body as { email?: string; phone?: string; name?: string };
+      const email = typeof body.email === "string" ? body.email.trim() || undefined : undefined;
+      const phone = typeof body.phone === "string" ? body.phone.trim() || undefined : undefined;
+      const name = typeof body.name === "string" ? body.name.trim() || undefined : undefined;
+      if (!email && !phone) {
+        res.status(400).json({ error: "At least one of email or phone is required" });
+        return;
+      }
+      const contact = await prisma.crmContact.create({
+        data: { orgId, addedById: userId, email, phone, name },
+        include: { addedBy: { select: { id: true, name: true, email: true } } }
+      });
+      res.status(201).json(contact);
+    }
+  );
+
+  router.delete(
+    "/contacts/:id",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const contact = await prisma.crmContact.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!contact) return res.status(404).json({ error: "Contact not found" });
+      await prisma.crmContact.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      });
+      res.status(204).send();
+    }
+  );
+
   router.get(
     "/deals/:id/activities",
     requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),

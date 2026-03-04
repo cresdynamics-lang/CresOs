@@ -82,7 +82,7 @@ export default function authRouter(prisma: PrismaClient): Router {
         data: { orgId: org.id, name: "Sales", key: ROLE_KEYS.sales }
       });
       await tx.role.create({
-        data: { orgId: org.id, name: "Ops", key: ROLE_KEYS.ops }
+        data: { orgId: org.id, name: "Developer", key: ROLE_KEYS.developer }
       });
       await tx.role.create({
         data: { orgId: org.id, name: "Finance", key: ROLE_KEYS.finance }
