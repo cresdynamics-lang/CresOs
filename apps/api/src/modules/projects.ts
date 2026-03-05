@@ -93,7 +93,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
-      const body = req.body as {
+      const body = (req.body || {}) as {
         name: string;
         clientId?: string;
         dealId?: string;
