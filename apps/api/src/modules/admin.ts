@@ -341,10 +341,6 @@ export default function adminRouter(prisma: PrismaClient): Router {
   router.get(
     "/roles/:roleId/users",
     requireRoles([ROLE_KEYS.admin]),
-
-  router.get(
-    "/roles/:roleId/users",
-    requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { roleId } = req.params;
