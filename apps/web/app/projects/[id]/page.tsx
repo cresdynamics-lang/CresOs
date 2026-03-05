@@ -17,6 +17,7 @@ type ProjectDetail = {
   phone?: string | null;
   email?: string | null;
   price?: number | null;
+  amountReceived?: number;
   projectDetails?: string | null;
   approvalStatus?: string;
   assignedDeveloper?: { id: string; name: string | null; email: string } | null;
@@ -62,6 +63,7 @@ export default function ProjectDetailPage() {
           phone: data.phone,
           email: data.email,
           price: data.price,
+          amountReceived: data.amountReceived ?? 0,
           projectDetails: data.projectDetails,
           approvalStatus: data.approvalStatus,
           assignedDeveloper: data.assignedDeveloper,
@@ -171,6 +173,9 @@ export default function ProjectDetailPage() {
   }
 
   const canSeeContact = project.clientOrOwnerName != null || project.phone != null || project.email != null || project.price != null;
+  const allocated = project.price != null ? Number(project.price) : null;
+  const received = project.amountReceived ?? 0;
+  const remaining = allocated != null ? Math.max(0, allocated - received) : null;
 
   return (
     <section className="flex flex-col gap-4">
@@ -227,7 +232,13 @@ export default function ProjectDetailPage() {
             {project.clientOrOwnerName && <li>Name: {project.clientOrOwnerName}</li>}
             {project.phone && <li>Phone: {project.phone}</li>}
             {project.email && <li>Email: {project.email}</li>}
-            {project.price != null && <li>Price: {formatMoney(Number(project.price))}</li>}
+            {project.price != null && (
+              <>
+                <li>Allocated: {formatMoney(Number(project.price))}</li>
+                <li>Received: {formatMoney(received)} (deducts from allocated when payments confirmed)</li>
+                {remaining != null && <li>Remaining: {formatMoney(remaining)}</li>}
+              </>
+            )}
           </ul>
         </div>
       )}

@@ -76,6 +76,71 @@ export default function adminRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Finance submissions: only admin can approve (expense, payout). Director can view only.
+  router.post(
+    "/finance-approvals/:id/decision",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { status, note } = req.body as {
+        status: "approved" | "rejected" | "cancelled";
+        note?: string;
+      };
+
+      if (!status) {
+        res.status(400).json({ error: "Missing status" });
+        return;
+      }
+
+      const existing = await prisma.approval.findUnique({ where: { id } });
+      if (!existing || existing.orgId !== orgId) {
+        res.status(404).json({ error: "Approval not found" });
+        return;
+      }
+      if (existing.entityType !== "expense" && existing.entityType !== "payout") {
+        res.status(400).json({ error: "This endpoint is only for expense or payout approvals" });
+        return;
+      }
+      if (existing.status !== "pending") {
+        res.status(400).json({ error: "Approval is not pending" });
+        return;
+      }
+
+      const approval = await prisma.approval.update({
+        where: { id },
+        data: {
+          status,
+          approverId: userId,
+          decisionNote: note,
+          decidedAt: new Date()
+        }
+      });
+
+      if (status === "approved") {
+        if (existing.entityType === "expense") {
+          await prisma.expense.updateMany({
+            where: { id: existing.entityId, orgId },
+            data: { status: "approved" }
+          });
+        }
+      }
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          type: `approval.${status}`,
+          entityType: approval.entityType,
+          entityId: approval.entityId,
+          metadata: { approvalId: approval.id, approver: "admin" }
+        }
+      });
+
+      res.json(approval);
+    }
+  );
+
   // Roles and role assignments
   router.get(
     "/roles",

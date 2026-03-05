@@ -382,12 +382,17 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         return;
       }
       const stripSensitive = isDeveloper && !isDirector;
-      const out: any = { ...project, price: project.price != null ? Number(project.price) : null };
+      const out: any = {
+        ...project,
+        price: project.price != null ? Number(project.price) : null,
+        amountReceived: project.amountReceived != null ? Number(project.amountReceived) : 0
+      };
       if (stripSensitive) {
         delete out.phone;
         delete out.email;
         delete out.price;
         delete out.clientOrOwnerName;
+        delete out.amountReceived;
       }
       res.json(out);
     }

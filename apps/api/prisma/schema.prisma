@@ -222,14 +222,16 @@ model Invite {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  orgId     String
-  name      String
-  email     String?
-  phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
+  id                  String    @id @default(cuid())
+  orgId               String
+  name                String
+  email               String?
+  phone               String?
+  reminderDayOfMonth   Int?      // 1-28: day of month to send payment reminder
+  lastReminderAt      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
   org       Org      @relation(fields: [orgId], references: [id])
   leads     Lead[]
@@ -383,6 +385,7 @@ model Project {
   phone               String?
   email               String?
   price               Decimal?  @db.Decimal(14, 2) // optional when type=demo
+  amountReceived      Decimal?  @db.Decimal(14, 2) @default(0) // sum of confirmed payments for this project (invoices)
   projectDetails      String?  @db.Text
   approvalStatus      String   @default("pending_approval") // pending_approval, approved, rejected
   approvedById        String?
@@ -556,9 +559,13 @@ model Payment {
   createdByUserId String?
   amount        Decimal         @db.Decimal(14, 2)
   currency      String          @default("USD")
-  method        String          // mpesa, bank_transfer, card, cash
-  reference     String?
+  method        String          // bank, card, mpesa, cash - how it landed
+  reference     String?         // transaction code / receipt reference
   mpesaRef      String?
+  source        String?         // where from (payer/source name)
+  account       String?         // which account it landed in
+  howToProceed  String?         // confirmation note: how to proceed (e.g. allocate to invoice)
+  notes         String?         // internal note for this transaction
   receivedAt    DateTime
   status        String          @default("pending") // pending, confirmed, failed
   createdAt     DateTime        @default(now())
@@ -570,16 +577,21 @@ model Payment {
 }
 
 model Expense {
-  id          String          @id @default(cuid())
-  orgId       String
-  category    String
-  description String?
-  amount      Decimal         @db.Decimal(14, 2)
-  currency    String          @default("USD")
-  spentAt     DateTime
-  status      String          @default("pending") // pending, approved, paid
-  createdAt   DateTime        @default(now())
-  deletedAt   DateTime?
+  id               String          @id @default(cuid())
+  orgId            String
+  category         String          // salaries, apis, hostings, domains, renewals, apis_per_project, other
+  description      String?
+  notes            String?         // internal note/comment for this transaction
+  source           String?         // where from (vendor/supplier name)
+  transactionCode  String?         // receipt / transaction code
+  account          String?         // which account it was paid from
+  paymentMethod    String?         // bank, card, mpesa, cash - how it was paid
+  amount           Decimal         @db.Decimal(14, 2)
+  currency         String          @default("USD")
+  spentAt          DateTime
+  status           String          @default("pending") // pending, approved, paid - needs admin approval
+  createdAt        DateTime        @default(now())
+  deletedAt        DateTime?
 
   org         Org            @relation(fields: [orgId], references: [id])
 }
@@ -589,6 +601,7 @@ model Payout {
   orgId       String
   recipientId String?
   description String?
+  notes       String?         // internal note/comment for this transaction
   amount      Decimal         @db.Decimal(14, 2)
   currency    String          @default("USD")
   scheduledAt DateTime?

@@ -11,7 +11,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Clients
   router.get(
     "/clients",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const clients = await prisma.client.findMany({
