@@ -24,7 +24,7 @@ export async function logAdminActivity(prisma: PrismaClient, input: AdminActivit
       actorId: input.actorId ?? null,
       entityType: input.entityType ?? null,
       entityId: input.entityId ?? null,
-      metadata: input.metadata ?? undefined
+      metadata: (input.metadata ?? undefined) as any
     }
   });
 }

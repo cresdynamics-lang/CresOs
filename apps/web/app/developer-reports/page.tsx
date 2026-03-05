@@ -242,10 +242,14 @@ export default function DeveloperReportsPage() {
                   {FIELDS.map(({ key, label }) => {
                     const value = report[key as keyof DeveloperReport];
                     if (value == null || value === "") return null;
+                    const display =
+                      typeof value === "string" ? value : JSON.stringify(value);
                     return (
                       <div key={key}>
                         <dt className="text-slate-400">{label}</dt>
-                        <dd className="mt-0.5 whitespace-pre-wrap text-slate-200">{value}</dd>
+                        <dd className="mt-0.5 whitespace-pre-wrap text-slate-200">
+                          {display}
+                        </dd>
                       </div>
                     );
                   })}

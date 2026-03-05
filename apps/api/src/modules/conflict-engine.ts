@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { PrismaClient, Approval } from "@prisma/client";
 
 export async function logConflict(

@@ -55,20 +55,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const apiFetch = async (input: string, init?: RequestInit) => {
-    const headers: HeadersInit = {
-      ...(init?.headers || {}),
-      "Content-Type": "application/json"
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(init?.headers ? Object.fromEntries(new Headers(init.headers)) : {})
     };
     if (auth.accessToken) {
-      headers.Authorization = `Bearer ${auth.accessToken}`;
+      headers["Authorization"] = `Bearer ${auth.accessToken}`;
     }
-    const res = await fetch(
-      API_BASE + input,
-      {
-        ...init,
-        headers
-      }
-    );
+    const res = await fetch(API_BASE + input, {
+      ...init,
+      headers
+    });
     return res;
   };
 
