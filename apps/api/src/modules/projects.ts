@@ -65,12 +65,17 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       // Strip price/phone/email for developer view
       const stripSensitive = isDeveloper && !isDirector;
       const out = projects.map((p) => {
-        const row = { ...p, price: p.price != null ? Number(p.price) : null };
+        const row = {
+          ...p,
+          price: p.price != null ? Number(p.price) : null,
+          amountReceived: p.amountReceived != null ? Number(p.amountReceived) : 0
+        };
         if (stripSensitive) {
           delete (row as any).phone;
           delete (row as any).email;
           delete (row as any).price;
           delete (row as any).clientOrOwnerName;
+          delete (row as any).amountReceived;
         }
         return row;
       });
