@@ -55,10 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const apiFetch = async (input: string, init?: RequestInit) => {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(init?.headers ? Object.fromEntries(new Headers(init.headers)) : {})
-    };
+    const headers: Record<string, string> = init?.headers
+      ? Object.fromEntries(new Headers(init.headers))
+      : {};
+    if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) {
+      headers["Content-Type"] = "application/json";
+    }
     if (auth.accessToken) {
       headers["Authorization"] = `Bearer ${auth.accessToken}`;
     }
