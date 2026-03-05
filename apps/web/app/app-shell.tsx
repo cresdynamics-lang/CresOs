@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { OnboardingPrompt } from "./onboarding-prompt";
 import { SettingsPanel } from "./settings-panel";
+import { NotificationBell } from "./notification-bell";
 
 type NavSection = {
   title: string;
@@ -189,7 +190,20 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <OnboardingPrompt onOpenAccountSettings={() => { setSettingsOpen(true); setSettingsInitialTab("account"); }} />
+        <header className="flex items-center justify-between border-b border-slate-800 px-6 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            CresOS workspace
+          </div>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+          </div>
+        </header>
+        <OnboardingPrompt
+          onOpenAccountSettings={() => {
+            setSettingsOpen(true);
+            setSettingsInitialTab("account");
+          }}
+        />
         <div className="mx-auto max-w-5xl px-6 py-6">{children}</div>
       </main>
     </div>

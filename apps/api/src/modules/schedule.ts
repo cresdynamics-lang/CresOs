@@ -128,6 +128,8 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
           title: body.title.trim(),
           type,
           scheduledAt,
+          originalScheduledAt: scheduledAt,
+          status: "scheduled",
           notes: body.notes?.trim() || null,
           reminderMinutesBefore,
           reminderSentAt: null
@@ -159,18 +161,31 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
         title?: string;
         type?: string;
         scheduledAt?: Date;
+        originalScheduledAt?: Date | null;
+        status?: string;
         notes?: string | null;
         completedAt?: Date | null;
         reminderMinutesBefore?: number | null;
         reminderSentAt?: Date | null;
       } = {};
-      if (body.completed !== undefined) data.completedAt = body.completed ? new Date() : null;
+      if (body.completed !== undefined) {
+        data.completedAt = body.completed ? new Date() : null;
+        if (body.completed) data.status = "completed";
+      }
       if (canEditHistory) {
         if (body.title !== undefined) data.title = body.title.trim();
         if (body.type !== undefined && ["meeting", "call", "report", "task", "other"].includes(body.type)) data.type = body.type;
         if (body.scheduledAt !== undefined) {
           const d = new Date(body.scheduledAt);
-          if (!isNaN(d.getTime())) data.scheduledAt = d;
+          if (!isNaN(d.getTime())) {
+            data.scheduledAt = d;
+            if (!existing.originalScheduledAt) {
+              data.originalScheduledAt = existing.scheduledAt;
+            }
+            if (!existing.completedAt) {
+              data.status = "rescheduled";
+            }
+          }
         }
         if (body.notes !== undefined) data.notes = body.notes?.trim() || null;
         if (body.reminderMinutesBefore !== undefined) {

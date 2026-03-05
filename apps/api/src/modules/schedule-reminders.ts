@@ -78,4 +78,44 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       await logEmailSent(prisma, { orgId: item.orgId, to: userEmail, subject: emailSubject, body, type: "schedule_reminder" });
     }
   }
+
+  // Mark missed meetings/calls and raise alerts if needed
+  const graceMinutes = 15;
+  const missedCutoff = new Date(now.getTime() - graceMinutes * 60 * 1000);
+  const missedCandidates = await prisma.scheduleItem.findMany({
+    where: {
+      completedAt: null,
+      scheduledAt: { lt: missedCutoff },
+      type: { in: ["meeting", "call"] },
+      status: { in: ["scheduled", "rescheduled"] }
+    },
+    include: {
+      user: { select: { id: true, name: true, email: true, notificationEmail: true } }
+    }
+  });
+
+  for (const item of missedCandidates) {
+    await prisma.scheduleItem.update({
+      where: { id: item.id },
+      data: { status: "missed" }
+    });
+
+    const typeLabel = item.type === "meeting" ? "Meeting" : "Call";
+    const subject = `${typeLabel} missed: ${item.title}`;
+    const body = `${typeLabel} "${item.title}" scheduled for ${item.scheduledAt.toISOString()} was not marked attended. Please update as attended or reschedule if this is incorrect.`;
+
+    // Notify the owner
+    await prisma.notification.create({
+      data: {
+        orgId: item.orgId,
+        channel: "in_app",
+        to: item.userId,
+        subject,
+        body,
+        status: "sent",
+        type: "schedule_missed",
+        tier: "execution"
+      }
+    });
+  }
 }

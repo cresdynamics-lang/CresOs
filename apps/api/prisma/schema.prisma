@@ -76,7 +76,9 @@ model ScheduleItem {
   title                 String
   type                  String    // meeting, call, report, task, other
   scheduledAt           DateTime
+  originalScheduledAt   DateTime?
   completedAt           DateTime?
+  status                String    @default("scheduled") // scheduled, completed, missed, rescheduled, cancelled
   notes                 String?   @db.Text
   reminderMinutesBefore Int?     // e.g. 5, 15, 30, 60, 120 — remind user this many minutes before
   reminderSentAt        DateTime? // when the reminder was sent (so we only send once)

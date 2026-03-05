@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { logEmailSent } from "./admin-activity";
 import { processAiAlignmentNotifications } from "./ai-alignment-notifications";
+import { processNegligenceAlerts } from "./negligence-alerts";
 import { processDueReminders } from "./lead-reminders";
 import { processScheduleReminders } from "./schedule-reminders";
 import { processTaskDueReminders } from "./task-reminders";
@@ -104,8 +105,9 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         processTaskDueReminders(prisma),
         processScheduleReminders(prisma)
       ]);
-      // AI alignment notifications (throttled); run in background so dashboard responds quickly
+      // AI alignment + negligence notifications (throttled); run in background so dashboard responds quickly
       void processAiAlignmentNotifications(prisma, orgId).catch(() => {});
+      void processNegligenceAlerts(prisma, orgId).catch(() => {});
 
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
