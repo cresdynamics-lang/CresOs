@@ -62,6 +62,17 @@ const EXPENSE_CATEGORIES = [
   "other"
 ] as const;
 
+type ProjectFinancial = {
+  id: string;
+  name: string;
+  status: string;
+  allocated: number | null;
+  received: number;
+  remaining: number | null;
+  managementMonthlyAmount: number | null;
+  managementMonths: number | null;
+};
+
 type FinancialReport = {
   generatedAt: string;
   period: { startOfMonth: string; endOfMonth: string };
@@ -88,6 +99,7 @@ export default function FinancePage() {
   const [clientsDue, setClientsDue] = useState<ClientDue[]>([]);
   const [report, setReport] = useState<FinancialReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [projectFinancials, setProjectFinancials] = useState<ProjectFinancial[]>([]);
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
   const [expenseForm, setExpenseForm] = useState<{
     category: string;
@@ -110,7 +122,8 @@ export default function FinancePage() {
     account: "",
     paymentMethod: "bank"
   });
-  const [paymentForm, setPaymentForm] = useState<{ method: string; amount: string; receivedAt: string; notes: string; source: string; invoiceId: string }>({
+  const [paymentForm, setPaymentForm] = useState<{ projectId: string; method: string; amount: string; receivedAt: string; notes: string; source: string; invoiceId: string }>({
+    projectId: "",
     method: "mpesa",
     amount: "",
     receivedAt: new Date().toISOString().slice(0, 10),
@@ -231,6 +244,13 @@ export default function FinancePage() {
       if (dueRes?.ok) {
         const data = (await dueRes.json()) as ClientDue[];
         setClientsDue(data);
+      }
+      if (canSeeReport) {
+        const projRes = await apiFetch("/finance/projects");
+        if (projRes.ok) {
+          const projData = (await projRes.json()) as ProjectFinancial[];
+          setProjectFinancials(projData);
+        }
       }
       const appRes = await apiFetch("/finance/approvals");
       if (appRes.ok) {
@@ -426,6 +446,64 @@ export default function FinancePage() {
           is never an afterthought. All amounts in KES.
         </p>
       </div>
+
+      {canSeeReport && projectFinancials.length > 0 && (
+        <div className="shell border-sky-800/50">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Project financials (platform) — deduction &amp; what is there
+          </h3>
+          <p className="mb-3 text-xs text-slate-400">
+            Allocated vs received per project; when on management: expected per month and for how long (to plan upgrades).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-slate-400">
+                  <th className="pb-2 pr-2">Project</th>
+                  <th className="pb-2 pr-2">Status</th>
+                  <th className="pb-2 pr-2 text-right">Allocated</th>
+                  <th className="pb-2 pr-2 text-right">Received</th>
+                  <th className="pb-2 pr-2 text-right">Remaining</th>
+                  <th className="pb-2 pr-2">Management</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectFinancials.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-800">
+                    <td className="py-2 pr-2">
+                      <a href={`/projects/${p.id}`} className="text-sky-400 hover:underline">
+                        {p.name}
+                      </a>
+                    </td>
+                    <td className="py-2 pr-2 capitalize text-slate-300">{p.status}</td>
+                    <td className="py-2 pr-2 text-right text-slate-200">
+                      {p.allocated != null ? formatMoney(p.allocated) : "—"}
+                    </td>
+                    <td className="py-2 pr-2 text-right text-emerald-400">{formatMoney(p.received)}</td>
+                    <td className="py-2 pr-2 text-right text-amber-400">
+                      {p.remaining != null ? formatMoney(p.remaining) : "—"}
+                    </td>
+                    <td className="py-2 pr-2 text-slate-300">
+                      {p.managementMonthlyAmount != null && p.managementMonths != null ? (
+                        <span>
+                          {formatMoney(p.managementMonthlyAmount)}/month for {p.managementMonths} month{p.managementMonths !== 1 ? "s" : ""}
+                          {p.managementMonths > 0 && (
+                            <span className="ml-1 text-xs text-slate-500">
+                              (total {formatMoney(p.managementMonthlyAmount * p.managementMonths)})
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {canSeeReport && (
         <div className="shell border-emerald-800/40 bg-slate-900/60">
@@ -758,7 +836,32 @@ export default function FinancePage() {
           </ul>
           {isFinance && (
             <form onSubmit={submitPayment} className="mt-3 flex flex-col gap-2 border-t border-slate-700 pt-3">
-              <p className="text-xs text-slate-400">Record payment — source, for which project (invoice)</p>
+              <p className="text-xs text-slate-400">Record payment — choose project, then invoice (deducts from project)</p>
+              <select
+                value={paymentForm.projectId}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, projectId: e.target.value, invoiceId: "" }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
+              >
+                <option value="">Select project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <select
+                value={paymentForm.invoiceId}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, invoiceId: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
+              >
+                <option value="">No invoice</option>
+                {(paymentForm.projectId
+                  ? invoices.filter((inv) => inv.projectId === paymentForm.projectId)
+                  : invoices
+                ).map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.number} {inv.project ? `— ${inv.project.name}` : ""}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 placeholder="Payment source (where from)"
@@ -766,18 +869,6 @@ export default function FinancePage() {
                 onChange={(e) => setPaymentForm((f) => ({ ...f, source: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
               />
-              <select
-                value={paymentForm.invoiceId}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, invoiceId: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              >
-                <option value="">No invoice / project</option>
-                {invoices.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.number} {inv.project ? `— ${inv.project.name}` : ""}
-                  </option>
-                ))}
-              </select>
               <select
                 value={paymentForm.method}
                 onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}

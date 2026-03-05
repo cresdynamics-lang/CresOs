@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
 
@@ -13,6 +13,12 @@ type UserRow = {
   profileCompletedAt: string | null;
   status: string;
 };
+
+type DepartmentRow = { id: string; name: string; description: string | null; _count?: { roles: number } };
+type RoleRow = { id: string; name: string; key: string; departmentId: string | null; department?: { id: string; name: string } | null };
+type PermissionRow = { id: string; key: string; description: string };
+type RolePermission = { roleId: string; permissionId: string };
+type UserWithRoles = UserRow & { roles?: { roleId: string; role: { id: string; name: string; key: string } }[] };
 
 type PerformanceData = {
   rolePerformance: { roleKey: string; roleName: string; userCount: number }[];
@@ -41,18 +47,97 @@ export default function AdminPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"users" | "performance" | "messages">("users");
+  const [tab, setTab] = useState<"users" | "departments" | "roles" | "capabilities" | "performance" | "messages">("users");
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [roles, setRoles] = useState<RoleRow[]>([]);
+  const [permissionsMatrix, setPermissionsMatrix] = useState<{
+    roles: RoleRow[];
+    permissions: PermissionRow[];
+    rolePermissions: RolePermission[];
+  } | null>(null);
+  const [deptName, setDeptName] = useState("");
+  const [deptDesc, setDeptDesc] = useState("");
+  const [roleName, setRoleName] = useState("");
+  const [roleKey, setRoleKey] = useState("");
+  const [roleDeptId, setRoleDeptId] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRoleId, setNewUserRoleId] = useState("");
+  const [assignRoleUserId, setAssignRoleUserId] = useState("");
+  const [assignRoleRoleId, setAssignRoleRoleId] = useState("");
+  const [usersWithRoles, setUsersWithRoles] = useState<UserWithRoles[]>([]);
   const isAdmin = auth.roleKeys.includes("admin");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await apiFetch("/admin/users");
       if (res.ok) setUsers((await res.json()) as UserRow[]);
     } catch {
       // ignore
     }
-  };
+  }, [apiFetch]);
+
+  const loadUsersWithRoles = useCallback(async () => {
+    try {
+      const [uRes, rRes] = await Promise.all([
+        apiFetch("/admin/users"),
+        apiFetch("/admin/roles")
+      ]);
+      if (!uRes.ok || !rRes.ok) return;
+      const userList = (await uRes.json()) as UserRow[];
+      const roleList = (await rRes.json()) as RoleRow[];
+      const assignments = await Promise.all(
+        roleList.map((role) =>
+          apiFetch(`/admin/roles/${role.id}/users`).then((res) =>
+            res.ok ? res.json() : []
+          )
+        )
+      );
+      const byUser = new Map<string, { roleId: string; role: { id: string; name: string; key: string } }[]>();
+      roleList.forEach((role, i) => {
+        const list = (assignments[i] as { user: { id: string }; role: { id: string; name: string; key: string } }[]) || [];
+        list.forEach((a: { user: { id: string }; role: { id: string; name: string; key: string } }) => {
+          const arr = byUser.get(a.user.id) ?? [];
+          arr.push({ roleId: a.role.id, role: a.role });
+          byUser.set(a.user.id, arr);
+        });
+      });
+      setUsersWithRoles(
+        userList.map((u) => ({ ...u, roles: byUser.get(u.id) ?? [] }))
+      );
+    } catch {
+      // ignore
+    }
+  }, [apiFetch]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await apiFetch("/admin/departments");
+      if (res.ok) setDepartments((await res.json()) as DepartmentRow[]);
+    } catch {
+      // ignore
+    }
+  }, [apiFetch]);
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const res = await apiFetch("/admin/roles");
+      if (res.ok) setRoles((await res.json()) as RoleRow[]);
+    } catch {
+      // ignore
+    }
+  }, [apiFetch]);
+
+  const loadPermissionsMatrix = useCallback(async () => {
+    try {
+      const res = await apiFetch("/admin/permissions/matrix");
+      if (res.ok) setPermissionsMatrix((await res.json()) as typeof permissionsMatrix);
+    } catch {
+      // ignore
+    }
+  }, [apiFetch]);
 
   const loadPerformance = async () => {
     try {
@@ -65,7 +150,26 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isAdmin) load();
-  }, [isAdmin, apiFetch]);
+  }, [isAdmin, load]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "users") loadUsersWithRoles();
+  }, [isAdmin, tab, loadUsersWithRoles]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "departments") loadDepartments();
+  }, [isAdmin, tab, loadDepartments]);
+
+  useEffect(() => {
+    if (isAdmin && (tab === "roles" || tab === "users")) {
+      loadRoles();
+      if (tab === "roles") loadDepartments();
+    }
+  }, [isAdmin, tab, loadRoles, loadDepartments]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "capabilities") loadPermissionsMatrix();
+  }, [isAdmin, tab, loadPermissionsMatrix]);
 
   useEffect(() => {
     if (isAdmin && tab === "performance") loadPerformance();
@@ -129,30 +233,150 @@ export default function AdminPage() {
             Users & organisation; performance by role, activity, finance, and responsibilities.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setTab("users")}
-            className={`rounded px-3 py-1.5 text-sm ${tab === "users" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
-          >
-            Users
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("performance")}
-            className={`rounded px-3 py-1.5 text-sm ${tab === "performance" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
-          >
-            Performance & activity
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("messages")}
-            className={`rounded px-3 py-1.5 text-sm ${tab === "messages" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
-          >
-            Messages
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setTab("users")} className={`rounded px-3 py-1.5 text-sm ${tab === "users" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Users</button>
+          <button type="button" onClick={() => setTab("departments")} className={`rounded px-3 py-1.5 text-sm ${tab === "departments" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Departments</button>
+          <button type="button" onClick={() => setTab("roles")} className={`rounded px-3 py-1.5 text-sm ${tab === "roles" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Roles</button>
+          <button type="button" onClick={() => setTab("capabilities")} className={`rounded px-3 py-1.5 text-sm ${tab === "capabilities" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Capabilities & access</button>
+          <button type="button" onClick={() => setTab("performance")} className={`rounded px-3 py-1.5 text-sm ${tab === "performance" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Performance</button>
+          <button type="button" onClick={() => setTab("messages")} className={`rounded px-3 py-1.5 text-sm ${tab === "messages" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Messages</button>
         </div>
       </div>
+
+      {tab === "departments" && (
+        <div className="shell">
+          <h3 className="mb-3 text-sm font-semibold text-slate-200">Departments</h3>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!deptName.trim()) return;
+              try {
+                const res = await apiFetch("/admin/departments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deptName.trim(), description: deptDesc.trim() || undefined }) });
+                if (res.ok) { setDeptName(""); setDeptDesc(""); loadDepartments(); }
+              } catch { /* ignore */ }
+            }}
+            className="mb-4 flex flex-wrap gap-2"
+          >
+            <input type="text" placeholder="Department name" value={deptName} onChange={(e) => setDeptName(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" />
+            <input type="text" placeholder="Description" value={deptDesc} onChange={(e) => setDeptDesc(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" />
+            <button type="submit" className="rounded bg-sky-600 px-3 py-1.5 text-sm text-white">Create department</button>
+          </form>
+          <ul className="space-y-2">
+            {departments.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/50 px-3 py-2">
+                <div>
+                  <span className="font-medium text-slate-200">{d.name}</span>
+                  {d.description && <p className="text-xs text-slate-400">{d.description}</p>}
+                  {d._count != null && <p className="text-xs text-slate-500">{d._count.roles} role(s)</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("Delete this department? Roles must be moved first.")) {
+                      const res = await apiFetch(`/admin/departments/${d.id}`, { method: "DELETE" });
+                      if (res.ok) loadDepartments();
+                    }
+                  }}
+                  className="rounded border border-rose-600/50 px-2 py-1 text-xs text-rose-400 hover:bg-rose-900/30"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+            {departments.length === 0 && <li className="text-sm text-slate-400">No departments. Create one above.</li>}
+          </ul>
+        </div>
+      )}
+
+      {tab === "roles" && (
+        <div className="shell">
+          <h3 className="mb-3 text-sm font-semibold text-slate-200">Roles</h3>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!roleName.trim() || !roleKey.trim()) return;
+              try {
+                const res = await apiFetch("/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: roleName.trim(), key: roleKey.trim(), departmentId: roleDeptId || null }) });
+                if (res.ok) { setRoleName(""); setRoleKey(""); setRoleDeptId(""); loadRoles(); }
+              } catch { /* ignore */ }
+            }}
+            className="mb-4 flex flex-wrap gap-2"
+          >
+            <input type="text" placeholder="Role name" value={roleName} onChange={(e) => setRoleName(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" />
+            <input type="text" placeholder="Key (e.g. analyst)" value={roleKey} onChange={(e) => setRoleKey(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" />
+            <select value={roleDeptId} onChange={(e) => setRoleDeptId(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200">
+              <option value="">No department</option>
+              {departments.map((dept) => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+            </select>
+            <button type="submit" className="rounded bg-sky-600 px-3 py-1.5 text-sm text-white">Create role</button>
+          </form>
+          <ul className="space-y-2">
+            {roles.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/50 px-3 py-2">
+                <div>
+                  <span className="font-medium text-slate-200">{r.name}</span>
+                  <span className="ml-2 text-xs text-slate-500">{r.key}</span>
+                  {r.department && <p className="text-xs text-sky-400">Dept: {r.department.name}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("Delete this role? Remove user assignments first.")) {
+                      const res = await apiFetch(`/admin/roles/${r.id}`, { method: "DELETE" });
+                      if (res.ok) loadRoles(); else { const d = await res.json(); alert((d as { error?: string }).error ?? "Failed"); }
+                    }
+                  }}
+                  className="rounded border border-rose-600/50 px-2 py-1 text-xs text-rose-400 hover:bg-rose-900/30"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+            {roles.length === 0 && <li className="text-sm text-slate-400">No roles beyond defaults. Create one above.</li>}
+          </ul>
+        </div>
+      )}
+
+      {tab === "capabilities" && permissionsMatrix && (
+        <div className="shell overflow-x-auto">
+          <h3 className="mb-3 text-sm font-semibold text-slate-200">Capabilities & access (permissions per role)</h3>
+          <p className="mb-4 text-xs text-slate-400">Set which permissions each role has. Save updates the selected role.</p>
+          <div className="space-y-4">
+            {permissionsMatrix.roles.map((role) => {
+              const rpSet = new Set(permissionsMatrix.rolePermissions.filter((rp) => rp.roleId === role.id).map((rp) => rp.permissionId));
+              const currentKeys = permissionsMatrix.permissions.filter((p) => rpSet.has(p.id)).map((p) => p.key);
+              return (
+                <div key={role.id} className="rounded border border-slate-700 bg-slate-800/50 p-3">
+                  <p className="mb-2 font-medium text-slate-200">{role.name} ({role.key})</p>
+                  <div className="flex flex-wrap gap-3">
+                    {permissionsMatrix.permissions.map((perm) => {
+                      const checked = rpSet.has(perm.id);
+                      return (
+                        <label key={perm.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={async (e) => {
+                              const next = e.target.checked;
+                              const newKeys = next ? [...currentKeys, perm.key] : currentKeys.filter((k) => k !== perm.key);
+                              try {
+                                const res = await apiFetch(`/admin/roles/${role.id}/permissions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ permissionKeys: newKeys }) });
+                                if (res.ok) loadPermissionsMatrix();
+                              } catch { /* ignore */ }
+                            }}
+                            className="rounded border-slate-600"
+                          />
+                          <span className="text-slate-300">{perm.key}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {tab === "messages" && (
         <div className="shell">
@@ -232,44 +456,91 @@ export default function AdminPage() {
 
       {tab === "users" && (
         <>
+      <div className="shell">
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">Create user</h3>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newUserEmail.trim() || !newUserPassword) return;
+            try {
+              const res = await apiFetch("/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: newUserEmail.trim(), name: newUserName.trim() || undefined, password: newUserPassword, roleId: newUserRoleId || undefined }) });
+              if (res.ok) { setNewUserEmail(""); setNewUserName(""); setNewUserPassword(""); setNewUserRoleId(""); load(); loadUsersWithRoles(); }
+            } catch { /* ignore */ }
+          }}
+          className="mb-4 flex flex-wrap gap-2"
+        >
+          <input type="email" placeholder="Email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" required />
+          <input type="text" placeholder="Name" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" />
+          <input type="password" placeholder="Password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200" required />
+          <select value={newUserRoleId} onChange={(e) => setNewUserRoleId(e.target.value)} className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200">
+            <option value="">No role</option>
+            {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          <button type="submit" className="rounded bg-sky-600 px-3 py-1.5 text-sm text-white">Create user</button>
+        </form>
+      </div>
       <div className="shell overflow-x-auto">
-        <h3 className="mb-3 text-sm font-semibold text-slate-200">Users</h3>
-        {users.length === 0 ? (
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">Users & roles</h3>
+        {usersWithRoles.length === 0 ? (
           <p className="text-slate-400">No users in this organisation.</p>
         ) : (
           <table className="w-full min-w-[600px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-700 text-slate-400">
                 <th className="pb-2 pr-4">Name</th>
-                <th className="pb-2 pr-4">Login email</th>
-                <th className="pb-2 pr-4">Phone</th>
-                <th className="pb-2 pr-4">Notification email</th>
+                <th className="pb-2 pr-4">Email</th>
+                <th className="pb-2 pr-4">Roles</th>
                 <th className="pb-2 pr-4">Profile</th>
                 <th className="pb-2"></th>
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {usersWithRoles.map((u) => (
                 <tr key={u.id} className="border-b border-slate-800">
                   <td className="py-2 pr-4 text-slate-200">{u.name ?? "—"}</td>
                   <td className="py-2 pr-4 text-slate-300">{u.email}</td>
-                  <td className="py-2 pr-4 text-slate-300">{u.phone ?? "—"}</td>
-                  <td className="py-2 pr-4 text-slate-300">{u.notificationEmail ?? u.email ?? "—"}</td>
                   <td className="py-2 pr-4">
-                    {u.profileCompletedAt ? (
-                      <span className="text-emerald-400">Complete</span>
-                    ) : (
-                      <span className="text-amber-400">Incomplete</span>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {(u.roles ?? []).map((ur) => (
+                        <span key={ur.roleId} className="inline-flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200">
+                          {ur.role.name}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await apiFetch("/admin/role-assignments", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: u.id, roleId: ur.roleId }) });
+                                if (res.ok) loadUsersWithRoles();
+                              } catch { /* ignore */ }
+                            }}
+                            className="text-rose-400 hover:underline"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      <select
+                        value=""
+                        onChange={async (e) => {
+                          const roleId = e.target.value;
+                          if (!roleId) return;
+                          e.target.value = "";
+                          try {
+                            const res = await apiFetch("/admin/role-assignments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: u.id, roleId }) });
+                            if (res.ok) loadUsersWithRoles();
+                          } catch { /* ignore */ }
+                        }}
+                        className="rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+                      >
+                        <option value="">+ Add role</option>
+                        {roles.filter((r) => !(u.roles ?? []).some((ur) => ur.roleId === r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-4">
+                    {u.profileCompletedAt ? <span className="text-emerald-400">Complete</span> : <span className="text-amber-400">Incomplete</span>}
                   </td>
                   <td className="py-2">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(u)}
-                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-                    >
-                      Edit
-                    </button>
+                    <button type="button" onClick={() => openEdit(u)} className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">Edit</button>
                   </td>
                 </tr>
               ))}

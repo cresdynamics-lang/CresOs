@@ -18,6 +18,8 @@ type ProjectDetail = {
   email?: string | null;
   price?: number | null;
   amountReceived?: number;
+  managementMonthlyAmount?: number | null;
+  managementMonths?: number | null;
   projectDetails?: string | null;
   approvalStatus?: string;
   assignedDeveloper?: { id: string; name: string | null; email: string } | null;
@@ -64,6 +66,8 @@ export default function ProjectDetailPage() {
           email: data.email,
           price: data.price,
           amountReceived: data.amountReceived ?? 0,
+          managementMonthlyAmount: data.managementMonthlyAmount,
+          managementMonths: data.managementMonths,
           projectDetails: data.projectDetails,
           approvalStatus: data.approvalStatus,
           assignedDeveloper: data.assignedDeveloper,
@@ -239,6 +243,14 @@ export default function ProjectDetailPage() {
                 {remaining != null && <li>Remaining: {formatMoney(remaining)}</li>}
               </>
             )}
+            {(project.managementMonthlyAmount != null && project.managementMonths != null) && (
+              <li className="mt-1 text-sky-300">
+                On management: {formatMoney(project.managementMonthlyAmount)}/month for {project.managementMonths} month{project.managementMonths !== 1 ? "s" : ""}
+                {project.managementMonths > 0 && (
+                  <span className="text-slate-400"> (total {formatMoney(project.managementMonthlyAmount * project.managementMonths)} to upgrade)</span>
+                )}
+              </li>
+            )}
           </ul>
         </div>
       )}
@@ -333,7 +345,14 @@ export default function ProjectDetailPage() {
       {editOpen && (isFinance || isDirector) && (
         <EditProjectContactModal
           projectId={project.id}
-          initial={{ clientOrOwnerName: project.clientOrOwnerName ?? "", phone: project.phone ?? "", email: project.email ?? "", price: project.price ?? "" }}
+          initial={{
+            clientOrOwnerName: project.clientOrOwnerName ?? "",
+            phone: project.phone ?? "",
+            email: project.email ?? "",
+            price: project.price ?? "",
+            managementMonthlyAmount: project.managementMonthlyAmount ?? "",
+            managementMonths: project.managementMonths ?? ""
+          }}
           onClose={() => setEditOpen(false)}
           onSaved={() => { setEditOpen(false); load(); }}
           apiFetch={apiFetch}
@@ -432,7 +451,7 @@ function EditProjectContactModal({
   apiFetch
 }: {
   projectId: string;
-  initial: { clientOrOwnerName: string; phone: string; email: string; price: string | number };
+  initial: { clientOrOwnerName: string; phone: string; email: string; price: string | number; managementMonthlyAmount?: string | number; managementMonths?: string | number };
   onClose: () => void;
   onSaved: () => void;
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
@@ -441,6 +460,8 @@ function EditProjectContactModal({
   const [phone, setPhone] = useState(initial.phone);
   const [email, setEmail] = useState(initial.email);
   const [price, setPrice] = useState(String(initial.price ?? ""));
+  const [managementMonthlyAmount, setManagementMonthlyAmount] = useState(String(initial.managementMonthlyAmount ?? ""));
+  const [managementMonths, setManagementMonths] = useState(String(initial.managementMonths ?? ""));
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -454,7 +475,9 @@ function EditProjectContactModal({
           clientOrOwnerName: clientOrOwnerName.trim() || null,
           phone: phone.trim() || null,
           email: email.trim() || null,
-          price: price.trim() ? Number(price) : null
+          price: price.trim() ? Number(price) : null,
+          managementMonthlyAmount: managementMonthlyAmount.trim() ? Number(managementMonthlyAmount) : null,
+          managementMonths: managementMonths.trim() ? Math.max(0, Math.floor(Number(managementMonths))) : null
         })
       });
       if (res.ok) onSaved();
@@ -466,7 +489,7 @@ function EditProjectContactModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-semibold text-slate-50">Update contact & price</h3>
+        <h3 className="mb-4 text-lg font-semibold text-slate-50">Update contact, price & management</h3>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Client / owner name</span>
@@ -481,8 +504,17 @@ function EditProjectContactModal({
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Price</span>
+            <span className="text-xs text-slate-400">Price (KES)</span>
             <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+          </label>
+          <p className="text-xs text-slate-500">When project is on management:</p>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Expected per month (KES)</span>
+            <input type="number" min={0} step={0.01} value={managementMonthlyAmount} onChange={(e) => setManagementMonthlyAmount(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="e.g. 50000" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">For how long (months)</span>
+            <input type="number" min={0} value={managementMonths} onChange={(e) => setManagementMonths(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="e.g. 12" />
           </label>
           <div className="mt-2 flex gap-2">
             <button type="submit" disabled={submitting} className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">

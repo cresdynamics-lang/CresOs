@@ -1,6 +1,8 @@
 import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
+import { sendWelcomeEmail } from "../lib/resend";
+import { logEmailSent } from "./admin-activity";
 
 export default function accountRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -47,6 +49,29 @@ export default function accountRouter(prisma: PrismaClient): Router {
         profileCompletedAt: true
       }
     });
+
+    const toEmail = user.notificationEmail?.trim() || user.email;
+    if (toEmail) {
+      const result = await sendWelcomeEmail(toEmail, user.name);
+      if (result.ok) {
+        const member = await prisma.orgMember.findFirst({
+          where: { userId: user.id },
+          select: { orgId: true }
+        });
+        const body = `Thanks for updating your profile. We'll send reminders and updates to this email.`;
+        if (member?.orgId) {
+          await logEmailSent(prisma, {
+            orgId: member.orgId,
+            to: toEmail,
+            subject: "You're all set — we'll send updates to this email",
+            body,
+            type: "welcome_profile",
+            actorId: user.id
+          });
+        }
+      }
+    }
+
     res.json(user);
   });
 

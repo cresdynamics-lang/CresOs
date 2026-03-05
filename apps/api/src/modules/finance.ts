@@ -578,6 +578,39 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Project financials for finance: allocated, received, remaining, and management (per month, duration)
+  router.get(
+    "/projects",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const projects = await prisma.project.findMany({
+        where: { orgId, deletedAt: null, approvalStatus: "approved" },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          price: true,
+          amountReceived: true,
+          managementMonthlyAmount: true,
+          managementMonths: true
+        }
+      });
+      const list = projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        allocated: p.price != null ? Number(p.price) : null,
+        received: p.amountReceived != null ? Number(p.amountReceived) : 0,
+        remaining: p.price != null ? Math.max(0, Number(p.price) - (p.amountReceived != null ? Number(p.amountReceived) : 0)) : null,
+        managementMonthlyAmount: p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : null,
+        managementMonths: p.managementMonths
+      }));
+      res.json(list);
+    }
+  );
+
   // Recalc project amountReceived from confirmed payments (for backfill / consistency)
   router.post(
     "/projects/recalc-received",

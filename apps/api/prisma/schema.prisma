@@ -16,6 +16,7 @@ model Org {
   deletedAt   DateTime?
 
   members       OrgMember[]
+  departments   Department[]
   roles         Role[]
   users         User[]        @relation("OrgUsers")
 
@@ -178,21 +179,39 @@ model OrgMember {
   @@unique([orgId, userId])
 }
 
+model Department {
+  id          String    @id @default(cuid())
+  orgId       String
+  name        String
+  description String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  org    Org     @relation(fields: [orgId], references: [id])
+  roles  Role[]
+
+  @@index([orgId])
+}
+
 model Role {
-  id        String    @id @default(cuid())
-  orgId     String
-  name      String
-  key       String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  orgId         String
+  departmentId  String?
+  name          String
+  key           String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   org             Org              @relation(fields: [orgId], references: [id])
+  department      Department?      @relation(fields: [departmentId], references: [id])
   users           UserRole[]
   orgMembers      OrgMember[]
   invites         Invite[]
   rolePermissions RolePermission[]
 
   @@unique([orgId, key])
+  @@index([departmentId])
 }
 
 model UserRole {
@@ -386,6 +405,9 @@ model Project {
   email               String?
   price               Decimal?  @db.Decimal(14, 2) // optional when type=demo
   amountReceived      Decimal?  @db.Decimal(14, 2) @default(0) // sum of confirmed payments for this project (invoices)
+  // When project is on management: expected per month and duration (for finance / upgrade visibility)
+  managementMonthlyAmount Decimal? @db.Decimal(14, 2) // expected KES per month while on management
+  managementMonths    Int?     // for how long (months) — e.g. 12 for one year
   projectDetails      String?  @db.Text
   approvalStatus      String   @default("pending_approval") // pending_approval, approved, rejected
   approvedById        String?

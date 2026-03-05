@@ -2,6 +2,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { PERMISSIONS } from "./permissions-registry";
 
@@ -141,7 +142,90 @@ export default function adminRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Roles and role assignments
+  // Departments CRUD
+  router.get(
+    "/departments",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const list = await prisma.department.findMany({
+        where: { orgId, deletedAt: null },
+        orderBy: { name: "asc" },
+        include: { _count: { select: { roles: true } } }
+      });
+      res.json(list);
+    }
+  );
+
+  router.post(
+    "/departments",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { name, description } = req.body as { name?: string; description?: string };
+      if (!name?.trim()) {
+        res.status(400).json({ error: "name is required" });
+        return;
+      }
+      const dept = await prisma.department.create({
+        data: { orgId, name: name.trim(), description: description?.trim() || null }
+      });
+      res.status(201).json(dept);
+    }
+  );
+
+  router.patch(
+    "/departments/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const { name, description } = req.body as { name?: string; description?: string };
+      const existing = await prisma.department.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Department not found" });
+        return;
+      }
+      const data: { name?: string; description?: string | null } = {};
+      if (name !== undefined) data.name = name.trim() || existing.name;
+      if (description !== undefined) data.description = description?.trim() || null;
+      const updated = await prisma.department.update({
+        where: { id },
+        data
+      });
+      res.json(updated);
+    }
+  );
+
+  router.delete(
+    "/departments/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const existing = await prisma.department.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: { _count: { select: { roles: true } } }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Department not found" });
+        return;
+      }
+      if (existing._count.roles > 0) {
+        res.status(400).json({ error: "Department has roles; move or delete roles first" });
+        return;
+      }
+      await prisma.department.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      });
+      res.status(204).send();
+    }
+  );
+
+  // Roles CRUD
   router.get(
     "/roles",
     requireRoles([ROLE_KEYS.admin]),
@@ -149,11 +233,114 @@ export default function adminRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const roles = await prisma.role.findMany({
         where: { orgId },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        include: { department: { select: { id: true, name: true } } }
       });
       res.json(roles);
     }
   );
+
+  router.post(
+    "/roles",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { name, key, departmentId } = req.body as { name?: string; key?: string; departmentId?: string | null };
+      if (!name?.trim() || !key?.trim()) {
+        res.status(400).json({ error: "name and key are required" });
+        return;
+      }
+      const keyNorm = key.trim().toLowerCase().replace(/\s+/g, "_");
+      const existing = await prisma.role.findUnique({
+        where: { orgId_key: { orgId, key: keyNorm } }
+      });
+      if (existing) {
+        res.status(400).json({ error: "Role with this key already exists" });
+        return;
+      }
+      if (departmentId) {
+        const dept = await prisma.department.findFirst({
+          where: { id: departmentId, orgId, deletedAt: null }
+        });
+        if (!dept) {
+          res.status(400).json({ error: "Department not found" });
+          return;
+        }
+      }
+      const role = await prisma.role.create({
+        data: {
+          orgId,
+          name: name.trim(),
+          key: keyNorm,
+          departmentId: departmentId?.trim() || null
+        }
+      });
+      res.status(201).json(role);
+    }
+  );
+
+  router.patch(
+    "/roles/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const { name, key, departmentId } = req.body as { name?: string; key?: string; departmentId?: string | null };
+      const role = await prisma.role.findFirst({
+        where: { id, orgId }
+      });
+      if (!role) {
+        res.status(404).json({ error: "Role not found" });
+        return;
+      }
+      const data: { name?: string; key?: string; departmentId?: string | null } = {};
+      if (name !== undefined) data.name = name.trim();
+      if (key !== undefined) data.key = key.trim().toLowerCase().replace(/\s+/g, "_");
+      if (departmentId !== undefined) data.departmentId = departmentId?.trim() || null;
+      if (data.departmentId) {
+        const dept = await prisma.department.findFirst({
+          where: { id: data.departmentId, orgId, deletedAt: null }
+        });
+        if (!dept) {
+          res.status(400).json({ error: "Department not found" });
+          return;
+        }
+      }
+      const updated = await prisma.role.update({
+        where: { id },
+        data
+      });
+      res.json(updated);
+    }
+  );
+
+  router.delete(
+    "/roles/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const role = await prisma.role.findFirst({
+        where: { id, orgId },
+        include: { _count: { select: { users: true } } }
+      });
+      if (!role) {
+        res.status(404).json({ error: "Role not found" });
+        return;
+      }
+      if (role._count.users > 0) {
+        res.status(400).json({ error: "Role has users assigned; remove assignments first" });
+        return;
+      }
+      await prisma.rolePermission.deleteMany({ where: { roleId: id } });
+      await prisma.role.delete({ where: { id } });
+      res.status(204).send();
+    }
+  );
+
+  router.get(
+    "/roles/:roleId/users",
+    requireRoles([ROLE_KEYS.admin]),
 
   router.get(
     "/roles/:roleId/users",
@@ -241,6 +428,100 @@ export default function adminRouter(prisma: PrismaClient): Router {
       });
 
       res.status(201).json(assignment);
+    }
+  );
+
+  router.delete(
+    "/role-assignments",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { userId, roleId } = req.body as { userId?: string; roleId?: string };
+      if (!userId || !roleId) {
+        res.status(400).json({ error: "userId and roleId are required" });
+        return;
+      }
+      const role = await prisma.role.findUnique({ where: { id: roleId } });
+      if (!role || role.orgId !== orgId) {
+        res.status(404).json({ error: "Role not found" });
+        return;
+      }
+      const user = await prisma.user.findFirst({
+        where: { id: userId, orgId, deletedAt: null }
+      });
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      await prisma.userRole.deleteMany({
+        where: { userId, roleId }
+      });
+      res.status(204).send();
+    }
+  );
+
+  // Create user (admin): email, name, temporary password, roleId
+  router.post(
+    "/users",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const adminId = req.auth!.userId;
+      const { email, name, password, roleId } = req.body as {
+        email?: string;
+        name?: string;
+        password?: string;
+        roleId?: string;
+      };
+      if (!email?.trim() || !password) {
+        res.status(400).json({ error: "email and password are required" });
+        return;
+      }
+      const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+      if (existing) {
+        res.status(400).json({ error: "Email already in use" });
+        return;
+      }
+      const role = roleId
+        ? await prisma.role.findFirst({ where: { id: roleId, orgId } })
+        : null;
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await prisma.user.create({
+        data: {
+          email: email.trim().toLowerCase(),
+          name: name?.trim() || null,
+          passwordHash,
+          orgId
+        }
+      });
+      if (role) {
+        await prisma.userRole.create({
+          data: { userId: user.id, roleId: role.id }
+        });
+        await prisma.orgMember.create({
+          data: { orgId, userId: user.id, roleId: role.id }
+        });
+      } else {
+        await prisma.orgMember.create({
+          data: { orgId, userId: user.id }
+        });
+      }
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: adminId,
+          type: "admin.user.created",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { email: user.email }
+        }
+      });
+      res.status(201).json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        status: user.status
+      });
     }
   );
 

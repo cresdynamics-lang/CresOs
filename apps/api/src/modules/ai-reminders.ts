@@ -1,5 +1,6 @@
 /**
  * AI-generated reminder copy for sales (meetings, calls, tasks) using Groq.
+ * Prompts are centralized in src/prompts/groq-prompts.ts.
  *
  * Env:
  *   GROQ_API_KEY       - Required for AI reminders; if unset, static fallback is used.
@@ -7,6 +8,16 @@
  */
 
 import Groq from "groq-sdk";
+import {
+  MEETING_REMINDER_SYSTEM,
+  CALL_REMINDER_SYSTEM,
+  TASK_REMINDER_SYSTEM,
+  CLIENT_PROJECT_UPDATE_SYSTEM,
+  CURATE_CLIENT_MESSAGE_SYSTEM,
+  buildCurateClientMessageUser,
+  USER_REMINDER_EMAIL_SYSTEM,
+  buildUserReminderEmailUser
+} from "../prompts/groq-prompts";
 
 const GROQ_MODEL = process.env.GROQ_REMINDER_MODEL ?? "llama-3.1-8b-instant";
 
@@ -54,13 +65,6 @@ async function generateReminder(systemPrompt: string, userMessage: string): Prom
 
 // ---- Meeting reminder ----
 
-const MEETING_SYSTEM_PROMPT = `You are a sales reminder assistant. Generate a short, professional reminder for a sales person about an upcoming meeting.
-
-Reply with a JSON object only, no other text:
-{ "subject": "Short subject line (under 60 chars)", "body": "One or two sentence reminder. Be direct and actionable." }
-
-Rules: subject and body must be plain text, no markdown. Body should mention the lead and timing. Keep tone professional and concise.`;
-
 export type MeetingReminderContext = {
   leadTitle: string;
   minutesUntil: number;
@@ -92,17 +96,10 @@ export async function generateMeetingReminder(ctx: MeetingReminderContext): Prom
     .filter(Boolean)
     .join("\n");
 
-  return generateReminder(MEETING_SYSTEM_PROMPT, userMessage);
+  return generateReminder(MEETING_REMINDER_SYSTEM, userMessage);
 }
 
 // ---- Call reminder ----
-
-const CALL_SYSTEM_PROMPT = `You are a sales reminder assistant. Generate a short, professional reminder for a sales person about an upcoming call.
-
-Reply with a JSON object only, no other text:
-{ "subject": "Short subject line (under 60 chars)", "body": "One or two sentence reminder. Be direct and actionable. Mention the lead and that they should be ready to call." }
-
-Rules: subject and body must be plain text, no markdown. Keep tone professional and concise.`;
 
 export type CallReminderContext = {
   leadTitle: string;
@@ -135,17 +132,10 @@ export async function generateCallReminder(ctx: CallReminderContext): Promise<Re
     .filter(Boolean)
     .join("\n");
 
-  return generateReminder(CALL_SYSTEM_PROMPT, userMessage);
+  return generateReminder(CALL_REMINDER_SYSTEM, userMessage);
 }
 
 // ---- Task due reminder ----
-
-const TASK_SYSTEM_PROMPT = `You are a task reminder assistant. Generate a short, professional reminder for someone about a task deadline.
-
-Reply with a JSON object only, no other text:
-{ "subject": "Short subject line (under 60 chars)", "body": "One or two sentence reminder. Be direct and actionable." }
-
-Rules: subject and body must be plain text, no markdown. Mention the task and project. Keep tone professional and concise.`;
 
 export type TaskReminderContext = {
   taskTitle: string;
@@ -168,19 +158,10 @@ export async function generateTaskReminder(ctx: TaskReminderContext): Promise<Re
     `Due: ${ctx.dueDate.toISOString()}`
   ].join("\n");
 
-  return generateReminder(TASK_SYSTEM_PROMPT, userMessage);
+  return generateReminder(TASK_REMINDER_SYSTEM, userMessage);
 }
 
 // ---- Client project update message (for sales to send to client) ----
-
-const CLIENT_MESSAGE_SYSTEM_PROMPT = `You are a professional sales assistant. Given a project's current status and its tasks, write a short, friendly message that a sales person can send to the client to update them on the project.
-
-Rules:
-- Write in second person to the client (e.g. "Your project...", "We have completed...").
-- Be concise: 2–4 sentences. Mention overall progress and any notable task statuses (done, in progress, blocked).
-- If there are blocked tasks, acknowledge briefly without oversharing internal detail.
-- Tone: professional, reassuring, client-ready. No internal jargon.
-- Output only the message body. Do not add links or "view status" — we will append a link separately when one is provided. Plain text only, no markdown.`;
 
 export type ClientMessageTask = {
   title: string;
@@ -229,7 +210,7 @@ export async function generateClientProjectMessage(ctx: ClientMessageContext): P
     const completion = await client.chat.completions.create({
       model: GROQ_MODEL,
       messages: [
-        { role: "system", content: CLIENT_MESSAGE_SYSTEM_PROMPT },
+        { role: "system", content: CLIENT_PROJECT_UPDATE_SYSTEM },
         { role: "user", content: userMessage }
       ],
       max_tokens: 512,
@@ -242,4 +223,52 @@ export async function generateClientProjectMessage(ctx: ClientMessageContext): P
   } catch {
     return null;
   }
+}
+
+// ---- Curate draft message to client ----
+
+/**
+ * Improve a draft message to a client using Groq: clearer, more professional, client-ready.
+ */
+export async function curateClientMessage(draft: string): Promise<string | null> {
+  const client = getClient();
+  if (!client || !draft?.trim()) return null;
+  try {
+    const completion = await client.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "system", content: CURATE_CLIENT_MESSAGE_SYSTEM },
+        { role: "user", content: buildCurateClientMessageUser(draft) }
+      ],
+      max_tokens: 512,
+      temperature: 0.3
+    });
+    const raw = completion.choices[0]?.message?.content?.trim();
+    if (!raw) return null;
+    return raw.slice(0, 2000);
+  } catch {
+    return null;
+  }
+}
+
+// ---- Generic user reminder email ----
+
+export type UserReminderEmailContext = {
+  reminderType: string;
+  title: string;
+  context?: string | null;
+  dueOrScheduled?: string | null;
+};
+
+/**
+ * Generate subject + body for a user-facing reminder email (e.g. task due, meeting soon).
+ */
+export async function generateUserReminderEmail(ctx: UserReminderEmailContext): Promise<ReminderCopy | null> {
+  const userMessage = buildUserReminderEmailUser({
+    reminderType: ctx.reminderType,
+    title: ctx.title,
+    context: ctx.context ?? undefined,
+    dueOrScheduled: ctx.dueOrScheduled ?? undefined
+  });
+  return generateReminder(USER_REMINDER_EMAIL_SYSTEM, userMessage);
 }

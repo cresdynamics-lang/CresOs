@@ -68,7 +68,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         const row = {
           ...p,
           price: p.price != null ? Number(p.price) : null,
-          amountReceived: p.amountReceived != null ? Number(p.amountReceived) : 0
+          amountReceived: p.amountReceived != null ? Number(p.amountReceived) : 0,
+          managementMonthlyAmount: p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : null,
+          managementMonths: p.managementMonths
         };
         if (stripSensitive) {
           delete (row as any).phone;
@@ -216,6 +218,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         status?: string;
         assignedDeveloperId?: string | null;
         timeline?: { date?: string; title?: string }[] | null;
+        managementMonthlyAmount?: string | number | null;
+        managementMonths?: string | number | null;
       };
       const project = await prisma.project.findFirst({
         where: { id: projectId, orgId, deletedAt: null }
@@ -241,11 +245,15 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         if (body.status !== undefined) data.status = body.status;
         if (body.assignedDeveloperId !== undefined) data.assignedDeveloperId = body.assignedDeveloperId && String(body.assignedDeveloperId).trim() ? String(body.assignedDeveloperId).trim() : null;
         if (body.timeline !== undefined) data.timeline = body.timeline;
+        if (body.managementMonthlyAmount !== undefined) data.managementMonthlyAmount = body.managementMonthlyAmount != null && body.managementMonthlyAmount !== "" ? new Prisma.Decimal(Number(body.managementMonthlyAmount)) : null;
+        if (body.managementMonths !== undefined) data.managementMonths = body.managementMonths != null && body.managementMonths !== "" ? Math.max(0, Math.floor(Number(body.managementMonths))) : null;
       } else if (canEditFinance) {
         if (body.clientOrOwnerName !== undefined) data.clientOrOwnerName = body.clientOrOwnerName && String(body.clientOrOwnerName).trim() ? String(body.clientOrOwnerName).trim() : null;
         if (body.phone !== undefined) data.phone = body.phone && String(body.phone).trim() ? String(body.phone).trim() : null;
         if (body.email !== undefined) data.email = body.email && String(body.email).trim() ? String(body.email).trim() : null;
         if (body.price !== undefined) data.price = body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : null;
+        if (body.managementMonthlyAmount !== undefined) data.managementMonthlyAmount = body.managementMonthlyAmount != null && body.managementMonthlyAmount !== "" ? new Prisma.Decimal(Number(body.managementMonthlyAmount)) : null;
+        if (body.managementMonths !== undefined) data.managementMonths = body.managementMonths != null && body.managementMonths !== "" ? Math.max(0, Math.floor(Number(body.managementMonths))) : null;
       } else if (canEditSales) {
         if (body.clientOrOwnerName !== undefined) data.clientOrOwnerName = body.clientOrOwnerName && String(body.clientOrOwnerName).trim() ? String(body.clientOrOwnerName).trim() : null;
         if (body.phone !== undefined) data.phone = body.phone && String(body.phone).trim() ? String(body.phone).trim() : null;
@@ -390,7 +398,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const out: any = {
         ...project,
         price: project.price != null ? Number(project.price) : null,
-        amountReceived: project.amountReceived != null ? Number(project.amountReceived) : 0
+        amountReceived: project.amountReceived != null ? Number(project.amountReceived) : 0,
+        managementMonthlyAmount: project.managementMonthlyAmount != null ? Number(project.managementMonthlyAmount) : null,
+        managementMonths: project.managementMonths
       };
       if (stripSensitive) {
         delete out.phone;
@@ -398,6 +408,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         delete out.price;
         delete out.clientOrOwnerName;
         delete out.amountReceived;
+        delete out.managementMonthlyAmount;
+        delete out.managementMonths;
       }
       res.json(out);
     }

@@ -13,7 +13,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!hasToken && pathname !== "/login") {
+    if (!hasToken && pathname !== "/login" && pathname !== "/") {
       router.replace("/login");
       return;
     }
@@ -28,14 +28,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <p className="text-sm text-slate-400">Loading…</p>
+      <div className="flex min-h-screen items-center justify-center bg-cres-bg">
+        <p className="text-sm text-cres-muted">Loading…</p>
       </div>
     );
   }
 
   if (!hasToken) {
-    if (pathname === "/login") return <>{children}</>;
+    if (pathname === "/" || pathname === "/login") return <>{children}</>;
     return null;
   }
 
