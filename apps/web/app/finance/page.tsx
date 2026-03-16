@@ -91,6 +91,34 @@ type FinancialReport = {
   };
 };
 
+const FINANCE_ALIGNMENT_RULES = [
+  {
+    title: "Business bank account only",
+    subtitle: "No mixing with personal money.",
+    body: "Use a separate business bank account for every client payment and every business expense. This creates a clean audit trail so directors, investors, and accountants can see exactly what happened."
+  },
+  {
+    title: "Monthly bank reconciliation",
+    subtitle: "Thirty minutes that protects the business.",
+    body: "At the end of each month, match your bank statement against CresOS records (money in, money out). You should be able to tick off every line with an invoice or receipt attached."
+  },
+  {
+    title: "Monthly income statement",
+    subtitle: "Revenue – expenses = profit.",
+    body: "Once a month, summarise total money in vs total money out. Directors and Finance should always know whether the business is actually profitable or just moving cash."
+  },
+  {
+    title: "Simple balance sheet",
+    subtitle: "What you own minus what you owe.",
+    body: "Keep a running list of assets (cash, receivables, equipment) and liabilities (loans, vendor debt). Review net worth trend monthly so you’re always bank- and investor-ready."
+  },
+  {
+    title: "Complete tax records",
+    subtitle: "Every invoice, every receipt, stored.",
+    body: "Keep digital copies of all invoices sent and receipts for expenses. When tax time or an audit comes, you can prove every shilling and move fast without panic."
+  }
+] as const;
+
 export default function FinancePage() {
   const { apiFetch, auth } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -165,7 +193,8 @@ export default function FinancePage() {
   const canSeeReport = auth.roleKeys.some((r) =>
     ["finance", "director_admin", "admin"].includes(r)
   );
-  const isFinance = auth.roleKeys.some((r) => ["finance", "admin"].includes(r));
+  // Only Finance role can perform actions; Director/Admin see read-only
+  const isFinance = auth.roleKeys.includes("finance");
 
   const fetchReport = useCallback(async () => {
     if (!canSeeReport) return;

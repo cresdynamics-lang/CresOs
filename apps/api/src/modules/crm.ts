@@ -53,7 +53,10 @@ export default function crmRouter(prisma: PrismaClient): Router {
     const leads = await prisma.lead.findMany({
       where: { orgId, deletedAt: null },
       orderBy: { createdAt: "desc" },
-      include: { client: true }
+      include: {
+        client: true,
+        project: { select: { id: true, name: true } }
+      }
     });
     res.json(leads);
     }
@@ -65,20 +68,33 @@ export default function crmRouter(prisma: PrismaClient): Router {
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
-    const { title, clientId, source } = req.body as {
+    const { title, clientId, projectId, source } = req.body as {
       title: string;
       clientId?: string;
+      projectId?: string;
       source?: string;
     };
     if (!title) {
       res.status(400).json({ error: "Title is required" });
       return;
     }
+    if (!projectId) {
+      res.status(400).json({ error: "projectId is required — lead must be tied to an existing project." });
+      return;
+    }
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, orgId, deletedAt: null }
+    });
+    if (!project) {
+      res.status(400).json({ error: "Project not found for this organisation." });
+      return;
+    }
     const lead = await prisma.lead.create({
       data: {
         orgId,
         title,
-        clientId,
+        clientId: clientId ?? project.clientId,
+        projectId: project.id,
         source,
         status: "new",
         ownerId: userId,
@@ -332,12 +348,48 @@ export default function crmRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const contacts = await prisma.crmContact.findMany({
-        where: { orgId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        include: { addedBy: { select: { id: true, name: true, email: true } } }
-      });
-      res.json(contacts);
+      const [manualContacts, clientContacts] = await Promise.all([
+        prisma.crmContact.findMany({
+          where: { orgId, deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          include: { addedBy: { select: { id: true, name: true, email: true } } }
+        }),
+        prisma.client.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            projects: {
+              some: { deletedAt: null }
+            }
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true
+          }
+        })
+      ]);
+
+      const mappedManual = manualContacts.map((c) => ({
+        id: c.id,
+        email: c.email,
+        phone: c.phone,
+        name: c.name,
+        addedBy: c.addedBy,
+        kind: "manual" as const
+      }));
+
+      const mappedClients = clientContacts.map((c) => ({
+        id: `client:${c.id}`,
+        email: c.email,
+        phone: c.phone,
+        name: c.name,
+        addedBy: null,
+        kind: "client_with_project" as const
+      }));
+
+      res.json([...mappedManual, ...mappedClients]);
     }
   );
 

@@ -22,7 +22,8 @@ type CrmContact = {
   email: string | null;
   phone: string | null;
   name: string | null;
-  addedBy?: { name: string | null; email: string };
+  addedBy?: { name: string | null; email: string } | null;
+  kind?: "manual" | "client_with_project";
 };
 
 export default function CrmPage() {
@@ -182,7 +183,7 @@ export default function CrmPage() {
 
       <div className="shell">
         <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-          Outreach contacts
+          Outreach contacts (manual) and clients with projects
         </p>
         <p className="mb-3 text-sm text-slate-400">
           Add emails or phone numbers to contact about your services. These can
@@ -239,7 +240,16 @@ export default function CrmPage() {
               className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                {c.name && <span className="text-slate-100">{c.name}</span>}
+                {c.name && (
+                  <span className="text-slate-100">
+                    {c.name}
+                    {c.kind === "client_with_project" && (
+                      <span className="ml-1 text-[10px] uppercase text-emerald-400">
+                        · client (with project)
+                      </span>
+                    )}
+                  </span>
+                )}
                 {c.email && (
                   <a
                     href={`mailto:${c.email}`}
@@ -260,7 +270,7 @@ export default function CrmPage() {
                   <span className="text-slate-500">—</span>
                 )}
               </div>
-              {canManageContacts && (
+              {canManageContacts && c.kind !== "client_with_project" && (
                 <button
                   type="button"
                   onClick={() => handleRemoveContact(c.id)}

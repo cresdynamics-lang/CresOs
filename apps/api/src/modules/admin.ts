@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { PERMISSIONS } from "./permissions-registry";
+import { sendWelcomeEmail } from "../lib/resend";
+import { logEmailSent } from "./admin-activity";
 
 export default function adminRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -1233,16 +1235,21 @@ export default function adminRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
+      const adminId = req.auth!.userId;
       const { id } = req.params;
       const body = req.body as { name?: string; phone?: string; notificationEmail?: string | null };
       const user = await prisma.user.findFirst({
         where: { id, orgId, deletedAt: null }
       });
       if (!user) return res.status(404).json({ error: "User not found" });
-      const data: { name?: string; phone?: string; notificationEmail?: string | null } = {};
+      const data: { name?: string; phone?: string; notificationEmail?: string | null; profileCompletedAt?: Date } = {};
       if (body.name !== undefined) data.name = body.name?.trim() || null;
       if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
       if (body.notificationEmail !== undefined) data.notificationEmail = body.notificationEmail?.trim() || null;
+      // Mark profile as completed once admin fills core contact fields
+      if (data.name !== undefined || data.phone !== undefined || data.notificationEmail !== undefined) {
+        data.profileCompletedAt = new Date();
+      }
       const updated = await prisma.user.update({
         where: { id },
         data,
@@ -1256,7 +1263,77 @@ export default function adminRouter(prisma: PrismaClient): Router {
           status: true
         }
       });
+
+      // Send a confirmation email when profile/contact details are updated by admin
+      const toEmail = updated.notificationEmail?.trim() || updated.email;
+      if (toEmail) {
+        try {
+          const result = await sendWelcomeEmail(toEmail, updated.name);
+          if (result.ok) {
+            const bodyText =
+              "Your CresOS profile details have been updated. We will use this email for notifications and alignment messages.";
+            await logEmailSent(prisma, {
+              orgId,
+              to: toEmail,
+              subject: "Your CresOS profile was updated",
+              body: bodyText,
+              type: "profile_updated_admin",
+              actorId: adminId
+            });
+          }
+        } catch {
+          // ignore email failures so admin can still save
+        }
+      }
+
       res.json(updated);
+    }
+  );
+
+  // Admin password reset: set a temporary password for a user
+  router.post(
+    "/users/:id/reset-password",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const adminId = req.auth!.userId;
+      const { id } = req.params;
+      const { temporaryPassword } = req.body as { temporaryPassword?: string };
+
+      if (!temporaryPassword || temporaryPassword.length < 8) {
+        res.status(400).json({ error: "temporaryPassword is required and must be at least 8 characters" });
+        return;
+      }
+
+      const user = await prisma.user.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+      await prisma.user.update({
+        where: { id },
+        data: {
+          passwordHash,
+          passwordLastChangedAt: new Date()
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: adminId,
+          type: "admin.user.password_reset",
+          entityType: "user",
+          entityId: id,
+          metadata: {}
+        }
+      });
+
+      res.status(204).send();
     }
   );
 

@@ -54,7 +54,10 @@ async function generateAlignment(prisma: PrismaClient, orgId: string): Promise<A
     scheduleItems,
     salesReports,
     meetingRequests,
-    overdueTasks
+    overdueTasks,
+    payments,
+    expenses,
+    invoices
   ] = await Promise.all([
     prisma.task.findMany({
       where: { orgId, deletedAt: null },
@@ -91,6 +94,18 @@ async function generateAlignment(prisma: PrismaClient, orgId: string): Promise<A
     prisma.task.findMany({
       where: { orgId, deletedAt: null, status: { not: "done" }, dueDate: { lt: now } },
       select: { title: true, dueDate: true }
+    }),
+    prisma.payment.findMany({
+      where: { orgId, deletedAt: null },
+      select: { amount: true, status: true, receivedAt: true }
+    }),
+    prisma.expense.findMany({
+      where: { orgId, deletedAt: null },
+      select: { amount: true, spentAt: true }
+    }),
+    prisma.invoice.findMany({
+      where: { orgId, deletedAt: null },
+      select: { totalAmount: true, status: true, issueDate: true }
     })
   ]);
 
@@ -114,6 +129,18 @@ async function generateAlignment(prisma: PrismaClient, orgId: string): Promise<A
     approved: projects.filter((p) => p.approvalStatus === "approved").length
   };
 
+  const totalPayments = payments.reduce((sum, p) => {
+    const raw = (p.amount as any)?.toNumber?.();
+    const val = raw != null ? raw : Number(p.amount) || 0;
+    return sum + val;
+  }, 0);
+  const totalExpenses = expenses.reduce((sum, e) => {
+    const raw = (e.amount as any)?.toNumber?.();
+    const val = raw != null ? raw : Number(e.amount) || 0;
+    return sum + val;
+  }, 0);
+  const openInvoices = invoices.filter((i) => ["sent", "partial", "overdue"].includes((i.status as any) ?? ""));
+
   const context = {
     tasks: taskSummary,
     overdueTaskTitles: overdueTasks.slice(0, 10).map((t) => ({ title: t.title, due: t.dueDate })),
@@ -124,19 +151,53 @@ async function generateAlignment(prisma: PrismaClient, orgId: string): Promise<A
     upcomingScheduleCount: scheduleItems.length,
     nextScheduleItems: scheduleItems.slice(0, 5).map((s) => ({ title: s.title, type: s.type, at: s.scheduledAt })),
     salesReportsLast7Days: salesReports.length,
-    pendingMeetingRequests: meetingRequests.length
+    pendingMeetingRequests: meetingRequests.length,
+    finance: {
+      totalPayments,
+      totalExpenses,
+      netCash: totalPayments - totalExpenses,
+      openInvoiceCount: openInvoices.length,
+      financeDiscipline: {
+        businessBankAccount: {
+          rule: "Use a dedicated business bank account for all client payments and business expenses. No personal mixing.",
+          benefit: "Creates a clean audit trail so investors, directors, and accountants can see exactly what happened.",
+          keep: "Open or confirm a business account this week. Route 100% of business money in/out through it and attach a receipt or invoice to every transaction."
+        },
+        monthlyBankReconciliation: {
+          rule: "Do a monthly bank reconciliation: match the bank statement to CresOS records (payments, expenses, payouts).",
+          benefit: "Catches errors, leaks, or fraud quickly instead of at year-end.",
+          keep: "Block 30 minutes at month-end to reconcile: date, description, amount in, amount out, and differences."
+        },
+        incomeStatement: {
+          rule: "Maintain a monthly income statement: revenue minus expenses equals profit.",
+          benefit: "Shows whether the business is really profitable or just moving cash.",
+          keep: "At month-end, summarize money in vs money out from CresOS and lock a simple statement for the Director and Finance."
+        },
+        balanceSheet: {
+          rule: "Keep a simple balance sheet: what the org owns (cash, receivables, equipment) minus what it owes (loans, vendor debt).",
+          benefit: "Investors and banks use this to judge financial health and risk.",
+          keep: "List assets and liabilities at month-end and review net worth trend with Director/Admin."
+        },
+        taxRecords: {
+          rule: "Keep every invoice you send and every receipt for business expenses (digital is fine).",
+          benefit: "When tax time or audit comes, you can prove every shilling.",
+          keep: "Store invoices and receipts in CresOS-linked folders and avoid missing documents for any transaction."
+        }
+      }
+    }
   };
 
   const client = getClient();
   if (!client) return null;
 
-  const systemPrompt = `You are an alignment and operations coach for a team (sales, developers, director, admin). Given a JSON snapshot of the org's current state (tasks, reports, projects, schedule, meeting requests), produce a short, actionable alignment message for each role.
+  const systemPrompt = `You are an alignment and operations coach for a team (sales, developers, director, admin). Given a JSON snapshot of the org's current state (tasks, reports, projects, schedule, meeting requests, finance metrics, and finance discipline rules), produce a short, actionable alignment message for each role.
 
 Output a JSON object only, with up to four keys: "sales", "developer", "director", "admin". Each value must be an object: { "subject": "Short subject under 60 chars", "body": "2-4 sentences: what's going on and 1-3 concrete steps to bridge gaps and align work to hit expected targets." }
 
 Rules:
 - Be specific to the data (mention blockers, overdue tasks, pending meetings, report gaps if relevant).
-- Suggest clear next actions (e.g. "Resolve the 3 overdue tasks on X project", "Submit your report to unblock visibility", "Align with developer on Y blocker").
+- For director and admin, explicitly reinforce finance governance where useful: separate business bank account, monthly bank reconciliation, monthly income statement, simple balance sheet, and complete tax records (invoices and receipts).
+- Suggest clear next actions (e.g. "Resolve the 3 overdue tasks on X project", "Submit your report to unblock visibility", "Align with developer on Y blocker", "Schedule this month’s bank reconciliation in CresOS and attach missing receipts").
 - Tone: professional, direct, supportive. No fluff.
 - Plain text only, no markdown.`;
 

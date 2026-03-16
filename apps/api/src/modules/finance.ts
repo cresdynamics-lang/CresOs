@@ -3,7 +3,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { logEmailSent } from "./admin-activity";
+import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 
@@ -110,6 +110,97 @@ export default function financeRouter(prisma: PrismaClient): Router {
         console.error(err);
         res.status(500).json({ error: "Failed to generate financial report" });
       }
+    }
+  );
+
+  // Excel-style finance sheet for documenting money in/out with dynamic columns/rows
+  router.get(
+    "/sheet",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+
+      const latest = await prisma.adminActivityMessage.findFirst({
+        where: { orgId, type: "finance_sheet_v1" },
+        orderBy: { createdAt: "desc" }
+      });
+
+      // Default sheet template if none saved yet
+      const defaultSheet = {
+        status: "draft",
+        columns: [
+          { id: "date", label: "Date" },
+          { id: "direction", label: "Money In/Out" },
+          { id: "amount", label: "Amount" },
+          { id: "currency", label: "Currency" },
+          { id: "purpose", label: "Purpose" },
+          { id: "reason", label: "Reason / Notes" },
+          { id: "receipt", label: "Receipt / Proof" },
+          { id: "counterparty", label: "From/To (Client, Vendor, Project)" }
+        ],
+        rows: [
+          {
+            id: "row-1",
+            cells: {
+              date: "",
+              direction: "",
+              amount: "",
+              currency: "",
+              purpose: "",
+              reason: "",
+              receipt: "",
+              counterparty: ""
+            }
+          }
+        ]
+      };
+
+      if (!latest || !latest.metadata) {
+        res.json(defaultSheet);
+        return;
+      }
+
+      const meta: any = latest.metadata;
+      const sheet = meta.sheet ?? meta;
+
+      res.json({
+        status: meta.status ?? "draft",
+        columns: Array.isArray(sheet.columns) ? sheet.columns : defaultSheet.columns,
+        rows: Array.isArray(sheet.rows) ? sheet.rows : defaultSheet.rows
+      });
+    }
+  );
+
+  router.post(
+    "/sheet",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+
+      const { status, columns, rows } = (req.body || {}) as {
+        status?: string;
+        columns?: Array<{ id: string; label: string }>;
+        rows?: Array<{ id: string; cells: Record<string, string> }>;
+      };
+
+      const safeStatus = status === "submitted" ? "submitted" : "draft";
+
+      await logAdminActivity(prisma, {
+        orgId,
+        type: "finance_sheet_v1",
+        summary: safeStatus === "submitted" ? "Finance sheet submitted" : "Finance sheet saved",
+        actorId: userId,
+        metadata: {
+          status: safeStatus,
+          sheet: {
+            columns: columns ?? [],
+            rows: rows ?? []
+          }
+        }
+      });
+
+      res.status(204).end();
     }
   );
 

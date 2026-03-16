@@ -3,7 +3,8 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { sendWelcomeEmail } from "../lib/resend";
-import { logEmailSent } from "./admin-activity";
+import { logAdminActivity, logEmailSent } from "./admin-activity";
+import bcrypt from "bcryptjs";
 
 export default function accountRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -74,6 +75,59 @@ export default function accountRouter(prisma: PrismaClient): Router {
     }
 
     res.json(user);
+  });
+
+  router.post("/change-password", async (req, res) => {
+    const userId = req.auth!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "currentPassword and newPassword are required" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user || !user.passwordHash) {
+      res.status(400).json({ error: "Unable to change password" });
+      return;
+    }
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      res.status(400).json({ error: "Current password is incorrect" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        passwordLastChangedAt: new Date()
+      }
+    });
+
+    const member = await prisma.orgMember.findFirst({
+      where: { userId },
+      select: { orgId: true }
+    });
+    if (member?.orgId) {
+      await logAdminActivity(prisma, {
+        orgId: member.orgId,
+        type: "account.password_changed",
+        summary: "User changed their password",
+        actorId: userId,
+        entityType: "user",
+        entityId: userId
+      });
+    }
+
+    res.status(204).send();
   });
 
   return router;

@@ -94,26 +94,44 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <div className="shell">
+      <div className="shell overflow-x-auto">
         {reports.length === 0 ? (
           <p className="text-slate-400">
             {isDirector ? "No submitted reports yet." : "You have no reports yet. Create one to get started."}
           </p>
         ) : (
-          <ul className="space-y-2">
-            {reports.map((r) => (
-              <li key={r.id}>
-                <Link
-                  href={`/reports/${r.id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 hover:border-slate-700"
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-400">
+                <th className="pb-2 pr-3">Title</th>
+                {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
+                <th className="pb-2 pr-3">Status</th>
+                <th className="pb-2 pr-3">Submitted at</th>
+                <th className="pb-2 pr-3">Created at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => (
+                <tr
+                  key={r.id}
+                  className="border-b border-slate-800 hover:bg-slate-900/60"
                 >
-                  <span className="font-medium text-slate-100">{r.title}</span>
-                  <div className="flex items-center gap-2 text-xs">
-                    {r.submittedBy && (
-                      <span className="text-slate-400">
-                        {r.submittedBy.name ?? r.submittedBy.email}
-                      </span>
-                    )}
+                  <td className="py-2 pr-3">
+                    <Link
+                      href={`/reports/${r.id}`}
+                      className="text-slate-100 hover:text-sky-400"
+                    >
+                      {r.title}
+                    </Link>
+                  </td>
+                  {isDirector && (
+                    <td className="py-2 pr-3 text-xs text-slate-300">
+                      {r.submittedBy
+                        ? r.submittedBy.name ?? r.submittedBy.email
+                        : "—"}
+                    </td>
+                  )}
+                  <td className="py-2 pr-3 text-xs">
                     <span
                       className={
                         r.status === "submitted"
@@ -123,16 +141,19 @@ export default function ReportsPage() {
                     >
                       {r.status}
                     </span>
-                    {r.submittedAt && (
-                      <span className="text-slate-500">
-                        Submitted {new Date(r.submittedAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-slate-400">
+                    {r.submittedAt
+                      ? new Date(r.submittedAt).toLocaleString()
+                      : "—"}
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-slate-500">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </section>

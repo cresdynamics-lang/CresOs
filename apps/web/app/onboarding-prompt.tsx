@@ -25,6 +25,16 @@ export function OnboardingPrompt({ onOpenAccountSettings }: Props) {
     return () => { cancelled = true; };
   }, [apiFetch, auth.accessToken]);
 
+  useEffect(() => {
+    function handleCompleted() {
+      setProfileCompleted(true);
+    }
+    window.addEventListener("cresos:profileCompleted", handleCompleted);
+    return () => {
+      window.removeEventListener("cresos:profileCompleted", handleCompleted);
+    };
+  }, []);
+
   if (profileCompleted !== false || dismissed) return null;
 
   return (

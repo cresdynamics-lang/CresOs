@@ -200,7 +200,6 @@ export default function AdminPage() {
     try {
       const res = await apiFetch(`/admin/users/${editing.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editName.trim() || null,
           phone: editPhone.trim() || null,
@@ -209,7 +208,8 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setEditing(null);
-        load();
+        // Refresh both flat users list and users-with-roles table
+        await Promise.all([load(), loadUsersWithRoles()]);
       }
     } finally {
       setSaving(false);
@@ -539,8 +539,40 @@ export default function AdminPage() {
                   <td className="py-2 pr-4">
                     {u.profileCompletedAt ? <span className="text-emerald-400">Complete</span> : <span className="text-amber-400">Incomplete</span>}
                   </td>
-                  <td className="py-2">
-                    <button type="button" onClick={() => openEdit(u)} className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">Edit</button>
+                  <td className="py-2 space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(u)}
+                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const tmp = window.prompt("Enter a temporary password for this user (min 8 characters):");
+                        if (!tmp || tmp.length < 8) return;
+                        try {
+                          const res = await apiFetch(`/admin/users/${u.id}/reset-password`, {
+                            method: "POST",
+                            body: JSON.stringify({ temporaryPassword: tmp })
+                          });
+                          if (!res.ok) {
+                            // eslint-disable-next-line no-alert
+                            alert("Failed to reset password.");
+                          } else {
+                            // eslint-disable-next-line no-alert
+                            alert("Password reset. Share the temporary password with the user.");
+                          }
+                        } catch {
+                          // eslint-disable-next-line no-alert
+                          alert("Network error while resetting password.");
+                        }
+                      }}
+                      className="rounded border border-amber-600 px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30"
+                    >
+                      Reset password
+                    </button>
                   </td>
                 </tr>
               ))}

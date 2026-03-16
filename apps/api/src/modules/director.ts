@@ -162,6 +162,7 @@ export default function directorRouter(prisma: PrismaClient): Router {
             where: {
               orgId,
               deletedAt: null,
+              approvalStatus: "approved",
               status: { in: ["planned", "active"] }
             }
           }),
@@ -173,6 +174,19 @@ export default function directorRouter(prisma: PrismaClient): Router {
                 { status: "paused" },
                 { status: "active", endDate: { lt: now } }
               ]
+            }
+          }),
+          prisma.project.count({
+            where: {
+              orgId,
+              deletedAt: null,
+              approvalStatus: "pending"
+            }
+          }),
+          prisma.client.count({
+            where: {
+              orgId,
+              deletedAt: null
             }
           }),
           prisma.task.count({
@@ -294,7 +308,7 @@ export default function directorRouter(prisma: PrismaClient): Router {
             highValueDealsPendingClosure: pipelineTotalValue
           },
           operationalHealth: {
-            activeProjects,
+            activeProjects, // approved + in planned/active
             projectsAtRisk,
             blockedTasksAboveThreshold: blockedThresholdCount,
             milestonesPendingApproval,

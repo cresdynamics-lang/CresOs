@@ -53,7 +53,8 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Administration",
     items: [
-      { href: "/admin", label: "Users & org", roles: ["admin"] }
+      { href: "/admin", label: "Users & org", roles: ["admin"] },
+      { href: "/activity", label: "Activity", roles: ["admin"] }
     ]
   }
 ];
@@ -106,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Side panel */}
       <aside className="flex w-64 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-900/50">
         <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-4">
@@ -189,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-y-auto">
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-3">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
             CresOS workspace

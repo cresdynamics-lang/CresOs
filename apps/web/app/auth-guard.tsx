@@ -5,26 +5,32 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { AppShell } from "./app-shell";
 
+const PUBLIC_PATHS = ["/", "/login"];
+
+function isPublicPath(path: string): boolean {
+  const normalized = path.replace(/\/$/, "") || "/";
+  return PUBLIC_PATHS.includes(normalized);
+}
+
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { auth, hydrated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const hasToken = Boolean(auth.accessToken);
+  const isPublic = isPublicPath(pathname);
+  const mustRedirectToLogin = !hasToken && !isPublic;
+  const mustRedirectToDashboard = hasToken && (pathname === "/login" || pathname === "/");
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!hasToken && pathname !== "/login" && pathname !== "/") {
+    if (mustRedirectToLogin) {
       router.replace("/login");
       return;
     }
-    if (hasToken && pathname === "/login") {
-      router.replace("/dashboard");
-      return;
-    }
-    if (hasToken && pathname === "/") {
+    if (mustRedirectToDashboard) {
       router.replace("/dashboard");
     }
-  }, [hydrated, hasToken, pathname, router]);
+  }, [hydrated, mustRedirectToLogin, mustRedirectToDashboard, router]);
 
   if (!hydrated) {
     return (
@@ -35,8 +41,12 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (!hasToken) {
-    if (pathname === "/" || pathname === "/login") return <>{children}</>;
-    return null;
+    if (isPublic) return <>{children}</>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-cres-bg">
+        <p className="text-sm text-cres-muted">Redirecting to sign in…</p>
+      </div>
+    );
   }
 
   if (pathname === "/login" || pathname === "/") return null;

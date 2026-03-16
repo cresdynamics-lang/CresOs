@@ -11,6 +11,7 @@ type Lead = {
   approvalStatus: string;
   source?: string;
   client?: { id: string; name: string };
+  project?: { id: string; name: string };
   owner?: { id: string; name: string | null; email: string };
 };
 
@@ -20,6 +21,8 @@ export default function LeadsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newSource, setNewSource] = useState("");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
 
@@ -39,14 +42,33 @@ export default function LeadsPage() {
     load();
   }, [apiFetch]);
 
+  useEffect(() => {
+    // Load projects to tie leads to existing work
+    (async () => {
+      try {
+        const res = await apiFetch("/projects");
+        if (res.ok) {
+          const data = (await res.json()) as { id: string; name: string; approvalStatus?: string }[];
+          setProjects(data);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [apiFetch]);
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if (!selectedProjectId) {
+      setError("Select a project for this lead.");
+      return;
+    }
     setError(null);
     try {
       const res = await apiFetch("/crm/leads", {
         method: "POST",
-        body: JSON.stringify({ title: newTitle.trim(), source: newSource.trim() || undefined })
+        body: JSON.stringify({ title: newTitle.trim(), projectId: selectedProjectId, source: newSource.trim() || undefined })
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -55,6 +77,7 @@ export default function LeadsPage() {
       }
       setNewTitle("");
       setNewSource("");
+      setSelectedProjectId("");
       setShowAdd(false);
       load();
     } catch {
@@ -95,6 +118,22 @@ export default function LeadsPage() {
             />
           </label>
           <label className="block">
+            <span className="mb-1 block text-sm text-slate-300">Project *</span>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+              required
+            >
+              <option value="">Select project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
             <span className="mb-1 block text-sm text-slate-300">Source</span>
             <input
               type="text"
@@ -124,7 +163,10 @@ export default function LeadsPage() {
                 >
                   <span className="font-medium text-slate-100">{lead.title}</span>
                   <div className="flex items-center gap-2 text-xs">
-                    {lead.client && (
+                    {lead.project && (
+                      <span className="text-slate-400">Project: {lead.project.name}</span>
+                    )}
+                    {lead.client && !lead.project && (
                       <span className="text-slate-400">{lead.client.name}</span>
                     )}
                     <span className="rounded bg-slate-700 px-2 py-0.5 text-slate-300">

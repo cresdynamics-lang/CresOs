@@ -20,6 +20,10 @@ export default function AccountPage() {
   const [notificationEmail, setNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +58,9 @@ export default function AccountPage() {
         const data = (await res.json()) as Profile;
         setProfile(data);
         setMessage({ type: "ok", text: "Saved. Notifications will be sent to your notification email." });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("cresos:profileCompleted"));
+        }
       } else {
         setMessage({ type: "error", text: "Failed to save" });
       }
@@ -61,6 +68,42 @@ export default function AccountPage() {
       setMessage({ type: "error", text: "Network error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setMessage({ type: "error", text: "Fill all password fields." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "New passwords do not match." });
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const res = await apiFetch("/account/change-password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+      if (res.ok) {
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setMessage({ type: "ok", text: "Password updated successfully." });
+      } else {
+        const data = await res.json().catch(() => null);
+        setMessage({ type: "error", text: data?.error ?? "Failed to change password." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Network error while changing password." });
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -73,12 +116,13 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="shell max-w-xl">
-      <h3 className="mb-3 text-sm font-semibold text-slate-200">Personal information</h3>
-      <p className="mb-4 text-xs text-slate-400">
-        Add your details so you can receive notifications. The notification email is used for reminders, meetings, and alerts.
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="shell max-w-xl space-y-8">
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">Personal information</h3>
+        <p className="mb-4 text-xs text-slate-400">
+          Add your details so you can receive notifications. The notification email is used for reminders, meetings, and alerts.
+        </p>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="block">
           <span className="mb-1 block text-xs text-slate-400">Name</span>
           <input
@@ -119,19 +163,64 @@ export default function AccountPage() {
             placeholder="Your phone number"
           />
         </label>
-        {message && (
-          <p className={message.type === "ok" ? "text-sm text-emerald-400" : "text-sm text-rose-400"}>
-            {message.text}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-fit rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-fit rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">Change password</h3>
+        <p className="mb-4 text-xs text-slate-400">
+          Update your CresOS password. Admin can reset it for you but cannot see your password.
+        </p>
+        <form onSubmit={handlePasswordChange} className="flex flex-col gap-4">
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">Current password</span>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">New password</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">Confirm new password</span>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={passwordSaving}
+            className="w-fit rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-60"
+          >
+            {passwordSaving ? "Updating…" : "Update password"}
+          </button>
+        </form>
+      </div>
+
+      {message && (
+        <p className={message.type === "ok" ? "text-sm text-emerald-400" : "text-sm text-rose-400"}>
+          {message.text}
+        </p>
+      )}
     </div>
   );
 }
