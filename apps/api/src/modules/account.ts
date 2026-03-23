@@ -11,6 +11,7 @@ export default function accountRouter(prisma: PrismaClient): Router {
 
   router.get("/me", async (req, res) => {
     const userId = req.auth!.userId;
+    const orgId = req.auth!.orgId;
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -24,7 +25,11 @@ export default function accountRouter(prisma: PrismaClient): Router {
       }
     });
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json(user);
+    const org = await prisma.org.findUnique({
+      where: { id: orgId },
+      select: { id: true, name: true, slug: true }
+    });
+    res.json({ ...user, org: org ?? { id: orgId, name: null, slug: null } });
   });
 
   router.patch("/me", async (req, res) => {

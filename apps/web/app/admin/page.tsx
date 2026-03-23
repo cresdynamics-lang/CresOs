@@ -38,6 +38,30 @@ type AdminMessage = {
   actor: { id: string; name: string | null; email: string } | null;
 };
 
+type OversightData = {
+  financePendingCount: number;
+  financeOver24h: {
+    id: string;
+    entityType: string;
+    entityId: string;
+    createdAt: string;
+    reason: string | null;
+    hoursPending: number;
+    requester: { id: string; name: string | null; email: string } | null;
+  }[];
+  delayedProjects: {
+    id: string;
+    name: string;
+    status: string;
+    endDate: string | null;
+    approvalStatus: string;
+    assignedDeveloperId: string | null;
+    updatedAt: string;
+  }[];
+  pendingHandoffs: number;
+  tasksOverdueCount: number;
+};
+
 export default function AdminPage() {
   const { auth, apiFetch } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -47,8 +71,11 @@ export default function AdminPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"users" | "departments" | "roles" | "capabilities" | "performance" | "messages">("users");
+  const [tab, setTab] = useState<
+    "users" | "departments" | "roles" | "capabilities" | "performance" | "messages" | "oversight"
+  >("users");
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [oversight, setOversight] = useState<OversightData | null>(null);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [permissionsMatrix, setPermissionsMatrix] = useState<{
@@ -183,9 +210,23 @@ export default function AdminPage() {
       setMessages([]);
     }
   };
+
+  const loadOversight = useCallback(async () => {
+    try {
+      const res = await apiFetch("/admin/oversight");
+      if (res.ok) setOversight((await res.json()) as OversightData);
+    } catch {
+      setOversight(null);
+    }
+  }, [apiFetch]);
+
   useEffect(() => {
     if (isAdmin && tab === "messages") loadMessages();
   }, [isAdmin, tab, apiFetch]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "oversight") loadOversight();
+  }, [isAdmin, tab, loadOversight]);
 
   const openEdit = (u: UserRow) => {
     setEditing(u);
@@ -240,6 +281,7 @@ export default function AdminPage() {
           <button type="button" onClick={() => setTab("capabilities")} className={`rounded px-3 py-1.5 text-sm ${tab === "capabilities" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Capabilities & access</button>
           <button type="button" onClick={() => setTab("performance")} className={`rounded px-3 py-1.5 text-sm ${tab === "performance" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Performance</button>
           <button type="button" onClick={() => setTab("messages")} className={`rounded px-3 py-1.5 text-sm ${tab === "messages" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Messages</button>
+          <button type="button" onClick={() => setTab("oversight")} className={`rounded px-3 py-1.5 text-sm ${tab === "oversight" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Oversight</button>
         </div>
       </div>
 
@@ -404,6 +446,110 @@ export default function AdminPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {tab === "oversight" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-200">Operational oversight</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Finance queue health, stalled approvals (&gt;24h), delayed or paused projects, handoffs, and overdue tasks. Opening this tab refreshes data and may trigger 24h finance escalation notices for admins.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadOversight()}
+              className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {!oversight ? (
+            <p className="text-slate-400">Loading…</p>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="shell">
+                  <p className="text-xs uppercase text-slate-500">Pending finance approvals</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-100">{oversight.financePendingCount}</p>
+                  <a href="/approvals" className="mt-2 inline-block text-xs text-sky-400 hover:underline">
+                    Open approvals →
+                  </a>
+                </div>
+                <div className="shell">
+                  <p className="text-xs uppercase text-slate-500">Stalled (&gt;24h)</p>
+                  <p className="mt-1 text-2xl font-semibold text-amber-400">{oversight.financeOver24h.length}</p>
+                  <p className="mt-1 text-xs text-slate-500">Expense / payout requests awaiting decision</p>
+                </div>
+                <div className="shell">
+                  <p className="text-xs uppercase text-slate-500">Pending handoffs</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-100">{oversight.pendingHandoffs}</p>
+                </div>
+                <div className="shell">
+                  <p className="text-xs uppercase text-slate-500">Overdue tasks</p>
+                  <p className="mt-1 text-2xl font-semibold text-rose-400">{oversight.tasksOverdueCount}</p>
+                </div>
+              </div>
+
+              <div className="shell">
+                <h4 className="mb-2 text-sm font-semibold text-slate-200">Finance approvals over 24 hours</h4>
+                {oversight.financeOver24h.length === 0 ? (
+                  <p className="text-sm text-slate-500">None — queue is within SLA.</p>
+                ) : (
+                  <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
+                    {oversight.financeOver24h.map((row) => (
+                      <li
+                        key={row.id}
+                        className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-slate-700 bg-slate-800/40 px-3 py-2"
+                      >
+                        <div>
+                          <span className="font-medium text-slate-200">
+                            {row.entityType} · {row.entityId.slice(0, 8)}…
+                          </span>
+                          {row.requester && (
+                            <span className="ml-2 text-xs text-slate-500">
+                              Requested by {row.requester.name ?? row.requester.email}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-amber-300">{row.hoursPending}h pending</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="shell">
+                <h4 className="mb-2 text-sm font-semibold text-slate-200">Projects needing attention</h4>
+                <p className="mb-3 text-xs text-slate-500">
+                  Past end date (still planned/active) or paused.
+                </p>
+                {oversight.delayedProjects.length === 0 ? (
+                  <p className="text-sm text-slate-500">None listed.</p>
+                ) : (
+                  <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
+                    {oversight.delayedProjects.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-slate-700 bg-slate-800/40 px-3 py-2"
+                      >
+                        <a href={`/projects/${p.id}`} className="font-medium text-sky-400 hover:underline">
+                          {p.name}
+                        </a>
+                        <span className="text-xs text-slate-400">
+                          {p.status}
+                          {p.endDate ? ` · end ${new Date(p.endDate).toLocaleDateString()}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}

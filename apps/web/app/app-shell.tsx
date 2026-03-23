@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { OnboardingPrompt } from "./onboarding-prompt";
 import { SettingsPanel } from "./settings-panel";
-import { NotificationBell } from "./notification-bell";
+import { HeaderStatusStrip } from "./header-status";
 
 type NavSection = {
   title: string;
@@ -54,7 +54,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     title: "Administration",
     items: [
       { href: "/admin", label: "Users & org", roles: ["admin"] },
-      { href: "/activity", label: "Activity", roles: ["admin"] }
+      { href: "/activity", label: "Activity log", roles: ["admin"] }
     ]
   }
 ];
@@ -102,7 +102,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   })).filter((s) => s.items.length > 0);
 
   const handleLogout = () => {
-    setAuth({ accessToken: null, roleKeys: [], userId: undefined });
+    setAuth({
+      accessToken: null,
+      roleKeys: [],
+      userId: undefined,
+      userEmail: undefined,
+      userName: undefined,
+      orgId: undefined,
+      orgName: undefined,
+      orgSlug: undefined
+    });
     router.replace("/login");
   };
 
@@ -191,13 +200,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
-        <header className="flex items-center justify-between border-b border-slate-800 px-6 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            CresOS workspace
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-6 py-3">
+          <div className="min-w-0 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <span className="text-slate-400">{auth.orgName?.trim() || "Workspace"}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <NotificationBell />
-          </div>
+          <HeaderStatusStrip />
         </header>
         <OnboardingPrompt
           onOpenAccountSettings={() => {

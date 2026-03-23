@@ -59,12 +59,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
             where: {
               orgId,
               deletedAt: null,
+              status: { in: ["approved", "paid"] },
               spentAt: { gte: startOfMonth }
             }
           }),
           prisma.expense.aggregate({
             _sum: { amount: true },
-            where: { orgId, deletedAt: null }
+            where: {
+              orgId,
+              deletedAt: null,
+              status: { in: ["approved", "paid"] }
+            }
           }),
           prisma.payout.aggregate({
             _sum: { amount: true },
@@ -536,7 +541,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Expenses
   router.get(
     "/expenses",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const expenses = await prisma.expense.findMany({
@@ -614,7 +619,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Payouts
   router.get(
     "/payouts",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const payouts = await prisma.payout.findMany({
@@ -893,7 +898,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const approvals = await prisma.approval.findMany({
       where: { orgId },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      include: {
+        requester: { select: { id: true, name: true, email: true } }
+      }
     });
     res.json(approvals);
     }

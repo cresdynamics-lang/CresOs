@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
+import { PageHeader } from "../page-header";
 
 type CeoAnalytics = {
   revenueHealth: {
@@ -28,8 +29,9 @@ type CeoAnalytics = {
 };
 
 export default function AnalyticsPage() {
-  const { apiFetch } = useAuth();
+  const { apiFetch, auth } = useAuth();
   const [data, setData] = useState<CeoAnalytics | null>(null);
+  const isAdmin = auth.roleKeys.includes("admin");
 
   useEffect(() => {
     async function load() {
@@ -46,15 +48,76 @@ export default function AnalyticsPage() {
   }, [apiFetch]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell">
-        <h2 className="mb-2 text-lg font-semibold text-slate-50">
-          Analytics
-        </h2>
-        <p className="text-sm text-slate-300">
-          CEO-level view across revenue, projects, pipeline, and workload.
-        </p>
-      </div>
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        title="Analytics"
+        description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
+      />
+
+      {isAdmin && (
+        <>
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-slate-200">Admin analytics scope</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="shell border-l-4 border-emerald-500/60 bg-slate-900/40">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Project analytics</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
+                  <li>Completion rates per project</li>
+                  <li>Average days to close</li>
+                  <li>Module velocity per developer</li>
+                  <li>Delay frequency by project type</li>
+                </ul>
+              </div>
+              <div className="shell border-l-4 border-amber-500/60 bg-slate-900/40">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Finance analytics</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
+                  <li>Approval turnaround time</li>
+                  <li>Decline rate and reasons</li>
+                  <li>Outstanding vs collected</li>
+                  <li>Cash flow trend (rolling windows)</li>
+                </ul>
+              </div>
+              <div className="shell border-l-4 border-sky-500/60 bg-slate-900/40">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">Team analytics</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
+                  <li>Developer utilisation signals</li>
+                  <li>Swap / handoff frequency</li>
+                  <li>Overload vs underutilised patterns</li>
+                  <li>Report streak per user</li>
+                </ul>
+              </div>
+              <div className="shell border-l-4 border-rose-500/50 bg-slate-900/40">
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Risk analytics</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
+                  <li>Projects with no update in 72h+</li>
+                  <li>Blocked tasks above threshold</li>
+                  <li>Stalled deals in pipeline</li>
+                  <li>Repeat swap patterns</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="shell border border-slate-600/80">
+            <h3 className="text-sm font-semibold text-slate-200">What Admin cannot see in analytics</h3>
+            <p className="mt-2 text-sm text-slate-500">Hard exclusions (PII / commercial sensitivity):</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
+              <li>Individual client names tied to revenue line items</li>
+              <li>Client contact details in CRM exports</li>
+              <li>Sales call transcripts and developer–client comms</li>
+            </ul>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-3 py-1.5 text-xs text-slate-500">
+                Design the analytics charts ↗
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-3 py-1.5 text-xs text-slate-500">
+                Export logic ↗
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
       {data && (
         <div className="grid gap-4 md:grid-cols-3">
           <div className="shell">
@@ -123,10 +186,9 @@ export default function AnalyticsPage() {
       )}
       {!data && (
         <div className="shell text-sm text-slate-400">
-          Analytics not available yet.
+          Loading analytics…
         </div>
       )}
     </section>
   );
 }
-

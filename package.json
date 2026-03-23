@@ -1,4 +1,15 @@
 {
+  "name": "cresos",
+  "private": true,
+  "scripts": {
+    "build:api": "npm run build --prefix apps/api",
+    "build:web": "npm run build --prefix apps/web",
+    "build": "npm run build:api && npm run build:web",
+    "test:api": "npm run test --prefix apps/api",
+    "test": "npm run test:api",
+    "lint:web": "npm run lint --prefix apps/web",
+    "verify": "npm run test:api && npm run build && npm run lint:web"
+  },
   "devDependencies": {
     "prisma": "^7.4.2"
   },

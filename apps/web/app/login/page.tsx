@@ -32,10 +32,16 @@ export default function LoginPage() {
       }
       const data = await res.json();
       const roleKeys = data.roleKeys ?? [];
+      const org = data.org as { id: string; name: string | null; slug: string | null } | undefined;
       setAuth({
         accessToken: data.accessToken,
         roleKeys,
-        userId: data.user?.id
+        userId: data.user?.id,
+        userEmail: data.user?.email,
+        userName: data.user?.name ?? null,
+        orgId: data.orgId ?? org?.id,
+        orgName: org?.name ?? null,
+        orgSlug: org?.slug ?? null
       });
       router.push("/dashboard");
     } catch (err) {

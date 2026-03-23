@@ -9,6 +9,7 @@ import { processNegligenceAlerts } from "./negligence-alerts";
 import { processDueReminders } from "./lead-reminders";
 import { processScheduleReminders } from "./schedule-reminders";
 import { processTaskDueReminders } from "./task-reminders";
+import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ELEVEN_HOURS_MS = 11 * 60 * 60 * 1000;
@@ -100,6 +101,11 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
       const userId = req.auth!.userId;
       const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
+      const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+
+      if (isAdmin) {
+        void processFinanceApprovalEscalations(prisma, orgId).catch(() => {});
+      }
 
       await Promise.all([
         processDueReminders(prisma),

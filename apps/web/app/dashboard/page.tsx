@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { subscribeDataRefresh } from "../data-refresh";
+import { PageHeader } from "../page-header";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 
@@ -12,6 +14,7 @@ type Summary = {
   revenueReceived: number;
   invoiceOutstanding: number;
   activeProjects: number;
+  teamMembers?: number;
 };
 
 type DirectorDashboard = {
@@ -123,59 +126,78 @@ export default function DashboardPage() {
     sessionStorage.setItem(REPORT_REMINDER_DISMISS_KEY, String(Date.now() + 60 * 60 * 1000));
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [summaryRes, attentionRes] = await Promise.all([
-          apiFetch("/analytics/summary"),
-          apiFetch("/dashboard/attention")
-        ]);
-        if (cancelled) return;
-        if (summaryRes.ok) {
-          const data = (await summaryRes.json()) as Summary;
-          setSummary(data);
-        } else setSummaryError(true);
-        if (attentionRes.ok) {
-          const data = (await attentionRes.json()) as Attention;
-          setAttention(data);
-          if (!cancelled && data?.notifications) {
-            const unread = data.notifications.filter((n) => !n.readAt);
-            let first = true;
-            for (const n of unread.slice(0, 5)) {
-              if (notifiedIdsRef.current.has(n.id)) continue;
-              notifiedIdsRef.current.add(n.id);
-              notify(n.subject ?? "Reminder", {
-                body: n.body?.slice(0, 120) ?? "",
-                tag: `notif-${n.id}`,
-                playSound: first
-              });
-              first = false;
-            }
+  const loadSummaryAndAttention = useCallback(async () => {
+    try {
+      const [summaryRes, attentionRes] = await Promise.all([
+        apiFetch("/analytics/summary"),
+        apiFetch("/dashboard/attention")
+      ]);
+      if (summaryRes.ok) {
+        const data = (await summaryRes.json()) as Summary;
+        setSummary(data);
+        setSummaryError(false);
+      } else setSummaryError(true);
+      if (attentionRes.ok) {
+        const data = (await attentionRes.json()) as Attention;
+        setAttention(data);
+        if (data?.notifications) {
+          const unread = data.notifications.filter((n) => !n.readAt);
+          let first = true;
+          for (const n of unread.slice(0, 5)) {
+            if (notifiedIdsRef.current.has(n.id)) continue;
+            notifiedIdsRef.current.add(n.id);
+            notify(n.subject ?? "Reminder", {
+              body: n.body?.slice(0, 120) ?? "",
+              tag: `notif-${n.id}`,
+              playSound: first
+            });
+            first = false;
           }
         }
-      } catch {
-        if (!cancelled) setSummaryError(true);
       }
+    } catch {
+      setSummaryError(true);
     }
-    load();
-    return () => { cancelled = true; };
   }, [apiFetch]);
 
-  useEffect(() => {
+  const loadDirectorDashboard = useCallback(async () => {
     if (!isDirectorOrAdmin) return;
-    let cancelled = false;
-    apiFetch("/director/dashboard")
-      .then((res) => {
-        if (!cancelled && res.ok) return res.json();
-        return null;
-      })
-      .then((data) => {
-        if (!cancelled && data) setDirectorDashboard(data as DirectorDashboard);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
+    try {
+      const res = await apiFetch("/director/dashboard");
+      if (res.ok) {
+        const data = (await res.json()) as DirectorDashboard;
+        setDirectorDashboard(data);
+      }
+    } catch {
+      // ignore
+    }
   }, [isDirectorOrAdmin, apiFetch]);
+
+  useEffect(() => {
+    void loadSummaryAndAttention();
+  }, [loadSummaryAndAttention]);
+
+  useEffect(() => {
+    void loadDirectorDashboard();
+  }, [loadDirectorDashboard]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        void loadSummaryAndAttention();
+        void loadDirectorDashboard();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const unsub = subscribeDataRefresh(() => {
+      void loadSummaryAndAttention();
+      void loadDirectorDashboard();
+    });
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      unsub();
+    };
+  }, [loadSummaryAndAttention, loadDirectorDashboard]);
 
   const quickLinks = Array.from(
     new Map(
@@ -199,6 +221,7 @@ export default function DashboardPage() {
   const overdueTasks = attention?.overdueTasks ?? [];
   const latestDeveloperReportNeedsAttention = attention?.latestDeveloperReportNeedsAttention ?? null;
   const isDeveloper = auth.roleKeys.includes("developer");
+  const isAdmin = auth.roleKeys.includes("admin");
   const hasAttention =
     unreadCount > 0 ||
     messagesCount > 0 ||
@@ -211,8 +234,95 @@ export default function DashboardPage() {
     handoffRequests.length > 0 ||
     (isDeveloper && (needsAttentionCount > 0 || (latestDeveloperReportNeedsAttention?.length ?? 0) > 0));
 
+  const pendingFinanceApprovals =
+    attention?.approvalsPending?.filter(
+      (a) => a.entityType === "expense" || a.entityType === "payout"
+    ).length ??
+    directorDashboard?.approvalQueue.totalPending ??
+    0;
+  const atRiskProjects = directorDashboard?.operationalHealth.projectsAtRisk ?? 0;
+  const teamMembers = summary?.teamMembers ?? 0;
+
   return (
     <section className="flex flex-col gap-4">
+      <PageHeader
+        title={`${primaryRoleLabel} dashboard`}
+        description="Operating System for Growth — one place for approvals, delivery signals, and finance health."
+      />
+
+      {isAdmin && directorDashboard && summary && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="shell border-slate-700/80">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Active projects</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-100">{summary.activeProjects}</p>
+            <p className="text-xs text-slate-500">Across all teams</p>
+          </div>
+          <div className="shell border-slate-700/80">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending approvals</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-300">{pendingFinanceApprovals}</p>
+            <p className="text-xs text-slate-500">Finance requests</p>
+          </div>
+          <div className="shell border-slate-700/80">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">At risk</p>
+            <p className="mt-1 text-2xl font-semibold text-rose-300">{atRiskProjects}</p>
+            <p className="text-xs text-slate-500">Delayed or stalled</p>
+          </div>
+          <div className="shell border-slate-700/80">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Team members</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-100">{teamMembers}</p>
+            <p className="text-xs text-slate-500">Seats in this workspace</p>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && directorDashboard && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="shell border-l-4 border-amber-500/60 bg-slate-900/40">
+            <h3 className="text-sm font-semibold text-amber-100/90">Director-level overview</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Read-only revenue, outstanding amounts, net flow, pipeline value, win rate, stalled deals, and active or at-risk projects — aligned for governance.
+            </p>
+            <Link
+              href="/analytics"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-amber-300 hover:text-amber-200"
+            >
+              See data sources →
+            </Link>
+          </div>
+          <div className="shell border-l-4 border-emerald-500/60 bg-slate-900/40">
+            <h3 className="text-sm font-semibold text-emerald-200">Approval queue</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Pending Finance requests surface here and in the header. The badge turns warning when more than three requests are waiting.
+            </p>
+            <Link
+              href="/approvals"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-emerald-300 hover:text-emerald-200"
+            >
+              Go to approvals →
+            </Link>
+          </div>
+          <div className="shell border-l-4 border-sky-500/60 bg-slate-900/40">
+            <h3 className="text-sm font-semibold text-sky-200">Work progress tracker</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Aggregated module completion across active projects updates as developers complete work. You can&apos;t edit this directly — it reflects live delivery.
+            </p>
+            <p className="mt-3 text-2xl font-semibold text-sky-300">{workProgress}%</p>
+          </div>
+          <div className="shell border-l-4 border-rose-500/50 bg-slate-900/40">
+            <h3 className="text-sm font-semibold text-rose-200">Your duties</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Admin-scoped items only: pending approvals, access requests, and governance reviews — not developer or sales task lists.
+            </p>
+            <Link
+              href="/admin"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-rose-200/90 hover:text-rose-100"
+            >
+              Users &amp; org →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {projectsNeedingReview.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-sky-600/50 bg-sky-950/40 px-4 py-3">
           <p className="text-sm text-sky-200">
@@ -264,22 +374,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
-      <div className="shell">
-        <div className="mb-2 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-slate-50">
-            {primaryRoleLabel} dashboard
-          </h2>
-          <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-300">
-            Signed in as {auth.roleKeys.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
-          </span>
-        </div>
-        <p className="text-sm text-slate-300">
-          {hasMetrics
-            ? "High-level view of CresOS: leads, deals, delivery, invoices, and revenue in one place."
-            : "Use the side panel to access your role-based tasks and reports."}
-        </p>
-      </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

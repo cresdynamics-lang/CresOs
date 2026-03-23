@@ -1,0 +1,20 @@
+---
+description: Admin role governance for CresOS — finance authority, visibility limits, audit
+globs:
+  - apps/api/src/modules/admin.ts
+  - apps/api/src/modules/finance.ts
+  - apps/web/app/admin/**
+  - apps/web/app/approvals/**
+---
+
+# Admin role (Cres Dynamics ERP)
+
+When changing Admin, Finance approvals, or oversight features:
+
+- **Only Admin** may approve/reject **expense** and **payout** approval entities via `POST /admin/finance-approvals/:id/decision`. Director is view-only for those.
+- **Reject** decisions must require a **note** (explanation: missing info, rule violation, or what must change).
+- Admin does **not** assign developers to projects in product flows; Director/Sales own assignment gates.
+- Prefer **event logs** and **immutable** audit metadata for approvals (approver id, timestamp, note).
+- Do not expose raw client phone/email to Admin on new screens unless the spec explicitly allows; prefer aggregates or approved-request context.
+
+See `docs/ADMIN_ROLE_ALIGNMENT.md` for the full charter.

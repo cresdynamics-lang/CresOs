@@ -6,6 +6,22 @@ import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { notifyDirectors } from "./director-notifications";
 
+/** Admin oversight: hide raw client contact unless user also has Finance or Sales role. */
+function maskClientForAdmin<T extends { email?: string | null; phone?: string | null }>(
+  roleKeys: string[],
+  row: T
+): T {
+  const hasFinance = roleKeys.includes("finance");
+  const hasSales = roleKeys.includes("sales");
+  const isAdmin = roleKeys.includes("admin");
+  if (!isAdmin || hasFinance || hasSales) return row;
+  return {
+    ...row,
+    email: row.email ? "•••• (restricted)" : null,
+    phone: row.phone ? "•••• (restricted)" : null
+  };
+}
+
 export default function crmRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
@@ -15,11 +31,12 @@ export default function crmRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
+    const roleKeys = req.auth!.roleKeys;
     const clients = await prisma.client.findMany({
       where: { orgId, deletedAt: null },
       orderBy: { createdAt: "desc" }
     });
-    res.json(clients);
+    res.json(clients.map((c) => maskClientForAdmin(roleKeys, c)));
     }
   );
 

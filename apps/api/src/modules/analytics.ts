@@ -9,59 +9,72 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
   // Simple summary used by the main dashboard
   router.get(
     "/summary",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance, ROLE_KEYS.analyst]),
+    requireRoles([
+      ROLE_KEYS.admin,
+      ROLE_KEYS.director,
+      ROLE_KEYS.finance,
+      ROLE_KEYS.analyst
+    ]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
 
-    const [leadsThisWeek, dealsWon, revenueReceived, invoiceOutstanding, activeProjects] =
-      await Promise.all([
-        prisma.lead.count({
-          where: {
-            orgId,
-            createdAt: { gte: startOfWeek },
-            deletedAt: null
-          }
-        }),
-        prisma.deal.count({
-          where: {
-            orgId,
-            stage: "won",
-            deletedAt: null
-          }
-        }),
-        prisma.payment.aggregate({
-          _sum: { amount: true },
-          where: {
-            orgId,
-            deletedAt: null
-          }
-        }),
-        prisma.invoice.aggregate({
-          _sum: { totalAmount: true },
-          where: {
-            orgId,
-            deletedAt: null,
-            OR: [{ status: "sent" }, { status: "partial" }, { status: "overdue" }]
-          }
-        }),
-        prisma.project.count({
-          where: {
-            orgId,
-            deletedAt: null,
-            status: { in: ["planned", "active"] }
-          }
-        })
-      ]);
+    const [
+      leadsThisWeek,
+      dealsWon,
+      revenueReceived,
+      invoiceOutstanding,
+      activeProjects,
+      teamMembers
+    ] = await Promise.all([
+      prisma.lead.count({
+        where: {
+          orgId,
+          createdAt: { gte: startOfWeek },
+          deletedAt: null
+        }
+      }),
+      prisma.deal.count({
+        where: {
+          orgId,
+          stage: "won",
+          deletedAt: null
+        }
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: {
+          orgId,
+          deletedAt: null
+        }
+      }),
+      prisma.invoice.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          orgId,
+          deletedAt: null,
+          OR: [{ status: "sent" }, { status: "partial" }, { status: "overdue" }]
+        }
+      }),
+      prisma.project.count({
+        where: {
+          orgId,
+          deletedAt: null,
+          status: { in: ["planned", "active"] }
+        }
+      }),
+      prisma.orgMember.count({ where: { orgId } })
+    ]);
 
     res.json({
       leadsThisWeek,
       dealsWon,
       revenueReceived: revenueReceived._sum.amount?.toNumber() ?? 0,
       invoiceOutstanding: invoiceOutstanding._sum.totalAmount?.toNumber() ?? 0,
-      activeProjects
+      activeProjects,
+      teamMembers
     });
     }
   );
@@ -69,7 +82,12 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
   // CEO-level dashboard: revenue, projects, lead conversion, workload
   router.get(
     "/ceo",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.finance, ROLE_KEYS.analyst]),
+    requireRoles([
+      ROLE_KEYS.admin,
+      ROLE_KEYS.director,
+      ROLE_KEYS.finance,
+      ROLE_KEYS.analyst
+    ]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const now = new Date();
@@ -120,6 +138,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
         where: {
           orgId,
           deletedAt: null,
+          status: { in: ["approved", "paid"] },
           spentAt: { gte: startOfMonth }
         }
       }),
@@ -310,6 +329,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
           where: {
             orgId,
             deletedAt: null,
+            status: { in: ["approved", "paid"] },
             spentAt: { gte: fourteenDaysAgo }
           }
         }),
@@ -319,6 +339,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
           where: {
             orgId,
             deletedAt: null,
+            status: { in: ["approved", "paid"] },
             spentAt: { gte: previous14Start, lt: fourteenDaysAgo }
           }
         }),

@@ -54,12 +54,12 @@ export default function ReportsPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="shell flex flex-col gap-3 border-cres-border bg-cres-surface/70 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="mb-2 text-lg font-semibold text-slate-50">
+          <h2 className="mb-2 text-lg font-semibold text-cres-text">
             {isDirector ? "Submitted reports" : "My reports"}
           </h2>
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-cres-text-muted">
             {isDirector
               ? "View and comment on sales activity reports."
               : "View your report history (read-only) or create and submit a new report."}
@@ -68,7 +68,7 @@ export default function ReportsPage() {
         {!isDirector && (
           <Link
             href="/reports/new"
-            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover"
           >
             New report
           </Link>
@@ -76,11 +76,11 @@ export default function ReportsPage() {
       </div>
 
       {!isDirector && overdue.length > 0 && (
-        <div className="rounded-xl border border-rose-500/50 bg-rose-950/30 px-4 py-3">
-          <p className="mb-2 font-semibold text-rose-400">
+        <div className="rounded-xl border border-cres-accent/40 bg-cres-surface px-4 py-3">
+          <p className="mb-2 font-semibold text-cres-accent">
             Alarm: {overdue.length} director question(s) not answered within 24 hours
           </p>
-          <ul className="list-inside list-disc text-sm text-rose-200">
+          <ul className="list-inside list-disc text-sm text-cres-text">
             {overdue.slice(0, 5).map((o) => (
               <li key={o.id}>
                 <Link href={`/reports/${o.reportId}`} className="underline">
@@ -94,15 +94,15 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <div className="shell overflow-x-auto">
+      <div className="shell overflow-x-auto border-cres-border bg-cres-card/80">
         {reports.length === 0 ? (
-          <p className="text-slate-400">
+          <p className="text-cres-muted">
             {isDirector ? "No submitted reports yet." : "You have no reports yet. Create one to get started."}
           </p>
         ) : (
           <table className="min-w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-cres-border text-xs uppercase tracking-wide text-cres-muted">
                 <th className="pb-2 pr-3">Title</th>
                 {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
                 <th className="pb-2 pr-3">Status</th>
@@ -114,18 +114,18 @@ export default function ReportsPage() {
               {reports.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-b border-slate-800 hover:bg-slate-900/60"
+                  className="border-b border-cres-border/60 hover:bg-cres-surface/60"
                 >
                   <td className="py-2 pr-3">
                     <Link
                       href={`/reports/${r.id}`}
-                      className="text-slate-100 hover:text-sky-400"
+                      className="text-cres-text hover:text-cres-accent"
                     >
                       {r.title}
                     </Link>
                   </td>
                   {isDirector && (
-                    <td className="py-2 pr-3 text-xs text-slate-300">
+                    <td className="py-2 pr-3 text-xs text-cres-text-muted">
                       {r.submittedBy
                         ? r.submittedBy.name ?? r.submittedBy.email
                         : "—"}
@@ -135,19 +135,19 @@ export default function ReportsPage() {
                     <span
                       className={
                         r.status === "submitted"
-                          ? "rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-300"
-                          : "rounded bg-amber-900/60 px-2 py-0.5 text-amber-300"
+                          ? "rounded bg-cres-accent/20 px-2 py-0.5 text-cres-accent"
+                          : "rounded bg-cres-border px-2 py-0.5 text-cres-text-muted"
                       }
                     >
                       {r.status}
                     </span>
                   </td>
-                  <td className="py-2 pr-3 text-xs text-slate-400">
+                  <td className="py-2 pr-3 text-xs text-cres-muted">
                     {r.submittedAt
                       ? new Date(r.submittedAt).toLocaleString()
                       : "—"}
                   </td>
-                  <td className="py-2 pr-3 text-xs text-slate-500">
+                  <td className="py-2 pr-3 text-xs text-cres-muted">
                     {new Date(r.createdAt).toLocaleString()}
                   </td>
                 </tr>

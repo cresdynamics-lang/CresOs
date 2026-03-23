@@ -77,6 +77,7 @@ export default function directorRouter(prisma: PrismaClient): Router {
             where: {
               orgId,
               deletedAt: null,
+              status: { in: ["approved", "paid"] },
               spentAt: { gte: startOfMonth }
             }
           }),
@@ -112,6 +113,7 @@ export default function directorRouter(prisma: PrismaClient): Router {
             where: {
               orgId,
               deletedAt: null,
+              status: { in: ["approved", "paid"] },
               spentAt: { gte: now, lte: next30Days }
             }
           }),

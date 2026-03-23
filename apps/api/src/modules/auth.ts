@@ -204,8 +204,16 @@ export default function authRouter(prisma: PrismaClient): Router {
       sessionId: session.id
     });
 
+    const org = await prisma.org.findUnique({
+      where: { id: primaryOrg },
+      select: { id: true, name: true, slug: true }
+    });
+
     res.json({
       user: { id: user.id, email: user.email, name: user.name },
+      org: org
+        ? { id: org.id, name: org.name, slug: org.slug }
+        : { id: primaryOrg, name: null as string | null, slug: null as string | null },
       orgId: primaryOrg,
       roleKeys,
       ...tokens

@@ -113,8 +113,8 @@ export default function ReportDetailPage() {
 
   if (!report) {
     return (
-      <section className="shell">
-        <p className="text-slate-400">Loading…</p>
+      <section className="shell border-cres-border bg-cres-surface/70">
+        <p className="text-cres-muted">Loading…</p>
       </section>
     );
   }
@@ -123,13 +123,13 @@ export default function ReportDetailPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell flex flex-wrap items-start justify-between gap-4">
+      <div className="shell flex flex-wrap items-start justify-between gap-4 border-cres-border bg-cres-surface/70">
         <div>
-          <Link href="/reports" className="text-sm text-brand hover:underline">
+          <Link href="/reports" className="text-sm text-cres-accent hover:underline">
             ← Back to reports
           </Link>
-          <h2 className="mt-2 text-lg font-semibold text-slate-50">{report.title}</h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <h2 className="mt-2 text-lg font-semibold text-cres-text">{report.title}</h2>
+          <p className="mt-1 text-xs text-cres-muted">
             By {report.submittedBy.name ?? report.submittedBy.email}
             {report.submittedAt && (
               <> · Submitted {new Date(report.submittedAt).toLocaleString()}</>
@@ -139,28 +139,28 @@ export default function ReportDetailPage() {
         <span
           className={
             report.status === "submitted"
-              ? "rounded bg-emerald-900/60 px-3 py-1 text-sm text-emerald-300"
-              : "rounded bg-amber-900/60 px-3 py-1 text-sm text-amber-300"
+              ? "rounded bg-cres-accent/20 px-3 py-1 text-sm text-cres-accent"
+              : "rounded bg-cres-border px-3 py-1 text-sm text-cres-text-muted"
           }
         >
           {report.status}
         </span>
       </div>
 
-      <div className="shell">
-        <p className="whitespace-pre-wrap text-sm text-slate-200">{report.body}</p>
+      <div className="shell border-cres-border bg-cres-card/80">
+        <p className="whitespace-pre-wrap text-sm text-cres-text">{report.body}</p>
       </div>
 
       {report.status === "submitted" && (
         <>
-          <div className="shell">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">Comments & questions</h3>
+          <div className="shell border-cres-border bg-cres-card/80">
+            <h3 className="mb-3 text-sm font-semibold text-cres-text">Comments & questions</h3>
 
             {topLevel.length === 0 && !isDirector && (
-              <p className="text-sm text-slate-400">No comments yet from director.</p>
+              <p className="text-sm text-cres-muted">No comments yet from director.</p>
             )}
             {topLevel.length === 0 && isDirector && (
-              <p className="text-sm text-slate-400">No comments yet. Add a comment or question below.</p>
+              <p className="text-sm text-cres-muted">No comments yet. Add a comment or question below.</p>
             )}
 
             <ul className="space-y-4">
@@ -172,35 +172,35 @@ export default function ReportDetailPage() {
                   <li
                     key={c.id}
                     className={`rounded-lg border px-3 py-3 ${
-                      c.kind === "question" ? "border-amber-800/60 bg-amber-950/20" : "border-slate-800 bg-slate-900/40"
+                      c.kind === "question" ? "border-cres-accent/40 bg-cres-accent/10" : "border-cres-border bg-cres-surface/50"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      <span className="font-medium text-slate-300">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-cres-muted">
+                      <span className="font-medium text-cres-text-muted">
                         {c.author.name ?? c.author.email}
                       </span>
                       <span>{c.kind === "question" ? "asked" : "commented"}</span>
                       <span>{new Date(c.createdAt).toLocaleString()}</span>
                       {deadline && (
-                        <span className={questionOverdue ? "text-rose-400" : "text-slate-500"}>
+                        <span className={questionOverdue ? "text-cres-accent" : "text-cres-muted"}>
                           {questionOverdue
                             ? "Overdue — answer required"
                             : `Due ${deadline.toLocaleString()}`}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-slate-200">{c.content}</p>
+                    <p className="mt-1 text-sm text-cres-text">{c.content}</p>
 
                     {replies.map((r) => (
                       <div
                         key={r.id}
-                        className="ml-4 mt-2 rounded border border-slate-700 bg-slate-900/60 px-3 py-2"
+                        className="ml-4 mt-2 rounded border border-cres-border bg-cres-surface/60 px-3 py-2"
                       >
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-cres-muted">
                           {r.author.name ?? r.author.email} answered{" "}
                           {new Date(r.createdAt).toLocaleString()}
                         </p>
-                        <p className="mt-1 text-sm text-slate-200">{r.content}</p>
+                        <p className="mt-1 text-sm text-cres-text">{r.content}</p>
                       </div>
                     ))}
 
@@ -213,13 +213,13 @@ export default function ReportDetailPage() {
                             setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))
                           }
                           placeholder="Your answer (required within 24h)"
-                          className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                          className="flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
                         />
                         <button
                           type="button"
                           disabled={loading}
                           onClick={() => handleAddResponse(c.id)}
-                          className="rounded bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                          className="rounded bg-cres-accent px-3 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
                         >
                           Submit answer
                         </button>
@@ -231,14 +231,14 @@ export default function ReportDetailPage() {
             </ul>
 
             {isDirector && (
-              <div className="mt-6 border-t border-slate-700 pt-4">
+              <div className="mt-6 border-t border-cres-border pt-4">
                 <label className="block">
-                  <span className="mb-1 block text-sm text-slate-300">Add comment or question</span>
+                  <span className="mb-1 block text-sm text-cres-text-muted">Add comment or question</span>
                   <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     rows={3}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text"
                     placeholder="Comment or question for the sales person..."
                   />
                 </label>
@@ -246,7 +246,7 @@ export default function ReportDetailPage() {
                   <select
                     value={newKind}
                     onChange={(e) => setNewKind(e.target.value as "comment" | "question")}
-                    className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200"
+                    className="rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
                   >
                     <option value="comment">Comment</option>
                     <option value="question">Question (requires answer within 24h)</option>
@@ -255,7 +255,7 @@ export default function ReportDetailPage() {
                     type="button"
                     disabled={loading || !newComment.trim()}
                     onClick={handleAddComment}
-                    className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                    className="rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
                   >
                     Post
                   </button>

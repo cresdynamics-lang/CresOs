@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
+import { subscribeDataRefresh } from "./data-refresh";
 
 type Notification = {
   id: string;
@@ -19,23 +20,29 @@ export function NotificationBell() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadCount() {
-      try {
-        const res = await apiFetch("/notifications/me/unseen-count");
-        if (!res.ok) return;
-        const data = (await res.json()) as { count: number };
-        if (!cancelled) setUnseenCount(data.count ?? 0);
-      } catch {
-        // ignore
-      }
+  const loadCount = useCallback(async () => {
+    try {
+      const res = await apiFetch("/notifications/me/unseen-count");
+      if (!res.ok) return;
+      const data = (await res.json()) as { count: number };
+      setUnseenCount(data.count ?? 0);
+    } catch {
+      // ignore
     }
-    void loadCount();
-    return () => {
-      cancelled = true;
-    };
   }, [apiFetch]);
+
+  useEffect(() => {
+    void loadCount();
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadCount();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const unsub = subscribeDataRefresh(() => void loadCount());
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      unsub();
+    };
+  }, [loadCount]);
 
   async function loadItems() {
     setLoading(true);

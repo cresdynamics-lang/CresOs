@@ -8,6 +8,9 @@ import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { PERMISSIONS } from "./permissions-registry";
 import { sendWelcomeEmail } from "../lib/resend";
 import { logEmailSent } from "./admin-activity";
+import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
+
+const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
 
 export default function adminRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -97,6 +100,12 @@ export default function adminRouter(prisma: PrismaClient): Router {
         res.status(400).json({ error: "Missing status" });
         return;
       }
+      if (status === "rejected" && (!note || !String(note).trim())) {
+        res.status(400).json({
+          error: "A written explanation is required when declining a finance request (what is missing, which rule, or what must change)."
+        });
+        return;
+      }
 
       const existing = await prisma.approval.findUnique({ where: { id } });
       if (!existing || existing.orgId !== orgId) {
@@ -128,16 +137,38 @@ export default function adminRouter(prisma: PrismaClient): Router {
             where: { id: existing.entityId, orgId },
             data: { status: "approved" }
           });
+        } else if (existing.entityType === "payout") {
+          await prisma.payout.updateMany({
+            where: { id: existing.entityId, orgId, deletedAt: null },
+            data: { paidAt: new Date() }
+          });
+        }
+      } else if (status === "rejected" || status === "cancelled") {
+        if (existing.entityType === "expense") {
+          await prisma.expense.updateMany({
+            where: { id: existing.entityId, orgId },
+            data: { status: "rejected" }
+          });
+        } else if (existing.entityType === "payout") {
+          await prisma.payout.updateMany({
+            where: { id: existing.entityId, orgId },
+            data: { deletedAt: new Date() }
+          });
         }
       }
 
       await prisma.eventLog.create({
         data: {
           orgId,
+          actorId: userId,
           type: `approval.${status}`,
           entityType: approval.entityType,
           entityId: approval.entityId,
-          metadata: { approvalId: approval.id, approver: "admin" }
+          metadata: {
+            approvalId: approval.id,
+            approver: "admin",
+            decisionNote: note ?? null
+          }
         }
       });
 
@@ -1359,6 +1390,87 @@ export default function adminRouter(prisma: PrismaClient): Router {
       });
 
       res.json(alerts);
+    }
+  );
+
+  // Operational oversight: finance queue, delays, handoffs (read-only data for Admin UI)
+  router.get(
+    "/oversight",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const now = new Date();
+      const cutoff24 = new Date(Date.now() - OVERSIGHT_24H_MS);
+
+      void processFinanceApprovalEscalations(prisma, orgId).catch(() => {});
+
+      const [
+        financePendingCount,
+        financeOver24h,
+        delayedProjects,
+        pendingHandoffs,
+        tasksOverdueCount
+      ] = await Promise.all([
+        prisma.approval.count({
+          where: { orgId, status: "pending", entityType: { in: ["expense", "payout"] } }
+        }),
+        prisma.approval.findMany({
+          where: {
+            orgId,
+            status: "pending",
+            entityType: { in: ["expense", "payout"] },
+            createdAt: { lt: cutoff24 }
+          },
+          orderBy: { createdAt: "asc" },
+          take: 50,
+          include: { requester: { select: { id: true, name: true, email: true } } }
+        }),
+        prisma.project.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            OR: [
+              { endDate: { lt: now }, status: { in: ["planned", "active"] } },
+              { status: "paused" }
+            ]
+          },
+          take: 40,
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            endDate: true,
+            approvalStatus: true,
+            assignedDeveloperId: true,
+            updatedAt: true
+          }
+        }),
+        prisma.projectHandoffRequest.count({ where: { orgId, status: "pending" } }),
+        prisma.task.count({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { not: "done" },
+            dueDate: { lt: now }
+          }
+        })
+      ]);
+
+      res.json({
+        financePendingCount,
+        financeOver24h: financeOver24h.map((a) => ({
+          id: a.id,
+          entityType: a.entityType,
+          entityId: a.entityId,
+          createdAt: a.createdAt,
+          reason: a.reason,
+          hoursPending: Math.floor((Date.now() - a.createdAt.getTime()) / (60 * 60 * 1000)),
+          requester: a.requester
+        })),
+        delayedProjects,
+        pendingHandoffs,
+        tasksOverdueCount
+      });
     }
   );
 

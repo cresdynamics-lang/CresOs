@@ -50,41 +50,41 @@ export default function NewReportPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell">
-        <h2 className="mb-2 text-lg font-semibold text-slate-50">Create report</h2>
-        <p className="text-sm text-slate-300">
+      <div className="shell border-cres-border bg-cres-surface/70">
+        <h2 className="mb-2 text-lg font-semibold text-cres-text">Create report</h2>
+        <p className="text-sm text-cres-text-muted">
           Describe the activities you’ve done. You can save as draft or submit for director review.
         </p>
       </div>
 
-      <div className="shell flex flex-col gap-4">
+      <div className="shell flex flex-col gap-4 border-cres-border bg-cres-card/80">
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-300">Title</span>
+          <span className="mb-1 block text-sm text-cres-text-muted">Title</span>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-brand"
+            className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text outline-none focus:border-cres-accent"
             placeholder="e.g. Weekly client follow-ups"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-300">Activities done</span>
+          <span className="mb-1 block text-sm text-cres-text-muted">Activities done</span>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={8}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-brand"
+            className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text outline-none focus:border-cres-accent"
             placeholder="Describe what you did..."
           />
         </label>
-        {error && <p className="text-sm text-rose-400">{error}</p>}
+        {error && <p className="text-sm text-cres-accent">{error}</p>}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={loading}
             onClick={() => handleCreate(false)}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+            className="rounded-lg border border-cres-border bg-cres-surface px-4 py-2 text-sm font-medium text-cres-text-muted hover:bg-cres-card disabled:opacity-60"
           >
             Save draft
           </button>
@@ -92,13 +92,13 @@ export default function NewReportPage() {
             type="button"
             disabled={loading}
             onClick={() => handleCreate(true)}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+            className="rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
           >
             {loading ? "Saving…" : "Save and submit"}
           </button>
           <Link
             href="/reports"
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-cres-border px-4 py-2 text-sm font-medium text-cres-text-muted hover:bg-cres-surface"
           >
             Cancel
           </Link>

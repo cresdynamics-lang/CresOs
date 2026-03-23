@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
+import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
+import { PageHeader } from "../page-header";
 
 type Invoice = {
   id: string;
@@ -167,7 +169,10 @@ export default function FinancePage() {
     howToProceed: ""
   });
   const [reminderDayEdit, setReminderDayEdit] = useState<{ clientId: string; day: number | null } | null>(null);
+  /** Expense/payout entity ids that have a pending Approval row (from DB). */
   const [pendingApprovalIds, setPendingApprovalIds] = useState<Set<string>>(new Set());
+  /** Count of pending expense/payout approval rows — matches DB & header. */
+  const [pendingFinanceApprovalCount, setPendingFinanceApprovalCount] = useState(0);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [invoiceForm, setInvoiceForm] = useState<{
@@ -195,6 +200,7 @@ export default function FinancePage() {
   );
   // Only Finance role can perform actions; Director/Admin see read-only
   const isFinance = auth.roleKeys.includes("finance");
+  const isAdmin = auth.roleKeys.includes("admin");
 
   const fetchReport = useCallback(async () => {
     if (!canSeeReport) return;
@@ -284,10 +290,11 @@ export default function FinancePage() {
       const appRes = await apiFetch("/finance/approvals");
       if (appRes.ok) {
         const appData = (await appRes.json()) as { entityType: string; entityId: string; status: string }[];
-        const pending = new Set(
-          appData.filter((a) => a.status === "pending" && (a.entityType === "expense" || a.entityType === "payout")).map((a) => a.entityId)
+        const pendingRows = appData.filter(
+          (a) => a.status === "pending" && (a.entityType === "expense" || a.entityType === "payout")
         );
-        setPendingApprovalIds(pending);
+        setPendingFinanceApprovalCount(pendingRows.length);
+        setPendingApprovalIds(new Set(pendingRows.map((a) => a.entityId)));
       }
       if (isFinance) {
         const [clientsRes, projectsRes] = await Promise.all([
@@ -311,6 +318,29 @@ export default function FinancePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!canSeeReport) return;
+    void fetchReport();
+  }, [canSeeReport, fetchReport]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        void loadData();
+        if (canSeeReport) void fetchReport();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const unsub = subscribeDataRefresh(() => {
+      void loadData();
+      if (canSeeReport) void fetchReport();
+    });
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      unsub();
+    };
+  }, [loadData, fetchReport, canSeeReport]);
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,7 +480,9 @@ export default function FinancePage() {
         body: JSON.stringify({ entityType, entityId, reason: "Submitted for admin approval" })
       });
       if (res.ok) {
-        setPendingApprovalIds((prev) => new Set(prev).add(entityId));
+        await loadData();
+        if (canSeeReport) await fetchReport();
+        emitDataRefresh();
       }
     } catch {
       // ignore
@@ -468,13 +500,70 @@ export default function FinancePage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell">
-        <h2 className="mb-2 text-lg font-semibold text-slate-50">Finance</h2>
-        <p className="text-sm text-slate-300">
-          Invoices, payments, expenses, and payouts in one OS so cash visibility
-          is never an afterthought. All amounts in KES.
-        </p>
-      </div>
+      <PageHeader
+        title="Finance overview"
+        description="Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES). Numbers load from your workspace database via the API; expense lines count in period totals after Admin approval."
+      />
+
+      {canSeeReport && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="shell">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Revenue (period)</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-400">
+              {report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
+            </p>
+          </div>
+          <div className="shell">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
+            <p className="mt-1 text-xl font-semibold text-amber-300">
+              {report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
+            </p>
+          </div>
+          <div className="shell">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Net flow</p>
+            <p
+              className={`mt-1 text-xl font-semibold ${
+                !report ? "text-slate-500" : report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
+            </p>
+          </div>
+          <div className="shell">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
+            <p className="mt-1 text-xl font-semibold text-slate-100">{pendingFinanceApprovalCount}</p>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="shell border border-slate-600/80 bg-slate-900/50">
+          <h3 className="text-sm font-semibold text-slate-200">Admin&apos;s finance access rules</h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border border-emerald-800/40 bg-slate-950/40 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400/90">Can see</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                Approved and declined transaction history · Pending request amounts and stated purposes · Cash flow summary ·
+                Outstanding invoice totals against active projects
+              </p>
+            </div>
+            <div className="rounded-lg border-l-4 border-rose-500/70 bg-slate-950/40 p-3 pl-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Cannot do</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                Admin cannot initiate, edit, or execute a transaction. Admin cannot see raw client pricing or invoice line items — only
+                aggregate totals visible here. That detail lives in Finance and Sales.
+              </p>
+            </div>
+            <div className="rounded-lg border border-sky-800/40 bg-slate-950/40 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">How project pricing flows here</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                When Sales marks a project active or demo, its value feeds the revenue pipeline. Admin sees the aggregate — not the
+                client breakdown.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {canSeeReport && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">
