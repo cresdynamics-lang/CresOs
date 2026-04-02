@@ -1,24 +1,29 @@
 import type { PrismaClient } from "@prisma/client";
 import { logAdminActivity } from "./admin-activity";
+import { ROLE_KEYS } from "./auth-middleware";
 
-const ROLE_KEYS_DIRECTOR = ["director_admin", "admin"];
+/** Director role only — sales/dev-facing governance alerts go here. */
+const ROLE_KEY_DIRECTOR = ROLE_KEYS.director;
+/** Admin role only — full org visibility mirrors. */
+const ROLE_KEY_ADMIN = ROLE_KEYS.admin;
 
-/**
- * Get all users in the org who have director or admin role (for email notifications).
- */
-export async function getDirectorUsers(
+async function getOrgUsersForRoleKeys(
   prisma: PrismaClient,
-  orgId: string
+  orgId: string,
+  roleKeys: string[]
 ): Promise<{ id: string; email: string }[]> {
+  if (roleKeys.length === 0) return [];
   const memberIds = (await prisma.orgMember.findMany({ where: { orgId }, select: { userId: true } })).map((m) => m.userId);
   const roles = await prisma.role.findMany({
-    where: { orgId, key: { in: ROLE_KEYS_DIRECTOR } },
+    where: { orgId, key: { in: roleKeys } },
     select: { id: true }
   });
   if (roles.length === 0) return [];
   const roleIds = roles.map((r) => r.id);
-  const directorUserIds = (await prisma.userRole.findMany({ where: { roleId: { in: roleIds } }, select: { userId: true } })).map((r) => r.userId);
-  const ids = [...new Set(memberIds.filter((id) => directorUserIds.includes(id)))];
+  const matchedUserIds = (await prisma.userRole.findMany({ where: { roleId: { in: roleIds } }, select: { userId: true } })).map(
+    (r) => r.userId
+  );
+  const ids = [...new Set(memberIds.filter((id) => matchedUserIds.includes(id)))];
   if (ids.length === 0) return [];
   const users = await prisma.user.findMany({
     where: { id: { in: ids } },
@@ -27,11 +32,63 @@ export async function getDirectorUsers(
   return users.map((u) => ({ id: u.id, email: u.notificationEmail?.trim() || u.email }));
 }
 
-const NOTIFICATION_TYPE = "director.activity";
+/**
+ * Users with the Director role only (not Admin).
+ */
+export async function getDirectorUsers(
+  prisma: PrismaClient,
+  orgId: string
+): Promise<{ id: string; email: string }[]> {
+  return getOrgUsersForRoleKeys(prisma, orgId, [ROLE_KEY_DIRECTOR]);
+}
 
 /**
- * Notify all directors in the org by in-app notification and email (queued).
- * Each director receives one in_app and one email notification.
+ * Users with the Admin role only.
+ */
+export async function getAdminUsers(
+  prisma: PrismaClient,
+  orgId: string
+): Promise<{ id: string; email: string }[]> {
+  return getOrgUsersForRoleKeys(prisma, orgId, [ROLE_KEY_ADMIN]);
+}
+
+const NOTIFICATION_TYPE = "director.activity";
+
+const ADMIN_VISIBILITY_TYPE = "admin.visibility";
+
+/**
+ * In-app copy for Admin users (structural tier) — mirrors org-wide and per-user alerts.
+ */
+export async function notifyAdminsInApp(
+  prisma: PrismaClient,
+  orgId: string,
+  subject: string,
+  body: string,
+  options?: { type?: string; tier?: string; excludeUserIds?: string[] }
+): Promise<void> {
+  const admins = await getAdminUsers(prisma, orgId);
+  const skip = new Set(options?.excludeUserIds ?? []);
+  const targets = admins.filter((a) => !skip.has(a.id));
+  if (targets.length === 0) return;
+  const type = options?.type ?? ADMIN_VISIBILITY_TYPE;
+  const tier = options?.tier ?? "structural";
+  await prisma.notification.createMany({
+    data: targets.map((a) => ({
+      orgId,
+      channel: "in_app",
+      to: a.id,
+      subject,
+      body,
+      status: "sent",
+      type,
+      tier
+    }))
+  });
+}
+
+/**
+ * Notify all directors (Director role) by in-app + email; mirror the same message to Admin in-app.
+ * Admins receive structural-tier visibility without duplicate email (see notifyAdminsInApp).
  */
 export async function notifyDirectors(
   prisma: PrismaClient,
@@ -41,34 +98,33 @@ export async function notifyDirectors(
   options?: { type?: string }
 ): Promise<void> {
   const directors = await getDirectorUsers(prisma, orgId);
-  if (directors.length === 0) return;
   const type = options?.type ?? NOTIFICATION_TYPE;
   const emailSubject = `[CresOS] ${subject}`;
-  await prisma.notification.createMany({
-    data: directors.flatMap((d) => [
-      {
-        orgId,
-        channel: "in_app",
-        to: d.id,
-        subject,
-        body,
-        status: "sent",
-        type,
-        tier: "governance"
-      },
-      {
-        orgId,
-        channel: "email",
-        to: d.email,
-        subject: emailSubject,
-        body,
-        status: "queued",
-        type,
-        tier: "governance"
-      }
-    ])
-  });
   if (directors.length > 0) {
+    await prisma.notification.createMany({
+      data: directors.flatMap((d) => [
+        {
+          orgId,
+          channel: "in_app",
+          to: d.id,
+          subject,
+          body,
+          status: "sent",
+          type,
+          tier: "governance"
+        },
+        {
+          orgId,
+          channel: "email",
+          to: d.email,
+          subject: emailSubject,
+          body,
+          status: "queued",
+          type,
+          tier: "governance"
+        }
+      ])
+    });
     await logAdminActivity(prisma, {
       orgId,
       type: "email_sent",
@@ -77,4 +133,9 @@ export async function notifyDirectors(
       metadata: { type, recipientCount: directors.length }
     });
   }
+  await notifyAdminsInApp(prisma, orgId, subject, body, {
+    type,
+    tier: "structural",
+    excludeUserIds: directors.map((d) => d.id)
+  });
 }

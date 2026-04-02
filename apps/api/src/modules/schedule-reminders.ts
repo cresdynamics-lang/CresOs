@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { logEmailSent } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 
 /**
  * Process schedule item reminders: for items with reminderMinutesBefore set,
@@ -17,7 +18,7 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       scheduledAt: { gt: now } // only future items — reminder fires X min before
     },
     include: {
-      user: { select: { id: true, email: true, notificationEmail: true } }
+      user: { select: { id: true, name: true, email: true, notificationEmail: true } }
     }
   });
 
@@ -77,6 +78,14 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       });
       await logEmailSent(prisma, { orgId: item.orgId, to: userEmail, subject: emailSubject, body, type: "schedule_reminder" });
     }
+    const ownerLabel = item.user.name ?? item.user.email ?? "User";
+    await notifyAdminsInApp(
+      prisma,
+      item.orgId,
+      `[Visibility] ${subject}`,
+      `Scheduled for: ${ownerLabel}. ${body}`,
+      { type: "schedule_reminder.admin_mirror", tier: "structural", excludeUserIds: [item.userId] }
+    );
   }
 
   // Mark missed meetings/calls and raise alerts if needed
@@ -117,5 +126,13 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
         tier: "execution"
       }
     });
+    const missedLabel = item.user.name ?? item.user.email ?? "User";
+    await notifyAdminsInApp(
+      prisma,
+      item.orgId,
+      `[Visibility] ${subject}`,
+      `Owner: ${missedLabel}. ${body}`,
+      { type: "schedule_missed.admin_mirror", tier: "structural", excludeUserIds: [item.userId] }
+    );
   }
 }

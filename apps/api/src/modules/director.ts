@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts } from "./conflict-engine";
+import { notifyAdminsInApp } from "./director-notifications";
 
 export default function directorRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -529,17 +530,24 @@ export default function directorRouter(prisma: PrismaClient): Router {
       });
 
       if (project.ownerUserId) {
+        const subject = "Project priority changed";
+        const body = `Priority changed to ${priority}. Reason: ${reason}`;
         await prisma.notification.create({
           data: {
             orgId,
             channel: "in_app",
             to: project.ownerUserId,
-            subject: "Project priority changed",
-            body: `Priority changed to ${priority}. Reason: ${reason}`,
+            subject,
+            body,
             status: "queued",
             type: "project.priority_changed",
             tier: "governance"
           }
+        });
+        await notifyAdminsInApp(prisma, orgId, subject, body, {
+          type: "project.priority_changed.admin_mirror",
+          tier: "structural",
+          excludeUserIds: [project.ownerUserId]
         });
       }
 
@@ -597,17 +605,24 @@ export default function directorRouter(prisma: PrismaClient): Router {
       });
 
       if (project.ownerUserId) {
+        const subject = "Project paused";
+        const body = `Project has been paused. Reason: ${reason}`;
         await prisma.notification.create({
           data: {
             orgId,
             channel: "in_app",
             to: project.ownerUserId,
-            subject: "Project paused",
-            body: `Project has been paused. Reason: ${reason}`,
+            subject,
+            body,
             status: "queued",
             type: "project.paused",
             tier: "governance"
           }
+        });
+        await notifyAdminsInApp(prisma, orgId, subject, body, {
+          type: "project.paused.admin_mirror",
+          tier: "structural",
+          excludeUserIds: [project.ownerUserId]
         });
       }
 
@@ -665,17 +680,24 @@ export default function directorRouter(prisma: PrismaClient): Router {
       });
 
       if (project.ownerUserId) {
+        const subject = "Project resumed";
+        const body = `Project has been resumed. Reason: ${reason}`;
         await prisma.notification.create({
           data: {
             orgId,
             channel: "in_app",
             to: project.ownerUserId,
-            subject: "Project resumed",
-            body: `Project has been resumed. Reason: ${reason}`,
+            subject,
+            body,
             status: "queued",
             type: "project.resumed",
             tier: "governance"
           }
+        });
+        await notifyAdminsInApp(prisma, orgId, subject, body, {
+          type: "project.resumed.admin_mirror",
+          tier: "structural",
+          excludeUserIds: [project.ownerUserId]
         });
       }
 

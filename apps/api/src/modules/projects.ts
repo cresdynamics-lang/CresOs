@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { generateClientProjectMessage } from "./ai-reminders";
 import { notifyDirectors } from "./director-notifications";
+import { notifyProjectExecutionStakeholders } from "./project-stakeholder-notifications";
 
 export default function projectsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -271,6 +272,24 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         data,
         include: { assignedDeveloper: { select: { id: true, name: true, email: true } }, createdBy: { select: { id: true, name: true, email: true } }, approvedBy: { select: { id: true, name: true } } }
       });
+      if ("timeline" in data) {
+        const timelineChanged =
+          JSON.stringify(project.timeline ?? null) !== JSON.stringify(updated.timeline ?? null);
+        if (timelineChanged) {
+          await notifyProjectExecutionStakeholders(
+            prisma,
+            orgId,
+            {
+              name: updated.name,
+              createdByUserId: updated.createdByUserId,
+              assignedDeveloperId: updated.assignedDeveloperId
+            },
+            "Delivery timeline updated",
+            `Project "${updated.name}" delivery timeline was updated.`,
+            { type: "project.timeline", excludeUserId: userId }
+          );
+        }
+      }
       res.json(updated);
     }
   );
@@ -667,7 +686,14 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       await prisma.eventLog.create({
         data: { orgId, actorId: userId, type: "task.created", entityType: "task", entityId: task.id, metadata: { projectId } }
       });
-      await notifyDirectors(prisma, orgId, "Task created", `Task "${task.title}" was added to project "${project.name}".`);
+      await notifyProjectExecutionStakeholders(
+        prisma,
+        orgId,
+        { name: project.name, createdByUserId: project.createdByUserId, assignedDeveloperId: project.assignedDeveloperId },
+        "Task created",
+        `Task "${task.title}" was added to project "${project.name}".`,
+        { type: "project.task", excludeUserId: userId }
+      );
       res.status(201).json(task);
     }
   );
@@ -819,7 +845,18 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }))
     });
 
-    await notifyDirectors(prisma, orgId, "Task updated", `Task "${task.title}" on project "${existing.project.name}" was updated. Status: ${task.status}.`);
+    await notifyProjectExecutionStakeholders(
+      prisma,
+      orgId,
+      {
+        name: existing.project.name,
+        createdByUserId: existing.project.createdByUserId,
+        assignedDeveloperId: existing.project.assignedDeveloperId
+      },
+      "Task updated",
+      `Task "${task.title}" on project "${existing.project.name}" was updated. Status: ${task.status}.`,
+      { type: "project.task", excludeUserId: userId }
+    );
     res.json(task);
     }
   );

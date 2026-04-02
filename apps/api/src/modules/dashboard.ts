@@ -4,6 +4,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { logEmailSent } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 import { processAiAlignmentNotifications } from "./ai-alignment-notifications";
 import { processNegligenceAlerts } from "./negligence-alerts";
 import { processDueReminders } from "./lead-reminders";
@@ -70,6 +71,18 @@ async function ensureReportSubmissionReminder(
     })
   ]);
   if (userEmail) await logEmailSent(prisma, { orgId, to: userEmail, subject: emailSubject, body, type: "report_submission_reminder" });
+  const salesUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true }
+  });
+  const salesLabel = salesUser?.name ?? salesUser?.email ?? "Sales user";
+  await notifyAdminsInApp(
+    prisma,
+    orgId,
+    `[Visibility] ${subject}`,
+    `Sales report reminder for: ${salesLabel}. ${body}`,
+    { type: "report_submission_reminder.admin_mirror", tier: "structural", excludeUserIds: [userId] }
+  );
 }
 
 async function reportSubmissionStreak(prisma: PrismaClient, userId: string): Promise<number> {

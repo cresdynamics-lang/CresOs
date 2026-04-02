@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { sendWelcomeEmail } from "../lib/resend";
 import { logAdminActivity, logEmailSent } from "./admin-activity";
 import bcrypt from "bcryptjs";
+import { mergeNotificationPreferences } from "../lib/notification-preferences";
 
 export default function accountRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -20,6 +21,7 @@ export default function accountRouter(prisma: PrismaClient): Router {
         name: true,
         phone: true,
         notificationEmail: true,
+        notificationPreferences: true,
         profileCompletedAt: true,
         status: true
       }
@@ -38,11 +40,28 @@ export default function accountRouter(prisma: PrismaClient): Router {
       name?: string;
       phone?: string;
       notificationEmail?: string | null;
+      notificationPreferences?: { mutedTiers?: string[]; muteAllInApp?: boolean };
     };
-    const data: { name?: string; phone?: string; notificationEmail?: string | null; profileCompletedAt?: Date } = {};
+    const data: {
+      name?: string;
+      phone?: string;
+      notificationEmail?: string | null;
+      notificationPreferences?: object;
+      profileCompletedAt?: Date;
+    } = {};
     if (body.name !== undefined) data.name = body.name?.trim() || null;
     if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
     if (body.notificationEmail !== undefined) data.notificationEmail = body.notificationEmail?.trim() || null;
+    if (body.notificationPreferences !== undefined) {
+      const existing = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationPreferences: true }
+      });
+      data.notificationPreferences = mergeNotificationPreferences(
+        existing?.notificationPreferences,
+        body.notificationPreferences
+      );
+    }
     data.profileCompletedAt = new Date();
     const user = await prisma.user.update({
       where: { id: userId },
@@ -53,6 +72,7 @@ export default function accountRouter(prisma: PrismaClient): Router {
         name: true,
         phone: true,
         notificationEmail: true,
+        notificationPreferences: true,
         profileCompletedAt: true
       }
     });

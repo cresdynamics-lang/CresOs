@@ -1,9 +1,10 @@
 // @ts-nocheck
 import type { Router } from "express";
 import { Router as createRouter } from "express";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { tiersForAuth } from "./role-notifications";
+import { parseNotificationPreferences } from "../lib/notification-preferences";
 
 export default function notificationsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -18,15 +19,43 @@ export default function notificationsRouter(prisma: PrismaClient): Router {
     ROLE_KEYS.client
   ];
 
-  // In-app notifications for current user
+  async function inAppWhereBase(
+    orgId: string,
+    userId: string
+  ): Promise<Prisma.NotificationWhereInput | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true }
+    });
+    const prefs = parseNotificationPreferences(user?.notificationPreferences);
+    if (prefs.muteAllInApp) {
+      return null;
+    }
+    const where: Prisma.NotificationWhereInput = {
+      orgId,
+      channel: "in_app",
+      to: userId
+    };
+    if (prefs.mutedTiers.length > 0) {
+      where.tier = { notIn: prefs.mutedTiers };
+    }
+    return where;
+  }
+
+  // In-app notifications for current user (respects notification preferences)
   router.get(
     "/me",
     requireRoles(ALL_APP_ROLES),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
+      const where = await inAppWhereBase(orgId, userId);
+      if (!where) {
+        res.json([]);
+        return;
+      }
       const list = await prisma.notification.findMany({
-        where: { orgId, channel: "in_app", to: userId },
+        where,
         orderBy: { createdAt: "desc" },
         take: 50
       });
@@ -41,15 +70,41 @@ export default function notificationsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
+      const where = await inAppWhereBase(orgId, userId);
+      if (!where) {
+        res.json({ count: 0 });
+        return;
+      }
       const count = await prisma.notification.count({
         where: {
-          orgId,
-          channel: "in_app",
-          to: userId,
+          ...where,
           readAt: null
         }
       });
       res.json({ count });
+    }
+  );
+
+  // Mark all visible in-app notifications as read (respects mute filters)
+  router.patch(
+    "/me/read-all",
+    requireRoles(ALL_APP_ROLES),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const where = await inAppWhereBase(orgId, userId);
+      if (!where) {
+        res.json({ updated: 0 });
+        return;
+      }
+      const result = await prisma.notification.updateMany({
+        where: {
+          ...where,
+          readAt: null
+        },
+        data: { readAt: new Date() }
+      });
+      res.json({ updated: result.count });
     }
   );
 
@@ -61,8 +116,13 @@ export default function notificationsRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { id } = req.params;
+      const where = await inAppWhereBase(orgId, userId);
+      if (!where) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
       const existing = await prisma.notification.findFirst({
-        where: { id, orgId, channel: "in_app", to: userId }
+        where: { id, ...where }
       });
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -104,4 +164,3 @@ export default function notificationsRouter(prisma: PrismaClient): Router {
 
   return router;
 }
-

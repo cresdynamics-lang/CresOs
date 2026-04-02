@@ -57,6 +57,10 @@ model Org {
   directorConfig DirectorConfig?
   securityConfig SecurityConfig?
   salesReports   SalesReport[]
+  chatUsers     ChatUser[]
+  conversations Conversation[]
+  inboxes       Inbox[]
+  chatChannels  ChatCommunityChannel[]
   leadComments   LeadComment[]
   leadFollowUps  LeadFollowUp[]
   crmContacts   CrmContact[]
@@ -115,11 +119,19 @@ model User {
   passwordHash       String
   phone              String?
   notificationEmail  String?   // personal email for notifications; if null, use email
+  /// In-app notification controls: { mutedTiers?: string[], muteAllInApp?: boolean }
+  notificationPreferences Json?
   profileCompletedAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
   status             String    @default("active") // active, locked, suspended
+  
+  // New profile fields
+  profilePicture     String?   // URL to profile picture
+  phoneNumbers       String[]  // Multiple phone numbers
+  workEmails         String[]  // Multiple work emails
+  nextOfKin          Json?     // Array of next of kin objects with name, phone, relationship
 
   memberships  OrgMember[]
   roles        UserRole[]
@@ -163,6 +175,12 @@ model User {
   leadsApproved         Lead[]           @relation("LeadApprovedBy")
   leadFollowUpsAssigned LeadFollowUp[]
   crmContactsAdded     CrmContact[]
+
+  // Chat System Relations
+  chatUser     ChatUser?
+  inbox        Inbox?        @relation("UserInbox")
+  conversations Conversation[] @relation("ConversationCreator")
+  messages     Message[]     @relation("MessageSender")
 }
 
 model OrgMember {
@@ -436,6 +454,7 @@ model Project {
   invoices            Invoice[]
   changeRequests      ChangeRequest[]
   handoffRequests     ProjectHandoffRequest[]
+  leads               Lead[]
 }
 
 model ProjectHandoffRequest {
@@ -693,6 +712,139 @@ model EventLog {
 
   @@index([orgId, entityType, entityId])
   @@index([orgId, type])
+}
+
+// Chat Community System Models
+model ChatUser {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  orgId        String
+  username     String   @unique
+  displayName  String
+  avatar       String?
+  status       String   @default("offline") // online, offline, away, busy
+  isOnline     Boolean  @default(false)
+  lastSeen     DateTime @default(now())
+  typingStatus String?  // typing, idle
+  preferences  Json     @default("{\"notifications\":true,\"soundEnabled\":true,\"doNotDisturb\":false}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org          Org      @relation(fields: [orgId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+  conversations Conversation[] @relation("ParticipantConversations")
+  inbox        Inbox?    @relation("InboxChatUser")
+  notifications ChatNotification[]
+
+  @@index([orgId, userId])
+  @@index([orgId, isOnline])
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  orgId         String
+  type          String   @default("direct") // direct, group, community, channel
+  name          String?
+  description   String?
+  avatar        String?
+  createdBy     String
+  participants  String[]
+  admins        String[]
+  settings      Json     @default("{\"isPublic\":false,\"allowInvites\":false,\"readOnly\":false,\"archived\":false}")
+  lastMessage   Json?    // {id, content, senderId, timestamp, type}
+  unreadCounts  Json     @default("{}") // {userId: count}
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  org           Org      @relation(fields: [orgId], references: [id])
+  creator       User     @relation("ConversationCreator", fields: [createdBy], references: [id])
+  messages      Message[]
+  notifications ChatNotification[]
+  chatUsers     ChatUser[] @relation("ParticipantConversations")
+
+  @@index([orgId, type])
+  @@index([orgId, updatedAt])
+}
+
+model Message {
+  id            String    @id @default(cuid())
+  conversationId String
+  senderId      String
+  content       String
+  type          String    @default("text") // text, file, image, system, voice, video
+  metadata      Json?     // {fileName, fileSize, mimeType, duration, thumbnail}
+  replyTo       String?
+  reactions     Json      @default("[]") // [{emoji, users, count}]
+  status        String    @default("sent") // sent, delivered, read, failed
+  readBy        Json      @default("[]") // [{userId, readAt}]
+  editedAt      DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  conversation  Conversation @relation(fields: [conversationId], references: [id])
+  sender        User         @relation("MessageSender", fields: [senderId], references: [id])
+  notifications  ChatNotification[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model Inbox {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  orgId          String
+  conversations  String[]
+  unreadCount    Int      @default(0)
+  lastActivity   DateTime @default(now())
+  settings       Json     @default("{\"archiveRead\":false,\"hideOffline\":false,\"sortBy\":\"recent\"}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org            Org           @relation(fields: [orgId], references: [id])
+  user           User          @relation("UserInbox", fields: [userId], references: [id], map: "Inbox_userId_fkey")
+  chatUser       ChatUser       @relation("InboxChatUser", fields: [userId], references: [id], map: "Inbox_chatUserId_fkey")
+
+  @@index([orgId, userId])
+}
+
+model ChatNotification {
+  id             String   @id @default(cuid())
+  userId         String
+  type           String   // message, mention, reaction, invite
+  conversationId String
+  messageId      String?
+  senderId       String
+  title          String
+  content        String
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user           ChatUser       @relation(fields: [userId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+  message        Message?       @relation(fields: [messageId], references: [id])
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+model ChatCommunityChannel {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String
+  type        String   @default("general") // general, random, announcements, support, projects, custom
+  isPublic    Boolean  @default(true)
+  members     String[]
+  moderators  String[]
+  settings    Json     @default("{\"allowFileSharing\":true,\"allowReactions\":true,\"messageRetention\":90}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org         Org @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, type])
+  @@index([orgId, isPublic])
 }
 
 model MeetingRequest {

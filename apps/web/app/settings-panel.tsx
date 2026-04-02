@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
+import { NotificationPreferencesForm } from "./notification-preferences-form";
 
 type Profile = {
   id: string;
@@ -122,9 +123,7 @@ export function SettingsPanel({ open, onClose, initialTab }: Props) {
         <div className="flex-1 overflow-y-auto p-4">
           {tab === "preferences" && (
             <div>
-              <p className="text-sm text-slate-400">
-                Notification preferences, display options, and other settings can be configured here in a future update.
-              </p>
+              <NotificationPreferencesForm />
             </div>
           )}
           {tab === "account" && (

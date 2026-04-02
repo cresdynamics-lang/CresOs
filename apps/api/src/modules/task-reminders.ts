@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { generateTaskReminder } from "./ai-reminders";
 import { logEmailSent } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -15,7 +16,7 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
       status: { not: "done" }
     },
     include: {
-      assignee: { select: { id: true, email: true, notificationEmail: true } },
+      assignee: { select: { id: true, name: true, email: true, notificationEmail: true } },
       project: { select: { id: true, name: true } }
     }
   });
@@ -71,6 +72,14 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
           })
         ]);
         await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
+        const assigneeLabel = assignee.name ?? assignee.email ?? "Assignee";
+        await notifyAdminsInApp(
+          prisma,
+          task.orgId,
+          `[Visibility] ${subject}`,
+          `Developer / assignee: ${assigneeLabel}. ${body}`,
+          { type: "task_due_reminder.admin_mirror", tier: "structural", excludeUserIds: [assignee.id] }
+        );
       }
       continue;
     }
@@ -123,6 +132,14 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
           })
         ]);
         await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
+        const assigneeLabel = assignee.name ?? assignee.email ?? "Assignee";
+        await notifyAdminsInApp(
+          prisma,
+          task.orgId,
+          `[Visibility] ${subject}`,
+          `Developer / assignee: ${assigneeLabel}. ${body}`,
+          { type: "task_due_reminder.admin_mirror", tier: "structural", excludeUserIds: [assignee.id] }
+        );
       }
       continue;
     }
@@ -173,6 +190,14 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
           })
         ]);
         await logEmailSent(prisma, { orgId: task.orgId, to: email, subject: `Reminder: ${subject}`, body, type: "task_due_reminder" });
+        const assigneeLabel = assignee.name ?? assignee.email ?? "Assignee";
+        await notifyAdminsInApp(
+          prisma,
+          task.orgId,
+          `[Visibility] ${subject}`,
+          `Developer / assignee: ${assigneeLabel}. ${body}`,
+          { type: "task_due_reminder.admin_mirror", tier: "structural", excludeUserIds: [assignee.id] }
+        );
       }
     }
   }

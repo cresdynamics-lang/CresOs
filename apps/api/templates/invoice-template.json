@@ -1,0 +1,235 @@
+{
+  "template_id": "cresos-standard-invoice",
+  "name": "CresOS Standard Invoice Template",
+  "version": "1.0",
+  "description": "Professional invoice template for CresOS SaaS platform",
+  "type": "standard",
+  "layout": {
+    "page": {
+      "size": "A4",
+      "orientation": "portrait",
+      "margins": {
+        "top": 40,
+        "right": 40,
+        "bottom": 40,
+        "left": 40
+      }
+    },
+    "header": {
+      "logo": {
+        "position": { "x": 40, "y": 30 },
+        "size": { "width": 120, "height": 60 },
+        "source": "{{company.logo_url}}"
+      },
+      "company_info": {
+        "position": { "x": 180, "y": 30 },
+        "font": { "size": 12, "weight": "bold" },
+        "text": "{{company.name}}"
+      },
+      "invoice_label": {
+        "position": { "x": 450, "y": 30 },
+        "font": { "size": 24, "weight": "bold" },
+        "text": "INVOICE"
+      }
+    },
+    "sections": [
+      {
+        "type": "invoice_details",
+        "position": { "x": 450, "y": 80 },
+        "fields": [
+          {
+            "label": "Invoice Number",
+            "value": "{{invoice_number}}",
+            "font": { "size": 10 }
+          },
+          {
+            "label": "Invoice Date",
+            "value": "{{invoice_date}}",
+            "font": { "size": 10 }
+          },
+          {
+            "label": "Due Date",
+            "value": "{{due_date}}",
+            "font": { "size": 10 }
+          },
+          {
+            "label": "Status",
+            "value": "{{status}}",
+            "font": { "size": 10, "color": "#007bff" }
+          }
+        ]
+      },
+      {
+        "type": "addresses",
+        "position": { "y": 150 },
+        "from": {
+          "label": "FROM:",
+          "position": { "x": 40 },
+          "fields": [
+            "{{company.name}}",
+            "{{company.address.street}}",
+            "{{company.address.city}}, {{company.address.country}} {{company.address.postal_code}}",
+            "{{company.email}}",
+            "{{company.phone}}",
+            "{{company.website}}"
+          ]
+        },
+        "to": {
+          "label": "BILL TO:",
+          "position": { "x": 280 },
+          "fields": [
+            "{{client.name}}",
+            "{{client.address.street}}",
+            "{{client.address.city}}, {{client.address.country}} {{client.address.postal_code}}",
+            "{{client.email}}",
+            "{{client.phone}}"
+          ]
+        }
+      },
+      {
+        "type": "project_info",
+        "position": { "x": 40, "y": 250 },
+        "show_if": "{{project.id}}",
+        "fields": [
+          {
+            "label": "Project",
+            "value": "{{project.name}}",
+            "font": { "size": 12, "weight": "bold" }
+          },
+          {
+            "label": "Description",
+            "value": "{{project.description}}",
+            "font": { "size": 10 }
+          }
+        ]
+      },
+      {
+        "type": "items_table",
+        "position": { "x": 40, "y": 320 },
+        "headers": [
+          { "text": "Item", "width": 200, "align": "left" },
+          { "text": "Description", "width": 200, "align": "left" },
+          { "text": "Qty", "width": 50, "align": "center" },
+          { "text": "Unit Price", "width": 80, "align": "right" },
+          { "text": "Total", "width": 80, "align": "right" }
+        ],
+        "rows": "{{items}}",
+        "row_template": {
+          "cells": [
+            "{{name}}",
+            "{{description}}",
+            "{{quantity}}",
+            "{{unit_price}}",
+            "{{total_price}}"
+          ]
+        },
+        "alternating_row_colors": ["#f8f9fa", "#ffffff"]
+      },
+      {
+        "type": "summary",
+        "position": { "x": 450, "y": 500 },
+        "fields": [
+          {
+            "label": "Subtotal",
+            "value": "{{summary.subtotal}}",
+            "font": { "size": 10 }
+          },
+          {
+            "label": "Tax",
+            "value": "{{summary.tax_amount}}",
+            "show_if": "{{summary.tax_amount}} > 0",
+            "font": { "size": 10 }
+          },
+          {
+            "label": "Total Amount",
+            "value": "{{summary.total_amount}}",
+            "font": { "size": 12, "weight": "bold" }
+          },
+          {
+            "label": "Balance Due",
+            "value": "{{summary.balance_due}}",
+            "font": { "size": 14, "weight": "bold", "color": "#28a745" }
+          }
+        ]
+      },
+      {
+        "type": "payment_terms",
+        "position": { "x": 40, "y": 580 },
+        "title": "Payment Terms",
+        "content": "Payment is due within {{payment_terms.due_in_days}} days. Late payments are subject to a 1.5% monthly fee.",
+        "font": { "size": 9 }
+      },
+      {
+        "type": "notes",
+        "position": { "x": 40, "y": 620 },
+        "show_if": "{{notes.client_message}}",
+        "title": "Notes",
+        "content": "{{notes.client_message}}",
+        "font": { "size": 9 }
+      },
+      {
+        "type": "footer",
+        "position": { "y": 750 },
+        "content": "Thank you for your business!",
+        "font": { "size": 10, "align": "center" },
+        "company_info": "{{company.name}} | {{company.email}} | {{company.website}}"
+      }
+    ]
+  },
+  "placeholders": {
+    "required": [
+      "invoice_number",
+      "invoice_date", 
+      "due_date",
+      "client.name",
+      "company.name",
+      "items",
+      "summary.total_amount"
+    ],
+    "optional": [
+      "company.logo_url",
+      "company.address",
+      "client.address",
+      "project.name",
+      "project.description",
+      "summary.tax_amount",
+      "notes.client_message",
+      "payment_terms.due_in_days"
+    ]
+  },
+  "styling": {
+    "colors": {
+      "primary": "#007bff",
+      "secondary": "#6c757d", 
+      "success": "#28a745",
+      "warning": "#ffc107",
+      "danger": "#dc3545",
+      "light": "#f8f9fa",
+      "dark": "#343a40"
+    },
+    "fonts": {
+      "primary": "Arial",
+      "secondary": "Helvetica"
+    },
+    "borders": {
+      "table": { "width": 1, "color": "#dee2e6" },
+      "section": { "width": 0, "color": "transparent" }
+    }
+  },
+  "features": {
+    "multi_currency": true,
+    "tax_calculation": true,
+    "discount_support": true,
+    "multi_language": false,
+    "digital_signature": false,
+    "qr_code": false,
+    "barcode": false
+  },
+  "output_formats": ["pdf", "html", "json"],
+  "default_settings": {
+    "currency": "USD",
+    "tax_rate": 0,
+    "payment_terms_days": 30,
+    "auto_reminders": true
+  }
+}

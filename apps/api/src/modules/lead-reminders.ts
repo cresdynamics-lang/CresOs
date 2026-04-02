@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { generateCallReminder, generateMeetingReminder } from "./ai-reminders";
 import { logEmailSent } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 
 const REMINDER_KEYS: Record<number, string> = {
   2880: "2d",
@@ -17,7 +18,7 @@ export async function processDueReminders(prisma: PrismaClient): Promise<void> {
   const followUps = await prisma.leadFollowUp.findMany({
     where: { scheduledAt: { gte: fiveMinutesAgo } }, // from 5 min ago so "0" reminder can fire
     include: {
-      assignedTo: { select: { id: true, email: true, notificationEmail: true } },
+      assignedTo: { select: { id: true, name: true, email: true, notificationEmail: true } },
       lead: { select: { id: true, title: true } }
     }
   });
@@ -88,6 +89,14 @@ export async function processDueReminders(prisma: PrismaClient): Promise<void> {
       ]);
       const toEmail = fu.assignedTo?.notificationEmail ?? fu.assignedTo?.email ?? "";
       if (toEmail) await logEmailSent(prisma, { orgId: fu.orgId, to: toEmail, subject: `Reminder: ${title}`, body, type: "lead.follow_up_reminder" });
+      const salesLabel = fu.assignedTo?.name ?? fu.assignedTo?.email ?? "Sales";
+      await notifyAdminsInApp(
+        prisma,
+        fu.orgId,
+        `[Visibility] ${title}`,
+        `Sales / assignee: ${salesLabel}. ${body}`,
+        { type: "lead.follow_up_reminder.admin_mirror", tier: "structural", excludeUserIds: [fu.assignedToId] }
+      );
     }
   }
 }

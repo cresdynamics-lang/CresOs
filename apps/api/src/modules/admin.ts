@@ -185,9 +185,54 @@ export default function adminRouter(prisma: PrismaClient): Router {
       const list = await prisma.department.findMany({
         where: { orgId, deletedAt: null },
         orderBy: { name: "asc" },
-        include: { _count: { select: { roles: true } } }
+        include: { 
+          _count: { select: { roles: true, members: true } },
+          roles: {
+            select: {
+              id: true,
+              name: true,
+              key: true,
+              _count: { select: { users: true } }
+            }
+          }
+        }
       });
-      res.json(list);
+      
+      // Ensure standard departments exist
+      const standardDepartments = ['Sales', 'Development', 'Finance', 'Marketing', 'Operations', 'HR'];
+      const existingDeptNames = list.map(d => d.name);
+      
+      // Create missing standard departments
+      for (const deptName of standardDepartments) {
+        if (!existingDeptNames.includes(deptName)) {
+          await prisma.department.create({
+            data: {
+              orgId,
+              name: deptName,
+              description: `Standard ${deptName} department`
+            }
+          });
+        }
+      }
+      
+      // Fetch updated list
+      const updatedList = await prisma.department.findMany({
+        where: { orgId, deletedAt: null },
+        orderBy: { name: "asc" },
+        include: { 
+          _count: { select: { roles: true, members: true } },
+          roles: {
+            select: {
+              id: true,
+              name: true,
+              key: true,
+              _count: { select: { users: true } }
+            }
+          }
+        }
+      });
+      
+      res.json(updatedList);
     }
   );
 
@@ -201,9 +246,25 @@ export default function adminRouter(prisma: PrismaClient): Router {
         res.status(400).json({ error: "name is required" });
         return;
       }
-      const dept = await prisma.department.create({
-        data: { orgId, name: name.trim(), description: description?.trim() || null }
+      
+      // Check if department already exists
+      const existing = await prisma.department.findFirst({
+        where: { orgId, name: name.trim(), deletedAt: null }
       });
+      
+      if (existing) {
+        res.status(400).json({ error: "Department with this name already exists" });
+        return;
+      }
+      
+      const dept = await prisma.department.create({
+        data: { 
+          orgId, 
+          name: name.trim(), 
+          description: description?.trim() || null 
+        }
+      });
+      
       res.status(201).json(dept);
     }
   );
@@ -241,14 +302,14 @@ export default function adminRouter(prisma: PrismaClient): Router {
       const { id } = req.params;
       const existing = await prisma.department.findFirst({
         where: { id, orgId, deletedAt: null },
-        include: { _count: { select: { roles: true } } }
+        include: { _count: { select: { roles: true, members: true } } }
       });
       if (!existing) {
         res.status(404).json({ error: "Department not found" });
         return;
       }
-      if (existing._count.roles > 0) {
-        res.status(400).json({ error: "Department has roles; move or delete roles first" });
+      if (existing._count.roles > 0 || existing._count.members > 0) {
+        res.status(400).json({ error: "Department has roles or members; move or delete them first" });
         return;
       }
       await prisma.department.update({
@@ -256,6 +317,128 @@ export default function adminRouter(prisma: PrismaClient): Router {
         data: { deletedAt: new Date() }
       });
       res.status(204).send();
+    }
+  );
+
+  // Assign user to department
+  router.post(
+    "/departments/:id/users",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const { userId } = req.body as { userId?: string };
+      
+      if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+      }
+      
+      const department = await prisma.department.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      
+      if (!department) {
+        res.status(404).json({ error: "Department not found" });
+        return;
+      }
+      
+      const user = await prisma.user.findFirst({
+        where: { id: userId, orgId, deletedAt: null }
+      });
+      
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      // Check if user is already a member
+      const existingMembership = await prisma.orgMember.findFirst({
+        where: { userId, departmentId: id }
+      });
+      
+      if (existingMembership) {
+        res.status(400).json({ error: "User is already a member of this department" });
+        return;
+      }
+      
+      const membership = await prisma.orgMember.create({
+        data: { orgId, userId, departmentId: id }
+      });
+      
+      res.status(201).json(membership);
+    }
+  );
+
+  // Remove user from department
+  router.delete(
+    "/departments/:id/users/:userId",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id, userId } = req.params;
+      
+      const department = await prisma.department.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      
+      if (!department) {
+        res.status(404).json({ error: "Department not found" });
+        return;
+      }
+      
+      await prisma.orgMember.deleteMany({
+        where: { userId, departmentId: id }
+      });
+      
+      res.status(204).send();
+    }
+  );
+
+  // Get department members
+  router.get(
+    "/departments/:id/users",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      
+      const department = await prisma.department.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      
+      if (!department) {
+        res.status(404).json({ error: "Department not found" });
+        return;
+      }
+      
+      const members = await prisma.orgMember.findMany({
+        where: { departmentId: id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              status: true,
+              createdAt: true,
+              roles: {
+                select: {
+                  role: {
+                    select: {
+                      id: true,
+                      name: true,
+                      key: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      res.json(members);
     }
   );
 
@@ -1253,11 +1436,66 @@ export default function adminRouter(prisma: PrismaClient): Router {
           notificationEmail: true,
           profileCompletedAt: true,
           status: true,
-          createdAt: true
+          createdAt: true,
+          roles: {
+            select: {
+              role: {
+                select: {
+                  id: true,
+                  name: true,
+                  key: true,
+                  department: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          memberships: {
+            select: {
+              department: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
         },
         orderBy: { createdAt: "desc" }
       });
-      res.json(users);
+      
+      // Transform users data to include department information
+      const usersWithDepartments = users.map(user => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        notificationEmail: user.notificationEmail,
+        profileCompletedAt: user.profileCompletedAt,
+        status: user.status,
+        createdAt: user.createdAt,
+        roles: user.roles.map(r => ({
+          id: r.role.id,
+          name: r.role.name,
+          key: r.role.key,
+          department: r.role.department
+        })),
+        departments: [
+          ...user.roles.map(r => r.role.department).filter(Boolean),
+          ...user.memberships.map(m => m.department).filter(Boolean)
+        ].reduce((unique, dept) => {
+          if (dept && !unique.find(d => d.id === dept.id)) {
+            unique.push(dept);
+          }
+          return unique;
+        }, [] as Array<{ id: string; name: string }>)
+      }));
+      
+      res.json(usersWithDepartments);
     }
   );
 

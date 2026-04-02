@@ -26,60 +26,60 @@ export const ROLE_KEYS = {
 } as const;
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-const prisma = new PrismaClient();
 
-export function authMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const token = header.substring("Bearer ".length);
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthContext;
-
-    if (!payload.sessionId) {
-      res.status(401).json({ error: "Invalid session" });
+/**
+ * Use the same PrismaClient instance as `createApp(prisma)` so sessions and routes share one pool.
+ */
+export function createAuthMiddleware(prisma: PrismaClient) {
+  return function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
-    prisma.session
-      .findUnique({ where: { id: payload.sessionId } })
-      .then(async (session) => {
-        if (!session || session.revokedAt) {
-          res.status(401).json({ error: "Session revoked" });
-          return;
-        }
+    const token = header.substring("Bearer ".length);
 
-        const user = await prisma.user.findUnique({
-          where: { id: session.userId }
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as AuthContext;
+
+      if (!payload.sessionId) {
+        res.status(401).json({ error: "Invalid session" });
+        return;
+      }
+
+      prisma.session
+        .findUnique({ where: { id: payload.sessionId } })
+        .then(async (session) => {
+          if (!session || session.revokedAt) {
+            res.status(401).json({ error: "Session revoked" });
+            return;
+          }
+
+          const user = await prisma.user.findUnique({
+            where: { id: session.userId }
+          });
+
+          if (!user || user.status !== "active") {
+            res.status(401).json({ error: "User is not active" });
+            return;
+          }
+
+          void prisma.session.update({
+            where: { id: session.id },
+            data: { lastSeenAt: new Date() }
+          });
+
+          req.auth = payload;
+          next();
+        })
+        .catch(() => {
+          res.status(401).json({ error: "Invalid token" });
         });
-
-        if (!user || user.status !== "active") {
-          res.status(401).json({ error: "User is not active" });
-          return;
-        }
-
-        void prisma.session.update({
-          where: { id: session.id },
-          data: { lastSeenAt: new Date() }
-        });
-
-        req.auth = payload;
-        next();
-      })
-      .catch(() => {
-        res.status(401).json({ error: "Invalid token" });
-      });
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
+    } catch {
+      res.status(401).json({ error: "Invalid token" });
+    }
+  };
 }
 
 export function requireRoles(required: string[]) {

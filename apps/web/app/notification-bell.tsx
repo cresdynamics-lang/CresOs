@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./auth-context";
 import { subscribeDataRefresh } from "./data-refresh";
@@ -8,9 +9,9 @@ type Notification = {
   id: string;
   type: string;
   body: string;
+  tier?: string;
   createdAt: string;
   readAt: string | null;
-  // Optional metadata fields can be added later for deep links
 };
 
 export function NotificationBell() {
@@ -19,6 +20,7 @@ export function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const loadCount = useCallback(async () => {
     try {
@@ -31,20 +33,7 @@ export function NotificationBell() {
     }
   }, [apiFetch]);
 
-  useEffect(() => {
-    void loadCount();
-    const onVis = () => {
-      if (document.visibilityState === "visible") void loadCount();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    const unsub = subscribeDataRefresh(() => void loadCount());
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      unsub();
-    };
-  }, [loadCount]);
-
-  async function loadItems() {
+  const loadItems = useCallback(async () => {
     setLoading(true);
     try {
       const res = await apiFetch("/notifications/me");
@@ -59,12 +48,28 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    void loadCount();
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadCount();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const unsub = subscribeDataRefresh(() => {
+      void loadCount();
+      if (open) void loadItems();
+    });
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      unsub();
+    };
+  }, [loadCount, loadItems, open]);
 
   const toggleOpen = async () => {
     const next = !open;
     setOpen(next);
-    if (next && items.length === 0) {
+    if (next) {
       await loadItems();
     }
   };
@@ -86,13 +91,35 @@ export function NotificationBell() {
     }
   };
 
+  const markAllRead = async () => {
+    setMarkingAll(true);
+    try {
+      const res = await apiFetch("/notifications/me/read-all", {
+        method: "PATCH"
+      });
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((n) => ({
+            ...n,
+            readAt: n.readAt ?? new Date().toISOString()
+          }))
+        );
+        setUnseenCount(0);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
   const hasUnseen = unseenCount > 0;
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={toggleOpen}
+        onClick={() => void toggleOpen()}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
         aria-label="Notifications"
       >
@@ -118,13 +145,30 @@ export function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-sm shadow-lg backdrop-blur">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Notifications
             </p>
             {loading && (
               <span className="text-[10px] text-slate-500">Loading…</span>
             )}
+          </div>
+          <div className="mb-3 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+            <button
+              type="button"
+              disabled={markingAll || unseenCount === 0}
+              onClick={() => void markAllRead()}
+              className="rounded border border-slate-600 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+            >
+              {markingAll ? "Marking…" : "Mark all read"}
+            </button>
+            <Link
+              href="/settings"
+              className="rounded border border-slate-600 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-800"
+              onClick={() => setOpen(false)}
+            >
+              Controls
+            </Link>
           </div>
           {items.length === 0 && !loading && (
             <p className="text-xs text-slate-500">No notifications yet.</p>
@@ -141,6 +185,11 @@ export function NotificationBell() {
                   }`}
                 >
                   <div>
+                    {n.tier && (
+                      <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                        {n.tier}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-300">{n.body}</p>
                     <p className="mt-1 text-[10px] text-slate-500">
                       {created.toLocaleString()}
@@ -150,7 +199,7 @@ export function NotificationBell() {
                     <button
                       type="button"
                       onClick={() => void markRead(n.id)}
-                      className="mt-0.5 rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+                      className="mt-0.5 shrink-0 rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
                     >
                       Mark read
                     </button>
@@ -164,4 +213,3 @@ export function NotificationBell() {
     </div>
   );
 }
-

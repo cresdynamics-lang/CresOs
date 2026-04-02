@@ -44,6 +44,7 @@ export default function authRouter(prisma: PrismaClient): Router {
       return;
     }
 
+    try {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       res.status(400).json({ error: "Email already in use" });
@@ -56,6 +57,10 @@ export default function authRouter(prisma: PrismaClient): Router {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+    if (!slug) {
+      res.status(400).json({ error: "Organization name must include a letter or number" });
+      return;
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const org = await tx.org.create({
@@ -136,6 +141,14 @@ export default function authRouter(prisma: PrismaClient): Router {
       user: { id: result.user.id, email: result.user.email, name: result.user.name },
       ...tokens
     });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("POST /auth/register failed", e);
+      res.status(500).json({
+        error: "Registration failed",
+        hint: "Ensure the database is migrated (e.g. prisma migrate deploy) and DATABASE_URL is correct."
+      });
+    }
   });
 
   router.post("/login", async (req, res) => {

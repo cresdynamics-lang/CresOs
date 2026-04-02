@@ -10,6 +10,390 @@ import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from ".
 export default function financeRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
+  // Get finance dashboard with invoice approvals
+  router.get(
+    "/dashboard",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+
+        const [
+          pendingInvoices,
+          approvedInvoices,
+          rejectedInvoices,
+          totalRevenue,
+          recentInvoices
+        ] = await Promise.all([
+          prisma.invoice.count({
+            where: { 
+              orgId,
+              status: "PENDING"
+            }
+          }),
+          prisma.invoice.count({
+            where: { 
+              orgId,
+              status: "APPROVED"
+            }
+          }),
+          prisma.invoice.count({
+            where: { 
+              orgId,
+              status: "REJECTED"
+            }
+          }),
+          prisma.invoice.aggregate({
+            where: { 
+              orgId,
+              status: "APPROVED"
+            },
+            _sum: {
+              totalAmount: true
+            }
+          }),
+          prisma.invoice.findMany({
+            where: { 
+              orgId,
+              status: "PENDING"
+            },
+            include: {
+              client: true,
+              project: true,
+              createdBy: {
+                select: { displayName: true }
+              }
+            },
+            orderBy: { createdAt: "asc" },
+            take: 10
+          })
+        ]);
+
+        res.json({
+          success: true,
+          data: {
+            stats: {
+              pending: pendingInvoices,
+              approved: approvedInvoices,
+              rejected: rejectedInvoices,
+              totalRevenue: totalRevenue._sum.totalAmount || 0
+            },
+            pendingInvoices: recentInvoices
+          }
+        });
+
+      } catch (error) {
+        console.error("Error fetching finance dashboard:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch finance dashboard", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Get invoices pending approval
+  router.get(
+    "/invoices/pending",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const { page = 1, limit = 20 } = req.query;
+
+        const [invoices, total] = await Promise.all([
+          prisma.invoice.findMany({
+            where: { 
+              orgId,
+              status: "PENDING"
+            },
+            include: {
+              client: true,
+              project: true,
+              items: true,
+              createdBy: {
+                select: { displayName: true }
+              }
+            },
+            orderBy: { createdAt: "asc" },
+            skip: (parseInt(page) - 1) * parseInt(limit),
+            take: parseInt(limit)
+          }),
+          prisma.invoice.count({
+            where: { 
+              orgId,
+              status: "PENDING"
+            }
+          })
+        ]);
+
+        res.json({
+          success: true,
+          data: {
+            invoices,
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              total,
+              pages: Math.ceil(total / parseInt(limit))
+            }
+          }
+        });
+
+      } catch (error) {
+        console.error("Error fetching pending invoices:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch pending invoices", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Approve invoice
+  router.post(
+    "/invoices/:id/approve",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const approverId = req.auth!.userId;
+        const { id } = req.params;
+        const { notes } = req.body;
+
+        // Check if invoice exists and is pending
+        const invoice = await prisma.invoice.findFirst({
+          where: {
+            id,
+            orgId,
+            status: "PENDING"
+          },
+          include: {
+            createdBy: {
+              select: { id: true, displayName: true }
+            }
+          }
+        });
+
+        if (!invoice) {
+          return res.status(404).json({ 
+            error: "Invoice not found or already processed" 
+          });
+        }
+
+        // Update invoice status
+        const updatedInvoice = await prisma.invoice.update({
+          where: { id },
+          data: {
+            status: "APPROVED",
+            approvedAt: new Date(),
+            approvedBy: {
+              connect: { userId: approverId }
+            },
+            approvalNotes: notes || null
+          },
+          include: {
+            client: true,
+            project: true,
+            items: true,
+            approvedBy: {
+              select: { displayName: true }
+            },
+            createdBy: {
+              select: { displayName: true }
+            }
+          }
+        });
+
+        // Create notification for invoice creator
+        await prisma.notification.create({
+          data: {
+            userId: invoice.createdBy.id,
+            title: "Invoice Approved",
+            message: `Invoice ${invoice.invoiceNumber} has been approved`,
+            type: "INVOICE_APPROVED",
+            metadata: {
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              approvedBy: req.auth!.userName
+            }
+          }
+        });
+
+        res.json({
+          success: true,
+          message: "Invoice approved successfully",
+          data: updatedInvoice
+        });
+
+      } catch (error) {
+        console.error("Error approving invoice:", error);
+        res.status(500).json({ 
+          error: "Failed to approve invoice", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Reject invoice
+  router.post(
+    "/invoices/:id/reject",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const approverId = req.auth!.userId;
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason || reason.trim().length === 0) {
+          return res.status(400).json({ 
+            error: "Rejection reason is required" 
+          });
+        }
+
+        // Check if invoice exists and is pending
+        const invoice = await prisma.invoice.findFirst({
+          where: {
+            id,
+            orgId,
+            status: "PENDING"
+          },
+          include: {
+            createdBy: {
+              select: { id: true, displayName: true }
+            }
+          }
+        });
+
+        if (!invoice) {
+          return res.status(404).json({ 
+            error: "Invoice not found or already processed" 
+          });
+        }
+
+        // Update invoice status
+        const updatedInvoice = await prisma.invoice.update({
+          where: { id },
+          data: {
+            status: "REJECTED",
+            approvedAt: new Date(),
+            approvedBy: {
+              connect: { userId: approverId }
+            },
+            rejectionReason: reason.trim()
+          },
+          include: {
+            client: true,
+            project: true,
+            items: true,
+            approvedBy: {
+              select: { displayName: true }
+            },
+            createdBy: {
+              select: { displayName: true }
+            }
+          }
+        });
+
+        // Create notification for invoice creator
+        await prisma.notification.create({
+          data: {
+            userId: invoice.createdBy.id,
+            title: "Invoice Rejected",
+            message: `Invoice ${invoice.invoiceNumber} has been rejected`,
+            type: "INVOICE_REJECTED",
+            metadata: {
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              rejectionReason: reason.trim(),
+              rejectedBy: req.auth!.userName
+            }
+          }
+        });
+
+        res.json({
+          success: true,
+          message: "Invoice rejected successfully",
+          data: updatedInvoice
+        });
+
+      } catch (error) {
+        console.error("Error rejecting invoice:", error);
+        res.status(500).json({ 
+          error: "Failed to reject invoice", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Generate approved invoice PDF
+  router.post(
+    "/invoices/:id/generate",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const { id } = req.params;
+
+        // Check if invoice exists and is approved
+        const invoice = await prisma.invoice.findFirst({
+          where: {
+            id,
+            orgId,
+            status: "APPROVED"
+          },
+          include: {
+            client: true,
+            project: true,
+            items: true,
+            approvedBy: {
+              select: { displayName: true }
+            }
+          }
+        });
+
+        if (!invoice) {
+          return res.status(404).json({ 
+            error: "Invoice not found or not approved" 
+          });
+        }
+
+        // Mark invoice as generated
+        const updatedInvoice = await prisma.invoice.update({
+          where: { id },
+          data: {
+            generatedAt: new Date(),
+            generatedBy: {
+              connect: { userId: req.auth!.userId }
+            }
+          }
+        });
+
+        // TODO: Generate actual PDF here
+        // For now, just return success
+        res.json({
+          success: true,
+          message: "Invoice generated successfully",
+          data: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            downloadUrl: `/api/finance/invoices/${id}/pdf`
+          }
+        });
+
+      } catch (error) {
+        console.error("Error generating invoice:", error);
+        res.status(500).json({ 
+          error: "Failed to generate invoice", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
   // Real-time financial report (on request) — admin, director, finance
   router.get(
     "/report",
@@ -245,6 +629,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      const client = await prisma.client.findFirst({
+        where: { id: clientId, orgId, deletedAt: null },
+        select: { id: true, name: true, email: true }
+      });
+      if (!client) {
+        res.status(404).json({ error: "Client not found" });
+        return;
+      }
+
+      const clientEmail = client.email?.trim() || "";
+
       const result = await prisma.$transaction(async (tx) => {
         const totalAmount = items.reduce((sum, item) => {
           const value =
@@ -285,29 +680,35 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         });
 
-        await tx.notification.create({
-          data: {
-            orgId,
-            channel: "email",
-            to: "client-email", // placeholder
-            subject: `Invoice ${invoice.number}`,
-            body: `Invoice ${invoice.number} has been sent.`,
-            status: "queued",
-            type: "invoice.sent",
-            tier: "financial"
-          }
-        });
+        if (clientEmail) {
+          const greeting = client.name ? `Hello ${client.name},` : "Hello,";
+          const body = `${greeting}\n\nInvoice ${invoice.number} has been issued.\nTotal: ${invoice.currency} ${totalAmount.toFixed(2)}.\n\nThank you.`;
+          await tx.notification.create({
+            data: {
+              orgId,
+              channel: "email",
+              to: clientEmail,
+              subject: `Invoice ${invoice.number}`,
+              body,
+              status: "queued",
+              type: "invoice.sent",
+              tier: "financial"
+            }
+          });
+        }
 
         return invoice;
       });
 
-      await logEmailSent(prisma, {
-        orgId,
-        to: "client",
-        subject: `Invoice ${result.number}`,
-        body: `Invoice ${result.number} has been sent.`,
-        type: "invoice.sent"
-      });
+      if (clientEmail) {
+        await logEmailSent(prisma, {
+          orgId,
+          to: clientEmail,
+          subject: `Invoice ${result.number}`,
+          body: `Invoice ${result.number} queued for ${clientEmail}.`,
+          type: "invoice.sent"
+        });
+      }
       res.status(201).json(result);
     }
   );
@@ -1010,6 +1411,480 @@ export default function financeRouter(prisma: PrismaClient): Router {
       });
 
       res.json(approval);
+    }
+  );
+
+  // Add invoice side panel functionality
+  router.get(
+    "/invoices",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        
+        // Get invoice statistics
+        const [
+          totalInvoices,
+          sentInvoices,
+          paidInvoices,
+          pendingInvoices,
+          overdueInvoices,
+          draftInvoices,
+          totalRevenue,
+          outstandingAmount
+        ] = await Promise.all([
+          prisma.invoice.count({
+            where: { orgId, deletedAt: null }
+          }),
+          
+          prisma.invoice.count({
+            where: { orgId, deletedAt: null, status: "sent" }
+          }),
+          
+          prisma.invoice.count({
+            where: { orgId, deletedAt: null, status: "paid" }
+          }),
+          
+          prisma.invoice.count({
+            where: { 
+              orgId, 
+              deletedAt: null, 
+              OR: [{ status: "sent" }, { status: "partial" }] 
+            }
+          }),
+          
+          prisma.invoice.count({
+            where: { orgId, deletedAt: null, status: "overdue" }
+          }),
+          
+          prisma.invoice.count({
+            where: { orgId, deletedAt: null, status: "draft" }
+          }),
+          
+          prisma.payment.aggregate({
+            _sum: { amount: true },
+            where: { 
+              orgId, 
+              deletedAt: null, 
+              status: "confirmed" 
+            }
+          }),
+          
+          prisma.invoice.aggregate({
+            _sum: { totalAmount: true },
+            where: { 
+              orgId, 
+              deletedAt: null, 
+              OR: [{ status: "sent" }, { status: "partial" }, { status: "overdue" }] 
+            }
+          })
+        ]);
+
+        // Get recent invoices
+        const recentInvoices = await prisma.invoice.findMany({
+          where: { orgId, deletedAt: null },
+          include: { 
+            client: { select: { name: true } },
+            project: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10
+        });
+
+        // Get monthly statistics for the last 6 months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        
+        const monthlyInvoices = await prisma.invoice.findMany({
+          where: { 
+            orgId, 
+            deletedAt: null,
+            createdAt: { gte: sixMonthsAgo }
+          },
+          select: {
+            createdAt: true,
+            totalAmount: true,
+            status: true
+          }
+        });
+
+        const monthlyStats = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+          const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+          
+          const monthInvoices = monthlyInvoices.filter(inv => 
+            inv.createdAt >= monthStart && inv.createdAt <= monthEnd
+          );
+          
+          monthlyStats.push({
+            month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+            invoices: monthInvoices.length,
+            revenue: monthInvoices
+              .filter(inv => inv.status === 'paid')
+              .reduce((sum, inv) => sum + Number(inv.totalAmount), 0)
+          });
+        }
+
+        res.json({
+          success: true,
+          data: {
+            totalInvoices,
+            sentInvoices,
+            paidInvoices,
+            pendingInvoices,
+            overdueInvoices,
+            draftInvoices,
+            totalRevenue: totalRevenue._sum.amount?.toNumber() || 0,
+            outstandingAmount: outstandingAmount._sum.totalAmount?.toNumber() || 0,
+            recentInvoices: recentInvoices.map(inv => ({
+              id: inv.id,
+              number: inv.number,
+              clientName: inv.client.name,
+              amount: Number(inv.totalAmount),
+              status: inv.status,
+              issueDate: inv.issueDate.toISOString().split('T')[0],
+              dueDate: inv.dueDate ? inv.dueDate.toISOString().split('T')[0] : '',
+              projectName: inv.project?.name || ''
+            })),
+            monthlyStats
+          }
+        });
+
+      } catch (error) {
+        console.error("Error fetching invoices:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch invoices", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Get invoices by status
+  router.get(
+    "/invoices/:status",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    async (req, res) => {
+      try {
+        const { status } = req.params;
+        const orgId = req.auth!.orgId;
+        const { page = 1, limit = 20, search = '' } = req.query;
+
+        const whereClause: any = { orgId, deletedAt: null };
+        
+        // Filter by status
+        if (status !== 'all') {
+          if (status === 'pending') {
+            whereClause.OR = [{ status: "sent" }, { status: "partial" }];
+          } else {
+            whereClause.status = status;
+          }
+        }
+
+        // Add search filter
+        if (search) {
+          whereClause.OR = [
+            { number: { contains: search, mode: 'insensitive' } },
+            { client: { name: { contains: search, mode: 'insensitive' } } },
+            { project: { name: { contains: search, mode: 'insensitive' } } }
+          ];
+        }
+
+        const [invoices, totalCount] = await Promise.all([
+          prisma.invoice.findMany({
+            where: whereClause,
+            include: {
+              client: { select: { name: true, email: true, phone: true } },
+              project: { select: { name: true } },
+              items: { select: { description: true, quantity: true, unitPrice: true } },
+              payments: {
+                where: { deletedAt: null },
+                select: { amount: true, status: true, receivedAt: true }
+              }
+            },
+            orderBy: { createdAt: "desc" },
+            skip: (Number(page) - 1) * Number(limit),
+            take: Number(limit)
+          }),
+          prisma.invoice.count({ where: whereClause })
+        ]);
+
+        // Calculate paid amount for each invoice
+        const invoicesWithCalculations = invoices.map(invoice => {
+          const paidAmount = invoice.payments
+            .filter(p => p.status === 'confirmed')
+            .reduce((sum, p) => sum + Number(p.amount), 0);
+          
+          return {
+            ...invoice,
+            paidAmount,
+            balanceDue: Number(invoice.totalAmount) - paidAmount,
+            totalAmount: Number(invoice.totalAmount)
+          };
+        });
+
+        res.json({
+          success: true,
+          data: {
+            invoices: invoicesWithCalculations,
+            pagination: {
+              page: Number(page),
+              limit: Number(limit),
+              total: totalCount,
+              pages: Math.ceil(totalCount / Number(limit))
+            }
+          }
+        });
+
+      } catch (error) {
+        console.error("Error fetching invoices by status:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch invoices", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Create new invoice
+  router.post(
+    "/invoices",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const createdBy = req.auth!.userId;
+        const invoiceData = req.body;
+
+        // Generate unique invoice number
+        const { DocxTemplateParser } = require("../services/invoice/docx-parser");
+        const docxParser = new DocxTemplateParser(
+          '/Users/airm1/Projects/CresOs/apps/api/src/services/invoice/Invoice.docx'
+        );
+        
+        const invoiceNumber = docxParser.generateInvoiceNumber(
+          invoiceData.projectId || invoiceData.clientId,
+          orgId
+        );
+
+        // Create invoice in database
+        const invoice = await prisma.invoice.create({
+          data: {
+            orgId,
+            clientId: invoiceData.clientId,
+            projectId: invoiceData.projectId || null,
+            number: invoiceNumber,
+            status: "sent",
+            issueDate: new Date(invoiceData.issueDate),
+            dueDate: new Date(invoiceData.dueDate),
+            currency: invoiceData.currency || "KES",
+            totalAmount: invoiceData.items.reduce(
+              (sum: number, item: any) => sum + (Number(item.unitPrice) * item.quantity), 
+              0
+            ),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          include: {
+            client: { select: { name: true, email: true, phone: true } },
+            project: { select: { name: true } }
+          }
+        });
+
+        // Create invoice items
+        await prisma.invoiceItem.createMany({
+          data: invoiceData.items.map((item: any, index: number) => ({
+            invoiceId: invoice.id,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            total: Number(item.unitPrice) * item.quantity
+          }))
+        });
+
+        // Generate PDF
+        const { PDFGenerator } = require("../services/invoice/pdf-generator");
+        const { FinanceInvoiceService } = require("../services/invoice/finance-integration");
+        
+        const financeService = new FinanceInvoiceService(prisma);
+        const { pdfBuffer } = await financeService.generateInvoicePDF({
+          invoice_number: invoice.number,
+          invoice_date: invoice.issueDate.toISOString().split('T')[0],
+          due_date: invoice.dueDate.toISOString().split('T')[0],
+          status: invoice.status,
+          currency: invoice.currency,
+          client: {
+            id: invoice.clientId,
+            name: invoice.client.name,
+            email: invoice.client.email,
+            phone: invoice.client.phone
+          },
+          company: {
+            name: "CresOS Solutions Ltd",
+            email: "info@cresos.com",
+            phone: "+254-700-123456"
+          },
+          project: invoice.project ? {
+            id: invoice.projectId!,
+            name: invoice.project.name
+          } : undefined,
+          items: invoiceData.items.map((item: any) => ({
+            id: `item-${index}`,
+            name: item.description,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: Number(item.unitPrice),
+            total_price: Number(item.unitPrice) * item.quantity,
+            type: 'service' as const,
+            category: 'general'
+          })),
+          summary: {
+            subtotal: Number(invoice.totalAmount),
+            tax_rate: 0,
+            tax_amount: 0,
+            total_amount: Number(invoice.totalAmount),
+            balance_due: Number(invoice.totalAmount)
+          },
+          payment_terms: {
+            due_in_days: 7
+          },
+          notes: {
+            client_message: "Thank you for your business! Payment is due within 7 days."
+          },
+          automation: {
+            auto_reminders_enabled: true,
+            reminder_schedule: [3, 1],
+            late_fee_enabled: false
+          },
+          created_at: invoice.createdAt.toISOString(),
+          updated_at: invoice.updatedAt.toISOString(),
+          created_by: createdBy,
+          organization_id: orgId
+        } as any);
+
+        res.status(201).json({
+          success: true,
+          message: `Invoice ${invoice.number} created successfully`,
+          data: {
+            invoice,
+            pdfGenerated: true,
+            pdfSize: `${(pdfBuffer.length / 1024).toFixed(2)} KB`
+          }
+        });
+
+      } catch (error) {
+        console.error("Error creating invoice:", error);
+        res.status(500).json({ 
+          error: "Failed to create invoice", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Get invoice PDF
+  router.get(
+    "/invoices/:invoiceId/pdf",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    async (req, res) => {
+      try {
+        const { invoiceId } = req.params;
+        const invoiceIdStr = Array.isArray(invoiceId) ? invoiceId[0] : invoiceId;
+        const orgId = req.auth!.orgId;
+
+        const invoice = await prisma.invoice.findFirst({
+          where: { id: invoiceIdStr, orgId, deletedAt: null },
+          include: {
+            client: { select: { name: true, email: true, phone: true } },
+            project: { select: { name: true } },
+            items: true
+          }
+        });
+
+        if (!invoice) {
+          return res.status(404).json({ error: "Invoice not found" });
+        }
+
+        // Generate PDF
+        const { PDFGenerator } = require("../services/invoice/pdf-generator");
+        const pdfGenerator = new PDFGenerator({
+          filename: `${invoice.number}.pdf`,
+          format: 'A4',
+          margin: { top: 40, right: 40, bottom: 40, left: 40 }
+        });
+
+        const pdfBuffer = await pdfGenerator.generatePDF({
+          invoice_number: invoice.number,
+          invoice_date: invoice.issueDate.toISOString().split('T')[0],
+          due_date: invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : '',
+          status: invoice.status,
+          currency: invoice.currency,
+          client: {
+            id: invoice.clientId,
+            name: invoice.client.name,
+            email: invoice.client.email,
+            phone: invoice.client.phone
+          },
+          company: {
+            name: "CresOS Solutions Ltd",
+            email: "info@cresos.com",
+            phone: "+254-700-123456"
+          },
+          project: invoice.project ? {
+            id: invoice.projectId!,
+            name: invoice.project.name
+          } : undefined,
+          items: invoice.items.map((item, index) => ({
+            id: item.id,
+            name: item.description,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: Number(item.unitPrice),
+            total_price: Number(item.total),
+            type: 'service' as const,
+            category: 'general'
+          })),
+          summary: {
+            subtotal: Number(invoice.totalAmount),
+            tax_rate: 0,
+            tax_amount: 0,
+            total_amount: Number(invoice.totalAmount),
+            balance_due: Number(invoice.totalAmount)
+          },
+          payment_terms: {
+            due_in_days: 7
+          },
+          notes: {
+            client_message: "Thank you for your business! Payment is due within 7 days."
+          },
+          automation: {
+            auto_reminders_enabled: true,
+            reminder_schedule: [3, 1],
+            late_fee_enabled: false
+          },
+          created_at: invoice.createdAt.toISOString(),
+          updated_at: invoice.updatedAt.toISOString(),
+          created_by: 'system',
+          organization_id: orgId
+        } as any);
+
+        // Set headers for PDF download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${invoice.number}.pdf"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+
+        res.send(pdfBuffer);
+
+      } catch (error) {
+        console.error("Error generating invoice PDF:", error);
+        res.status(500).json({ 
+          error: "Failed to generate PDF", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
     }
   );
 
