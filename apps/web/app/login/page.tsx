@@ -35,6 +35,7 @@ export default function LoginPage() {
       const org = data.org as { id: string; name: string | null; slug: string | null } | undefined;
       setAuth({
         accessToken: data.accessToken,
+        refreshToken: data.refreshToken ?? null,
         roleKeys,
         userId: data.user?.id,
         userEmail: data.user?.email,

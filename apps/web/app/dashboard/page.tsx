@@ -102,9 +102,14 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   sales: [
     { href: "/crm", label: "CRM" },
     { href: "/leads", label: "Leads" },
-    { href: "/reports", label: "My reports" }
+    { href: "/reports", label: "My reports" },
+    { href: "/meeting-requests", label: "Director meeting" }
   ],
-  developer: [{ href: "/projects", label: "Projects" }, { href: "/developer-reports", label: "Reports" }],
+  developer: [
+    { href: "/projects", label: "Projects" },
+    { href: "/developer-reports", label: "Reports" },
+    { href: "/meeting-requests", label: "Director meeting" }
+  ],
   director_admin: [
     { href: "/projects", label: "Projects" },
     { href: "/leads", label: "Leads" },
@@ -115,7 +120,11 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   ],
   finance: [{ href: "/finance", label: "Finance" }, { href: "/approvals", label: "Approvals" }],
   analyst: [{ href: "/analytics", label: "Analytics" }, { href: "/crm", label: "CRM" }],
-  admin: [{ href: "/admin", label: "Users & org" }, { href: "/analytics", label: "Analytics" }],
+  admin: [
+    { href: "/admin", label: "Users & org" },
+    { href: "/meeting-requests", label: "Meetings" },
+    { href: "/analytics", label: "Analytics" }
+  ],
   client: []
 };
 
@@ -424,7 +433,7 @@ export default function DashboardPage() {
       {reportReminderDue && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-600/50 bg-amber-950/40 px-4 py-3">
           <p className="text-sm text-amber-200">
-            It’s been 11+ hours since your last report. Submit a report to keep your streak and stay on track.
+            It’s been 12+ hours since your last report (and no current-focus update in that window). Submit a report to keep your streak and stay on track.
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Link

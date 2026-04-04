@@ -14,9 +14,23 @@ type AdminMessage = {
   actor: { id: string; name: string | null; email: string } | null;
 };
 
-type ActivityFilter = "all" | "approvals" | "users" | "projects" | "delays";
+type AuditEvent = {
+  id: string;
+  type: string;
+  entityType: string;
+  entityId: string;
+  actorId: string | null;
+  metadata: unknown;
+  createdAt: string;
+};
 
-function filterCategory(m: AdminMessage): ActivityFilter | "other" {
+type UnifiedRow =
+  | { kind: "message"; createdAt: string; data: AdminMessage }
+  | { kind: "audit"; createdAt: string; data: AuditEvent };
+
+type ActivityFilter = "all" | "approvals" | "users" | "projects" | "delays" | "communications" | "audit";
+
+function filterCategoryMessage(m: AdminMessage): ActivityFilter | "other" {
   const t = m.type.toLowerCase();
   if (t.includes("approval") || t.includes("finance") || t.includes("decline") || t.includes("payout") || t.includes("expense")) {
     return "approvals";
@@ -30,22 +44,52 @@ function filterCategory(m: AdminMessage): ActivityFilter | "other" {
   if (t.includes("delay") || t.includes("overdue") || t.includes("risk") || t.includes("blocked")) {
     return "delays";
   }
+  if (t.includes("meeting") || t.includes("email") || t.includes("director") || t.includes("visibility")) {
+    return "communications";
+  }
   return "other";
+}
+
+function filterCategoryAudit(e: AuditEvent): ActivityFilter | "other" {
+  const t = e.type.toLowerCase();
+  if (t.includes("approval") || t.includes("finance") || t.includes("expense") || t.includes("payout")) {
+    return "approvals";
+  }
+  if (t.includes("user") || t.includes("session") || t.includes("permission") || t.includes("invite")) {
+    return "users";
+  }
+  if (t.includes("project") || t.includes("lead") || t.includes("task")) {
+    return "projects";
+  }
+  if (t.includes("override") || t.includes("risk")) {
+    return "delays";
+  }
+  return "audit";
+}
+
+function rowCategory(row: UnifiedRow): ActivityFilter | "other" {
+  if (row.kind === "message") return filterCategoryMessage(row.data);
+  const cat = filterCategoryAudit(row.data);
+  return cat === "audit" ? "audit" : cat;
 }
 
 const FILTER_TABS: { id: ActivityFilter; label: string; className: string }[] = [
   { id: "all", label: "All events", className: "text-slate-100 bg-slate-700" },
-  { id: "approvals", label: "Approvals", className: "text-amber-200 border border-amber-600/50" },
-  { id: "users", label: "User changes", className: "text-sky-200 border border-sky-600/50" },
-  { id: "projects", label: "Projects", className: "text-emerald-200 border border-emerald-600/50" },
-  { id: "delays", label: "Delays", className: "text-rose-200 border border-rose-600/50" }
+  { id: "approvals", label: "Approvals & finance", className: "text-amber-200 border border-amber-600/50" },
+  { id: "users", label: "Users & access", className: "text-sky-200 border border-sky-600/50" },
+  { id: "projects", label: "Projects & delivery", className: "text-emerald-200 border border-emerald-600/50" },
+  { id: "delays", label: "Risks & delays", className: "text-rose-200 border border-rose-600/50" },
+  { id: "communications", label: "Meetings & mail", className: "text-violet-200 border border-violet-600/50" },
+  { id: "audit", label: "System audit", className: "text-slate-200 border border-slate-500/50" }
 ];
 
 export default function ActivityPage() {
   const { apiFetch, auth } = useAuth();
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const isAdmin = auth.roleKeys.includes("admin");
 
@@ -57,27 +101,48 @@ export default function ActivityPage() {
     let cancelled = false;
     async function load() {
       try {
-        const res = await apiFetch("/admin/messages");
-        if (!cancelled && res.ok) {
-          const data = (await res.json()) as AdminMessage[];
-          setMessages(data);
+        const [mRes, aRes] = await Promise.all([
+          apiFetch("/admin/messages?limit=200"),
+          apiFetch("/admin/audit?limit=200")
+        ]);
+        if (!cancelled && mRes.ok) {
+          const data = (await mRes.json()) as AdminMessage[];
+          setMessages(Array.isArray(data) ? data : []);
+        }
+        if (!cancelled && aRes.ok) {
+          const data = (await aRes.json()) as AuditEvent[];
+          setAudit(Array.isArray(data) ? data : []);
         }
       } catch {
-        if (!cancelled) setMessages([]);
+        if (!cancelled) {
+          setMessages([]);
+          setAudit([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
   }, [apiFetch, isAdmin]);
 
+  const merged = useMemo((): UnifiedRow[] => {
+    const a: UnifiedRow[] = messages.map((m) => ({ kind: "message" as const, createdAt: m.createdAt, data: m }));
+    const b: UnifiedRow[] = audit.map((e) => ({ kind: "audit" as const, createdAt: e.createdAt, data: e }));
+    return [...a, ...b].sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime());
+  }, [messages, audit]);
+
   const filtered = useMemo(() => {
-    if (filter === "all") return messages;
-    return messages.filter((m) => filterCategory(m) === filter);
-  }, [messages, filter]);
+    if (filter === "all") return merged;
+    return merged.filter((row) => {
+      const cat = rowCategory(row);
+      if (filter === "communications") return cat === "communications";
+      if (filter === "audit") return row.kind === "audit" || cat === "audit";
+      return cat === filter;
+    });
+  }, [merged, filter]);
 
   if (!isAdmin) {
     return (
@@ -91,17 +156,18 @@ export default function ActivityPage() {
     <section className="flex flex-col gap-6">
       <PageHeader
         title="Activity log"
-        description="Immutable stream of governance-relevant events. Filter by category; entries are retained for audit."
+        description="Admin activity messages plus the immutable event audit. Filter by category; expand rows for full detail."
       />
 
       <div className="shell border border-slate-600/60 bg-slate-950/40">
         <p className="text-sm leading-relaxed text-slate-400">
-          This log is <strong className="text-slate-300">immutable</strong>. It records approvals, declines, role changes, invites, project transitions, module completion, finance requests, and sign-in events — each with a timestamp and actor where available. Admins can filter but cannot delete or edit entries.
+          Combines <strong className="text-slate-300">operational messages</strong> (meeting requests, emails, reminders) with the{" "}
+          <strong className="text-slate-300">event audit</strong> (approvals, user actions, overrides). Entries cannot be edited or deleted.
         </p>
       </div>
 
       <div className="shell">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Live activity feed</p>
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Live feed</p>
         <div className="mb-4 flex flex-wrap gap-2">
           {FILTER_TABS.map((tab) => {
             const active = filter === tab.id;
@@ -125,26 +191,71 @@ export default function ActivityPage() {
         ) : filtered.length === 0 ? (
           <p className="text-slate-500">No events in this view yet.</p>
         ) : (
-          <ul className="max-h-[480px] space-y-3 overflow-y-auto pr-1">
-            {filtered.map((m) => (
-              <li key={m.id} className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-medium uppercase text-slate-500">
-                    {m.type.replace(/_/g, " ")}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {new Date(m.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm font-medium text-slate-200">{m.summary}</p>
-                {m.body && <p className="mt-1 text-xs text-slate-400 line-clamp-3">{m.body}</p>}
-                {m.actor && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Actor: {m.actor.name ?? m.actor.email} ({m.actor.id.slice(0, 8)}…)
+          <ul className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+            {filtered.map((row) => {
+              const key = row.kind === "message" ? `m-${row.data.id}` : `e-${row.data.id}`;
+              const isOpen = expanded[key] ?? false;
+              if (row.kind === "message") {
+                const m = row.data;
+                return (
+                  <li key={key} className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-medium uppercase text-slate-500">
+                        {m.type.replace(/_/g, " ")} · message
+                      </span>
+                      <span className="text-xs text-slate-400">{new Date(m.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1 text-sm font-medium text-slate-200">{m.summary}</p>
+                    {m.body && (
+                      <p className={`mt-1 text-xs text-slate-400 ${isOpen ? "whitespace-pre-wrap" : "line-clamp-4"}`}>{m.body}</p>
+                    )}
+                    {m.body && m.body.length > 200 && (
+                      <button
+                        type="button"
+                        onClick={() => setExpanded((s) => ({ ...s, [key]: !isOpen }))}
+                        className="mt-1 text-xs text-sky-400 hover:underline"
+                      >
+                        {isOpen ? "Show less" : "Show full"}
+                      </button>
+                    )}
+                    {m.actor && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Actor: {m.actor.name ?? m.actor.email}
+                      </p>
+                    )}
+                  </li>
+                );
+              }
+              const e = row.data;
+              const metaStr =
+                e.metadata != null ? JSON.stringify(e.metadata, null, 0) : "";
+              return (
+                <li key={key} className="rounded-lg border border-slate-600/80 bg-slate-900/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase text-slate-500">
+                      {e.type.replace(/_/g, " ")} · {e.entityType}
+                    </span>
+                    <span className="text-xs text-slate-400">{new Date(e.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-1 font-mono text-xs text-slate-500">
+                    {e.entityId}
+                    {e.actorId && <span className="ml-2 text-slate-600">actor {e.actorId.slice(0, 8)}…</span>}
                   </p>
-                )}
-              </li>
-            ))}
+                  {metaStr && (
+                    <p className={`mt-1 text-xs text-slate-400 ${isOpen ? "whitespace-pre-wrap break-all" : "line-clamp-3"}`}>{metaStr}</p>
+                  )}
+                  {metaStr.length > 180 && (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((s) => ({ ...s, [key]: !isOpen }))}
+                      className="mt-1 text-xs text-sky-400 hover:underline"
+                    >
+                      {isOpen ? "Show less" : "Show full metadata"}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -153,13 +264,10 @@ export default function ActivityPage() {
         <h3 className="text-sm font-semibold text-slate-200">Audit trail rules</h3>
         <ul className="mt-3 space-y-2 text-sm text-slate-400">
           <li>
-            <strong className="text-slate-300">Immutability:</strong> No row can be edited or deleted — even by Admin — so disputes have a single source of truth for the Director.
+            <strong className="text-slate-300">Immutability:</strong> No row can be edited or deleted — even by Admin — so disputes have a single source of truth.
           </li>
           <li>
-            <strong className="text-slate-300">What generates a row:</strong> Finance request submitted · Approval or decline · Decline note · User invited or suspended · Role changed · Project assignment · Module complete · Director sign-off · Swap request · Sign-in (where logged).
-          </li>
-          <li>
-            <strong className="text-slate-300">Export:</strong> Use Admin reporting or data export tools (where enabled) for date-bounded extracts for Director review or external audit.
+            <strong className="text-slate-300">What you see:</strong> Admin messages (notifications stream) and EventLog audit rows (governance actions). Use filters to narrow.
           </li>
         </ul>
       </div>

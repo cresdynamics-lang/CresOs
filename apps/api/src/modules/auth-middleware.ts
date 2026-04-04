@@ -76,11 +76,18 @@ export function createAuthMiddleware(prisma: PrismaClient) {
           req.auth = payload;
           next();
         })
-        .catch(() => {
-          res.status(401).json({ error: "Invalid token" });
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("auth middleware session lookup failed", err);
+          res.status(503).json({ error: "Could not verify session" });
         });
-    } catch {
-      res.status(401).json({ error: "Invalid token" });
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "TokenExpiredError") {
+        res.status(401).json({ error: "Session expired", code: "TOKEN_EXPIRED" });
+        return;
+      }
+      res.status(401).json({ error: "Invalid token", code: "INVALID_TOKEN" });
     }
   };
 }

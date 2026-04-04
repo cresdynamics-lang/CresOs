@@ -229,7 +229,7 @@ export default function CrmPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contactIds: [...selectedIds],
+          contactIds: Array.from(selectedIds),
           subject: bulkSubject.trim(),
           body: bulkBody.trim()
         })

@@ -8,7 +8,12 @@ import { InvoiceSchema } from "../services/invoice/schema";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import multer from "multer";
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: "uploads/" });
+
+function routeParam(v: string | string[] | undefined): string {
+  if (v == null) return "";
+  return Array.isArray(v) ? v[0] ?? "" : v;
+}
 
 export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -58,7 +63,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
-        const { projectId } = req.params;
+        const projectId = routeParam(req.params.projectId);
         const { type = 'standard', milestoneId } = req.body;
         const orgId = req.auth!.orgId;
         
@@ -124,7 +129,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
-        const { invoiceId } = req.params;
+        const invoiceId = routeParam(req.params.invoiceId);
         const { stamp, watermark } = req.body;
         
         // Get invoice from database
@@ -159,7 +164,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
-        const { invoiceId } = req.params;
+        const invoiceId = routeParam(req.params.invoiceId);
         const { amount } = req.body;
         
         if (!amount || amount <= 0) {
@@ -275,9 +280,9 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
-        const { invoiceId } = req.params;
+        const invoiceId = routeParam(req.params.invoiceId);
         const orgId = req.auth!.orgId;
-        
+
         const invoice = await prisma.invoice.findFirst({
           where: {
             id: invoiceId,
@@ -297,7 +302,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
               select: {
                 id: true,
                 name: true,
-                description: true,
+                projectDetails: true,
               },
             },
             items: true,
@@ -323,7 +328,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
-        const { invoiceId } = req.params;
+        const invoiceId = routeParam(req.params.invoiceId);
         const orgId = req.auth!.orgId;
         
         const config = await getOrganizationInvoiceConfig(prisma, orgId);

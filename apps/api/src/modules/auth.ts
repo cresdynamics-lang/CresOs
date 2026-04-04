@@ -233,7 +233,7 @@ export default function authRouter(prisma: PrismaClient): Router {
     });
   });
 
-  router.post("/refresh", (req, res) => {
+  router.post("/refresh", async (req, res) => {
     const { refreshToken } = req.body as { refreshToken?: string };
     if (!refreshToken) {
       res.status(400).json({ error: "Missing refreshToken" });
@@ -246,19 +246,59 @@ export default function authRouter(prisma: PrismaClient): Router {
         orgId: string;
         sessionId?: string;
       };
-      // For simplicity we reuse the existing session if present
+      if (!decoded.sessionId) {
+        res.status(401).json({ error: "Invalid refresh token" });
+        return;
+      }
+
+      const session = await prisma.session.findUnique({
+        where: { id: decoded.sessionId }
+      });
+      if (!session || session.revokedAt) {
+        res.status(401).json({ error: "Session revoked" });
+        return;
+      }
+      if (session.orgId !== decoded.orgId || session.userId !== decoded.userId) {
+        res.status(401).json({ error: "Invalid refresh token" });
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        include: {
+          memberships: { include: { role: true } },
+          roles: { include: { role: true } }
+        }
+      });
+      if (!user || user.status !== "active") {
+        res.status(401).json({ error: "User is not active" });
+        return;
+      }
+
+      const roleKeys = [
+        ...new Set([
+          ...user.memberships.map((m) => m.role?.key).filter(Boolean),
+          ...user.roles.map((r) => r.role.key)
+        ])
+      ] as string[];
+
       const accessToken = jwt.sign(
         {
-          userId: decoded.userId,
-          orgId: decoded.orgId,
-          roleKeys: [],
-          sessionId: decoded.sessionId ?? ""
+          userId: user.id,
+          orgId: session.orgId,
+          roleKeys,
+          sessionId: session.id
         },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
       res.json({ accessToken });
-    } catch {
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "TokenExpiredError") {
+        res.status(401).json({ error: "Refresh token expired" });
+        return;
+      }
       res.status(401).json({ error: "Invalid refresh token" });
     }
   });

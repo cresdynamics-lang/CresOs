@@ -12,10 +12,12 @@ type ScheduleItem = {
   completedAt: string | null;
   notes: string | null;
   reminderMinutesBefore: number | null;
+  user?: { id: string; name: string | null; email: string };
 };
 
 type ScheduleResponse = {
   period: string;
+  scope?: string;
   range: { start: string; end: string };
   stats: { total: number; completed: number; pending: number };
   items: ScheduleItem[];
@@ -47,9 +49,11 @@ const REMINDER_OPTIONS: { value: number | ""; label: string }[] = [
 
 export default function SchedulePage() {
   const { apiFetch, auth } = useAuth();
+  const isAdmin = auth.roleKeys.includes("admin");
   const canDeleteOrEditHistory = auth.roleKeys.some((r) => ["admin", "director_admin"].includes(r));
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter">("week");
   const [completedFilter, setCompletedFilter] = useState<"all" | "done" | "pending">("all");
+  const [orgSchedule, setOrgSchedule] = useState(false);
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ title: "", type: "task", scheduledAt: "", notes: "", reminderMinutesBefore: "" as number | "" });
@@ -60,12 +64,14 @@ export default function SchedulePage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch(`/schedule?period=${period}&completed=${completedFilter}`);
+      const q = new URLSearchParams({ period, completed: completedFilter });
+      if (isAdmin && orgSchedule) q.set("scope", "org");
+      const res = await apiFetch(`/schedule?${q.toString()}`);
       if (res.ok) setData((await res.json()) as ScheduleResponse);
     } catch {
       setData(null);
     }
-  }, [period, completedFilter, apiFetch]);
+  }, [period, completedFilter, apiFetch, isAdmin, orgSchedule]);
 
   useEffect(() => {
     load();
@@ -164,6 +170,11 @@ export default function SchedulePage() {
           <h2 className="text-lg font-semibold text-slate-50">Tasks & schedule</h2>
           <p className="text-sm text-slate-300">
             Schedule meetings, calls, reports, and tasks. Review by day, week, month, or quarter to stay accountable.
+            {isAdmin && (
+              <span className="mt-2 block text-xs text-slate-400">
+                As admin you can view everyone’s schedule and mark items done to confirm meetings org-wide.
+              </span>
+            )}
           </p>
           {notificationPermission === "denied" && (
             <p className="mt-1 text-xs text-amber-400">
@@ -195,6 +206,17 @@ export default function SchedulePage() {
             </button>
           ))}
         </div>
+        {isAdmin && (
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={orgSchedule}
+              onChange={(e) => setOrgSchedule(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            Show entire organization (confirm anyone’s meetings)
+          </label>
+        )}
       </div>
 
       {/* Accountability stats */}
@@ -236,7 +258,8 @@ export default function SchedulePage() {
       {/* List */}
       <div className="shell">
         <h3 className="mb-3 text-sm font-semibold text-slate-200">
-          {PERIODS.find((p) => p.value === period)?.label} — {data?.items.length ?? 0} items
+          {PERIODS.find((p) => p.value === period)?.label}
+          {data?.scope === "org" ? " · org-wide" : ""} — {data?.items.length ?? 0} items
         </h3>
         {!data ? (
           <p className="text-sm text-slate-400">Getting your schedule…</p>
@@ -253,6 +276,11 @@ export default function SchedulePage() {
                   <p className={`font-medium text-slate-100 ${item.completedAt ? "line-through text-slate-400" : ""}`}>
                     {item.title}
                   </p>
+                  {item.user && (
+                    <p className="text-xs text-sky-400/90">
+                      {item.user.name ?? item.user.email}
+                    </p>
+                  )}
                   <p className="text-xs text-slate-400">
                     {TYPES.find((t) => t.value === item.type)?.label ?? item.type} · {new Date(item.scheduledAt).toLocaleString()}
                     {item.reminderMinutesBefore != null && (

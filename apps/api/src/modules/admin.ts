@@ -919,8 +919,15 @@ export default function adminRouter(prisma: PrismaClient): Router {
     "/users/:id/lock",
     requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
+      const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
       const { id } = req.params;
+
+      const existing = await prisma.user.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!existing) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
 
       const user = await prisma.user.update({
         where: { id },
@@ -950,8 +957,15 @@ export default function adminRouter(prisma: PrismaClient): Router {
     "/users/:id/suspend",
     requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
+      const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
       const { id } = req.params;
+
+      const existing = await prisma.user.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!existing) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
 
       const user = await prisma.user.update({
         where: { id },
@@ -981,8 +995,15 @@ export default function adminRouter(prisma: PrismaClient): Router {
     "/users/:id/reactivate",
     requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
+      const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
       const { id } = req.params;
+
+      const existing = await prisma.user.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!existing) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
 
       const user = await prisma.user.update({
         where: { id },

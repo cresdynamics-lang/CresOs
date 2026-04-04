@@ -73,9 +73,13 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         });
       } catch (error) {
         console.error("Error initializing chat user:", error);
-        res.status(500).json({
+        const message = error instanceof Error ? error.message : "Unknown error";
+        const lower = message.toLowerCase();
+        const status =
+          lower.includes("not a member") ? 403 : lower.includes("not found") ? 404 : 500;
+        res.status(status).json({
           error: "Failed to initialize chat user",
-          message: error instanceof Error ? error.message : "Unknown error"
+          message
         });
       }
     }
@@ -309,7 +313,11 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           where: {
             id: participantId,
             deletedAt: null,
-            OR: [{ orgId }, { memberships: { some: { orgId, deletedAt: null } } }]
+            OR: [
+              { orgId },
+              { memberships: { some: { orgId, deletedAt: null } } },
+              { roles: { some: { role: { orgId } } } }
+            ]
           },
           select: {
             id: true,
@@ -379,9 +387,13 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         });
       } catch (error) {
         console.error("Error creating direct conversation:", error);
-        res.status(500).json({
+        const message = error instanceof Error ? error.message : "Unknown error";
+        const lower = message.toLowerCase();
+        const status =
+          lower.includes("not a member") ? 403 : lower.includes("not found") ? 404 : 500;
+        res.status(status).json({
           error: "Failed to create direct conversation",
-          message: error instanceof Error ? error.message : "Unknown error"
+          message
         });
       }
     }

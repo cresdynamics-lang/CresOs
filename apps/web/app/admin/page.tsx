@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
+import { MeetingRequestsPanel } from "../../components/meeting-requests-panel";
 
 type UserRow = {
   id: string;
@@ -72,7 +73,14 @@ export default function AdminPage() {
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<
-    "users" | "departments" | "roles" | "capabilities" | "performance" | "messages" | "oversight"
+    | "users"
+    | "departments"
+    | "roles"
+    | "capabilities"
+    | "performance"
+    | "messages"
+    | "oversight"
+    | "meetings"
   >("users");
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [oversight, setOversight] = useState<OversightData | null>(null);
@@ -271,7 +279,7 @@ export default function AdminPage() {
         <div>
           <h2 className="text-lg font-semibold text-slate-50">Administration</h2>
           <p className="text-sm text-slate-300">
-            Users & organisation; performance by role, activity, finance, and responsibilities.
+            Users & organisation; director meetings; performance; activity and oversight.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -282,8 +290,19 @@ export default function AdminPage() {
           <button type="button" onClick={() => setTab("performance")} className={`rounded px-3 py-1.5 text-sm ${tab === "performance" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Performance</button>
           <button type="button" onClick={() => setTab("messages")} className={`rounded px-3 py-1.5 text-sm ${tab === "messages" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Messages</button>
           <button type="button" onClick={() => setTab("oversight")} className={`rounded px-3 py-1.5 text-sm ${tab === "oversight" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Oversight</button>
+          <button type="button" onClick={() => setTab("meetings")} className={`rounded px-3 py-1.5 text-sm ${tab === "meetings" ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}>Meetings</button>
         </div>
       </div>
+
+      {tab === "meetings" && (
+        <div className="shell">
+          <p className="mb-4 text-sm text-slate-300">
+            Same data as <span className="text-slate-200">Delivery → Director meeting</span>: approve or reject requests from sales and developers,
+            confirm the time, and add follow-up notes. All changes persist to the database.
+          </p>
+          <MeetingRequestsPanel embedded />
+        </div>
+      )}
 
       {tab === "departments" && (
         <div className="shell">

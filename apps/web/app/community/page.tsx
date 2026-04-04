@@ -203,7 +203,9 @@ export default function CommunityPage() {
         });
         if (!initRes.ok) {
           const err = (await initRes.json().catch(() => ({}))) as { error?: string; message?: string };
-          setChatError(err.error ?? err.message ?? "Chat could not be initialized");
+          setChatError(
+            err.message ?? err.error ?? "Chat could not be initialized"
+          );
           return;
         }
         await apiFetch("/chat-community/status", {
@@ -416,7 +418,10 @@ export default function CommunityPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setSelectedConversation(data.data.conversation);
+        const conv = data.data?.conversation;
+        if (conv) setSelectedConversation(conv);
+        setSidebarPanel("chats");
+        void loadConversations();
         setCallState({
           isInCall: true,
           callType,
@@ -589,16 +594,25 @@ export default function CommunityPage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setSelectedConversation(data.data.conversation);
+        const data = (await response.json()) as {
+          data?: { conversation?: Conversation };
+        };
+        const conv = data.data?.conversation;
+        if (!conv?.id) {
+          setChatError("Chat was created but the app could not read it. Try again.");
+          return;
+        }
         setSidebarPanel("chats");
+        setSelectedConversation(conv);
         await loadConversations();
         requestAnimationFrame(() => {
           messageInputRef.current?.focus();
         });
       } else {
         const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-        setChatError(err.error ?? err.message ?? `Could not open chat (${response.status})`);
+        setChatError(
+          err.message ?? err.error ?? `Could not open chat (${response.status})`
+        );
       }
     } catch (error) {
       console.error("Failed to start conversation:", error);
@@ -637,9 +651,13 @@ export default function CommunityPage() {
           </div>
         </div>
       )}
-    <div className="flex h-[calc(100vh-5.5rem)] min-h-[480px] max-w-[1600px] mx-auto overflow-hidden rounded-lg border border-[#2A3942] font-body shadow-xl">
-      {/* ——— Left: Chats + People (partitioned) ——— */}
-      <div className={`flex w-full max-w-[400px] flex-shrink-0 flex-col ${wa.sidebarBg} border-r ${wa.border}`}>
+    <div className="mx-auto flex h-[calc(100vh-5.5rem)] min-h-[480px] max-w-[1600px] flex-col overflow-hidden rounded-lg border border-[#2A3942] font-body shadow-xl md:flex-row">
+      {/* ——— Left: Chats + People (partitioned) ——— On small screens, hide when a 1:1 chat is open so the thread is full width. */}
+      <div
+        className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
+          selectedConversation ? "hidden md:flex" : "flex"
+        }`}
+      >
         <div className={`flex items-center gap-2 px-3 py-3 ${wa.sidebarHeader}`}>
           <button
             type="button"
@@ -854,11 +872,25 @@ export default function CommunityPage() {
         </div>
       </div>
 
-      {/* ——— Right: Conversation ——— */}
-      <div className={`flex min-w-0 min-h-0 flex-1 flex-col ${wa.chatBg}`}>
+      {/* ——— Right: 1:1 conversation ——— Hidden on small screens until a chat is selected (list-only mode). */}
+      <div
+        className={`flex min-h-0 min-w-0 flex-1 flex-col ${wa.chatBg} ${
+          selectedConversation ? "flex" : "hidden md:flex"
+        }`}
+      >
         {selectedConversation ? (
           <>
-            <div className={`flex flex-shrink-0 items-center gap-3 px-3 py-2 ${wa.chatHeader}`}>
+            <div className={`flex flex-shrink-0 items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 ${wa.chatHeader}`}>
+              <button
+                type="button"
+                className="shrink-0 rounded-full p-2 text-[#AEBAC1] hover:bg-[#2A3942] md:hidden"
+                onClick={() => setSelectedConversation(null)}
+                aria-label="Back to chats"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
               <div className="relative h-10 w-10 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-sm font-medium leading-10 text-white">
                 {initialsFromLabel(selectedConversation.name)}
                 {selectedPeer?.isOnline && (

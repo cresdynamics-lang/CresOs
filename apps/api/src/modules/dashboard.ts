@@ -11,10 +11,10 @@ import { processDueReminders } from "./lead-reminders";
 import { processScheduleReminders } from "./schedule-reminders";
 import { processTaskDueReminders } from "./task-reminders";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
+import { processStaleActivityAdminDigest, TWELVE_HOURS_MS } from "./stale-activity-admin-digest";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-const ELEVEN_HOURS_MS = 11 * 60 * 60 * 1000;
-const REPORT_REMINDER_THROTTLE_MS = 11 * 60 * 60 * 1000; // don't send again within 11h
+const REPORT_REMINDER_THROTTLE_MS = TWELVE_HOURS_MS;
 
 function toDateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -27,8 +27,17 @@ async function ensureReportSubmissionReminder(
   userEmail: string,
   lastSubmittedAt: Date | null
 ): Promise<void> {
+  const profile = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, notificationEmail: true, name: true, currentFocusUpdatedAt: true }
+  });
+  const email = profile?.notificationEmail?.trim() || profile?.email?.trim() || userEmail;
+  if (profile?.currentFocusUpdatedAt && Date.now() - profile.currentFocusUpdatedAt.getTime() < TWELVE_HOURS_MS) {
+    return;
+  }
+
   const since = lastSubmittedAt ? Date.now() - lastSubmittedAt.getTime() : Infinity;
-  if (since < ELEVEN_HOURS_MS) return;
+  if (since < TWELVE_HOURS_MS) return;
 
   const recent = await prisma.notification.findFirst({
     where: {
@@ -42,7 +51,8 @@ async function ensureReportSubmissionReminder(
   if (recent) return;
 
   const subject = "Submit your report";
-  const body = "It's been 11+ hours since your last report. Submit a report on the dashboard to keep your streak and stay on track.";
+  const body =
+    "It's been 12+ hours since your last report (and no current-focus update in the last 12 hours). Submit a report on the dashboard to keep your streak and stay on track.";
   const emailSubject = `Reminder: ${subject}`;
   await prisma.$transaction([
     prisma.notification.create({
@@ -61,7 +71,7 @@ async function ensureReportSubmissionReminder(
       data: {
         orgId,
         channel: "email",
-        to: userEmail,
+        to: email,
         subject: emailSubject,
         body,
         status: "queued",
@@ -70,12 +80,8 @@ async function ensureReportSubmissionReminder(
       }
     })
   ]);
-  if (userEmail) await logEmailSent(prisma, { orgId, to: userEmail, subject: emailSubject, body, type: "report_submission_reminder" });
-  const salesUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { name: true, email: true }
-  });
-  const salesLabel = salesUser?.name ?? salesUser?.email ?? "Sales user";
+  if (email) await logEmailSent(prisma, { orgId, to: email, subject: emailSubject, body, type: "report_submission_reminder" });
+  const salesLabel = profile?.name?.trim() || profile?.email || "Sales user";
   await notifyAdminsInApp(
     prisma,
     orgId,
@@ -118,6 +124,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
 
       if (isAdmin) {
         void processFinanceApprovalEscalations(prisma, orgId).catch(() => {});
+        void processStaleActivityAdminDigest(prisma, orgId).catch(() => {});
       }
 
       await Promise.all([
@@ -134,13 +141,24 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
       const endOfToday = new Date(startOfToday.getTime() + ONE_DAY_MS - 1);
 
       let lastReportSubmittedAt: Date | null = null;
+      let salesFocusOk12h = false;
       if (isSales) {
-        const lastReport = await prisma.salesReport.findFirst({
-          where: { submittedById: userId, status: "submitted", submittedAt: { not: null } },
-          orderBy: { submittedAt: "desc" },
-          select: { submittedAt: true }
-        });
+        const [lastReport, salesProfile] = await Promise.all([
+          prisma.salesReport.findFirst({
+            where: { submittedById: userId, status: "submitted", submittedAt: { not: null } },
+            orderBy: { submittedAt: "desc" },
+            select: { submittedAt: true }
+          }),
+          prisma.user.findUnique({
+            where: { id: userId },
+            select: { currentFocusUpdatedAt: true }
+          })
+        ]);
         lastReportSubmittedAt = lastReport?.submittedAt ?? null;
+        salesFocusOk12h = !!(
+          salesProfile?.currentFocusUpdatedAt &&
+          Date.now() - salesProfile.currentFocusUpdatedAt.getTime() < TWELVE_HOURS_MS
+        );
       }
 
       const isDeveloper = req.auth!.roleKeys.includes(ROLE_KEYS.developer);
@@ -247,7 +265,8 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
 
       const reportReminderDue =
         isSales &&
-        (lastReportSubmittedAt === null || Date.now() - lastReportSubmittedAt.getTime() >= ELEVEN_HOURS_MS);
+        !salesFocusOk12h &&
+        (lastReportSubmittedAt === null || Date.now() - lastReportSubmittedAt.getTime() >= TWELVE_HOURS_MS);
 
       if (reportReminderDue && isSales) {
         const user = await prisma.user.findUnique({
@@ -255,13 +274,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
           select: { email: true, notificationEmail: true }
         });
         const email = user?.notificationEmail ?? user?.email ?? "";
-        await ensureReportSubmissionReminder(
-          prisma,
-          orgId,
-          userId,
-          email,
-          lastReportSubmittedAt
-        );
+        await ensureReportSubmissionReminder(prisma, orgId, userId, email, lastReportSubmittedAt);
       }
 
       let workProgressPercent = 0;

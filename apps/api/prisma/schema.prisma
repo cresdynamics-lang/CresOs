@@ -787,7 +787,6 @@ model ChatUser {
   org          Org      @relation(fields: [orgId], references: [id])
   user         User     @relation(fields: [userId], references: [id])
   conversations Conversation[] @relation("ParticipantConversations")
-  inbox        Inbox?    @relation("InboxChatUser")
   notifications ChatNotification[]
 
   @@index([orgId, userId])
@@ -857,7 +856,6 @@ model Inbox {
 
   org            Org           @relation(fields: [orgId], references: [id])
   user           User          @relation("UserInbox", fields: [userId], references: [id], map: "Inbox_userId_fkey")
-  chatUser       ChatUser       @relation("InboxChatUser", fields: [userId], references: [id], map: "Inbox_chatUserId_fkey")
 
   @@index([orgId, userId])
 }
@@ -911,6 +909,8 @@ model MeetingRequest {
   respondedById String?
   respondedAt   DateTime?
   responseNote  String?   @db.Text
+  /// Optional follow-up from director/admin after the initial response (visible to requester).
+  adminComment  String?   @db.Text
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

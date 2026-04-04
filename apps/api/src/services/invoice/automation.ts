@@ -163,7 +163,6 @@ export class InvoiceAutomationService {
         currency: 'USD',
         client: invoiceData.client!,
         company: {
-          id: organization.id,
           name: organization.name,
           email: organization.email,
           phone: organization.phone,

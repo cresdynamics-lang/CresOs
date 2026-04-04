@@ -1,338 +1,444 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth-context";
 
-interface UserProfile {
+type RoleInfo = {
   id: string;
   name: string;
+  key: string;
+  department: { id: string; name: string } | null;
+};
+
+type AdminUserRow = {
+  id: string;
   email: string;
-  phone: string;
-  phoneNumbers: string[];
-  workEmails: string[];
-  profilePicture?: string;
-  nextOfKin: {
-    name: string;
-    phone: string;
-    relationship: string;
-  }[];
+  name: string | null;
+  phone: string | null;
+  notificationEmail: string | null;
+  profileCompletedAt: string | null;
   status: string;
-  role: {
-    name: string;
-    key: string;
-    department: {
-      name: string;
-    };
-  };
   createdAt: string;
-  updatedAt: string;
-}
+  roles: RoleInfo[];
+  departments: { id: string; name: string }[];
+};
 
 export default function AdminUsersPage() {
   const { auth, apiFetch } = useAuth();
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string; key: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editNotificationEmail, setEditNotificationEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRoleId, setNewUserRoleId] = useState("");
 
-  const fetchUsers = async () => {
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+
+  const isAdmin = auth.roleKeys.includes("admin");
+
+  const load = useCallback(async () => {
     try {
-      const response = await apiFetch("/admin/users");
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.data || []);
+      const [uRes, rRes] = await Promise.all([apiFetch("/admin/users"), apiFetch("/admin/roles")]);
+      if (uRes.ok) {
+        const data = (await uRes.json()) as AdminUserRow[];
+        setUsers(Array.isArray(data) ? data : []);
       }
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
+      if (rRes.ok) {
+        const list = (await rRes.json()) as { id: string; name: string; key: string }[];
+        setRoles(Array.isArray(list) ? list : []);
+      }
+    } catch {
+      setUsers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFetch]);
 
-  const fetchUserProfile = async (userId: string) => {
+  useEffect(() => {
+    if (isAdmin) void load();
+    else setLoading(false);
+  }, [isAdmin, load]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const q = searchTerm.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        (user.name?.toLowerCase().includes(q) ?? false) ||
+        user.email.toLowerCase().includes(q);
+      const matchesRole =
+        filterRole === "all" || user.roles.some((r) => r.key === filterRole);
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchTerm, filterRole]);
+
+  function openEdit(u: AdminUserRow) {
+    setEditing(u);
+    setEditName(u.name ?? "");
+    setEditPhone(u.phone ?? "");
+    setEditNotificationEmail(u.notificationEmail ?? u.email ?? "");
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    setSaving(true);
     try {
-      const response = await apiFetch(`/user/${userId}/profile`);
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedUser(data.data);
+      const res = await apiFetch(`/admin/users/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim() || null,
+          phone: editPhone.trim() || null,
+          notificationEmail: editNotificationEmail.trim() || null
+        })
+      });
+      if (res.ok) {
+        setEditing(null);
+        await load();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert((d as { error?: string }).error ?? "Save failed");
       }
-    } catch (error) {
-      console.error("Failed to fetch user profile:", error);
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === "all" || user.role.key === filterRole;
-    return matchesSearch && matchesRole;
-  });
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "text-green-400 bg-green-900/20";
-      case "locked": return "text-yellow-400 bg-yellow-900/20";
-      case "suspended": return "text-red-400 bg-red-900/20";
-      default: return "text-slate-400 bg-slate-900/20";
+  async function postUserAction(path: string, userId: string) {
+    setActionId(userId);
+    try {
+      const res = await apiFetch(`/admin/users/${userId}${path}`, { method: "POST" });
+      if (res.ok) await load();
+      else {
+        const d = await res.json().catch(() => ({}));
+        alert((d as { error?: string }).error ?? "Action failed");
+      }
+    } finally {
+      setActionId(null);
     }
-  };
+  }
+
+  async function submitResetPassword() {
+    if (!resetUserId || resetPassword.length < 8) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/admin/users/${resetUserId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ temporaryPassword: resetPassword })
+      });
+      if (res.ok) {
+        setResetUserId(null);
+        setResetPassword("");
+        await load();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert((d as { error?: string }).error ?? "Reset failed");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!isAdmin) {
+    return (
+      <section className="shell">
+        <p className="text-slate-400">Only administrators can manage users.</p>
+      </section>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading users...</div>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-slate-400">Loading users…</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">User Management</h1>
-        <p className="text-slate-400">View and manage user profiles and details.</p>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <div>
+        <h1 className="mb-2 text-2xl font-bold text-slate-200">User management</h1>
+        <p className="text-slate-400">
+          Create, update, lock, suspend, reactivate, and reset passwords for users in your organization. All actions are logged to Activity.
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-200">Create user</h2>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newUserEmail.trim() || !newUserPassword) return;
+            const res = await apiFetch("/admin/users", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: newUserEmail.trim(),
+                name: newUserName.trim() || undefined,
+                password: newUserPassword,
+                roleId: newUserRoleId || undefined
+              })
+            });
+            if (res.ok) {
+              setNewUserEmail("");
+              setNewUserName("");
+              setNewUserPassword("");
+              setNewUserRoleId("");
+              await load();
+            } else {
+              const d = await res.json().catch(() => ({}));
+              alert((d as { error?: string }).error ?? "Create failed");
+            }
+          }}
+          className="flex flex-wrap items-end gap-2"
+        >
+          <label className="flex flex-col gap-1 text-xs text-slate-400">
+            Email *
+            <input
+              type="email"
+              required
+              value={newUserEmail}
+              onChange={(e) => setNewUserEmail(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-400">
+            Name
             <input
               type="text"
-              placeholder="Search users by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand"
+              value={newUserName}
+              onChange={(e) => setNewUserName(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
             />
-          </div>
-          <div>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-400">
+            Password *
+            <input
+              type="password"
+              required
+              value={newUserPassword}
+              onChange={(e) => setNewUserPassword(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-400">
+            Role
             <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+              value={newUserRoleId}
+              onChange={(e) => setNewUserRoleId(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="director_admin">Director Admin</option>
-              <option value="finance">Finance</option>
-              <option value="sales">Sales</option>
-              <option value="developer">Developer</option>
-              <option value="analyst">Analyst</option>
-              <option value="client">Client</option>
+              <option value="">None</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
             </select>
-          </div>
-        </div>
+          </label>
+          <button type="submit" className="rounded bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500">
+            Create
+          </button>
+        </form>
       </div>
 
-      {/* Users List */}
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-        <h2 className="text-xl font-semibold text-slate-200 mb-4">Users ({filteredUsers.length})</h2>
-        
-        {filteredUsers.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            <div className="mb-2">👥</div>
-            <div>No users found</div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredUsers.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-medium text-slate-200">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="font-medium text-slate-200">{user.name}</div>
-                    <div className="text-sm text-slate-400">{user.email}</div>
-                    <div className="text-xs text-slate-500">
-                      {user.role.name} • {user.role.department.name}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(user.status)}`}>
-                    {user.status}
-                  </span>
-                  <button
-                    onClick={() => fetchUserProfile(user.id)}
-                    className="px-3 py-1 bg-brand text-white rounded text-sm hover:bg-brand/80 transition-colors"
-                  >
-                    View Profile
-                  </button>
-                </div>
-              </div>
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row">
+          <input
+            type="text"
+            placeholder="Search name or email…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-200 placeholder:text-slate-500"
+          />
+          <select
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-200"
+          >
+            <option value="all">All roles</option>
+            {roles.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+              </option>
             ))}
-          </div>
+          </select>
+        </div>
+
+        <h2 className="mb-3 text-lg font-semibold text-slate-200">
+          Users ({filteredUsers.length})
+        </h2>
+
+        {filteredUsers.length === 0 ? (
+          <p className="text-slate-500">No users match.</p>
+        ) : (
+          <ul className="space-y-2">
+            {filteredUsers.map((user) => {
+              const label = user.name?.trim() || user.email;
+              const roleLine = user.roles.map((r) => r.name).join(", ") || "No role";
+              const isSelf = user.id === auth.userId;
+              return (
+                <li
+                  key={user.id}
+                  className="flex flex-col gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-100">{label}</p>
+                    <p className="text-sm text-slate-400">{user.email}</p>
+                    <p className="text-xs text-slate-500">{roleLine}</p>
+                    <span
+                      className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${
+                        user.status === "active"
+                          ? "bg-emerald-900/40 text-emerald-300"
+                          : user.status === "locked"
+                            ? "bg-amber-900/40 text-amber-300"
+                            : "bg-rose-900/40 text-rose-300"
+                      }`}
+                    >
+                      {user.status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(user)}
+                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetUserId(user.id);
+                        setResetPassword("");
+                      }}
+                      disabled={isSelf}
+                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                    >
+                      Reset password
+                    </button>
+                    {user.status === "active" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void postUserAction("/lock", user.id)}
+                          disabled={isSelf || actionId === user.id}
+                          className="rounded border border-amber-700/50 px-2 py-1 text-xs text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
+                        >
+                          Lock
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void postUserAction("/suspend", user.id)}
+                          disabled={isSelf || actionId === user.id}
+                          className="rounded border border-rose-700/50 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40 disabled:opacity-40"
+                        >
+                          Suspend
+                        </button>
+                      </>
+                    )}
+                    {(user.status === "locked" || user.status === "suspended") && (
+                      <button
+                        type="button"
+                        onClick={() => void postUserAction("/reactivate", user.id)}
+                        disabled={actionId === user.id}
+                        className="rounded border border-emerald-700/50 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                      >
+                        Reactivate
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
-      {/* User Profile Modal */}
-      {selectedUser && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
-          <div className="bg-slate-900 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-200">
-                User Profile: {selectedUser.name}
-              </h2>
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-slate-100">Edit user</h3>
+            <div className="flex flex-col gap-3">
+              <label className="text-xs text-slate-400">
+                Name
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-2 text-slate-200"
+                />
+              </label>
+              <label className="text-xs text-slate-400">
+                Phone
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-2 text-slate-200"
+                />
+              </label>
+              <label className="text-xs text-slate-400">
+                Notification email
+                <input
+                  value={editNotificationEmail}
+                  onChange={(e) => setEditNotificationEmail(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-2 text-slate-200"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} className="rounded px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800">
+                Cancel
+              </button>
               <button
-                onClick={() => setSelectedUser(null)}
-                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200"
+                type="button"
+                disabled={saving}
+                onClick={() => void saveEdit()}
+                className="rounded bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                {saving ? "Saving…" : "Save"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="space-y-6">
-              {/* Basic Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-2">Basic Information</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs text-slate-500">Name:</span>
-                      <div className="text-slate-200">{selectedUser.name}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Email:</span>
-                      <div className="text-slate-200">{selectedUser.email}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Role:</span>
-                      <div className="text-slate-200">{selectedUser.role.name}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Department:</span>
-                      <div className="text-slate-200">{selectedUser.role.department.name}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Status:</span>
-                      <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${getStatusColor(selectedUser.status)}`}>
-                        {selectedUser.status}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-2">Account Information</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs text-slate-500">User ID:</span>
-                      <div className="text-slate-200 text-sm">{selectedUser.id}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Created:</span>
-                      <div className="text-slate-200">{formatDate(selectedUser.createdAt)}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500">Last Updated:</span>
-                      <div className="text-slate-200">{formatDate(selectedUser.updatedAt)}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contact Details */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-2">Contact Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-xs text-slate-500">Primary Phone:</span>
-                    <div className="text-slate-200">{selectedUser.phone || "Not set"}</div>
-                  </div>
-                  
-                  <div>
-                    <span className="text-xs text-slate-500">Additional Phones:</span>
-                    <div className="text-slate-200">
-                      {selectedUser.phoneNumbers.length > 0 ? (
-                        <div className="space-y-1">
-                          {selectedUser.phoneNumbers.map((phone, index) => (
-                            <div key={index} className="text-sm">{phone}</div>
-                          ))}
-                        </div>
-                      ) : (
-                        "None"
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <span className="text-xs text-slate-500">Work Emails:</span>
-                    <div className="text-slate-200">
-                      {selectedUser.workEmails.length > 0 ? (
-                        <div className="space-y-1">
-                          {selectedUser.workEmails.map((email, index) => (
-                            <div key={index} className="text-sm">{email}</div>
-                          ))}
-                        </div>
-                      ) : (
-                        "None"
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Next of Kin */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-2">Next of Kin Information</h3>
-                <div className="space-y-4">
-                  {selectedUser.nextOfKin.map((kin, index) => (
-                    <div key={index} className="p-3 bg-slate-800/50 rounded-lg">
-                      <h4 className="text-sm font-medium text-slate-200 mb-2">Next of Kin {index + 1}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <span className="text-xs text-slate-500">Name:</span>
-                          <div className="text-slate-200">{kin.name || "Not set"}</div>
-                        </div>
-                        <div>
-                          <span className="text-xs text-slate-500">Phone:</span>
-                          <div className="text-slate-200">{kin.phone || "Not set"}</div>
-                        </div>
-                        <div>
-                          <span className="text-xs text-slate-500">Relationship:</span>
-                          <div className="text-slate-200">{kin.relationship || "Not set"}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Profile Picture */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-2">Profile Picture</h3>
-                <div className="flex items-center gap-4">
-                  {selectedUser.profilePicture ? (
-                    <img
-                      src={selectedUser.profilePicture}
-                      alt="Profile"
-                      className="w-20 h-20 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center text-2xl font-medium text-slate-200">
-                      {selectedUser.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <div className="text-slate-200">Profile picture</div>
-                    <div className="text-sm text-slate-400">
-                      {selectedUser.profilePicture ? "Uploaded" : "Default avatar"}
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {resetUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold text-slate-100">Set temporary password</h3>
+            <p className="mb-4 text-sm text-slate-400">Minimum 8 characters. User should change it after login.</p>
+            <input
+              type="password"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              placeholder="New password"
+              className="mb-4 w-full rounded border border-slate-600 bg-slate-800 px-2 py-2 text-slate-200"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setResetUserId(null)} className="rounded px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || resetPassword.length < 8}
+                onClick={() => void submitResetPassword()}
+                className="rounded bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Reset password"}
+              </button>
             </div>
           </div>
         </div>

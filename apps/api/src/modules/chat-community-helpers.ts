@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /** Primary label in UI: full name if set, otherwise login email. */
 export function displayNameOrEmail(name: string | null | undefined, email: string): string {
@@ -7,9 +8,9 @@ export function displayNameOrEmail(name: string | null | undefined, email: strin
   return email;
 }
 
-/** All active user IDs tied to an org (direct orgId and/or OrgMember). */
+/** All active user IDs tied to an org (primary org field, OrgMember, and UserRole in that org). */
 export async function getUserIdsInOrg(prisma: PrismaClient, orgId: string): Promise<string[]> {
-  const [withOrgField, members] = await Promise.all([
+  const [withOrgField, members, roleAssignments] = await Promise.all([
     prisma.user.findMany({
       where: { orgId, deletedAt: null },
       select: { id: true }
@@ -17,11 +18,16 @@ export async function getUserIdsInOrg(prisma: PrismaClient, orgId: string): Prom
     prisma.orgMember.findMany({
       where: { orgId, deletedAt: null },
       select: { userId: true }
+    }),
+    prisma.userRole.findMany({
+      where: { role: { orgId } },
+      select: { userId: true }
     })
   ]);
   const set = new Set<string>();
   for (const u of withOrgField) set.add(u.id);
   for (const m of members) set.add(m.userId);
+  for (const r of roleAssignments) set.add(r.userId);
   return [...set];
 }
 
@@ -57,15 +63,18 @@ export async function ensureChatUserAndInbox(
   orgId: string,
   opts?: { displayName?: string; touchPresence?: boolean }
 ): Promise<void> {
+  const orgMemberIds = await getUserIdsInOrg(prisma, orgId);
+  if (!orgMemberIds.includes(userId)) {
+    throw new Error("User is not a member of this organization");
+  }
+
   const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      deletedAt: null,
-      OR: [{ orgId }, { memberships: { some: { orgId, deletedAt: null } } }]
-    },
+    where: { id: userId, deletedAt: null },
     select: { id: true, email: true, name: true }
   });
-  if (!user) return;
+  if (!user) {
+    throw new Error("User account not found");
+  }
 
   const displayName =
     opts?.displayName?.trim() || displayNameOrEmail(user.name, user.email);
@@ -74,21 +83,37 @@ export async function ensureChatUserAndInbox(
   let chatUser = await prisma.chatUser.findUnique({ where: { userId } });
   if (!chatUser) {
     const username = await uniqueChatUsername(prisma, orgId, userId, user.email);
-    chatUser = await prisma.chatUser.create({
-      data: {
-        userId,
-        orgId,
-        username,
-        displayName,
-        status: touchPresence ? "online" : "offline",
-        isOnline: touchPresence,
-        lastSeen: new Date()
+    try {
+      chatUser = await prisma.chatUser.create({
+        data: {
+          userId,
+          orgId,
+          username,
+          displayName,
+          status: touchPresence ? "online" : "offline",
+          isOnline: touchPresence,
+          lastSeen: new Date()
+        }
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        chatUser = await prisma.chatUser.findUnique({ where: { userId } });
+        if (!chatUser) throw e;
+      } else {
+        throw e;
       }
-    });
+    }
   } else {
-    const data: { displayName?: string; status?: string; isOnline?: boolean; lastSeen?: Date } = {
-      displayName
-    };
+    const data: {
+      displayName: string;
+      orgId?: string;
+      status?: string;
+      isOnline?: boolean;
+      lastSeen?: Date;
+    } = { displayName };
+    if (chatUser.orgId !== orgId) {
+      data.orgId = orgId;
+    }
     if (touchPresence) {
       data.status = "online";
       data.isOnline = true;
@@ -102,14 +127,30 @@ export async function ensureChatUserAndInbox(
 
   const inbox = await prisma.inbox.findUnique({ where: { userId } });
   if (!inbox) {
-    await prisma.inbox.create({
-      data: {
-        userId,
-        orgId,
-        conversations: [],
-        unreadCount: 0,
-        lastActivity: new Date()
+    try {
+      await prisma.inbox.create({
+        data: {
+          userId,
+          orgId,
+          conversations: [],
+          unreadCount: 0,
+          lastActivity: new Date()
+        }
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        /* another request created inbox */
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!msg.includes("Unique constraint") && !msg.includes("duplicate key")) {
+          throw e;
+        }
       }
+    }
+  } else if (inbox.orgId !== orgId) {
+    await prisma.inbox.update({
+      where: { userId },
+      data: { orgId }
     });
   }
 }
@@ -150,6 +191,22 @@ export async function createOrGetDirectConversation(
     [participantId]: 0
   };
 
+  const [creatorChat, peerChat] = await Promise.all([
+    prisma.chatUser.findUnique({ where: { userId: creatorId }, select: { id: true } }),
+    prisma.chatUser.findUnique({ where: { userId: participantId }, select: { id: true } })
+  ]);
+  if (!creatorChat || !peerChat) {
+    await ensureChatUserAndInbox(prisma, creatorId, orgId, { touchPresence: false });
+    await ensureChatUserAndInbox(prisma, participantId, orgId, { touchPresence: false });
+  }
+  const [cuA, cuB] = await Promise.all([
+    prisma.chatUser.findUnique({ where: { userId: creatorId }, select: { id: true } }),
+    prisma.chatUser.findUnique({ where: { userId: participantId }, select: { id: true } })
+  ]);
+  if (!cuA?.id || !cuB?.id) {
+    throw new Error("Could not create chat profiles for both participants");
+  }
+
   const conversation = await prisma.conversation.create({
     data: {
       orgId,
@@ -167,12 +224,28 @@ export async function createOrGetDirectConversation(
     }
   });
 
+  try {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        chatUsers: {
+          connect: [{ id: cuA.id }, { id: cuB.id }]
+        }
+      }
+    });
+  } catch {
+    /* Listing uses participants[]; join table is optional for DM delivery */
+  }
+
   for (const uid of [creatorId, participantId]) {
     const inbox = await prisma.inbox.findUnique({ where: { userId: uid } });
     if (inbox && !inbox.conversations.includes(conversation.id)) {
       await prisma.inbox.update({
         where: { userId: uid },
-        data: { conversations: { push: conversation.id }, lastActivity: new Date() }
+        data: {
+          conversations: [...inbox.conversations, conversation.id],
+          lastActivity: new Date()
+        }
       });
     }
   }

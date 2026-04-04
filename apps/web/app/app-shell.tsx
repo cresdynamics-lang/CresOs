@@ -34,7 +34,8 @@ const SIDEBAR_SECTIONS: NavSection[] = [
       { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
       { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
-      { href: "/crm", label: "CRM", roles: ["admin", "sales"] }
+      { href: "/crm", label: "CRM", roles: ["admin", "sales"] },
+      { href: "/meeting-requests", label: "Director meeting", roles: ["admin", "sales"] }
     ]
   },
   {
@@ -42,7 +43,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     items: [
       { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
       { href: "/developer-reports", label: "Reports", roles: ["admin", "director_admin", "developer"] },
-      { href: "/meeting-requests", label: "Meeting requests", roles: ["admin", "director_admin", "developer"] }
+      { href: "/meeting-requests", label: "Director meeting", roles: ["admin", "director_admin", "developer"] }
     ]
   },
   {
@@ -117,6 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const handleLogout = () => {
     setAuth({
       accessToken: null,
+      refreshToken: null,
       roleKeys: [],
       userId: undefined,
       userEmail: undefined,
