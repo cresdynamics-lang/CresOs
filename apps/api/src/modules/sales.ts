@@ -11,7 +11,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Get sales dashboard with invoice stats
   router.get(
     "/dashboard",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -94,7 +94,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Create new invoice (requires finance approval)
   router.post(
     "/invoices",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -178,7 +178,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
             userRoles: {
               some: {
                 role: {
-                  key: { in: [ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin] }
+                  key: { in: [ROLE_KEYS.finance, ROLE_KEYS.admin] }
                 }
               }
             }
@@ -220,7 +220,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Get sales user's invoices
   router.get(
     "/invoices",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -283,7 +283,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Get specific invoice
   router.get(
     "/invoices/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -333,7 +333,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Update invoice (only if pending)
   router.patch(
     "/invoices/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -418,7 +418,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Delete invoice (only if pending)
   router.delete(
     "/invoices/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -469,7 +469,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Get clients for invoice creation
   router.get(
     "/clients",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -507,7 +507,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
   // Get projects for invoice creation
   router.get(
     "/projects",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;

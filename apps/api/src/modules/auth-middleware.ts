@@ -25,6 +25,9 @@ export const ROLE_KEYS = {
   client: "client"
 } as const;
 
+/** Every product role — Community and shared features use this so all logged-in org users stay included. */
+export const ALL_APP_ROLE_KEYS: string[] = Object.values(ROLE_KEYS);
+
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 /**

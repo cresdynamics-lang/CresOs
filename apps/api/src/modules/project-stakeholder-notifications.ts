@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { getAcceptedDeveloperIds } from "../lib/project-access";
 import { logAdminActivity } from "./admin-activity";
 import { getAdminUsers, getDirectorUsers } from "./director-notifications";
 
@@ -14,7 +15,7 @@ export async function notifyProjectExecutionStakeholders(
   project: { name: string; createdByUserId: string | null; assignedDeveloperId: string | null },
   subject: string,
   body: string,
-  options?: { type?: string; excludeUserId?: string; emailDirectors?: boolean }
+  options?: { type?: string; excludeUserId?: string; emailDirectors?: boolean; projectId?: string }
 ): Promise<void> {
   const directors = await getDirectorUsers(prisma, orgId);
   const admins = await getAdminUsers(prisma, orgId);
@@ -22,7 +23,12 @@ export async function notifyProjectExecutionStakeholders(
   for (const d of directors) recipientIds.add(d.id);
   for (const a of admins) recipientIds.add(a.id);
   if (project.createdByUserId) recipientIds.add(project.createdByUserId);
-  if (project.assignedDeveloperId) recipientIds.add(project.assignedDeveloperId);
+  if (options?.projectId) {
+    const devIds = await getAcceptedDeveloperIds(prisma, options.projectId);
+    for (const id of devIds) recipientIds.add(id);
+  } else if (project.assignedDeveloperId) {
+    recipientIds.add(project.assignedDeveloperId);
+  }
   if (options?.excludeUserId) recipientIds.delete(options.excludeUserId);
 
   if (recipientIds.size === 0) return;

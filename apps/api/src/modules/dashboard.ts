@@ -148,7 +148,16 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         isDeveloper && !isDirector
           ? await Promise.all([
               prisma.project.findMany({
-                where: { orgId, deletedAt: null, approvalStatus: "approved", assignedDeveloperId: userId, developerReviewedAt: null },
+                where: {
+                  orgId,
+                  deletedAt: null,
+                  approvalStatus: "approved",
+                  developerReviewedAt: null,
+                  OR: [
+                    { assignedDeveloperId: userId },
+                    { developerAssignments: { some: { userId, status: "accepted" } } }
+                  ]
+                },
                 select: { id: true, name: true }
               }),
               prisma.projectHandoffRequest.findMany({

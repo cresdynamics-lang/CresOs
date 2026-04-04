@@ -61,8 +61,8 @@ export default function ReportsPage() {
           </h2>
           <p className="text-sm text-cres-text-muted">
             {isDirector
-              ? "View and comment on sales activity reports."
-              : "View your report history (read-only) or create and submit a new report."}
+              ? "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
+              : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report."}
           </p>
         </div>
         {!isDirector && (

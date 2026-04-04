@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
 import { PageHeader } from "../page-header";
@@ -29,11 +30,23 @@ type CeoAnalytics = {
 };
 
 export default function AnalyticsPage() {
-  const { apiFetch, auth } = useAuth();
+  const router = useRouter();
+  const { apiFetch, auth, hydrated } = useAuth();
   const [data, setData] = useState<CeoAnalytics | null>(null);
   const isAdmin = auth.roleKeys.includes("admin");
+  const canAccessAnalytics = auth.roleKeys.some((r) =>
+    ["admin", "director_admin", "finance", "analyst"].includes(r)
+  );
 
   useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canAccessAnalytics) {
+      router.replace("/dashboard");
+    }
+  }, [hydrated, auth.accessToken, canAccessAnalytics, router]);
+
+  useEffect(() => {
+    if (!canAccessAnalytics) return;
     async function load() {
       try {
         const res = await apiFetch("/analytics/ceo");
@@ -44,8 +57,16 @@ export default function AnalyticsPage() {
         // ignore
       }
     }
-    load();
-  }, [apiFetch]);
+    void load();
+  }, [apiFetch, canAccessAnalytics]);
+
+  if (hydrated && auth.accessToken && !canAccessAnalytics) {
+    return (
+      <section className="shell">
+        <p className="text-slate-400">Redirecting…</p>
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-6">

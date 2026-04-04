@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { subscribeDataRefresh } from "../data-refresh";
 
 type Lead = {
   id: string;
@@ -10,13 +11,13 @@ type Lead = {
   status: string;
   approvalStatus: string;
   source?: string;
-  client?: { id: string; name: string };
+  client?: { id: string; name: string; email?: string | null; phone?: string | null };
   project?: { id: string; name: string };
   owner?: { id: string; name: string | null; email: string };
 };
 
 export default function LeadsPage() {
-  const { apiFetch, auth } = useAuth();
+  const { apiFetch, auth, hydrated } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -24,23 +25,40 @@ export default function LeadsPage() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
+  const [loadedOnce, setLoadedOnce] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!auth.accessToken) {
+      setLeads([]);
+      setLoadedOnce(true);
+      return;
+    }
     try {
       const res = await apiFetch("/crm/leads");
-      if (res.ok) {
-        const data = (await res.json()) as Lead[];
-        setLeads(data);
+      const raw = await res.json().catch(() => null);
+      if (res.ok && Array.isArray(raw)) {
+        setLeads(raw);
+      } else {
+        setLeads([]);
       }
     } catch {
-      // ignore
+      setLeads([]);
+    } finally {
+      setLoadedOnce(true);
     }
-  };
+  }, [apiFetch, auth.accessToken]);
 
   useEffect(() => {
-    load();
-  }, [apiFetch]);
+    if (!hydrated || !auth.accessToken) return;
+    void load();
+  }, [hydrated, auth.accessToken, load]);
+
+  useEffect(() => {
+    const unsub = subscribeDataRefresh(() => {
+      void load();
+    });
+    return unsub;
+  }, [load]);
 
   useEffect(() => {
     // Load projects to tie leads to existing work
@@ -91,10 +109,10 @@ export default function LeadsPage() {
         <div>
           <h2 className="mb-2 text-lg font-semibold text-slate-50">Leads</h2>
           <p className="text-sm text-slate-300">
-            Add leads (director approval required). View and manage leads.
+            New projects automatically create or update a client and a linked lead (project name, phone, email). This list refreshes when projects change. Manual adds may require admin approval.
           </p>
         </div>
-        {auth.roleKeys.some((r) => ["sales", "director_admin", "admin"].includes(r)) && (
+        {auth.roleKeys.some((r) => ["sales", "admin"].includes(r)) && (
           <button
             type="button"
             onClick={() => setShowAdd(!showAdd)}
@@ -151,9 +169,9 @@ export default function LeadsPage() {
       )}
 
       <div className="shell">
-        {leads.length === 0 ? (
-          <p className="text-slate-400">No leads yet.</p>
-        ) : (
+        {loadedOnce && leads.length === 0 ? (
+          <p className="text-slate-400">No leads yet. Create or update a project with client details to generate one automatically.</p>
+        ) : leads.length > 0 ? (
           <ul className="space-y-2">
             {leads.map((lead) => (
               <li key={lead.id}>
@@ -161,13 +179,27 @@ export default function LeadsPage() {
                   href={`/leads/${lead.id}`}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 hover:border-slate-700"
                 >
-                  <span className="font-medium text-slate-100">{lead.title}</span>
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-slate-100">{lead.title}</span>
+                    {lead.source === "project" && (
+                      <span className="ml-2 rounded bg-sky-900/50 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
+                        Project
+                      </span>
+                    )}
+                    {lead.client && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Client: {lead.client.name}
+                        {lead.client.phone ? ` · ${lead.client.phone}` : ""}
+                        {lead.client.email ? ` · ${lead.client.email}` : ""}
+                      </p>
+                    )}
+                    {lead.owner && (
+                      <p className="mt-0.5 text-xs text-slate-500">Owner: {lead.owner.name ?? lead.owner.email}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-shrink-0 flex-wrap items-center gap-2 text-xs">
                     {lead.project && (
                       <span className="text-slate-400">Project: {lead.project.name}</span>
-                    )}
-                    {lead.client && !lead.project && (
-                      <span className="text-slate-400">{lead.client.name}</span>
                     )}
                     <span className="rounded bg-slate-700 px-2 py-0.5 text-slate-300">
                       {lead.status}
@@ -190,6 +222,8 @@ export default function LeadsPage() {
               </li>
             ))}
           </ul>
+        ) : (
+          !loadedOnce && <p className="text-slate-400">Loading…</p>
         )}
       </div>
     </section>

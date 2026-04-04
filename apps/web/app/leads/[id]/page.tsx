@@ -24,6 +24,8 @@ type Lead = {
   source: string | null;
   owner: { id: string; name: string | null; email: string } | null;
   approvedBy: { id: string; name: string | null; email: string } | null;
+  client?: { id: string; name: string; email?: string | null; phone?: string | null } | null;
+  project?: { id: string; name: string; approvalStatus?: string } | null;
   comments: Comment[];
   followUps: FollowUp[];
 };
@@ -52,7 +54,8 @@ export default function LeadDetailPage() {
   const [followReminders, setFollowReminders] = useState<number[]>([60, 30, 5]);
   const [loading, setLoading] = useState(false);
 
-  const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
+  const isAdmin = auth.roleKeys.includes("admin");
+  const canScheduleFollowUp = auth.roleKeys.some((r) => ["sales", "analyst"].includes(r));
 
   const load = async () => {
     try {
@@ -171,7 +174,7 @@ export default function LeadDetailPage() {
           >
             {lead.approvalStatus}
           </span>
-          {isDirector && lead.approvalStatus === "pending_approval" && (
+          {isAdmin && lead.approvalStatus === "pending_approval" && (
             <>
               <button
                 type="button"
@@ -194,16 +197,43 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {isDirector && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-semibold text-slate-200">Director comments</h3>
-          <form onSubmit={handleAddComment} className="flex flex-col gap-2">
+      {(lead.client || lead.project) && (
+        <div className="shell border-sky-800/40 bg-sky-950/20">
+          <h3 className="mb-2 text-sm font-semibold text-slate-200">Client &amp; project</h3>
+          {lead.client && (
+            <p className="text-sm text-slate-300">
+              <span className="text-slate-400">Client:</span> {lead.client.name}
+              {lead.client.phone ? ` · ${lead.client.phone}` : ""}
+              {lead.client.email ? ` · ${lead.client.email}` : ""}
+            </p>
+          )}
+          {lead.project && (
+            <p className="mt-2 text-sm">
+              <span className="text-slate-400">Project:</span>{" "}
+              <Link href={`/projects/${lead.project.id}`} className="text-sky-400 hover:underline">
+                {lead.project.name}
+              </Link>
+              {lead.project.approvalStatus && (
+                <span className="ml-2 text-xs text-slate-500">({lead.project.approvalStatus})</span>
+              )}
+            </p>
+          )}
+          {lead.source === "project" && (
+            <p className="mt-2 text-xs text-slate-500">Source: linked from project</p>
+          )}
+        </div>
+      )}
+
+      <div className="shell">
+        <h3 className="mb-2 text-sm font-semibold text-slate-200">Comments</h3>
+        {isAdmin && (
+          <form onSubmit={handleAddComment} className="mb-3 flex flex-col gap-2">
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={2}
               className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-              placeholder="Add a comment..."
+              placeholder="Add a comment…"
             />
             <button
               type="submit"
@@ -213,40 +243,35 @@ export default function LeadDetailPage() {
               Post comment
             </button>
           </form>
-          {lead.comments.length > 0 && (
-            <ul className="mt-3 space-y-2 border-t border-slate-700 pt-3">
-              {lead.comments.map((c) => (
-                <li key={c.id} className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm">
-                  <p className="text-slate-300">{c.content}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {c.author.name ?? c.author.email} · {new Date(c.createdAt).toLocaleString()}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {lead.comments.length > 0 && !isDirector && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-semibold text-slate-200">Director comments</h3>
-          <ul className="space-y-2">
+        )}
+        {lead.comments.length > 0 ? (
+          <ul className={`space-y-2 ${isAdmin ? "mt-0 border-t border-slate-700 pt-3" : ""}`}>
             {lead.comments.map((c) => (
               <li key={c.id} className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm">
                 <p className="text-slate-300">{c.content}</p>
-                <p className="mt-1 text-xs text-slate-500">{new Date(c.createdAt).toLocaleString()}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {c.author.name ?? c.author.email} · {new Date(c.createdAt).toLocaleString()}
+                </p>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-slate-500">No comments yet.</p>
+        )}
+      </div>
 
       <div className="shell">
         <h3 className="mb-3 text-sm font-semibold text-slate-200">Schedule meeting or call</h3>
-        <p className="mb-3 text-xs text-slate-400">
-          You will be notified by email and in-app at the chosen times before the meeting/call.
-        </p>
+        {!canScheduleFollowUp ? (
+          <p className="mb-3 text-xs text-slate-400">
+            Scheduling is available to sales and analyst roles. Upcoming items are listed below when present.
+          </p>
+        ) : (
+          <p className="mb-3 text-xs text-slate-400">
+            You will be notified by email and in-app at the chosen times before the meeting/call.
+          </p>
+        )}
+        {canScheduleFollowUp && (
         <form onSubmit={handleAddFollowUp} className="flex flex-col gap-3">
           <div className="flex gap-4">
             <label className="flex items-center gap-2">
@@ -331,6 +356,7 @@ export default function LeadDetailPage() {
             Schedule {followUpType}
           </button>
         </form>
+        )}
       </div>
 
       {lead.followUps.length > 0 && (

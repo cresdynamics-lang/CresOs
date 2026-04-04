@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { createApp } from "./create-app";
 import { validateEnv } from "./lib/env";
 import { registerGracefulShutdown } from "./lib/graceful-shutdown";
+import { scheduleDeveloperDailyDigest } from "./modules/developer-daily-digest";
 
 validateEnv();
 
@@ -19,6 +20,7 @@ const server = http.createServer(app);
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.info(`CresOS API listening on port ${PORT} (health /health, readiness /health/ready)`);
+  scheduleDeveloperDailyDigest(prisma);
 });
 
 registerGracefulShutdown(server, prisma);

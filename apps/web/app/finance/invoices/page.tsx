@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
 
 interface Invoice {
@@ -35,7 +36,10 @@ interface InvoiceItem {
 }
 
 export default function FinanceInvoicesPage() {
-  const { auth, apiFetch } = useAuth();
+  const router = useRouter();
+  const { auth, apiFetch, hydrated } = useAuth();
+  const canAccessFinanceInvoices = auth.roleKeys.some((r) => ["admin", "finance"].includes(r));
+  const isAdmin = auth.roleKeys.includes("admin");
   const [activeTab, setActiveTab] = useState<"dashboard" | "pending" | "all">("dashboard");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,9 +53,16 @@ export default function FinanceInvoicesPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [approvalNotes, setApprovalNotes] = useState("");
 
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canAccessFinanceInvoices) {
+      router.replace("/dashboard");
+    }
+  }, [hydrated, auth.accessToken, canAccessFinanceInvoices, router]);
+
   // Fetch dashboard data
   useEffect(() => {
-    if (!auth.accessToken) return;
+    if (!auth.accessToken || !canAccessFinanceInvoices) return;
     
     if (activeTab === "dashboard") {
       fetchDashboard();
@@ -60,7 +71,7 @@ export default function FinanceInvoicesPage() {
     } else if (activeTab === "all") {
       fetchAllInvoices();
     }
-  }, [activeTab, auth.accessToken]);
+  }, [activeTab, auth.accessToken, canAccessFinanceInvoices]);
 
   const fetchDashboard = async () => {
     try {
@@ -231,7 +242,9 @@ export default function FinanceInvoicesPage() {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-200 mb-2">Finance Invoice Approvals</h1>
-        <p className="text-slate-400">Review and approve invoices submitted by the sales team.</p>
+        <p className="text-slate-400">
+          Pending invoices are visible to finance and leadership. Only an organization admin can approve, reject, or generate official invoice documents.
+        </p>
       </div>
 
       {/* Tabs */}
@@ -536,8 +549,8 @@ export default function FinanceInvoicesPage() {
                 </div>
               )}
 
-              {/* Approval Actions */}
-              {selectedInvoice.status === "PENDING" && (
+              {/* Approval Actions — admin only */}
+              {selectedInvoice.status === "PENDING" && isAdmin && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -582,6 +595,12 @@ export default function FinanceInvoicesPage() {
                 </div>
               )}
 
+              {selectedInvoice.status === "PENDING" && !isAdmin && (
+                <p className="text-sm text-slate-400">
+                  This invoice is waiting for an organization admin to approve or reject it.
+                </p>
+              )}
+
               {/* Approved/Rejected Info */}
               {(selectedInvoice.status === "APPROVED" || selectedInvoice.status === "REJECTED") && (
                 <div className="space-y-4">
@@ -598,12 +617,14 @@ export default function FinanceInvoicesPage() {
                           <strong>Notes:</strong> {selectedInvoice.approvalNotes}
                         </div>
                       )}
-                      <button
-                        onClick={() => generateInvoice(selectedInvoice.id)}
-                        className="mt-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                      >
-                        Generate Invoice PDF
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => generateInvoice(selectedInvoice.id)}
+                          className="mt-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          Generate Invoice PDF
+                        </button>
+                      )}
                     </div>
                   )}
                   

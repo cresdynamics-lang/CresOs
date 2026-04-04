@@ -3,6 +3,26 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { notifyDirectors } from "./director-notifications";
+
+function totalDeveloperReportContent(body: {
+  whatWorked?: string;
+  blockers?: string;
+  needsAttention?: string;
+  implemented?: string;
+  pending?: string;
+  nextPlan?: string;
+}): number {
+  const parts = [
+    body.whatWorked,
+    body.blockers,
+    body.needsAttention,
+    body.implemented,
+    body.pending,
+    body.nextPlan
+  ];
+  return parts.reduce((sum, p) => sum + (p?.trim().length ?? 0), 0);
+}
 
 export default function developerReportsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -55,7 +75,26 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         where: { orgId, submittedById: userId, reportDate }
       });
       if (existing) {
-        res.status(400).json({ error: "You already have a report for this date. Update it instead." });
+        res.status(400).json({
+          error:
+            "You already have a report for this date. Filed reports are read-only — contact an admin if a correction is needed."
+        });
+        return;
+      }
+
+      const fields = {
+        whatWorked: body.whatWorked?.trim() || null,
+        blockers: body.blockers?.trim() || null,
+        needsAttention: body.needsAttention?.trim() || null,
+        implemented: body.implemented?.trim() || null,
+        pending: body.pending?.trim() || null,
+        nextPlan: body.nextPlan?.trim() || null
+      };
+      if (totalDeveloperReportContent(fields) < 60) {
+        res.status(400).json({
+          error:
+            "Please add enough detail for leadership: at least 60 characters total across the sections (what worked, blockers, needs attention, etc.)."
+        });
         return;
       }
 
@@ -64,14 +103,20 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
           orgId,
           submittedById: userId,
           reportDate,
-          whatWorked: body.whatWorked?.trim() || null,
-          blockers: body.blockers?.trim() || null,
-          needsAttention: body.needsAttention?.trim() || null,
-          implemented: body.implemented?.trim() || null,
-          pending: body.pending?.trim() || null,
-          nextPlan: body.nextPlan?.trim() || null
-        }
+          ...fields
+        },
+        include: { submittedBy: { select: { name: true, email: true } } }
       });
+      const devName = report.submittedBy?.name || report.submittedBy?.email || "Developer";
+      const dayKey = reportDate.toISOString().slice(0, 10);
+      const recordedAt = report.createdAt.toISOString();
+      await notifyDirectors(
+        prisma,
+        orgId,
+        `Developer daily report: ${dayKey}`,
+        `${devName} filed a daily report for ${dayKey}.\n\nRecorded at (server, UTC): ${recordedAt}\nReport ID: ${report.id}\n\nDirector and admin can open Developer reports in the app; this timestamp is stored even if you were offline when it was filed.`,
+        { type: "developer_report.submitted" }
+      );
       res.status(201).json(report);
     }
   );
@@ -98,13 +143,12 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Update (developer: own only)
+  // Update — leadership only (developers cannot edit filed history)
   router.patch(
     "/:id",
-    requireRoles([ROLE_KEYS.developer]),
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const userId = req.auth!.userId;
       const { id } = req.params;
       const body = req.body as {
         whatWorked?: string;
@@ -116,10 +160,29 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
       };
 
       const existing = await prisma.developerReport.findFirst({
-        where: { id, orgId, submittedById: userId }
+        where: { id, orgId }
       });
       if (!existing) {
         res.status(404).json({ error: "Report not found" });
+        return;
+      }
+
+      const merged = {
+        whatWorked:
+          body.whatWorked !== undefined ? body.whatWorked?.trim() || null : existing.whatWorked,
+        blockers: body.blockers !== undefined ? body.blockers?.trim() || null : existing.blockers,
+        needsAttention:
+          body.needsAttention !== undefined ? body.needsAttention?.trim() || null : existing.needsAttention,
+        implemented:
+          body.implemented !== undefined ? body.implemented?.trim() || null : existing.implemented,
+        pending: body.pending !== undefined ? body.pending?.trim() || null : existing.pending,
+        nextPlan: body.nextPlan !== undefined ? body.nextPlan?.trim() || null : existing.nextPlan
+      };
+      if (totalDeveloperReportContent(merged) < 60) {
+        res.status(400).json({
+          error:
+            "After this edit, the report would be too thin for leadership (under 60 characters total). Add more detail."
+        });
         return;
       }
 
@@ -138,18 +201,16 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Delete (developer: own; director: any)
+  // Delete — leadership only (developers cannot delete filed history)
   router.delete(
     "/:id",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const userId = req.auth!.userId;
-      const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
       const { id } = req.params;
 
       const existing = await prisma.developerReport.findFirst({
-        where: isDirector ? { id, orgId } : { id, orgId, submittedById: userId }
+        where: { id, orgId }
       });
       if (!existing) {
         res.status(404).json({ error: "Report not found" });

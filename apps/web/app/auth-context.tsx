@@ -82,11 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth.accessToken) profileBootstrapDone.current = false;
   }, [auth.accessToken]);
 
-  /** Load org + name for sessions created before profile fields existed. */
+  /** Load org + name, and always sync `userId` from the API when missing (needed for Community / participant matching). */
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
     if (profileBootstrapDone.current) return;
-    if (auth.orgName) {
+    if (auth.orgName && auth.userId) {
       profileBootstrapDone.current = true;
       return;
     }
@@ -102,12 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
+          id?: string;
           name?: string | null;
           email?: string;
           org?: { id: string; name: string | null; slug: string | null };
         };
         if (cancelled) return;
         patchAuth({
+          ...(data.id && { userId: data.id }),
           userName: data.name ?? undefined,
           userEmail: data.email,
           orgId: data.org?.id,

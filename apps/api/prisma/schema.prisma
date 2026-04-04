@@ -29,6 +29,8 @@ model Org {
   milestones    Milestone[]
   tasks         Task[]
   taskComments  TaskComment[]
+  projectDeveloperAssignments ProjectDeveloperAssignment[]
+  developerDailyDigestsSent DeveloperDailyDigestSent[]
   attachments   Attachment[]
 
   invoices      Invoice[]
@@ -133,6 +135,12 @@ model User {
   workEmails         String[]  // Multiple work emails
   nextOfKin          Json?     // Array of next of kin objects with name, phone, relationship
 
+  /// Primary project this user is working on today (developer/sales); visible to admin + director.
+  currentFocusProjectId String?
+  currentFocusNote      String?   @db.Text
+  currentFocusUpdatedAt DateTime?
+  currentFocusProject   Project?  @relation("UserCurrentFocus", fields: [currentFocusProjectId], references: [id], onDelete: SetNull)
+
   memberships  OrgMember[]
   roles        UserRole[]
 
@@ -150,6 +158,8 @@ model User {
   projectsAssignedAsDev Project[]  @relation("ProjectAssignedDeveloper")
   handoffsSent         ProjectHandoffRequest[] @relation("HandoffFrom")
   handoffsReceived     ProjectHandoffRequest[] @relation("HandoffTo")
+  projectDevAssignments ProjectDeveloperAssignment[] @relation("ProjectDevAssignmentUser")
+  projectDevAssignmentsInvited ProjectDeveloperAssignment[] @relation("ProjectDevAssignmentInviter")
   scheduleItems       ScheduleItem[]
   tasksAssigned       Task[]      @relation("TaskAssignee")
   taskCommentsAuthored TaskComment[] @relation("TaskCommentAuthor")
@@ -175,6 +185,8 @@ model User {
   leadsApproved         Lead[]           @relation("LeadApprovedBy")
   leadFollowUpsAssigned LeadFollowUp[]
   crmContactsAdded     CrmContact[]
+
+  developerDailyDigestsSent DeveloperDailyDigestSent[]
 
   // Chat System Relations
   chatUser     ChatUser?
@@ -454,7 +466,9 @@ model Project {
   invoices            Invoice[]
   changeRequests      ChangeRequest[]
   handoffRequests     ProjectHandoffRequest[]
+  developerAssignments ProjectDeveloperAssignment[]
   leads               Lead[]
+  usersWithCurrentFocus User[]  @relation("UserCurrentFocus")
 }
 
 model ProjectHandoffRequest {
@@ -474,6 +488,27 @@ model ProjectHandoffRequest {
 
   @@index([projectId])
   @@index([toUserId, status])
+}
+
+/// Director (or sales pre-assign) invites one or more developers; each may accept or decline before working on tasks.
+model ProjectDeveloperAssignment {
+  id          String   @id @default(cuid())
+  orgId       String
+  projectId   String
+  userId      String
+  status      String   @default("pending") // pending, accepted, declined
+  invitedById String?
+  createdAt   DateTime @default(now())
+  respondedAt DateTime?
+
+  org       Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("ProjectDevAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("ProjectDevAssignmentInviter", fields: [invitedById], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId, status])
+  @@index([projectId])
 }
 
 model Milestone {
@@ -541,12 +576,31 @@ model TaskComment {
   authorId  String?
   body      String
   type      String   @default("progress") // progress, blocker, completion, scope_issue
+  /// all | sales | developers — who should treat this as primary audience (everyone can still read on the project).
+  audience  String?  @default("all")
+  /// @mentioned user ids in this org (notifications); optional.
+  mentionedUserIds String[] @default([])
   createdAt DateTime @default(now())
   deletedAt DateTime?
 
   org       Org      @relation(fields: [orgId], references: [id])
   task      Task     @relation(fields: [taskId], references: [id])
   author    User?    @relation("TaskCommentAuthor", fields: [authorId], references: [id])
+}
+
+/// One row per developer per calendar day (digest TZ) — idempotent 6PM system digest to directors.
+model DeveloperDailyDigestSent {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  dateKey   String
+  sentAt    DateTime @default(now())
+
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId, dateKey])
+  @@index([orgId, dateKey])
 }
 
 model Attachment {

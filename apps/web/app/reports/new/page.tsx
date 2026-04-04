@@ -17,6 +17,10 @@ export default function NewReportPage() {
       setError("Title and activities are required.");
       return;
     }
+    if (andSubmit && body.trim().length < 40) {
+      setError("Write at least 40 characters in Activities so the director gets a useful record (same rule on the server).");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -53,7 +57,7 @@ export default function NewReportPage() {
       <div className="shell border-cres-border bg-cres-surface/70">
         <h2 className="mb-2 text-lg font-semibold text-cres-text">Create report</h2>
         <p className="text-sm text-cres-text-muted">
-          Describe the activities you’ve done. You can save as draft or submit for director review.
+          Describe the activities you’ve done. You can save as draft or submit for director review. When you submit, the server records the exact time (UTC) — directors see it in-app and in email, even if they were offline when you sent it.
         </p>
       </div>
 

@@ -121,7 +121,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
   // Generate PDF for invoice
   router.post(
     "/:invoiceId/pdf",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const { invoiceId } = req.params;
@@ -184,7 +184,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
   // Get invoice analytics
   router.get(
     "/analytics",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -211,7 +211,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
   // List invoices
   router.get(
     "/",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -272,7 +272,7 @@ export default function invoiceAutomationRoutes(prisma: PrismaClient): Router {
   // Get single invoice
   router.get(
     "/:invoiceId",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const { invoiceId } = req.params;

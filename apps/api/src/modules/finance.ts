@@ -13,7 +13,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Get finance dashboard with invoice approvals
   router.get(
     "/dashboard",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -95,7 +95,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Get invoices pending approval
   router.get(
     "/invoices/pending",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -150,10 +150,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Approve invoice
+  // Approve invoice (money matters — org admin only)
   router.post(
     "/invoices/:id/approve",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -236,10 +236,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Reject invoice
+  // Reject invoice (money matters — org admin only)
   router.post(
     "/invoices/:id/reject",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -329,10 +329,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Generate approved invoice PDF
+  // Generate approved invoice PDF (money matters — org admin only)
   router.post(
     "/invoices/:id/generate",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director_admin]),
+    requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -1376,6 +1376,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
         res.status(403).json({ error: "Only admin can approve payment/expense submissions. Director can view only." });
         return;
       }
+      if (existing.entityType === "invoice" || existing.entityType?.includes("invoice")) {
+        res.status(403).json({
+          error: "Directors cannot approve or reject invoice workflows. Use Finance or Admin."
+        });
+        return;
+      }
 
       if (status === "approved") {
         try {
@@ -1417,7 +1423,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Add invoice side panel functionality
   router.get(
     "/invoices",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
@@ -1566,7 +1572,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Get invoices by status
   router.get(
     "/invoices/:status",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const { status } = req.params;
@@ -1788,7 +1794,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Get invoice PDF
   router.get(
     "/invoices/:invoiceId/pdf",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       try {
         const { invoiceId } = req.params;

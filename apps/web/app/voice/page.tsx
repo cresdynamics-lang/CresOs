@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 
 interface VoiceRecording {
@@ -25,7 +26,9 @@ interface CallRecording {
 }
 
 export default function VoicePage() {
-  const { auth, apiFetch } = useAuth();
+  const router = useRouter();
+  const { auth, apiFetch, hydrated } = useAuth();
+  const canAccessVoice = auth.roleKeys.some((r) => ["admin", "finance"].includes(r));
   const [activeTab, setActiveTab] = useState<"recordings" | "calls" | "transcribe">("recordings");
   const [recordings, setRecordings] = useState<VoiceRecording[]>([]);
   const [callRecordings, setCallRecordings] = useState<CallRecording[]>([]);
@@ -35,9 +38,16 @@ export default function VoicePage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canAccessVoice) {
+      router.replace("/dashboard");
+    }
+  }, [hydrated, auth.accessToken, canAccessVoice, router]);
+
   // Fetch voice recordings
   useEffect(() => {
-    if (!auth.accessToken) return;
+    if (!auth.accessToken || !canAccessVoice) return;
     
     const fetchRecordings = async () => {
       try {
@@ -52,11 +62,11 @@ export default function VoicePage() {
     };
 
     fetchRecordings();
-  }, [auth.accessToken, apiFetch]);
+  }, [auth.accessToken, apiFetch, canAccessVoice]);
 
   // Fetch call recordings
   useEffect(() => {
-    if (!auth.accessToken) return;
+    if (!auth.accessToken || !canAccessVoice) return;
     
     const fetchCallRecordings = async () => {
       try {
@@ -71,7 +81,7 @@ export default function VoicePage() {
     };
 
     fetchCallRecordings();
-  }, [auth.accessToken, apiFetch]);
+  }, [auth.accessToken, apiFetch, canAccessVoice]);
 
   const startRecording = () => {
     setIsRecording(true);

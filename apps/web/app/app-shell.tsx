@@ -7,6 +7,7 @@ import { useAuth } from "./auth-context";
 import { OnboardingPrompt } from "./onboarding-prompt";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
+import { ALL_APP_ROLE_KEYS } from "../lib/app-roles";
 
 type NavSection = {
   title: string;
@@ -17,23 +18,23 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", roles: ["admin", "director_admin", "finance", "developer", "sales", "analyst", "client"] },
+      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
       { href: "/schedule", label: "Tasks", roles: ["admin", "director_admin", "developer", "sales", "analyst"] }
     ]
   },
   {
     title: "Community",
     items: [
-      { href: "/community", label: "Community", roles: ["admin", "director_admin", "finance", "developer", "sales", "analyst", "client"] }
+      { href: "/community", label: "Community", roles: [...ALL_APP_ROLE_KEYS] }
     ]
   },
   {
     title: "Sales",
     items: [
-      { href: "/sales/invoices", label: "Invoices", roles: ["admin", "director_admin", "sales"] },
-      { href: "/sales/reports", label: "Reports", roles: ["admin", "director_admin", "sales"] },
-      { href: "/sales/leads", label: "Leads", roles: ["admin", "director_admin", "sales"] },
-      { href: "/sales/crm", label: "CRM", roles: ["admin", "director_admin", "sales"] }
+      { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
+      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
+      { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
+      { href: "/crm", label: "CRM", roles: ["admin", "sales"] }
     ]
   },
   {
@@ -47,10 +48,10 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Finance",
     items: [
-      { href: "/finance", label: "Finance", roles: ["admin", "director_admin", "finance", "analyst"] },
-      { href: "/finance/invoices", label: "Invoice Approvals", roles: ["admin", "director_admin", "finance"] },
+      { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst"] },
+      { href: "/finance/invoices", label: "Invoice Approvals", roles: ["admin", "finance"] },
       { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] },
-      { href: "/voice", label: "Voice", roles: ["admin", "director_admin", "finance"] }
+      { href: "/voice", label: "Voice", roles: ["admin", "finance"] }
     ]
   },
   {
@@ -178,11 +179,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </p>
                 <nav className="flex flex-col gap-0.5">
                   {section.items.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive =
+                      pathname === item.href ||
+                      (item.href === "/reports" && pathname.startsWith("/reports")) ||
+                      (item.href === "/leads" && pathname.startsWith("/leads")) ||
+                      (item.href === "/crm" && pathname.startsWith("/crm"));
                     const showAlarm = item.href === "/reports" && overdueCount > 0;
                     return (
                       <Link
-                        key={item.href}
+                        key={`${section.title}-${item.href}-${item.label}`}
                         href={item.href}
                         className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isActive
@@ -215,11 +220,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
                 <nav className="flex flex-col gap-1">
                   {section.items.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive =
+                      pathname === item.href ||
+                      (item.href === "/reports" && pathname.startsWith("/reports")) ||
+                      (item.href === "/leads" && pathname.startsWith("/leads")) ||
+                      (item.href === "/crm" && pathname.startsWith("/crm"));
                     const showAlarm = item.href === "/reports" && overdueCount > 0;
                     return (
                       <Link
-                        key={item.href}
+                        key={`${section.title}-${item.href}-${item.label}`}
                         href={item.href}
                         className={`flex items-center justify-center rounded-lg p-2 text-xs font-medium transition-colors relative ${
                           isActive

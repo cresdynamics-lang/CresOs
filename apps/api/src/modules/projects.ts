@@ -5,8 +5,10 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { generateClientProjectMessage } from "./ai-reminders";
-import { notifyDirectors } from "./director-notifications";
+import { getDirectorUsers, notifyDirectors } from "./director-notifications";
 import { notifyProjectExecutionStakeholders } from "./project-stakeholder-notifications";
+import { syncLeadAndClientFromProject } from "./project-lead-sync";
+import { getProjectDeveloperAccess, getAcceptedDeveloperIds } from "../lib/project-access";
 
 export default function projectsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -14,7 +16,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // List users that can be assigned as developer (developer role in org)
   router.get(
     "/assignable-developers",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.developer]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.developer, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const memberIds = (await prisma.orgMember.findMany({ where: { orgId }, select: { userId: true } })).map((m) => m.userId);
@@ -40,12 +42,19 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const isFinance = roleKeys.includes(ROLE_KEYS.finance);
       const isSales = roleKeys.includes(ROLE_KEYS.sales);
 
-      let where: { orgId: string; deletedAt: null; createdByUserId?: string; approvalStatus?: string; assignedDeveloperId?: string } = { orgId, deletedAt: null };
+      let where: Record<string, unknown> = { orgId, deletedAt: null };
       if (isDirector || roleKeys.includes(ROLE_KEYS.admin) || roleKeys.includes(ROLE_KEYS.analyst)) {
         // director/admin/analyst: all
       } else if (isDeveloper && !isDirector) {
         where.approvalStatus = "approved";
-        where.assignedDeveloperId = userId;
+        where.OR = [
+          { assignedDeveloperId: userId },
+          {
+            developerAssignments: {
+              some: { userId, status: { in: ["pending", "accepted"] } }
+            }
+          }
+        ];
       } else if (isFinance) {
         where.approvalStatus = "approved";
       } else if (isSales) {
@@ -55,7 +64,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }
 
       const projects = await prisma.project.findMany({
-        where,
+        where: where as any,
         orderBy: { createdAt: "desc" },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -63,6 +72,27 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           approvedBy: { select: { id: true, name: true } }
         }
       });
+
+      const projectIds = projects.map((p) => p.id);
+      const emptySummary = { todo: 0, in_progress: 0, blocked: 0, done: 0 };
+      const taskSummaryByProject: Record<string, typeof emptySummary> = {};
+      if (projectIds.length > 0) {
+        for (const id of projectIds) {
+          taskSummaryByProject[id] = { ...emptySummary };
+        }
+        const grouped = await prisma.task.groupBy({
+          by: ["projectId", "status"],
+          where: { orgId, projectId: { in: projectIds }, deletedAt: null },
+          _count: { _all: true }
+        });
+        for (const row of grouped) {
+          const pid = row.projectId;
+          const st = row.status as keyof typeof emptySummary;
+          if (taskSummaryByProject[pid] && st in taskSummaryByProject[pid]) {
+            taskSummaryByProject[pid][st] = row._count._all;
+          }
+        }
+      }
 
       // Strip price/phone/email for developer view
       const stripSensitive = isDeveloper && !isDirector;
@@ -72,7 +102,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           price: p.price != null ? Number(p.price) : null,
           amountReceived: p.amountReceived != null ? Number(p.amountReceived) : 0,
           managementMonthlyAmount: p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : null,
-          managementMonths: p.managementMonths
+          managementMonths: p.managementMonths,
+          taskSummary: taskSummaryByProject[p.id] ?? { ...emptySummary }
         };
         if (stripSensitive) {
           delete (row as any).phone;
@@ -87,10 +118,10 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Create project: sales (with approval flow) or developer (legacy, auto-approved)
+  // Create project: Sales (demo/project → pending director approval) or Director/Admin (approved immediately). Developers cannot create projects.
   router.post(
     "/",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.sales]),
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.sales, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -106,6 +137,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         projectDetails?: string;
         status?: string;
         assignedDeveloperId?: string;
+        assignedDeveloperIds?: string[];
         timeline?: { date?: string; title?: string }[];
         startDate?: string;
         endDate?: string;
@@ -114,14 +146,43 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(400).json({ error: "Name is required" });
         return;
       }
-      const isSalesCreate = body.type != null && ["demo", "project"].includes(body.type);
-      const price = body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : undefined;
-      if (isSalesCreate && body.type === "project" && (price === undefined || Number(price) < 0)) {
-        // price optional for demo
-        if (body.type === "project") {
-          // allow null/omit for draft; require for full project if you want
-        }
+      const isDirectorLike =
+        req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
+      if (!isDirectorLike && !isSales) {
+        res.status(403).json({ error: "Only Sales or Director can create projects" });
+        return;
       }
+      const isSalesCreate = body.type != null && ["demo", "project"].includes(body.type);
+      if (isSales && !isDirectorLike && !isSalesCreate) {
+        res.status(400).json({ error: "Sales must set type to demo or project" });
+        return;
+      }
+      const price = body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : undefined;
+      const rawDevIds = Array.isArray(body.assignedDeveloperIds)
+        ? body.assignedDeveloperIds
+        : body.assignedDeveloperId
+          ? [body.assignedDeveloperId]
+          : [];
+      const developerIds = [...new Set(rawDevIds.map((x) => String(x).trim()).filter(Boolean))];
+
+      let approvalStatus: string;
+      let approvedById: string | null = null;
+      let approvedAt: Date | null = null;
+      if (isDirectorLike) {
+        approvalStatus = "approved";
+        approvedById = userId;
+        approvedAt = new Date();
+      } else if (isSalesCreate) {
+        approvalStatus = "pending_approval";
+      } else {
+        approvalStatus = "approved";
+      }
+
+      const primaryDev =
+        (body.assignedDeveloperId && String(body.assignedDeveloperId).trim()) ||
+        (developerIds.length > 0 ? developerIds[0] : null);
+
       const project = await prisma.project.create({
         data: {
           orgId,
@@ -139,8 +200,10 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           email: body.email?.trim() || null,
           price: price ?? null,
           projectDetails: body.projectDetails?.trim() || null,
-          approvalStatus: isSalesCreate ? "pending_approval" : "approved",
-          assignedDeveloperId: body.assignedDeveloperId || null,
+          approvalStatus,
+          approvedById,
+          approvedAt,
+          assignedDeveloperId: primaryDev || null,
           timeline: body.timeline ?? null
         },
         include: {
@@ -148,6 +211,38 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           assignedDeveloper: { select: { id: true, name: true, email: true } }
         }
       });
+
+      if (developerIds.length > 0 && isDirectorLike) {
+        const developerRole = await prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.developer } });
+        for (const devId of developerIds) {
+          if (!developerRole) break;
+          const hasDev = await prisma.userRole.findFirst({ where: { userId: devId, roleId: developerRole.id } });
+          if (!hasDev) continue;
+          await prisma.projectDeveloperAssignment
+            .create({
+              data: {
+                orgId,
+                projectId: project.id,
+                userId: devId,
+                status: "pending",
+                invitedById: userId
+              }
+            })
+            .catch(() => {});
+          await prisma.notification.create({
+            data: {
+              orgId,
+              channel: "in_app",
+              to: devId,
+              subject: "Project assignment",
+              body: `You were invited to work on "${project.name}". Open Projects to accept or decline.`,
+              status: "sent",
+              type: "project.assignment",
+              tier: "execution"
+            }
+          });
+        }
+      }
 
       await prisma.eventLog.create({
         data: {
@@ -160,15 +255,29 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         }
       });
       const actorName = project.createdBy?.name || project.createdBy?.email || "A user";
-      await notifyDirectors(prisma, orgId, "New project created", `Project "${project.name}" was created by ${actorName}. Status: ${project.approvalStatus}.`);
+      if (approvalStatus === "pending_approval") {
+        await notifyDirectors(
+          prisma,
+          orgId,
+          "New project pending approval",
+          `Project "${project.name}" was created by ${actorName} and needs director approval.`
+        );
+      } else if (!isDirectorLike) {
+        await notifyDirectors(prisma, orgId, "New project created", `Project "${project.name}" was created by ${actorName}. Status: ${project.approvalStatus}.`);
+      }
+      try {
+        await syncLeadAndClientFromProject(prisma, orgId, project.id);
+      } catch (e) {
+        console.error("syncLeadAndClientFromProject after create:", e);
+      }
       res.status(201).json(project);
     }
   );
 
-  // Director: approve or reject project (makes it visible to developer + finance)
+  // Director: approve or reject project (makes it visible to developer + finance) — director only, not admin
   router.patch(
     "/:projectId/approve",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.director]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -194,10 +303,30 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         },
         include: { approvedBy: { select: { id: true, name: true } }, assignedDeveloper: { select: { id: true, name: true, email: true } } }
       });
+      if (body.approvalStatus === "approved" && project.assignedDeveloperId) {
+        await prisma.projectDeveloperAssignment.upsert({
+          where: {
+            projectId_userId: { projectId, userId: project.assignedDeveloperId }
+          },
+          create: {
+            orgId,
+            projectId,
+            userId: project.assignedDeveloperId,
+            status: "accepted",
+            invitedById: userId
+          },
+          update: { status: "accepted", respondedAt: new Date() }
+        });
+      }
       await prisma.eventLog.create({
         data: { orgId, actorId: userId, type: "project.approved", entityType: "project", entityId: projectId, metadata: { approvalStatus: body.approvalStatus } }
       });
       await notifyDirectors(prisma, orgId, "Project approval updated", `Project "${project.name}" was ${body.approvalStatus}.`);
+      try {
+        await syncLeadAndClientFromProject(prisma, orgId, projectId);
+      } catch (e) {
+        console.error("syncLeadAndClientFromProject after approve:", e);
+      }
       res.json(updated);
     }
   );
@@ -286,9 +415,14 @@ export default function projectsRouter(prisma: PrismaClient): Router {
             },
             "Delivery timeline updated",
             `Project "${updated.name}" delivery timeline was updated.`,
-            { type: "project.timeline", excludeUserId: userId }
+            { type: "project.timeline", excludeUserId: userId, projectId: updated.id }
           );
         }
+      }
+      try {
+        await syncLeadAndClientFromProject(prisma, orgId, projectId);
+      } catch (e) {
+        console.error("syncLeadAndClientFromProject after patch:", e);
       }
       res.json(updated);
     }
@@ -389,7 +523,23 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           createdBy: { select: { id: true, name: true, email: true } },
           assignedDeveloper: { select: { id: true, name: true, email: true } },
           approvedBy: { select: { id: true, name: true } },
-          tasks: { where: { deletedAt: null }, orderBy: { dueDate: "asc" } },
+          developerAssignments: {
+            include: {
+              user: { select: { id: true, name: true, email: true } },
+              invitedBy: { select: { id: true, name: true, email: true } }
+            }
+          },
+          tasks: {
+            where: { deletedAt: null },
+            orderBy: { dueDate: "asc" },
+            include: {
+              comments: {
+                where: { deletedAt: null },
+                orderBy: { createdAt: "asc" },
+                include: { author: { select: { id: true, name: true, email: true } } }
+              }
+            }
+          },
           milestones: { where: { deletedAt: null }, orderBy: { dueDate: "asc" } }
         }
       });
@@ -401,10 +551,16 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const isDeveloper = req.auth!.roleKeys.includes(ROLE_KEYS.developer);
       const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
-      // Developer (not director): only if approved and assigned to me
-      if (isDeveloper && !isDirector && (project.approvalStatus !== "approved" || project.assignedDeveloperId !== userId)) {
-        res.status(404).json({ error: "Project not found" });
-        return;
+      if (isDeveloper && !isDirector) {
+        if (project.approvalStatus !== "approved") {
+          res.status(404).json({ error: "Project not found" });
+          return;
+        }
+        const access = await getProjectDeveloperAccess(prisma, project, userId);
+        if (access === "none") {
+          res.status(404).json({ error: "Project not found" });
+          return;
+        }
       }
       if (isFinance && project.approvalStatus !== "approved") {
         res.status(404).json({ error: "Project not found" });
@@ -431,7 +587,122 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         delete out.managementMonthlyAmount;
         delete out.managementMonths;
       }
+      const mentionIds = new Set<string>();
+      if (project.createdByUserId) mentionIds.add(project.createdByUserId);
+      for (const id of await getAcceptedDeveloperIds(prisma, project.id)) {
+        mentionIds.add(id);
+      }
+      for (const d of await getDirectorUsers(prisma, orgId)) {
+        mentionIds.add(d.id);
+      }
+      out.mentionableUsers = await prisma.user.findMany({
+        where: { id: { in: [...mentionIds] }, deletedAt: null },
+        select: { id: true, name: true, email: true }
+      });
+      out.developerAccess = await getProjectDeveloperAccess(prisma, project, userId);
       res.json(out);
+    }
+  );
+
+  // Director invites additional developers (pending accept)
+  router.post(
+    "/:projectId/developer-assignments",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const { userIds } = req.body as { userIds?: string[] };
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        res.status(400).json({ error: "userIds array is required" });
+        return;
+      }
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+      const developerRole = await prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.developer } });
+      if (!developerRole) {
+        res.status(400).json({ error: "No developer role in org" });
+        return;
+      }
+      const created: unknown[] = [];
+      for (const raw of userIds) {
+        const uid = String(raw).trim();
+        if (!uid) continue;
+        const hasDev = await prisma.userRole.findFirst({ where: { userId: uid, roleId: developerRole.id } });
+        if (!hasDev) continue;
+        const row = await prisma.projectDeveloperAssignment
+          .upsert({
+            where: { projectId_userId: { projectId, userId: uid } },
+            create: {
+              orgId,
+              projectId,
+              userId: uid,
+              status: "pending",
+              invitedById: userId
+            },
+            update: { status: "pending", invitedById: userId, respondedAt: null }
+          })
+          .catch(() => null);
+        if (row) {
+          created.push(row);
+          await prisma.notification.create({
+            data: {
+              orgId,
+              channel: "in_app",
+              to: uid,
+              subject: "Project assignment",
+              body: `You were invited to work on "${project.name}". Open Projects to accept or decline.`,
+              status: "sent",
+              type: "project.assignment",
+              tier: "execution"
+            }
+          });
+        }
+      }
+      res.status(201).json({ assignments: created });
+    }
+  );
+
+  router.patch(
+    "/:projectId/developer-assignments/:assignmentId/respond",
+    requireRoles([ROLE_KEYS.developer]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId, assignmentId } = req.params;
+      const { accept } = req.body as { accept?: boolean };
+      const row = await prisma.projectDeveloperAssignment.findFirst({
+        where: { id: assignmentId, projectId, orgId }
+      });
+      if (!row) {
+        res.status(404).json({ error: "Assignment not found" });
+        return;
+      }
+      if (row.userId !== userId) {
+        res.status(403).json({ error: "You can only respond to your own invitation" });
+        return;
+      }
+      const now = new Date();
+      const status = accept === false ? "declined" : "accepted";
+      const updated = await prisma.projectDeveloperAssignment.update({
+        where: { id: assignmentId },
+        data: { status, respondedAt: now }
+      });
+      if (status === "accepted") {
+        const proj = await prisma.project.findFirst({ where: { id: projectId } });
+        if (proj && !proj.assignedDeveloperId) {
+          await prisma.project.update({
+            where: { id: projectId },
+            data: { assignedDeveloperId: row.userId }
+          });
+        }
+      }
+      res.json(updated);
     }
   );
 
@@ -449,8 +720,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      if (!isDirector && project.assignedDeveloperId !== userId) {
-        res.status(403).json({ error: "Only the assigned developer can mark as reviewed" });
+      const access = await getProjectDeveloperAccess(prisma, project, userId);
+      if (!isDirector && access !== "active") {
+        res.status(403).json({ error: "Only an assigned developer who accepted the project can mark as reviewed" });
         return;
       }
       const updated = await prisma.project.update({
@@ -477,8 +749,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      if (!isDirector && project.assignedDeveloperId !== userId) {
-        res.status(403).json({ error: "Only the assigned developer can request handoff" });
+      const handoffAccess = await getProjectDeveloperAccess(prisma, project, userId);
+      if (!isDirector && handoffAccess !== "active") {
+        res.status(403).json({ error: "Only an accepted developer on this project can request handoff" });
         return;
       }
       const toUserId = body.toUserId?.trim();
@@ -581,11 +854,22 @@ export default function projectsRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/:projectId/milestones",
-    requireRoles([ROLE_KEYS.developer]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
     const { projectId } = req.params;
+    const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+    const project = await prisma.project.findFirst({ where: { id: projectId, orgId, deletedAt: null } });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    const access = await getProjectDeveloperAccess(prisma, project, userId);
+    if (!isDirector && access !== "active") {
+      res.status(403).json({ error: "Only an accepted developer on this project can add milestones" });
+      return;
+    }
     const { name, dueDate } = req.body as {
       name: string;
       dueDate?: string;
@@ -621,18 +905,32 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Tasks (assigned developer or director/analyst only for add/edit)
   router.get(
     "/:projectId/tasks",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { projectId } = req.params;
       const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isAnalyst = req.auth!.roleKeys.includes(ROLE_KEYS.analyst);
+      const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
+      const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
       const project = await prisma.project.findFirst({ where: { id: projectId, orgId, deletedAt: null } });
       if (!project) {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      if (!isDirector && !req.auth!.roleKeys.includes(ROLE_KEYS.analyst) && project.assignedDeveloperId !== userId) {
+      if (isFinance && project.approvalStatus !== "approved") {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+      const devAccess = await getProjectDeveloperAccess(prisma, project, userId);
+      const canSeeTasks =
+        isDirector ||
+        isAnalyst ||
+        (isFinance && project.approvalStatus === "approved") ||
+        devAccess !== "none" ||
+        (isSales && project.createdByUserId === userId);
+      if (!canSeeTasks) {
         res.status(404).json({ error: "Project not found" });
         return;
       }
@@ -657,8 +955,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      if (!isDirector && project.assignedDeveloperId !== userId) {
-        res.status(403).json({ error: "Only the assigned developer can add tasks" });
+      const access = await getProjectDeveloperAccess(prisma, project, userId);
+      if (!isDirector && access !== "active") {
+        res.status(403).json({ error: "Only a developer who accepted this project can add tasks" });
         return;
       }
       const { title, description, milestoneId, dueDate } = req.body as {
@@ -692,7 +991,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         { name: project.name, createdByUserId: project.createdByUserId, assignedDeveloperId: project.assignedDeveloperId },
         "Task created",
         `Task "${task.title}" was added to project "${project.name}".`,
-        { type: "project.task", excludeUserId: userId }
+        { type: "project.task", excludeUserId: userId, projectId: project.id }
       );
       res.status(201).json(task);
     }
@@ -701,24 +1000,39 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Task comments (assigned developer or director/analyst)
   router.get(
     "/tasks/:taskId/comments",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { taskId } = req.params;
       const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isAnalyst = req.auth!.roleKeys.includes(ROLE_KEYS.analyst);
+      const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
+      const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
       const task = await prisma.task.findUnique({ where: { id: taskId }, include: { project: true } });
       if (!task || task.orgId !== orgId) {
         res.status(404).json({ error: "Task not found" });
         return;
       }
-      if (!isDirector && !req.auth!.roleKeys.includes(ROLE_KEYS.analyst) && task.project.assignedDeveloperId !== userId) {
+      if (isFinance && task.project.approvalStatus !== "approved") {
+        res.status(404).json({ error: "Task not found" });
+        return;
+      }
+      const devAccess = await getProjectDeveloperAccess(prisma, task.project, userId);
+      const canSeeComments =
+        isDirector ||
+        isAnalyst ||
+        (isFinance && task.project.approvalStatus === "approved") ||
+        devAccess !== "none" ||
+        (isSales && task.project.createdByUserId === userId);
+      if (!canSeeComments) {
         res.status(404).json({ error: "Task not found" });
         return;
       }
       const comments = await prisma.taskComment.findMany({
         where: { orgId, taskId, deletedAt: null },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, name: true, email: true } } }
       });
       res.json(comments);
     }
@@ -726,34 +1040,69 @@ export default function projectsRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/tasks/:taskId/comments",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.sales]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { taskId } = req.params;
       const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       const task = await prisma.task.findUnique({ where: { id: taskId }, include: { project: true } });
       if (!task || task.orgId !== orgId) {
         res.status(404).json({ error: "Task not found" });
         return;
       }
-      if (!isDirector && task.project.assignedDeveloperId !== userId) {
-        res.status(403).json({ error: "Only the assigned developer can add comments" });
+      const access = await getProjectDeveloperAccess(prisma, task.project, userId);
+      const salesCanComment = isSales && task.project.createdByUserId === userId;
+      if (!isDirector && !salesCanComment && access !== "active") {
+        res.status(403).json({ error: "Only Sales (project owner), Director, or an accepted developer on this project can add comments" });
         return;
       }
-      const { body, type } = req.body as { body: string; type?: string };
+      const { body, type, audience, mentionedUserIds } = req.body as {
+        body: string;
+        type?: string;
+        audience?: string;
+        mentionedUserIds?: string[];
+      };
       if (!body?.trim()) {
         res.status(400).json({ error: "Body is required" });
         return;
       }
-      const allowedTypes = ["progress", "blocker", "completion", "scope_issue"];
+      const allowedTypes = ["progress", "blocker", "completion", "scope_issue", "director_note"];
       const commentType = type && allowedTypes.includes(type) ? type : "progress";
+      const aud = audience && ["all", "sales", "developers"].includes(audience) ? audience : "all";
+      const mentions = Array.isArray(mentionedUserIds)
+        ? [...new Set(mentionedUserIds.map((x) => String(x).trim()).filter(Boolean))]
+        : [];
       const comment = await prisma.taskComment.create({
-        data: { orgId, taskId, authorId: userId, body: body.trim(), type: commentType }
+        data: {
+          orgId,
+          taskId,
+          authorId: userId,
+          body: body.trim(),
+          type: commentType,
+          audience: aud,
+          mentionedUserIds: mentions
+        }
       });
       await prisma.eventLog.create({
         data: { orgId, actorId: userId, type: "task.comment.added", entityType: "task", entityId: taskId, metadata: { commentId: comment.id } }
       });
+      for (const mid of mentions) {
+        if (mid === userId) continue;
+        await prisma.notification.create({
+          data: {
+            orgId,
+            channel: "in_app",
+            to: mid,
+            subject: "You were mentioned on a task",
+            body: `On project "${task.project.name}": ${body.trim().slice(0, 240)}${body.length > 240 ? "…" : ""}`,
+            status: "sent",
+            type: "task.mention",
+            tier: "execution"
+          }
+        });
+      }
       res.status(201).json(comment);
     }
   );
@@ -772,8 +1121,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Task not found" });
         return;
       }
-      if (!isDirector && existing.project.assignedDeveloperId !== userId) {
-        res.status(403).json({ error: "Only the assigned developer can edit this task" });
+      const access = await getProjectDeveloperAccess(prisma, existing.project, userId);
+      if (!isDirector && access !== "active") {
+        res.status(403).json({ error: "Only an accepted developer on this project can edit this task" });
         return;
       }
     const { status, priority, blockedReason, dueDate, estimatedHours, actualHours } =
@@ -855,7 +1205,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       },
       "Task updated",
       `Task "${task.title}" on project "${existing.project.name}" was updated. Status: ${task.status}.`,
-      { type: "project.task", excludeUserId: userId }
+      { type: "project.task", excludeUserId: userId, projectId: existing.project.id }
     );
     res.json(task);
     }

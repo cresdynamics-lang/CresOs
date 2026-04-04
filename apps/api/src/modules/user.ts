@@ -3,6 +3,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { getProjectDeveloperAccess } from "../lib/project-access";
 
 export default function userRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -583,6 +584,136 @@ export default function userRouter(prisma: PrismaClient): Router {
         res.status(500).json({ 
           error: "Failed to update security settings", 
           message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Set "what I'm working on" (developer/sales) — visible to admin + director on strategic dashboard
+  router.patch(
+    "/current-focus",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.sales]),
+    async (req, res) => {
+      try {
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const body = req.body as { projectId?: string | null; note?: string | null };
+
+        const projectId =
+          body.projectId === undefined || body.projectId === null || body.projectId === ""
+            ? null
+            : String(body.projectId);
+
+        const note =
+          body.note === undefined || body.note === null
+            ? null
+            : String(body.note).trim() || null;
+
+        if (projectId === null) {
+          await prisma.user.update({
+            where: { id: userId, orgId },
+            data: {
+              currentFocusProjectId: null,
+              currentFocusNote: note,
+              currentFocusUpdatedAt: new Date()
+            }
+          });
+          res.json({ success: true, data: { projectId: null, note, updatedAt: new Date().toISOString() } });
+          return;
+        }
+
+        const project = await prisma.project.findFirst({
+          where: { id: projectId, orgId, deletedAt: null, approvalStatus: "approved" }
+        });
+        if (!project) {
+          res.status(404).json({ error: "Project not found or not approved" });
+          return;
+        }
+
+        const roleKeys = req.auth!.roleKeys;
+        const isDev = roleKeys.includes(ROLE_KEYS.developer);
+        const isSales = roleKeys.includes(ROLE_KEYS.sales);
+        const devAccess = await getProjectDeveloperAccess(prisma, project, userId);
+        const allowed =
+          (isDev && devAccess === "active") ||
+          (isSales && project.createdByUserId === userId);
+        if (!allowed) {
+          res.status(403).json({
+            error: "You can only set focus on a project you are assigned to (developer) or created (sales)."
+          });
+          return;
+        }
+
+        const updated = await prisma.user.update({
+          where: { id: userId, orgId },
+          data: {
+            currentFocusProjectId: projectId,
+            currentFocusNote: note,
+            currentFocusUpdatedAt: new Date()
+          },
+          select: {
+            currentFocusUpdatedAt: true,
+            currentFocusNote: true,
+            currentFocusProject: {
+              select: { id: true, name: true, status: true }
+            }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: {
+            projectId: updated.currentFocusProject?.id ?? projectId,
+            projectName: updated.currentFocusProject?.name,
+            note: updated.currentFocusNote,
+            updatedAt: updated.currentFocusUpdatedAt?.toISOString()
+          }
+        });
+      } catch (error) {
+        console.error("Error updating current focus:", error);
+        res.status(500).json({
+          error: "Failed to update current focus",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.get(
+    "/current-focus",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.sales]),
+    async (req, res) => {
+      try {
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const user = await prisma.user.findFirst({
+          where: { id: userId, orgId },
+          select: {
+            currentFocusNote: true,
+            currentFocusUpdatedAt: true,
+            currentFocusProject: {
+              select: { id: true, name: true, status: true }
+            }
+          }
+        });
+        if (!user) {
+          res.status(404).json({ error: "User not found" });
+          return;
+        }
+        res.json({
+          success: true,
+          data: {
+            projectId: user.currentFocusProject?.id ?? null,
+            project: user.currentFocusProject,
+            note: user.currentFocusNote,
+            updatedAt: user.currentFocusUpdatedAt?.toISOString() ?? null
+          }
+        });
+      } catch (error) {
+        console.error("Error loading current focus:", error);
+        res.status(500).json({
+          error: "Failed to load current focus",
+          message: error instanceof Error ? error.message : "Unknown error"
         });
       }
     }

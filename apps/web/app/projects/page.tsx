@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { emitDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 
 type Developer = { id: string; name: string | null; email: string };
+
+type TaskSummary = { todo: number; in_progress: number; blocked: number; done: number };
 
 type Project = {
   id: string;
@@ -26,6 +29,7 @@ type Project = {
   endDate?: string | null;
   clientLink?: string | null;
   timeline?: { date?: string; title?: string }[] | null;
+  taskSummary?: TaskSummary;
 };
 
 type ClientMessageResult = { message: string; link?: string };
@@ -44,6 +48,13 @@ export default function ProjectsPage() {
 
   const isSales = auth.roleKeys.some((r) => ["admin", "director_admin", "sales"].includes(r));
   const isDirector = auth.roleKeys.some((r) => ["admin", "director_admin"].includes(r));
+  /** Developers alone cannot create projects; Sales, Director, and Admin can. */
+  const canCreateProject =
+    auth.roleKeys.includes("sales") ||
+    auth.roleKeys.includes("director_admin") ||
+    auth.roleKeys.includes("admin");
+  /** Project approval is director-only (not admin). */
+  const canApproveProject = auth.roleKeys.includes("director_admin");
   const isFinance = auth.roleKeys.includes("finance");
   const canGenerateMessage = auth.roleKeys.some((r) => ["admin", "director_admin", "sales", "developer", "analyst"].includes(r));
 
@@ -71,7 +82,8 @@ export default function ProjectsPage() {
           startDate: p.startDate,
           endDate: p.endDate,
           clientLink: p.clientLink,
-          timeline: p.timeline
+          timeline: p.timeline,
+          taskSummary: p.taskSummary
         }))
       );
     } catch {
@@ -84,12 +96,12 @@ export default function ProjectsPage() {
   }, [loadProjects]);
 
   useEffect(() => {
-    if (!createOpen || !isSales) return;
+    if (!createOpen || !canCreateProject) return;
     apiFetch("/projects/assignable-developers")
       .then((r) => r.ok && r.json())
       .then((list) => setDevelopers(Array.isArray(list) ? list : []))
       .catch(() => setDevelopers([]));
-  }, [createOpen, isSales, apiFetch]);
+  }, [createOpen, canCreateProject, apiFetch]);
 
   async function handleApprove(projectId: string) {
     setApprovingId(projectId);
@@ -99,7 +111,10 @@ export default function ProjectsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approvalStatus: "approved" })
       });
-      if (res.ok) await loadProjects();
+      if (res.ok) {
+        await loadProjects();
+        emitDataRefresh();
+      }
     } finally {
       setApprovingId(null);
     }
@@ -160,10 +175,10 @@ export default function ProjectsPage() {
         <div>
           <h2 className="text-lg font-semibold text-slate-50">Projects</h2>
           <p className="text-sm text-slate-300">
-            Track projects, milestones, and tasks. Sales create projects for director approval; developers receive approved projects and tasks; finance sees contact and price after approval.
+            Sales and Directors create projects. Developers only work on assigned projects (accept when invited). Directors can invite multiple developers and comment on tasks; daily reports remain on Developer reports.
           </p>
         </div>
-        {isSales && (
+        {canCreateProject && (
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
@@ -207,6 +222,18 @@ export default function ProjectsPage() {
                 Dev: {project.assignedDeveloper.name || project.assignedDeveloper.email}
               </p>
             )}
+            {project.approvalStatus === "approved" && project.taskSummary && (
+              <p className="mt-2 text-xs text-slate-400">
+                Delivery:{" "}
+                <span className="text-emerald-400/90">Done {project.taskSummary.done}</span>
+                {" · "}
+                <span className="text-sky-300/90">In progress {project.taskSummary.in_progress}</span>
+                {" · "}
+                <span className="text-amber-300/90">Blocked {project.taskSummary.blocked}</span>
+                {" · "}
+                <span className="text-slate-500">Todo {project.taskSummary.todo}</span>
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-1">
               {project.approvalStatus === "pending_approval" && (
                 <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-200">
@@ -218,7 +245,7 @@ export default function ProjectsPage() {
                   Approved
                 </span>
               )}
-              {isDirector && project.approvalStatus === "pending_approval" && (
+              {canApproveProject && project.approvalStatus === "pending_approval" && (
                 <button
                   type="button"
                   onClick={() => handleApprove(project.id)}
@@ -261,15 +288,20 @@ export default function ProjectsPage() {
       </div>
       {projects.length === 0 && (
         <div className="shell text-center text-sm text-slate-400">
-          No projects yet. {isSales && "Create one to get started."}
+          No projects yet. {canCreateProject && "Create one to get started."}
         </div>
       )}
 
-      {createOpen && isSales && (
+      {createOpen && canCreateProject && (
         <CreateProjectModal
           developers={developers}
+          directorMode={isDirector}
           onClose={() => setCreateOpen(false)}
-          onCreated={() => { setCreateOpen(false); loadProjects(); }}
+          onCreated={() => {
+            setCreateOpen(false);
+            loadProjects();
+            emitDataRefresh();
+          }}
           apiFetch={apiFetch}
         />
       )}
@@ -306,11 +338,13 @@ export default function ProjectsPage() {
 
 function CreateProjectModal({
   developers,
+  directorMode,
   onClose,
   onCreated,
   apiFetch
 }: {
   developers: Developer[];
+  directorMode: boolean;
   onClose: () => void;
   onCreated: () => void;
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
@@ -324,6 +358,7 @@ function CreateProjectModal({
   const [projectDetails, setProjectDetails] = useState("");
   const [status, setStatus] = useState("planned");
   const [assignedDeveloperId, setAssignedDeveloperId] = useState("");
+  const [assignedDeveloperIds, setAssignedDeveloperIds] = useState<string[]>([]);
   const [timeline, setTimeline] = useState<{ date: string; title: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,27 +366,34 @@ function CreateProjectModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { setError("Project name is required"); return; }
-    if (type === "project" && !price.trim()) {
+    if (!directorMode && type === "project" && !price.trim()) {
       // price optional for demo only
     }
     setSubmitting(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        clientOrOwnerName: clientOrOwnerName.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        price: price.trim() ? Number(price) : undefined,
+        projectDetails: projectDetails.trim() || undefined,
+        status,
+        timeline: timeline.length ? timeline : undefined
+      };
+      if (!directorMode) {
+        payload.type = type;
+      }
+      if (directorMode && assignedDeveloperIds.length > 0) {
+        payload.assignedDeveloperIds = assignedDeveloperIds;
+      } else if (assignedDeveloperId) {
+        payload.assignedDeveloperId = assignedDeveloperId;
+      }
       const res = await apiFetch("/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          type,
-          clientOrOwnerName: clientOrOwnerName.trim() || undefined,
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          price: price.trim() ? Number(price) : undefined,
-          projectDetails: projectDetails.trim() || undefined,
-          status,
-          assignedDeveloperId: assignedDeveloperId || undefined,
-          timeline: timeline.length ? timeline : undefined
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         onCreated();
@@ -367,19 +409,26 @@ function CreateProjectModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-semibold text-slate-50">New project</h3>
+        <h3 className="mb-4 text-lg font-semibold text-slate-50">{directorMode ? "New project (Director)" : "New project"}</h3>
+        <p className="mb-2 text-xs text-slate-500">
+          {directorMode
+            ? "Creates approved immediately. Invite one or more developers — each must accept before working tasks."
+            : "Submitted for director approval unless your org policy differs."}
+        </p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Project name *</span>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Type</span>
-            <select value={type} onChange={(e) => setType(e.target.value as "demo" | "project")} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
-              <option value="demo">Demo</option>
-              <option value="project">Project</option>
-            </select>
-          </label>
+          {!directorMode && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">Type</span>
+              <select value={type} onChange={(e) => setType(e.target.value as "demo" | "project")} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+                <option value="demo">Demo</option>
+                <option value="project">Project</option>
+              </select>
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Client / project owner name</span>
             <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
@@ -410,15 +459,41 @@ function CreateProjectModal({
               <option value="cancelled">Cancelled</option>
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Assign developer</span>
-            <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
-              <option value="">—</option>
-              {developers.map((d) => (
-                <option key={d.id} value={d.id}>{d.name || d.email}</option>
-              ))}
-            </select>
-          </label>
+          {directorMode ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">Invite developers (accept required)</span>
+              <div className="max-h-36 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-800/80 p-2">
+                {developers.length === 0 ? (
+                  <p className="text-xs text-slate-500">No developers in org.</p>
+                ) : (
+                  developers.map((d) => (
+                    <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={assignedDeveloperIds.includes(d.id)}
+                        onChange={(e) => {
+                          setAssignedDeveloperIds((prev) =>
+                            e.target.checked ? [...prev, d.id] : prev.filter((id) => id !== d.id)
+                          );
+                        }}
+                      />
+                      {d.name || d.email}
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">Assign developer</span>
+              <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+                <option value="">—</option>
+                {developers.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name || d.email}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Timeline (optional)</span>
             {timeline.map((t, i) => (

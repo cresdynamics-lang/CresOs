@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
 
 interface Invoice {
@@ -49,7 +50,9 @@ interface Project {
 }
 
 export default function SalesInvoicesPage() {
-  const { auth, apiFetch } = useAuth();
+  const router = useRouter();
+  const { auth, apiFetch, hydrated } = useAuth();
+  const canAccessSalesInvoices = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
   const [activeTab, setActiveTab] = useState<"dashboard" | "create" | "invoices">("dashboard");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -80,24 +83,31 @@ export default function SalesInvoicesPage() {
     total: 0
   }]);
 
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canAccessSalesInvoices) {
+      router.replace("/dashboard");
+    }
+  }, [hydrated, auth.accessToken, canAccessSalesInvoices, router]);
+
   // Fetch dashboard data
   useEffect(() => {
-    if (!auth.accessToken) return;
+    if (!auth.accessToken || !canAccessSalesInvoices) return;
     
     if (activeTab === "dashboard") {
       fetchDashboard();
     } else if (activeTab === "invoices") {
       fetchInvoices();
     }
-  }, [activeTab, auth.accessToken]);
+  }, [activeTab, auth.accessToken, canAccessSalesInvoices]);
 
   // Fetch clients and projects for create form
   useEffect(() => {
-    if (!auth.accessToken || activeTab !== "create") return;
+    if (!auth.accessToken || !canAccessSalesInvoices || activeTab !== "create") return;
     
     fetchClients();
     fetchProjects();
-  }, [activeTab, auth.accessToken]);
+  }, [activeTab, auth.accessToken, canAccessSalesInvoices]);
 
   const fetchDashboard = async () => {
     try {

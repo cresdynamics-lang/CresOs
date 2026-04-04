@@ -195,13 +195,35 @@ export default function reportsRouter(prisma: PrismaClient): Router {
         return res.status(404).json({ error: "Report not found or already submitted" });
       }
 
+      const trimmedTitle = existing.title.trim();
+      const trimmedBody = existing.body.trim();
+      if (trimmedTitle.length < 3) {
+        return res.status(400).json({ error: "Title is too short to submit." });
+      }
+      if (trimmedBody.length < 40) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Activities section must be at least 40 characters so the director gets a useful record."
+          });
+      }
+
+      const submittedAt = new Date();
       const report = await prisma.salesReport.update({
         where: { id },
-        data: { status: "submitted", submittedAt: new Date() },
+        data: { status: "submitted", submittedAt },
         include: { submittedBy: { select: { name: true, email: true } } }
       });
       const by = report.submittedBy?.name || report.submittedBy?.email || "Sales";
-      await notifyDirectors(prisma, orgId, "Report submitted", `Report "${report.title}" was submitted by ${by}.`);
+      const ts = submittedAt.toISOString();
+      await notifyDirectors(
+        prisma,
+        orgId,
+        "Sales report submitted",
+        `Report "${report.title}" was submitted by ${by}.\n\nSubmitted at (server, UTC): ${ts}\nThis time is stored on the server and is visible in the app even if you were offline when it arrived.`,
+        { type: "sales_report.submitted" }
+      );
       res.json(report);
     }
   );

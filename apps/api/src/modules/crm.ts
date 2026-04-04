@@ -64,7 +64,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Leads
   router.get(
     "/leads",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const leads = await prisma.lead.findMany({
@@ -72,7 +72,8 @@ export default function crmRouter(prisma: PrismaClient): Router {
       orderBy: { createdAt: "desc" },
       include: {
         client: true,
-        project: { select: { id: true, name: true } }
+        project: { select: { id: true, name: true } },
+        owner: { select: { id: true, name: true, email: true } }
       }
     });
     res.json(leads);
@@ -126,7 +127,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Single lead (with comments, follow-ups)
   router.get(
     "/leads/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
@@ -134,6 +135,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
         where: { id, orgId, deletedAt: null },
         include: {
           client: true,
+          project: { select: { id: true, name: true, approvalStatus: true } },
           owner: { select: { id: true, name: true, email: true } },
           approvedBy: { select: { id: true, name: true, email: true } },
           comments: { include: { author: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" } },
@@ -145,10 +147,10 @@ export default function crmRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Director: approve or reject lead
+  // Admin: approve or reject lead; sales/analyst: update own lead fields
   router.patch(
     "/leads/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -157,9 +159,11 @@ export default function crmRouter(prisma: PrismaClient): Router {
       const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
       if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-      const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+      const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
       if (body.approvalStatus != null && (body.approvalStatus === "approved" || body.approvalStatus === "rejected")) {
-        if (!isDirector) return res.status(403).json({ error: "Only director can approve or reject leads" });
+        if (!isAdmin) {
+          return res.status(403).json({ error: "Only org admin can approve or reject leads" });
+        }
         const updated = await prisma.lead.update({
           where: { id },
           data: {
@@ -171,8 +175,8 @@ export default function crmRouter(prisma: PrismaClient): Router {
         await notifyDirectors(prisma, orgId, "Lead approval updated", `Lead "${lead.title}" was ${body.approvalStatus}.`);
         return res.json(updated);
       }
-      // Sales/owner: update status, title, source only
-      if (lead.ownerId !== userId && !isDirector) return res.status(403).json({ error: "Not your lead" });
+      // Sales/owner: update status, title, source only (admin may override)
+      if (lead.ownerId !== userId && !isAdmin) return res.status(403).json({ error: "Not your lead" });
       const updated = await prisma.lead.update({
         where: { id },
         data: {
@@ -185,10 +189,10 @@ export default function crmRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Director: comment on lead
+  // Admin: comment on lead
   router.post(
     "/leads/:id/comments",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -209,7 +213,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   const REMINDER_SLOTS_DEFAULT = [2880, 1440, 60, 30, 5, 0]; // 2d, 1d, 1h, 30m, 5m, at time
   router.post(
     "/leads/:id/follow-ups",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.analyst]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
@@ -269,7 +273,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Deals
   router.get(
     "/deals",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const deals = await prisma.deal.findMany({
@@ -362,7 +366,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Outreach contacts (emails/phones for sending service communications)
   router.get(
     "/contacts",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const [manualContacts, clientContacts] = await Promise.all([
@@ -447,6 +451,159 @@ export default function crmRouter(prisma: PrismaClient): Router {
         data: { deletedAt: new Date() }
       });
       res.status(204).send();
+    }
+  );
+
+  // Sample copy for bulk email to clients / CRM contacts (sales picks a template, edits, sends)
+  router.get(
+    "/message-templates",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (_req, res) => {
+      res.json({
+        templates: [
+          {
+            id: "invoice_followup",
+            name: "Invoice / payment reminder",
+            subject: "Following up on your invoice",
+            body:
+              "Hi {{name}},\n\n" +
+              "I’m writing to follow up on a recent invoice. If you’ve already paid, thank you — please disregard this note. If anything is unclear or you need a copy resent, reply to this email and we’ll sort it out quickly.\n\n" +
+              "Best regards"
+          },
+          {
+            id: "new_product",
+            name: "New product introduction",
+            subject: "Something new we think fits your needs",
+            body:
+              "Hi {{name}},\n\n" +
+              "We’ve launched a new product line and wanted you to be among the first to know. I’d be glad to walk you through how it could help your situation — happy to schedule a short call at your convenience.\n\n" +
+              "Best regards"
+          },
+          {
+            id: "new_service",
+            name: "New service introduction",
+            subject: "New service now available",
+            body:
+              "Hi {{name}},\n\n" +
+              "We’re introducing a new service designed to support clients like you more closely. If you’d like an overview or to discuss whether it’s a fit, just reply and we’ll set up a time.\n\n" +
+              "Best regards"
+          }
+        ]
+      });
+    }
+  );
+
+  /** Queue one outbound email per recipient (same pattern as other queued notifications). */
+  router.post(
+    "/bulk-message",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const body = req.body as {
+        contactIds?: string[];
+        subject?: string;
+        body?: string;
+      };
+      const contactIds = Array.isArray(body.contactIds) ? body.contactIds : [];
+      const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+      const text = typeof body.body === "string" ? body.body.trim() : "";
+      if (contactIds.length === 0 || !subject || !text) {
+        res.status(400).json({ error: "contactIds (non-empty), subject, and body are required" });
+        return;
+      }
+      if (contactIds.length > 200) {
+        res.status(400).json({ error: "Maximum 200 recipients per send." });
+        return;
+      }
+
+      const org = await prisma.org.findUnique({
+        where: { id: orgId },
+        select: { name: true }
+      });
+      const orgName = org?.name ?? "CresOS";
+
+      type Recipient = { email: string; label: string };
+      const recipients: Recipient[] = [];
+      const seen = new Set<string>();
+
+      for (const rawId of contactIds) {
+        if (typeof rawId !== "string" || !rawId.trim()) continue;
+        if (rawId.startsWith("client:")) {
+          const clientId = rawId.slice("client:".length);
+          const c = await prisma.client.findFirst({
+            where: { id: clientId, orgId, deletedAt: null },
+            select: { name: true, email: true }
+          });
+          if (c?.email) {
+            const em = c.email.trim().toLowerCase();
+            if (!seen.has(em)) {
+              seen.add(em);
+              recipients.push({ email: c.email.trim(), label: (c.name || "").trim() || c.email.trim() });
+            }
+          }
+        } else {
+          const c = await prisma.crmContact.findFirst({
+            where: { id: rawId, orgId, deletedAt: null },
+            select: { name: true, email: true }
+          });
+          if (c?.email) {
+            const em = c.email.trim().toLowerCase();
+            if (!seen.has(em)) {
+              seen.add(em);
+              recipients.push({ email: c.email.trim(), label: (c.name || "").trim() || c.email.trim() });
+            }
+          }
+        }
+      }
+
+      if (recipients.length === 0) {
+        res.status(400).json({
+          error: "No recipients with an email on file. Add an email to the contact or choose contacts that have email."
+        });
+        return;
+      }
+
+      const emailSubject = subject.includes(orgName) ? subject : `[${orgName}] ${subject}`;
+
+      await prisma.notification.createMany({
+        data: recipients.map((r) => {
+          const personalized = text
+            .replace(/\{\{name\}\}/gi, r.label)
+            .replace(/\{\{org\}\}/gi, orgName);
+          return {
+            orgId,
+            channel: "email",
+            to: r.email,
+            subject: emailSubject,
+            body: personalized,
+            status: "queued",
+            type: "crm.bulk_message",
+            tier: "execution"
+          };
+        })
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "crm.bulk_message",
+          entityType: "org",
+          entityId: orgId,
+          metadata: {
+            recipientCount: recipients.length,
+            subject: emailSubject,
+            requestedIds: contactIds.length
+          }
+        }
+      });
+
+      res.status(201).json({
+        success: true,
+        queued: recipients.length,
+        skippedNoEmail: contactIds.length - recipients.length
+      });
     }
   );
 

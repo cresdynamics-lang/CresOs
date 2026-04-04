@@ -286,6 +286,28 @@ export default function directorRouter(prisma: PrismaClient): Router {
 
         const blockedThresholdCount = blockedTasksOverThreshold;
 
+        const teamCurrentFocus = await prisma.user.findMany({
+          where: { orgId, deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            currentFocusNote: true,
+            currentFocusUpdatedAt: true,
+            currentFocusProject: {
+              select: { id: true, name: true, status: true, approvalStatus: true }
+            },
+            roles: {
+              select: {
+                role: {
+                  select: { key: true, name: true }
+                }
+              }
+            }
+          },
+          orderBy: [{ name: "asc" }, { email: "asc" }]
+        });
+
         res.json({
           financialHealth: {
             revenueThisPeriod: revenueValue,
@@ -320,6 +342,22 @@ export default function directorRouter(prisma: PrismaClient): Router {
           approvalQueue: {
             totalPending: pendingApprovals.length
           },
+          teamCurrentFocus: teamCurrentFocus.map((u) => ({
+            userId: u.id,
+            name: u.name,
+            email: u.email,
+            roleKeys: u.roles.map((r) => r.role.key),
+            project: u.currentFocusProject
+              ? {
+                  id: u.currentFocusProject.id,
+                  name: u.currentFocusProject.name,
+                  status: u.currentFocusProject.status,
+                  approvalStatus: u.currentFocusProject.approvalStatus
+                }
+              : null,
+            note: u.currentFocusNote,
+            updatedAt: u.currentFocusUpdatedAt
+          })),
           riskSummary: {
             financial: topFinancialRisks,
             operational: topOperationalRisks,

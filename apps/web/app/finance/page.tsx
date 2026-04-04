@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
@@ -122,7 +123,16 @@ const FINANCE_ALIGNMENT_RULES = [
 ] as const;
 
 export default function FinancePage() {
-  const { apiFetch, auth } = useAuth();
+  const router = useRouter();
+  const { apiFetch, auth, hydrated } = useAuth();
+  const canAccessFinance = auth.roleKeys.some((r) => ["admin", "finance", "analyst"].includes(r));
+
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canAccessFinance) {
+      router.replace("/dashboard");
+    }
+  }, [hydrated, auth.accessToken, canAccessFinance, router]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -203,7 +213,7 @@ export default function FinancePage() {
   const isAdmin = auth.roleKeys.includes("admin");
 
   const fetchReport = useCallback(async () => {
-    if (!canSeeReport) return;
+    if (!canAccessFinance || !canSeeReport) return;
     setReportLoading(true);
     try {
       const res = await apiFetch("/finance/report");
@@ -216,9 +226,10 @@ export default function FinancePage() {
     } finally {
       setReportLoading(false);
     }
-  }, [canSeeReport, apiFetch]);
+  }, [canSeeReport, apiFetch, canAccessFinance]);
 
   const loadData = useCallback(async () => {
+    if (!canAccessFinance) return;
     try {
       const [invRes, payRes, expRes, dueRes] = await Promise.all([
         apiFetch("/finance/invoices"),
@@ -313,7 +324,7 @@ export default function FinancePage() {
     } catch {
       // ignore
     }
-  }, [apiFetch, canSeeReport, isFinance]);
+  }, [apiFetch, canSeeReport, isFinance, canAccessFinance]);
 
   useEffect(() => {
     loadData();
