@@ -96,7 +96,7 @@ export default function SecurityPage() {
     }
 
     try {
-      const response = await apiFetch("/user/change-password", {
+      const response = await apiFetch("/account/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

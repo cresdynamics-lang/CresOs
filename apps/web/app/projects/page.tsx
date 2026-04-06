@@ -8,7 +8,7 @@ import { formatMoney } from "../format-money";
 
 type Developer = { id: string; name: string | null; email: string };
 
-type TaskSummary = { todo: number; in_progress: number; blocked: number; done: number };
+type TaskSummary = { not_started: number; in_progress: number; waiting_response: number; blocked: number; done: number };
 
 type Project = {
   id: string;
@@ -229,9 +229,11 @@ export default function ProjectsPage() {
                 {" · "}
                 <span className="text-sky-300/90">In progress {project.taskSummary.in_progress}</span>
                 {" · "}
+                <span className="text-violet-300/90">Waiting {project.taskSummary.waiting_response}</span>
+                {" · "}
                 <span className="text-amber-300/90">Blocked {project.taskSummary.blocked}</span>
                 {" · "}
-                <span className="text-slate-500">Todo {project.taskSummary.todo}</span>
+                <span className="text-slate-500">Not started {project.taskSummary.not_started ?? (project.taskSummary as any).todo ?? 0}</span>
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1">

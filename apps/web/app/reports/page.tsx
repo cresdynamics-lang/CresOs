@@ -65,14 +65,24 @@ export default function ReportsPage() {
               : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report."}
           </p>
         </div>
-        {!isDirector && (
-          <Link
-            href="/reports/new"
-            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover"
-          >
-            New report
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isDirector && (
+            <Link
+              href="/reports/ai"
+              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-cres-border px-4 py-2 text-sm font-medium text-cres-text hover:bg-cres-surface"
+            >
+              AI Reports →
+            </Link>
+          )}
+          {!isDirector && (
+            <Link
+              href="/reports/new"
+              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover"
+            >
+              New report
+            </Link>
+          )}
+        </div>
       </div>
 
       {!isDirector && overdue.length > 0 && (

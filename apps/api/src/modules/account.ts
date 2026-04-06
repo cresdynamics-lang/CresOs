@@ -6,6 +6,7 @@ import { sendWelcomeEmail } from "../lib/resend";
 import { logAdminActivity, logEmailSent } from "./admin-activity";
 import bcrypt from "bcryptjs";
 import { mergeNotificationPreferences } from "../lib/notification-preferences";
+import { notifyAdminsInApp } from "./director-notifications";
 
 export default function accountRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -150,6 +151,14 @@ export default function accountRouter(prisma: PrismaClient): Router {
         entityType: "user",
         entityId: userId
       });
+
+      await notifyAdminsInApp(
+        prisma,
+        member.orgId,
+        "[Visibility] Password changed",
+        "A user changed their password.",
+        { type: "account.password_changed", tier: "structural", excludeUserIds: [userId] }
+      );
     }
 
     res.status(204).send();

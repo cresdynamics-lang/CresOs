@@ -34,7 +34,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
       { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
       { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
-      { href: "/crm", label: "CRM", roles: ["admin", "sales"] },
+      { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"] },
       { href: "/meeting-requests", label: "Director meeting", roles: ["admin", "sales"] }
     ]
   },

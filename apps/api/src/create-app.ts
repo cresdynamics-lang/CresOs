@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { json } from "express";
+import path from "path";
 import type { PrismaClient } from "@prisma/client";
 import authRouter from "./modules/auth";
 import crmRouter from "./modules/crm";
@@ -29,6 +30,8 @@ export function createApp(prisma: PrismaClient): express.Application {
   const app = express();
   app.use(cors());
   app.use(json());
+
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   /** Process is up (use for load-balancer / liveness; no DB call). */
   app.get("/health", (_req, res) => {

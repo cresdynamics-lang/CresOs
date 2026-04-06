@@ -36,12 +36,22 @@ type MessageTemplate = {
   body: string;
 };
 
+type ClientSummary = {
+  key: string;
+  clientId: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  projects: { id: string; name: string; status: string; approvalStatus: string }[];
+};
+
 export default function CrmPage() {
   const router = useRouter();
   const { apiFetch, auth, hydrated } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [contacts, setContacts] = useState<CrmContact[]>([]);
+  const [clientSummary, setClientSummary] = useState<{ total: number; clients: ClientSummary[] } | null>(null);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [contactForm, setContactForm] = useState({ email: "", phone: "", name: "" });
   const [contactSubmitting, setContactSubmitting] = useState(false);
@@ -54,9 +64,9 @@ export default function CrmPage() {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [templateChoice, setTemplateChoice] = useState<string>("");
 
-  const canAccessCrm = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
+  const canAccessCrm = auth.roleKeys.some((r) => ["admin", "sales", "director_admin", "finance"].includes(r));
   const canManageContacts = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
-  const canBulkMessage = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
+  const canBulkMessage = auth.roleKeys.some((r) => ["admin", "sales", "director_admin"].includes(r));
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -77,6 +87,21 @@ export default function CrmPage() {
       }
     } catch {
       setContacts([]);
+    }
+  }, [apiFetch, auth.accessToken]);
+
+  const loadClients = useCallback(async () => {
+    if (!auth.accessToken) return;
+    try {
+      const res = await apiFetch("/crm/clients/summary");
+      if (res.ok) {
+        const data = (await res.json()) as { total: number; clients: ClientSummary[] };
+        setClientSummary(data);
+      } else {
+        setClientSummary(null);
+      }
+    } catch {
+      setClientSummary(null);
     }
   }, [apiFetch, auth.accessToken]);
 
@@ -118,13 +143,14 @@ export default function CrmPage() {
         setTemplates(data.templates ?? []);
       }
       await loadContacts();
+      await loadClients();
     } catch {
       setLeads([]);
       setDeals([]);
     } finally {
       setLoadedOnce(true);
     }
-  }, [apiFetch, auth.accessToken, loadContacts]);
+  }, [apiFetch, auth.accessToken, loadContacts, loadClients]);
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -279,7 +305,7 @@ export default function CrmPage() {
 
       {loadedOnce && (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="shell">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Leads</p>
               <ul className="space-y-2 text-sm">
@@ -316,6 +342,56 @@ export default function CrmPage() {
                 ))}
                 {deals.length === 0 && <li className="text-sm text-slate-400">No deals yet.</li>}
               </ul>
+            </div>
+
+            <div className="shell">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                Clients ({clientSummary?.total ?? 0})
+              </p>
+              <p className="mb-2 text-sm text-slate-400">
+                All project owners/clients are listed here automatically. Use this list to contact clients and track project status.
+              </p>
+              <ul className="space-y-2 text-sm">
+                {(clientSummary?.clients ?? []).slice(0, 12).map((c) => (
+                  <li key={c.key} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-100">{c.name}</p>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                          {c.email && (
+                            <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
+                              {c.email}
+                            </a>
+                          )}
+                          {c.phone && (
+                            <a className="text-slate-300 hover:underline" href={`tel:${c.phone}`}>
+                              {c.phone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-500">{c.projects.length} project{c.projects.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div className="mt-2 flex flex-col gap-1">
+                      {c.projects.slice(0, 3).map((p) => (
+                        <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center justify-between text-xs hover:underline">
+                          <span className="truncate text-slate-300">{p.name}</span>
+                          <span className="ml-2 shrink-0 text-slate-500">
+                            {p.status} · {p.approvalStatus}
+                          </span>
+                        </Link>
+                      ))}
+                      {c.projects.length > 3 && <span className="text-xs text-slate-500">+{c.projects.length - 3} more</span>}
+                    </div>
+                  </li>
+                ))}
+                {(clientSummary?.clients?.length ?? 0) === 0 && (
+                  <li className="text-sm text-slate-400">No clients yet. Add a project with client details to populate.</li>
+                )}
+              </ul>
+              {(clientSummary?.clients?.length ?? 0) > 12 && (
+                <p className="mt-2 text-xs text-slate-500">Showing first 12 clients. Use Contacts below for full outreach list.</p>
+              )}
             </div>
           </div>
 

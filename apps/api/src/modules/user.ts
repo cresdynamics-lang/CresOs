@@ -3,10 +3,27 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { uploadProfilePicture } from "../lib/uploads";
+import bcrypt from "bcryptjs";
+import { logAdminActivity } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 import { getProjectDeveloperAccess } from "../lib/project-access";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 
 export default function userRouter(prisma: PrismaClient): Router {
   const router = createRouter();
+
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (allowed.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Invalid file type"));
+    }
+  });
 
   // Get user profile
   router.get(
@@ -193,6 +210,58 @@ export default function userRouter(prisma: PrismaClient): Router {
         res.status(500).json({ 
           error: "Failed to update profile", 
           message: error instanceof Error ? error.message : "Unknown error" 
+        });
+      }
+    }
+  );
+
+  // Upload profile picture (multipart)
+  router.post(
+    "/profile-picture",
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const file = req.file;
+        if (!file) {
+          return res.status(400).json({ error: "Missing file" });
+        }
+        const ext =
+          file.mimetype === "image/png"
+            ? "png"
+            : file.mimetype === "image/webp"
+              ? "webp"
+              : file.mimetype === "image/gif"
+                ? "gif"
+                : "jpg";
+        const dir = path.join(process.cwd(), "uploads", "profile-pictures");
+        fs.mkdirSync(dir, { recursive: true });
+        const filename = `${userId}-${Date.now()}.${ext}`;
+        const abs = path.join(dir, filename);
+        fs.writeFileSync(abs, file.buffer);
+        const urlPath = `/uploads/profile-pictures/${filename}`;
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { profilePicture: urlPath }
+        });
+
+        await logAdminActivity(prisma, {
+          orgId,
+          type: "user.profile_picture.updated",
+          summary: "User updated profile picture",
+          actorId: userId,
+          entityType: "user",
+          entityId: userId
+        });
+
+        res.json({ success: true, data: { profilePicture: urlPath } });
+      } catch (error) {
+        console.error("Error uploading profile picture:", error);
+        res.status(500).json({
+          error: "Failed to upload profile picture",
+          message: error instanceof Error ? error.message : "Unknown error"
         });
       }
     }
@@ -745,13 +814,53 @@ export default function userRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "User not found" });
         }
 
-        // TODO: Verify current password and update new password
-        // This would require bcrypt comparison and hashing
-        
-        res.json({
-          success: true,
-          message: "Password changed successfully"
+        if (!user.passwordHash) {
+          return res.status(400).json({ error: "Unable to change password" });
+        }
+
+        const ok = await bcrypt.compare(String(currentPassword), user.passwordHash);
+        if (!ok) {
+          return res.status(400).json({ error: "Current password is incorrect" });
+        }
+
+        const passwordHash = await bcrypt.hash(String(newPassword), 10);
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            passwordHash,
+            passwordLastChangedAt: new Date()
+          }
         });
+
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            actorId: userId,
+            type: "account.password_changed",
+            entityType: "user",
+            entityId: userId,
+            metadata: {}
+          }
+        });
+
+        await logAdminActivity(prisma, {
+          orgId,
+          type: "account.password_changed",
+          summary: "User changed their password",
+          actorId: userId,
+          entityType: "user",
+          entityId: userId
+        });
+
+        await notifyAdminsInApp(
+          prisma,
+          orgId,
+          "[Visibility] Password changed",
+          "A user changed their password.",
+          { type: "account.password_changed", tier: "structural", excludeUserIds: [userId] }
+        );
+
+        return res.status(204).send();
 
       } catch (error) {
         console.error("Error changing password:", error);

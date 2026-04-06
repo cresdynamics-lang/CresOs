@@ -290,11 +290,11 @@ export default function ProjectDetailPage() {
 
   const deliveryCounts = project.tasks.reduce(
     (acc, t) => {
-      const k = t.status as keyof typeof acc;
+      const k = (t.status === "todo" ? "not_started" : t.status) as keyof typeof acc;
       if (k in acc) acc[k] += 1;
       return acc;
     },
-    { todo: 0, in_progress: 0, blocked: 0, done: 0 }
+    { not_started: 0, in_progress: 0, waiting_response: 0, blocked: 0, done: 0 }
   );
 
   function commentTypeLabel(type: string): string {
@@ -459,9 +459,11 @@ export default function ProjectDetailPage() {
             {" · "}
             <span className="text-sky-300">{deliveryCounts.in_progress} in progress</span>
             {" · "}
+            <span className="text-violet-300">{deliveryCounts.waiting_response} waiting</span>
+            {" · "}
             <span className="text-amber-300">{deliveryCounts.blocked} blocked</span>
             {" · "}
-            <span className="text-slate-500">{deliveryCounts.todo} todo</span>
+            <span className="text-slate-500">{deliveryCounts.not_started} not started</span>
           </p>
           <p className="mt-2 text-xs text-slate-500">
             Task notes below stay in sync with development: blockers and scope issues help Sales coordinate with the client (APIs, payment, assets).
@@ -495,12 +497,13 @@ export default function ProjectDetailPage() {
                   <span className="font-medium text-slate-100">{t.title}</span>
                   {isAssignedDev ? (
                     <select
-                      value={t.status}
+                      value={t.status === "todo" ? "not_started" : t.status}
                       onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
                       className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-200"
                     >
-                      <option value="todo">Todo</option>
+                      <option value="not_started">Not started</option>
                       <option value="in_progress">In progress</option>
+                      <option value="waiting_response">Waiting response</option>
                       <option value="blocked">Blocked</option>
                       <option value="done">Done</option>
                     </select>

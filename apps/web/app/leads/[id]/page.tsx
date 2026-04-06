@@ -44,7 +44,14 @@ export default function LeadDetailPage() {
   const id = params.id as string;
   const { apiFetch, auth } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [comment, setComment] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editStatus, setEditStatus] = useState("new");
+  const [editProjectId, setEditProjectId] = useState<string>("");
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [followUpType, setFollowUpType] = useState<"meeting" | "call">("meeting");
   const [followName, setFollowName] = useState("");
   const [followBusiness, setFollowBusiness] = useState("");
@@ -55,6 +62,8 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(false);
 
   const isAdmin = auth.roleKeys.includes("admin");
+  const isSales = auth.roleKeys.includes("sales");
+  const canEditLead = isSales || isAdmin;
   const canScheduleFollowUp = auth.roleKeys.some((r) => ["sales", "analyst"].includes(r));
 
   const load = async () => {
@@ -70,6 +79,49 @@ export default function LeadDetailPage() {
   useEffect(() => {
     load();
   }, [id, apiFetch, router]);
+
+  useEffect(() => {
+    if (!auth.accessToken) return;
+    apiFetch("/projects")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setProjects(Array.isArray(list) ? list.map((p: any) => ({ id: p.id, name: p.name })) : []))
+      .catch(() => setProjects([]));
+  }, [apiFetch, auth.accessToken]);
+
+  useEffect(() => {
+    if (!lead) return;
+    setEditStatus(lead.status || "new");
+    setEditProjectId(lead.project?.id ?? "");
+    setClientName(lead.client?.name ?? "");
+    setClientEmail(lead.client?.email ?? "");
+    setClientPhone(lead.client?.phone ?? "");
+  }, [lead]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canEditLead) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/crm/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: editStatus,
+          projectId: editProjectId || null,
+          client: {
+            name: clientName.trim() || undefined,
+            email: clientEmail.trim() || null,
+            phone: clientPhone.trim() || null
+          }
+        })
+      });
+      if (res.ok) {
+        setEditing(false);
+        load();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleApprove = async (status: "approved" | "rejected") => {
     setLoading(true);
@@ -196,6 +248,110 @@ export default function LeadDetailPage() {
           )}
         </div>
       </div>
+
+      {lead.status === "closed" && !lead.project && (
+        <div className="shell border-rose-900/50 bg-rose-950/20">
+          <p className="text-sm text-rose-200">
+            This lead is <span className="font-semibold">closed</span> but not linked to any project.
+            Please link it to a project so delivery can be tracked.
+          </p>
+          {canEditLead && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="mt-2 rounded bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
+            >
+              Link to project
+            </button>
+          )}
+        </div>
+      )}
+
+      {canEditLead && (
+        <div className="shell">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-200">Lead status & contact</h3>
+            <button
+              type="button"
+              onClick={() => setEditing((v) => !v)}
+              className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-900"
+            >
+              {editing ? "Cancel" : "Edit"}
+            </button>
+          </div>
+          {editing && (
+            <form onSubmit={handleSave} className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Status</span>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                >
+                  <option value="new">New</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="qualified">Qualified</option>
+                  <option value="waiting">Waiting</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="closed">Closed</option>
+                  <option value="disqualified">Disqualified</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Project</span>
+                <select
+                  value={editProjectId}
+                  onChange={(e) => setEditProjectId(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                >
+                  <option value="">No project yet</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Client name</span>
+                <input
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-400">Client phone</span>
+                <input
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-xs text-slate-400">Client email</span>
+                <input
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       {(lead.client || lead.project) && (
         <div className="shell border-sky-800/40 bg-sky-950/20">

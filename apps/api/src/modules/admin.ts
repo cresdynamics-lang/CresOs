@@ -8,6 +8,7 @@ import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { PERMISSIONS } from "./permissions-registry";
 import { sendWelcomeEmail } from "../lib/resend";
 import { logEmailSent } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 
 const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
@@ -729,6 +730,14 @@ export default function adminRouter(prisma: PrismaClient): Router {
           metadata: { email: user.email }
         }
       });
+
+      await notifyAdminsInApp(
+        prisma,
+        orgId,
+        "[Visibility] User created",
+        `An admin created a new user: ${user.email}`,
+        { type: "admin.user.created", tier: "structural", excludeUserIds: [adminId] }
+      );
       res.status(201).json({
         id: user.id,
         email: user.email,
@@ -1554,6 +1563,27 @@ export default function adminRouter(prisma: PrismaClient): Router {
         }
       });
 
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: adminId,
+          type: "admin.user.updated",
+          entityType: "user",
+          entityId: id,
+          metadata: {
+            fields: Object.keys(data)
+          }
+        }
+      });
+
+      await notifyAdminsInApp(
+        prisma,
+        orgId,
+        "[Visibility] User updated",
+        `An admin updated a user's profile details: ${updated.email}`,
+        { type: "admin.user.updated", tier: "structural", excludeUserIds: [adminId] }
+      );
+
       // Send a confirmation email when profile/contact details are updated by admin
       const toEmail = updated.notificationEmail?.trim() || updated.email;
       if (toEmail) {
@@ -1622,6 +1652,14 @@ export default function adminRouter(prisma: PrismaClient): Router {
           metadata: {}
         }
       });
+
+      await notifyAdminsInApp(
+        prisma,
+        orgId,
+        "[Visibility] User password reset",
+        "An admin reset a user's password.",
+        { type: "admin.user.password_reset", tier: "structural", excludeUserIds: [adminId] }
+      );
 
       res.status(204).send();
     }

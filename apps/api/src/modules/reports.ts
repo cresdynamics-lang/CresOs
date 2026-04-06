@@ -10,6 +10,37 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 export default function reportsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
+  // Admin AI reports (directors/admin only)
+  router.get(
+    "/ai",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const list = await prisma.adminAiReport.findMany({
+        where: { orgId },
+        orderBy: { dateKey: "desc" }
+      });
+      res.json(list);
+    }
+  );
+
+  router.get(
+    "/ai/:id",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const report = await prisma.adminAiReport.findFirst({
+        where: { id, orgId }
+      });
+      if (!report) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+      res.json(report);
+    }
+  );
+
   // Sales: overdue unanswered questions (alarm) - must be before /:id
   router.get(
     "/alarms/overdue",

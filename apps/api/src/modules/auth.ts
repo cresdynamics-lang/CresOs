@@ -4,6 +4,8 @@ import type { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ROLE_KEYS } from "./auth-middleware";
+import { logAdminActivity } from "./admin-activity";
+import { notifyAdminsInApp } from "./director-notifications";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const JWT_EXPIRES_IN = "1h";
@@ -209,6 +211,43 @@ export default function authRouter(prisma: PrismaClient): Router {
         userId: user.id
       }
     });
+
+    const ip =
+      (typeof req.headers["x-forwarded-for"] === "string" && req.headers["x-forwarded-for"].split(",")[0]?.trim()) ||
+      req.socket?.remoteAddress ||
+      null;
+    const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null;
+    try {
+      await prisma.eventLog.create({
+        data: {
+          orgId: primaryOrg,
+          actorId: user.id,
+          type: "auth.login.success",
+          entityType: "session",
+          entityId: session.id,
+          metadata: { email, ip, userAgent }
+        }
+      });
+      await logAdminActivity(prisma, {
+        orgId: primaryOrg,
+        type: "auth.login.success",
+        summary: "User logged in",
+        body: `${user.name?.trim() || user.email} logged in.${ip ? ` IP: ${ip}.` : ""}${userAgent ? ` UA: ${userAgent.slice(0, 180)}${userAgent.length > 180 ? "…" : ""}` : ""}`,
+        actorId: user.id,
+        entityType: "session",
+        entityId: session.id,
+        metadata: { ip, userAgent }
+      });
+      await notifyAdminsInApp(
+        prisma,
+        primaryOrg,
+        "[Visibility] User login",
+        `${user.name?.trim() || user.email} logged in.${ip ? ` IP: ${ip}.` : ""}`,
+        { type: "auth.login.success.admin_mirror", tier: "structural", excludeUserIds: [user.id] }
+      );
+    } catch {
+      // ignore audit logging failures
+    }
 
     const tokens = signTokens({
       userId: user.id,

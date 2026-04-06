@@ -74,7 +74,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       });
 
       const projectIds = projects.map((p) => p.id);
-      const emptySummary = { todo: 0, in_progress: 0, blocked: 0, done: 0 };
+      const emptySummary = { not_started: 0, in_progress: 0, waiting_response: 0, blocked: 0, done: 0 };
       const taskSummaryByProject: Record<string, typeof emptySummary> = {};
       if (projectIds.length > 0) {
         for (const id of projectIds) {
@@ -87,7 +87,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         });
         for (const row of grouped) {
           const pid = row.projectId;
-          const st = row.status as keyof typeof emptySummary;
+          const raw = String(row.status || "");
+          const st = (raw === "todo" ? "not_started" : raw) as keyof typeof emptySummary;
           if (taskSummaryByProject[pid] && st in taskSummaryByProject[pid]) {
             taskSummaryByProject[pid][st] = row._count._all;
           }
@@ -255,15 +256,29 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         }
       });
       const actorName = project.createdBy?.name || project.createdBy?.email || "A user";
-      if (approvalStatus === "pending_approval") {
+      if (isSalesCreate) {
+        if (approvalStatus === "pending_approval") {
+          await notifyDirectors(
+            prisma,
+            orgId,
+            "New project created",
+            `Project "${project.name}" was created by ${actorName} and needs director approval. Status: ${project.approvalStatus}.`
+          );
+        } else {
+          await notifyDirectors(
+            prisma,
+            orgId,
+            "New project created",
+            `Project "${project.name}" was created by ${actorName}. Status: ${project.approvalStatus}.`
+          );
+        }
+      } else if (!isDirectorLike) {
         await notifyDirectors(
           prisma,
           orgId,
-          "New project pending approval",
-          `Project "${project.name}" was created by ${actorName} and needs director approval.`
+          "New project created",
+          `Project "${project.name}" was created by ${actorName}. Status: ${project.approvalStatus}.`
         );
-      } else if (!isDirectorLike) {
-        await notifyDirectors(prisma, orgId, "New project created", `Project "${project.name}" was created by ${actorName}. Status: ${project.approvalStatus}.`);
       }
       try {
         await syncLeadAndClientFromProject(prisma, orgId, project.id);
@@ -977,7 +992,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           milestoneId: milestoneId || undefined,
           title: title.trim(),
           description: description?.trim() || undefined,
-          status: "todo",
+          status: "not_started",
           assigneeId: userId,
           dueDate: dueDate ? new Date(dueDate) : undefined
         }
@@ -1136,18 +1151,29 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         actualHours?: string;
       };
 
-    if (status === "blocked" && !blockedReason) {
+    const normalizedStatus =
+      status === "todo" ? "not_started" : status;
+
+    if (normalizedStatus === "blocked" && !blockedReason) {
       res.status(400).json({ error: "blockedReason is required when status is blocked" });
       return;
     }
 
-    if (status === "done" && (existing.blockedReason || blockedReason)) {
+    if (normalizedStatus === "done" && (existing.blockedReason || blockedReason)) {
       res.status(400).json({ error: "Task with blockedReason cannot be marked done" });
       return;
     }
 
+    if (
+      normalizedStatus != null &&
+      !["not_started", "in_progress", "waiting_response", "blocked", "done"].includes(normalizedStatus)
+    ) {
+      res.status(400).json({ error: "Invalid status" });
+      return;
+    }
+
     const data: any = {
-      status,
+      status: normalizedStatus,
       priority,
       blockedReason,
       dueDate: dueDate ? new Date(dueDate) : undefined
@@ -1177,10 +1203,10 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     });
 
     const events: string[] = ["task.updated"];
-    if (status === "blocked") {
+    if (normalizedStatus === "blocked") {
       events.push("task.blocked");
     }
-    if (status === "done") {
+    if (normalizedStatus === "done") {
       events.push("task.completed");
     }
 

@@ -160,7 +160,7 @@ export class InvoiceAutomationService {
         invoice_date: now.toISOString().split('T')[0],
         due_date: this.calculateDueDate(now).toISOString().split('T')[0],
         status: 'draft',
-        currency: 'USD',
+        currency: 'KES',
         client: invoiceData.client!,
         company: {
           name: organization.name,

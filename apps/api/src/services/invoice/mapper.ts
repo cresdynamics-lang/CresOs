@@ -133,7 +133,7 @@ export class InvoiceDataMapper {
       invoice_date: invoiceDate,
       due_date: dueDate,
       status: 'draft',
-      currency: 'USD', // Default currency - make configurable
+      currency: 'KES', // Default currency - make configurable
       client: {
         id: project.client_id,
         name: project.client_name,

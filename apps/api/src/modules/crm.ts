@@ -40,6 +40,88 @@ export default function crmRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Clients + project status summary (includes projects without clientId as pseudo-clients)
+  router.get(
+    "/clients/summary",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const roleKeys = req.auth!.roleKeys;
+
+      const projects = await prisma.project.findMany({
+        where: { orgId, deletedAt: null },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          approvalStatus: true,
+          clientId: true,
+          clientOrOwnerName: true,
+          email: true,
+          phone: true,
+          client: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      type ProjectRow = { id: string; name: string; status: string; approvalStatus: string };
+      type ClientSummary = {
+        key: string;
+        clientId: string | null;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        projects: ProjectRow[];
+      };
+
+      const map = new Map<string, ClientSummary>();
+
+      for (const p of projects) {
+        const linked = p.clientId && p.client ? p.client : null;
+        const key = linked ? `client:${linked.id}` : `project:${p.id}`;
+        const name =
+          (linked?.name ?? "").trim() ||
+          (p.clientOrOwnerName ?? "").trim() ||
+          p.name;
+        const email = (linked?.email ?? p.email ?? null) ? String(linked?.email ?? p.email).trim() || null : null;
+        const phone = (linked?.phone ?? p.phone ?? null) ? String(linked?.phone ?? p.phone).trim() || null : null;
+
+        const existing = map.get(key);
+        const entry: ClientSummary =
+          existing ?? {
+            key,
+            clientId: linked?.id ?? null,
+            name,
+            email,
+            phone,
+            projects: []
+          };
+
+        entry.projects.push({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          approvalStatus: p.approvalStatus
+        });
+
+        map.set(key, entry);
+      }
+
+      const list = Array.from(map.values())
+        .map((c) => maskClientForAdmin(roleKeys, c))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+      res.json({ total: list.length, clients: list });
+    }
+  );
+
   router.post(
     "/clients",
     requireRoles([ROLE_KEYS.sales]),
@@ -96,23 +178,25 @@ export default function crmRouter(prisma: PrismaClient): Router {
       res.status(400).json({ error: "Title is required" });
       return;
     }
-    if (!projectId) {
-      res.status(400).json({ error: "projectId is required — lead must be tied to an existing project." });
-      return;
+
+    let project: { id: string; clientId: string | null } | null = null;
+    if (projectId) {
+      project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null },
+        select: { id: true, clientId: true }
+      });
+      if (!project) {
+        res.status(400).json({ error: "Project not found for this organisation." });
+        return;
+      }
     }
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, orgId, deletedAt: null }
-    });
-    if (!project) {
-      res.status(400).json({ error: "Project not found for this organisation." });
-      return;
-    }
+
     const lead = await prisma.lead.create({
       data: {
         orgId,
         title,
-        clientId: clientId ?? project.clientId,
-        projectId: project.id,
+        clientId: clientId ?? project?.clientId ?? undefined,
+        projectId: project?.id ?? undefined,
         source,
         status: "new",
         ownerId: userId,
@@ -155,7 +239,14 @@ export default function crmRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { id } = req.params;
-      const body = req.body as { approvalStatus?: string; status?: string; title?: string; source?: string };
+      const body = req.body as {
+        approvalStatus?: string;
+        status?: string;
+        title?: string;
+        source?: string;
+        projectId?: string | null;
+        client?: { name?: string; email?: string | null; phone?: string | null };
+      };
       const lead = await prisma.lead.findFirst({ where: { id, orgId, deletedAt: null } });
       if (!lead) return res.status(404).json({ error: "Lead not found" });
 
@@ -177,12 +268,68 @@ export default function crmRouter(prisma: PrismaClient): Router {
       }
       // Sales/owner: update status, title, source only (admin may override)
       if (lead.ownerId !== userId && !isAdmin) return res.status(403).json({ error: "Not your lead" });
+
+      const normalizedStatus = body.status != null ? String(body.status).trim() : null;
+      if (!isAdmin && normalizedStatus != null) {
+        const allowed = ["new", "contacted", "qualified", "disqualified", "waiting", "scheduled", "closed"];
+        if (!allowed.includes(normalizedStatus)) {
+          return res.status(400).json({ error: "Invalid lead status" });
+        }
+      }
+
+      // Optionally link/unlink a project
+      let nextProjectId: string | null | undefined = undefined;
+      let derivedClientId: string | null | undefined = undefined;
+      if (body.projectId !== undefined) {
+        if (body.projectId === null || String(body.projectId).trim() === "") {
+          nextProjectId = null;
+        } else {
+          const pid = String(body.projectId);
+          const project = await prisma.project.findFirst({ where: { id: pid, orgId, deletedAt: null }, select: { id: true, clientId: true } });
+          if (!project) return res.status(400).json({ error: "Project not found" });
+          nextProjectId = project.id;
+          derivedClientId = project.clientId;
+        }
+      }
+
+      // Optionally update lead's client contact fields (updates/creates Client)
+      let nextClientId: string | undefined = undefined;
+      if (body.client && (body.client.name || body.client.email != null || body.client.phone != null)) {
+        const name = body.client.name?.trim();
+        const email = body.client.email != null ? (String(body.client.email).trim() || null) : undefined;
+        const phone = body.client.phone != null ? (String(body.client.phone).trim() || null) : undefined;
+
+        if (lead.clientId) {
+          await prisma.client.update({
+            where: { id: lead.clientId },
+            data: {
+              ...(name ? { name } : {}),
+              ...(email !== undefined ? { email } : {}),
+              ...(phone !== undefined ? { phone } : {})
+            }
+          });
+        } else {
+          const created = await prisma.client.create({
+            data: {
+              orgId,
+              name: name || lead.title,
+              ...(email !== undefined ? { email } : {}),
+              ...(phone !== undefined ? { phone } : {})
+            }
+          });
+          nextClientId = created.id;
+        }
+      }
+
       const updated = await prisma.lead.update({
         where: { id },
         data: {
-          ...(body.status != null && { status: body.status }),
+          ...(normalizedStatus != null && { status: normalizedStatus }),
           ...(body.title != null && { title: body.title }),
-          ...(body.source != null && { source: body.source })
+          ...(body.source != null && { source: body.source }),
+          ...(nextProjectId !== undefined && { projectId: nextProjectId }),
+          ...(nextClientId !== undefined && { clientId: nextClientId }),
+          ...(derivedClientId != null && lead.clientId == null && nextClientId === undefined && { clientId: derivedClientId })
         }
       });
       res.json(updated);
@@ -366,7 +513,7 @@ export default function crmRouter(prisma: PrismaClient): Router {
   // Outreach contacts (emails/phones for sending service communications)
   router.get(
     "/contacts",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const [manualContacts, clientContacts] = await Promise.all([

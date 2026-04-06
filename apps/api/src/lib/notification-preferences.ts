@@ -5,21 +5,22 @@ export type NotificationPreferences = {
   mutedTiers?: string[];
   /** When true, no in-app items shown and badge stays at 0 */
   muteAllInApp?: boolean;
+  /** Optional: play a sound on incoming Community chat messages (web-only). */
+  playCommunitySound?: boolean;
 };
 
 const VALID_TIERS = new Set<string>(Object.values(NOTIFICATION_TIERS));
 
 export function parseNotificationPreferences(raw: unknown): Required<NotificationPreferences> {
-  if (!raw || typeof raw !== "object") {
-    return { mutedTiers: [], muteAllInApp: false };
-  }
-  const o = raw as Record<string, unknown>;
-  const muted = Array.isArray(o.mutedTiers)
-    ? o.mutedTiers.filter((t): t is string => typeof t === "string" && VALID_TIERS.has(t))
+  const base: Record<string, unknown> = raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
+  const muted = Array.isArray(base.mutedTiers)
+    ? (base.mutedTiers as unknown[]).filter((t): t is string => typeof t === "string" && VALID_TIERS.has(t))
     : [];
   return {
+    ...(base as any),
     mutedTiers: [...new Set(muted)],
-    muteAllInApp: Boolean(o.muteAllInApp)
+    muteAllInApp: Boolean(base.muteAllInApp),
+    playCommunitySound: Boolean(base.playCommunitySound)
   };
 }
 
@@ -29,7 +30,13 @@ export function mergeNotificationPreferences(
 ): Required<NotificationPreferences> {
   const base = parseNotificationPreferences(current);
   return {
+    ...base,
     muteAllInApp: patch.muteAllInApp !== undefined ? Boolean(patch.muteAllInApp) : base.muteAllInApp,
-    mutedTiers: patch.mutedTiers !== undefined ? parseNotificationPreferences({ mutedTiers: patch.mutedTiers }).mutedTiers : base.mutedTiers
+    mutedTiers:
+      patch.mutedTiers !== undefined
+        ? parseNotificationPreferences({ ...base, mutedTiers: patch.mutedTiers }).mutedTiers
+        : base.mutedTiers,
+    playCommunitySound:
+      patch.playCommunitySound !== undefined ? Boolean(patch.playCommunitySound) : base.playCommunitySound
   };
 }

@@ -41,6 +41,7 @@ interface OnlineUser {
   status: "online" | "busy" | "away" | "offline";
   lastSeen: string | null;
   isOnline: boolean;
+  avatar?: string | null;
 }
 
 interface CallState {
@@ -97,6 +98,26 @@ function dayKey(iso: string): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+function playCommunityBeep(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = "square";
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.35);
+  } catch {
+    // ignore
+  }
+}
+
 function formatDaySeparator(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -127,6 +148,15 @@ function peerSubtitle(conv: Conversation | null, roster: OnlineUser[], myId?: st
 function initialsFromLabel(label: string): string {
   const c = label.trim().charAt(0);
   return c ? c.toUpperCase() : "?";
+}
+
+function avatarUrl(pathOrUrl: string | null | undefined): string | null {
+  if (!pathOrUrl) return null;
+  const raw = String(pathOrUrl).trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
 function formatTimestampShort(timestamp: string): string {
@@ -165,6 +195,14 @@ export default function CommunityPage() {
     remoteStream: null,
     peerConnection: null
   });
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsReadyRef = useRef(false);
+  const activeCallIdRef = useRef<string | null>(null);
+  const activePeerIdRef = useRef<string | null>(null);
+  const pendingInboundCallRef = useRef<{ callId: string; fromUserId: string; callType: "voice" | "video" } | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
   const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -172,13 +210,289 @@ export default function CommunityPage() {
   const [voiceRecordingTimer, setVoiceRecordingTimer] = useState<NodeJS.Timeout | null>(null);
   const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
 
+  const [playCommunitySound, setPlayCommunitySound] = useState(false);
+  const audioUnlockedRef = useRef(false);
+  const lastUnreadTotalRef = useRef(0);
+  const lastBeepAtRef = useRef(0);
+
+  const startCallTimer = useCallback(() => {
+    if (callTimer) {
+      clearInterval(callTimer);
+      setCallTimer(null);
+    }
+    const timer = setInterval(() => {
+      setCallState((prev) => ({
+        ...prev,
+        callDuration: prev.callDuration + 1
+      }));
+    }, 1000);
+    setCallTimer(timer);
+  }, [callTimer]);
+
+  const wsSend = useCallback((payload: unknown) => {
+    const ws = wsRef.current;
+    if (!ws) return;
+    const sendNow = () => {
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch {
+        // ignore
+      }
+    };
+    if (ws.readyState === WebSocket.OPEN) {
+      sendNow();
+      return;
+    }
+    if (ws.readyState === WebSocket.CONNECTING) {
+      const onOpen = () => {
+        ws.removeEventListener("open", onOpen);
+        sendNow();
+      };
+      ws.addEventListener("open", onOpen);
+    }
+  }, []);
+
+  const wsUrl = useMemo(() => {
+    const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+    const wsBase = base.startsWith("https://")
+      ? base.replace(/^https:\/\//, "wss://")
+      : base.replace(/^http:\/\//, "ws://");
+    const token = auth.accessToken ? encodeURIComponent(auth.accessToken) : "";
+    return `${wsBase}/chat-community/ws?token=${token}`;
+  }, [auth.accessToken]);
+
+  const ensureWs = useCallback((): WebSocket | null => {
+    if (!auth.accessToken) return null;
+    const existing = wsRef.current;
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+      return existing;
+    }
+
+    wsReadyRef.current = false;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      wsReadyRef.current = true;
+    };
+
+    ws.onclose = () => {
+      wsReadyRef.current = false;
+      if (wsRef.current === ws) wsRef.current = null;
+    };
+
+    ws.onerror = () => {
+      wsReadyRef.current = false;
+    };
+
+    ws.onmessage = async (evt) => {
+      try {
+        const payload = JSON.parse(String(evt.data)) as any;
+        if (!payload || typeof payload.type !== "string") return;
+
+        if (payload.type === "call_request") {
+          const fromUserId = String(payload.fromUserId || "");
+          const callId = String(payload.callId || "");
+          const callType = payload.callType === "video" ? "video" : "voice";
+          if (!fromUserId || !callId) return;
+          if (callState.isInCall) {
+            ws.send(
+              JSON.stringify({
+                type: "call_reject",
+                callId,
+                toUserId: fromUserId,
+                reason: "busy"
+              })
+            );
+            return;
+          }
+          pendingInboundCallRef.current = { callId, fromUserId, callType };
+          const label = onlineUsers.find((u) => u.id === fromUserId)?.name || "Someone";
+          const ok = window.confirm(`${label} is calling you (${callType}). Accept?`);
+          if (!ok) {
+            ws.send(
+              JSON.stringify({
+                type: "call_reject",
+                callId,
+                toUserId: fromUserId,
+                reason: "rejected"
+              })
+            );
+            pendingInboundCallRef.current = null;
+            return;
+          }
+
+          activeCallIdRef.current = callId;
+          activePeerIdRef.current = fromUserId;
+
+          const peer = onlineUsers.find((u) => u.id === fromUserId) || {
+            id: fromUserId,
+            name: label,
+            status: "online",
+            lastSeen: null,
+            isOnline: true
+          };
+
+          const constraints = {
+            audio: true,
+            video: callType === "video"
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+          const pc = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+          });
+
+          pcRef.current = pc;
+          localStreamRef.current = stream;
+
+          const remoteStream = new MediaStream();
+          remoteStreamRef.current = remoteStream;
+          pc.ontrack = (e) => {
+            e.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+            setCallState((prev) => ({ ...prev, remoteStream }));
+          };
+
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) return;
+            const toUserId = activePeerIdRef.current;
+            const callId2 = activeCallIdRef.current;
+            if (!toUserId || !callId2) return;
+            ws.send(
+              JSON.stringify({
+                type: "ice_candidate",
+                callId: callId2,
+                toUserId,
+                candidate: e.candidate
+              })
+            );
+          };
+
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+          setCallState({
+            isInCall: true,
+            callType,
+            callWith: peer as OnlineUser,
+            callDuration: 0,
+            isMuted: false,
+            isVideoOn: callType === "video",
+            localStream: stream,
+            remoteStream,
+            peerConnection: pc
+          });
+
+          startCallTimer();
+
+          wsSend({ type: "call_accept", callId, toUserId: fromUserId });
+          pendingInboundCallRef.current = null;
+          return;
+        }
+
+        if (payload.type === "call_accept") {
+          const callId = String(payload.callId || "");
+          const fromUserId = String(payload.fromUserId || "");
+          if (!callId || !fromUserId) return;
+          if (activeCallIdRef.current !== callId) return;
+          const pc = pcRef.current;
+          if (!pc) return;
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          wsSend({ type: "call_offer", callId, toUserId: fromUserId, sdp: offer });
+          return;
+        }
+
+        if (payload.type === "call_offer") {
+          const callId = String(payload.callId || "");
+          const fromUserId = String(payload.fromUserId || "");
+          if (!callId || !fromUserId) return;
+          if (activeCallIdRef.current !== callId) return;
+          const pc = pcRef.current;
+          if (!pc) return;
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          wsSend({ type: "call_answer", callId, toUserId: fromUserId, sdp: answer });
+          return;
+        }
+
+        if (payload.type === "call_answer") {
+          const callId = String(payload.callId || "");
+          if (!callId) return;
+          if (activeCallIdRef.current !== callId) return;
+          const pc = pcRef.current;
+          if (!pc) return;
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          return;
+        }
+
+        if (payload.type === "ice_candidate") {
+          const callId = String(payload.callId || "");
+          if (!callId) return;
+          if (activeCallIdRef.current !== callId) return;
+          const pc = pcRef.current;
+          if (!pc) return;
+          if (payload.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          }
+          return;
+        }
+
+        if (payload.type === "call_reject") {
+          const callId = String(payload.callId || "");
+          if (!callId) return;
+          if (activeCallIdRef.current !== callId) return;
+          alert("Call rejected");
+          endCall();
+          return;
+        }
+
+        if (payload.type === "call_hangup") {
+          const callId = String(payload.callId || "");
+          if (!callId) return;
+          if (activeCallIdRef.current !== callId) return;
+          endCall();
+          return;
+        }
+      } catch {
+        return;
+      }
+    };
+
+    return ws;
+  }, [auth.accessToken, wsUrl, callState.isInCall, callState.peerConnection, onlineUsers]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        wsRef.current?.close();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
   const loadConversations = useCallback(async () => {
     if (!auth.accessToken) return;
     try {
       const response = await apiFetch("/chat-community/conversations");
       if (response.ok) {
         const data = await response.json();
-        setConversations(data.data.conversations || []);
+        const next = (data.data.conversations || []) as Conversation[];
+        setConversations(next);
+
+        if (playCommunitySound && audioUnlockedRef.current) {
+          const totalUnread = next.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
+          const prevTotal = lastUnreadTotalRef.current;
+          lastUnreadTotalRef.current = totalUnread;
+          const now = Date.now();
+          const shouldBeep = totalUnread > prevTotal;
+          const rateOk = now - lastBeepAtRef.current > 2000;
+          if (shouldBeep && rateOk) {
+            lastBeepAtRef.current = now;
+            playCommunityBeep();
+          }
+        }
         setChatError(null);
       } else {
         const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -191,6 +505,40 @@ export default function CommunityPage() {
       setLoading(false);
     }
   }, [auth.accessToken, apiFetch]);
+
+  useEffect(() => {
+    if (!auth.accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiFetch("/account/me");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { notificationPreferences?: any };
+        setPlayCommunitySound(Boolean(data.notificationPreferences?.playCommunitySound));
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.accessToken, apiFetch]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (audioUnlockedRef.current) return;
+    const unlock = () => {
+      audioUnlockedRef.current = true;
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth.accessToken) return;
@@ -258,8 +606,25 @@ export default function CommunityPage() {
         const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`);
         if (response.ok) {
           const data = await response.json();
-          setMessages(data.data.messages || []);
+          const nextMessages = (data.data.messages || []) as Message[];
+          setMessages(nextMessages);
           setChatError(null);
+
+          if (auth.userId) {
+            const unread = nextMessages.filter(
+              (m) => m.senderId !== auth.userId && m.status !== "read"
+            );
+            if (unread.length > 0) {
+              await Promise.allSettled(
+                unread.map((m) =>
+                  apiFetch(`/chat-community/messages/${m.id}/read`, {
+                    method: "POST"
+                  })
+                )
+              );
+              void loadConversations();
+            }
+          }
         } else {
           const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
           setChatError(err.error ?? err.message ?? `Could not load messages (${response.status})`);
@@ -273,7 +638,7 @@ export default function CommunityPage() {
     };
 
     fetchMessages();
-  }, [selectedConversation, auth.accessToken, apiFetch]);
+  }, [selectedConversation, auth.accessToken, auth.userId, apiFetch, loadConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -397,6 +762,20 @@ export default function CommunityPage() {
       alert("Voice and video calls are only available when the other person is online.");
       return;
     }
+    if (!auth.userId) {
+      alert("Missing user id. Refresh and try again.");
+      return;
+    }
+
+    const ws = ensureWs();
+    if (!ws) {
+      alert("Could not connect to call service.");
+      return;
+    }
+
+    const callId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    activeCallIdRef.current = callId;
+    activePeerIdRef.current = user.id;
 
     try {
       const constraints = {
@@ -405,6 +784,37 @@ export default function CommunityPage() {
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+
+      pcRef.current = pc;
+      localStreamRef.current = stream;
+
+      const remoteStream = new MediaStream();
+      remoteStreamRef.current = remoteStream;
+      pc.ontrack = (e) => {
+        e.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+        setCallState((prev) => ({ ...prev, remoteStream }));
+      };
+
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) return;
+        const toUserId = activePeerIdRef.current;
+        const callId2 = activeCallIdRef.current;
+        if (!toUserId || !callId2) return;
+        ws.send(
+          JSON.stringify({
+            type: "ice_candidate",
+            callId: callId2,
+            toUserId,
+            candidate: e.candidate
+          })
+        );
+      };
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
       const response = await apiFetch("/chat-community/conversations/direct", {
         method: "POST",
@@ -422,29 +832,26 @@ export default function CommunityPage() {
         if (conv) setSelectedConversation(conv);
         setSidebarPanel("chats");
         void loadConversations();
-        setCallState({
-          isInCall: true,
-          callType,
-          callWith: user,
-          callDuration: 0,
-          isMuted: false,
-          isVideoOn: callType === "video",
-          localStream: stream,
-          remoteStream: null,
-          peerConnection: null
-        });
-
-        const timer = setInterval(() => {
-          setCallState((prev) => ({
-            ...prev,
-            callDuration: prev.callDuration + 1
-          }));
-        }, 1000);
-        setCallTimer(timer);
       }
+
+      setCallState({
+        isInCall: true,
+        callType,
+        callWith: user,
+        callDuration: 0,
+        isMuted: false,
+        isVideoOn: callType === "video",
+        localStream: stream,
+        remoteStream,
+        peerConnection: pc
+      });
+
+      startCallTimer();
+      wsSend({ type: "call_request", callId, toUserId: user.id, callType });
     } catch (error) {
       console.error("Failed to start call:", error);
       alert("Failed to access camera/microphone. Please check permissions.");
+      endCall();
     }
   };
 
@@ -454,15 +861,28 @@ export default function CommunityPage() {
       setCallTimer(null);
     }
 
-    if (callState.localStream) {
-      callState.localStream.getTracks().forEach((track) => track.stop());
+    const callId = activeCallIdRef.current;
+    const toUserId = activePeerIdRef.current;
+    if (callId && toUserId) {
+      wsSend({ type: "call_hangup", callId, toUserId });
     }
-    if (callState.remoteStream) {
-      callState.remoteStream.getTracks().forEach((track) => track.stop());
+
+    activeCallIdRef.current = null;
+    activePeerIdRef.current = null;
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
     }
-    if (callState.peerConnection) {
-      callState.peerConnection.close();
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
     }
+    if (pcRef.current) {
+      pcRef.current.close();
+    }
+
+    localStreamRef.current = null;
+    remoteStreamRef.current = null;
+    pcRef.current = null;
 
     setCallState({
       isInCall: false,
@@ -795,7 +1215,15 @@ export default function CommunityPage() {
                     className={`flex cursor-pointer items-center gap-3 border-b border-[#202C33] px-3 py-2.5 outline-none ${wa.listHover} focus-visible:ring-2 focus-visible:ring-[#25D366]/50`}
                   >
                     <div className="relative h-12 w-12 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-lg font-medium leading-[3rem] text-white">
-                      {initialsFromLabel(user.name)}
+                      {avatarUrl(user.avatar) ? (
+                        <img
+                          src={avatarUrl(user.avatar) as string}
+                          alt={user.name}
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        initialsFromLabel(user.name)
+                      )}
                       <span
                         className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#111B21] ${getStatusColor(user.isOnline ? user.status : "offline")}`}
                       />
@@ -1093,8 +1521,24 @@ export default function CommunityPage() {
 
             {callState.callType === "video" && (
               <div className="mb-4 space-y-4">
-                <div className="relative flex h-48 items-center justify-center rounded-lg bg-[#111B21]">
-                  {callState.isVideoOn && callState.localStream ? (
+                <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-lg bg-[#111B21]">
+                  {callState.remoteStream ? (
+                    <video
+                      ref={(el) => {
+                        if (el && callState.remoteStream) {
+                          el.srcObject = callState.remoteStream;
+                          void el.play();
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-[#8696A0]">Connecting…</div>
+                  )}
+
+                  {callState.localStream && (
                     <video
                       ref={(el) => {
                         if (el && callState.localStream) {
@@ -1106,10 +1550,8 @@ export default function CommunityPage() {
                       autoPlay
                       playsInline
                       muted
-                      className="h-full w-full rounded-lg object-cover"
+                      className="absolute bottom-2 right-2 h-20 w-28 rounded-md object-cover ring-2 ring-black/30"
                     />
-                  ) : (
-                    <div className="text-[#8696A0]">{callState.isVideoOn ? "Starting camera…" : "Camera off"}</div>
                   )}
                 </div>
               </div>

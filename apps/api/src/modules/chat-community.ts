@@ -8,7 +8,7 @@
 import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
-import { requireRoles, ALL_APP_ROLE_KEYS } from "./auth-middleware";
+import { requireRoles, ALL_APP_ROLE_KEYS, ROLE_KEYS } from "./auth-middleware";
 import multer from "multer";
 import {
   ensureChatUserAndInbox,
@@ -36,6 +36,127 @@ const upload = multer({
 
 export default function chatCommunityRouter(prisma: PrismaClient): Router {
   const router = createRouter();
+
+  router.post(
+    "/admin/send",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const body = req.body as {
+          roleKey?: string;
+          userId?: string;
+          content?: string;
+          type?: string;
+        };
+
+        const content = typeof body.content === "string" ? body.content.trim() : "";
+        const type = typeof body.type === "string" && body.type.trim() ? body.type.trim() : "text";
+        if (!content) {
+          return res.status(400).json({ error: "Message content is required" });
+        }
+
+        if (!body.roleKey && !body.userId) {
+          return res.status(400).json({ error: "Missing recipient (roleKey or userId)" });
+        }
+
+        const recipientUserIds: string[] = [];
+        if (body.userId) {
+          const recipient = await prisma.user.findFirst({
+            where: {
+              id: body.userId,
+              deletedAt: null,
+              OR: [
+                { orgId },
+                { memberships: { some: { orgId, deletedAt: null } } },
+                { roles: { some: { role: { orgId } } } }
+              ]
+            },
+            select: { id: true }
+          });
+          if (recipient && recipient.id !== userId) recipientUserIds.push(recipient.id);
+        } else if (body.roleKey) {
+          const users = await prisma.user.findMany({
+            where: {
+              deletedAt: null,
+              id: { not: userId },
+              AND: [
+                {
+                  OR: [
+                    { orgId },
+                    { memberships: { some: { orgId, deletedAt: null } } },
+                    { roles: { some: { role: { orgId } } } }
+                  ]
+                },
+                { roles: { some: { role: { orgId, key: body.roleKey } } } }
+              ]
+            },
+            select: { id: true }
+          });
+          recipientUserIds.push(...users.map((u) => u.id));
+        }
+
+        if (recipientUserIds.length === 0) {
+          return res.status(404).json({ error: "No recipients found" });
+        }
+
+        await ensureChatUserAndInbox(prisma, userId, orgId, { touchPresence: true });
+
+        const results: Array<{ recipientUserId: string; conversationId: string; messageId: string }> = [];
+
+        for (const recipientId of recipientUserIds) {
+          await ensureChatUserAndInbox(prisma, recipientId, orgId, { touchPresence: false });
+          const conv = await createOrGetDirectConversation(prisma, orgId, userId, recipientId);
+
+          const created = await prisma.message.create({
+            data: {
+              conversationId: conv.id,
+              senderId: userId,
+              content,
+              type,
+              status: "sent",
+              readBy: [{ userId, readAt: new Date().toISOString() }]
+            }
+          });
+
+          const unreadNext = mergeUnreadCounts(conv.unreadCounts, conv.participants, userId);
+          await prisma.conversation.update({
+            where: { id: conv.id },
+            data: {
+              lastMessage: {
+                id: created.id,
+                content: created.content,
+                senderId: created.senderId,
+                timestamp: created.createdAt.toISOString(),
+                type: created.type
+              },
+              unreadCounts: unreadNext,
+              updatedAt: new Date()
+            }
+          });
+
+          results.push({
+            recipientUserId: recipientId,
+            conversationId: conv.id,
+            messageId: created.id
+          });
+        }
+
+        res.status(201).json({
+          success: true,
+          message: "Message sent",
+          data: { results }
+        });
+      } catch (error) {
+        console.error("Error sending admin message:", error);
+        res.status(500).json({
+          error: "Failed to send admin message",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
 
   // Initialize chat user when user first accesses chat
   router.post(
@@ -101,6 +222,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             id: true,
             name: true,
             email: true,
+            profilePicture: true,
             createdAt: true,
             chatUser: {
               select: {
@@ -139,7 +261,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
               status: isOnline ? status : "offline",
               isOnline,
               lastSeen: (cu?.lastSeen ?? u.createdAt).toISOString(),
-              avatar: null as string | null
+              avatar: u.profilePicture || null
             };
           })
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -705,10 +827,67 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
     requireRoles(ALL_APP_ROLE_KEYS),
     async (req, res) => {
       try {
-        const { messageId } = req.params;
+        const messageId = Array.isArray(req.params.messageId)
+          ? req.params.messageId[0]
+          : req.params.messageId;
+        if (!messageId) {
+          return res.status(400).json({ error: "Missing message id" });
+        }
         const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
 
-        // In a real implementation, this would update the database
+        const msg = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            deletedAt: null,
+            conversation: {
+              orgId,
+              participants: { has: userId }
+            }
+          },
+          select: {
+            id: true,
+            conversationId: true,
+            readBy: true
+          }
+        });
+
+        if (!msg) {
+          return res.status(404).json({ error: "Message not found" });
+        }
+
+        const currentReadBy = Array.isArray(msg.readBy)
+          ? (msg.readBy as Array<{ userId?: string; readAt?: string }> )
+          : [];
+
+        const alreadyRead = currentReadBy.some((r) => r?.userId === userId);
+        if (!alreadyRead) {
+          await prisma.message.update({
+            where: { id: messageId },
+            data: {
+              readBy: [...currentReadBy, { userId, readAt: new Date().toISOString() }],
+              status: "read"
+            }
+          });
+        }
+
+        const conv = await prisma.conversation.findFirst({
+          where: { id: msg.conversationId, orgId, participants: { has: userId } },
+          select: { id: true, unreadCounts: true }
+        });
+
+        if (conv) {
+          const unreadMap = conv.unreadCounts as Record<string, number> | null;
+          if ((unreadMap?.[userId] ?? 0) > 0) {
+            const next = { ...(unreadMap ?? {}) };
+            next[userId] = 0;
+            await prisma.conversation.update({
+              where: { id: conv.id },
+              data: { unreadCounts: next }
+            });
+          }
+        }
+
         res.json({
           success: true,
           message: "Message marked as read"

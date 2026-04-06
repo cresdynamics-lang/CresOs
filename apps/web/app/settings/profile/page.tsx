@@ -26,6 +26,7 @@ export default function ProfileSettingsPage() {
   const [activeTab, setActiveTab] = useState<"profile" | "contact" | "kin" | "picture">("profile");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({
     id: auth.userId || "",
     name: auth.userName || "",
@@ -150,8 +151,30 @@ export default function ProfileSettingsPage() {
   const handleProfilePictureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // TODO: Implement file upload
-      alert("Profile picture upload will be implemented soon");
+      setUploadingPicture(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await apiFetch("/user/profile-picture", {
+          method: "POST",
+          body: fd
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          alert((data as any)?.error ?? "Failed to upload profile picture");
+          return;
+        }
+        const next = (data as any)?.data?.profilePicture as string | undefined;
+        if (next) {
+          setProfile((p) => ({ ...p, profilePicture: next }));
+        }
+      } catch (error) {
+        console.error("Failed to upload profile picture:", error);
+        alert("Failed to upload profile picture. Please try again.");
+      } finally {
+        setUploadingPicture(false);
+        event.target.value = "";
+      }
     }
   };
 
@@ -455,9 +478,17 @@ export default function ProfileSettingsPage() {
           
           <div className="space-y-6">
             <div className="flex items-center gap-6">
-              <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center text-3xl font-medium text-slate-200">
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
+              {profile.profilePicture ? (
+                <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}${profile.profilePicture}`}
+                  alt="Profile"
+                  className="w-32 h-32 rounded-full object-cover bg-slate-700"
+                />
+              ) : (
+                <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center text-3xl font-medium text-slate-200">
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               
               <div>
                 <h3 className="text-lg font-medium text-slate-200 mb-2">Current Profile Picture</h3>
@@ -466,13 +497,14 @@ export default function ProfileSettingsPage() {
                 </p>
                 
                 <div className="flex gap-3">
-                  <label className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand/80 transition-colors cursor-pointer">
-                    Upload New Picture
+                  <label className={`px-4 py-2 bg-brand text-white rounded-lg transition-colors cursor-pointer ${uploadingPicture ? "opacity-60" : "hover:bg-brand/80"}`}>
+                    {uploadingPicture ? "Uploading…" : "Upload New Picture"}
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleProfilePictureUpload}
                       className="hidden"
+                      disabled={uploadingPicture}
                     />
                   </label>
                   

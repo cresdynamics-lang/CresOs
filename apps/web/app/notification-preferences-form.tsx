@@ -16,11 +16,12 @@ const TIERS: { id: string; label: string; hint: string }[] = [
 export type NotificationPrefs = {
   mutedTiers: string[];
   muteAllInApp: boolean;
+  playCommunitySound?: boolean;
 };
 
 function normalizePrefs(raw: unknown): NotificationPrefs {
   if (!raw || typeof raw !== "object") {
-    return { mutedTiers: [], muteAllInApp: false };
+    return { mutedTiers: [], muteAllInApp: false, playCommunitySound: false };
   }
   const o = raw as Record<string, unknown>;
   const muted = Array.isArray(o.mutedTiers)
@@ -28,7 +29,8 @@ function normalizePrefs(raw: unknown): NotificationPrefs {
     : [];
   return {
     mutedTiers: Array.from(new Set(muted)),
-    muteAllInApp: Boolean(o.muteAllInApp)
+    muteAllInApp: Boolean(o.muteAllInApp),
+    playCommunitySound: Boolean(o.playCommunitySound)
   };
 }
 
@@ -39,6 +41,7 @@ export function NotificationPreferencesForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [muteAllInApp, setMuteAllInApp] = useState(false);
   const [mutedTiers, setMutedTiers] = useState<Set<string>>(new Set());
+  const [playCommunitySound, setPlayCommunitySound] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +52,7 @@ export function NotificationPreferencesForm() {
       const p = normalizePrefs(data.notificationPreferences);
       setMuteAllInApp(p.muteAllInApp);
       setMutedTiers(new Set(p.mutedTiers));
+      setPlayCommunitySound(Boolean(p.playCommunitySound));
     } finally {
       setLoading(false);
     }
@@ -76,7 +80,8 @@ export function NotificationPreferencesForm() {
         body: JSON.stringify({
           notificationPreferences: {
             muteAllInApp,
-            mutedTiers: Array.from(mutedTiers)
+            mutedTiers: Array.from(mutedTiers),
+            playCommunitySound
           }
         })
       });
@@ -102,6 +107,20 @@ export function NotificationPreferencesForm() {
       <p className="text-sm text-slate-400">
         Control which in-app notifications appear in your bell and count toward the badge. Email notifications are unchanged.
       </p>
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-3">
+        <input
+          type="checkbox"
+          checked={playCommunitySound}
+          onChange={(e) => setPlayCommunitySound(e.target.checked)}
+          className="mt-1 rounded border-slate-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-200">Play loud sound for Community messages</span>
+          <span className="text-xs text-slate-500">
+            If enabled, CresOS will attempt to play a short sound for incoming Community messages (your browser may require a click first).
+          </span>
+        </span>
+      </label>
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-3">
         <input
           type="checkbox"
