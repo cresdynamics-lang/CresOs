@@ -57,16 +57,14 @@ export function HeaderStatusStrip() {
   }, [load]);
 
   const approvalsWarn = pendingFinance > 3;
+  const isAdmin = auth.roleKeys.includes("admin");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-300">
         <NotificationBell />
-        <span className="hidden sm:inline">
-          {unseen} notification{unseen === 1 ? "" : "s"}
-        </span>
       </div>
-      {canSeeApprovals && (
+      {canSeeApprovals && !isAdmin && (
         <Link
           href="/approvals"
           className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${

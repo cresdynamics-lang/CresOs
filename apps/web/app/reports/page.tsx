@@ -9,6 +9,8 @@ type Report = {
   title: string;
   body: string;
   status: string;
+  reviewStatus?: string;
+  remarks?: string | null;
   submittedAt: string | null;
   createdAt: string;
   submittedBy?: { id: string; name: string | null; email: string };
@@ -116,6 +118,8 @@ export default function ReportsPage() {
                 <th className="pb-2 pr-3">Title</th>
                 {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
                 <th className="pb-2 pr-3">Status</th>
+                <th className="pb-2 pr-3">Review</th>
+                <th className="pb-2 pr-3">Remarks</th>
                 <th className="pb-2 pr-3">Submitted at</th>
                 <th className="pb-2 pr-3">Created at</th>
               </tr>
@@ -151,6 +155,22 @@ export default function ReportsPage() {
                     >
                       {r.status}
                     </span>
+                  </td>
+                  <td className="py-2 pr-3 text-xs">
+                    <span
+                      className={
+                        r.reviewStatus === "checked"
+                          ? "rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
+                          : r.reviewStatus === "viewed"
+                            ? "rounded bg-sky-500/15 px-2 py-0.5 text-sky-300"
+                            : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200"
+                      }
+                    >
+                      {r.reviewStatus ?? "pending"}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-cres-text-muted">
+                    {r.remarks?.trim() ? r.remarks.trim().slice(0, 80) : "—"}
                   </td>
                   <td className="py-2 pr-3 text-xs text-cres-muted">
                     {r.submittedAt

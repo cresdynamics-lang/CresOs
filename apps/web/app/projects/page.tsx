@@ -39,6 +39,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
   const [clientMessage, setClientMessage] = useState<{ projectId: string; projectName: string; result: ClientMessageResult } | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState<Record<string, string>>({});
@@ -46,17 +47,20 @@ export default function ProjectsPage() {
   const [savingLinkId, setSavingLinkId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  const isSales = auth.roleKeys.some((r) => ["admin", "director_admin", "sales"].includes(r));
-  const isDirector = auth.roleKeys.some((r) => ["admin", "director_admin"].includes(r));
-  /** Developers alone cannot create projects; Sales, Director, and Admin can. */
+  const isSales = auth.roleKeys.some((r) => ["director_admin", "sales"].includes(r));
+  const isDirector = auth.roleKeys.includes("director_admin");
+  const isDeveloperOnly =
+    auth.roleKeys.includes("developer") &&
+    !auth.roleKeys.some((r) => ["admin", "director_admin", "sales", "finance", "analyst", "client"].includes(r));
+  /** Developers alone cannot create projects; Sales and Director can. */
   const canCreateProject =
     auth.roleKeys.includes("sales") ||
-    auth.roleKeys.includes("director_admin") ||
-    auth.roleKeys.includes("admin");
+    auth.roleKeys.includes("director_admin");
   /** Project approval is director-only (not admin). */
   const canApproveProject = auth.roleKeys.includes("director_admin");
   const isFinance = auth.roleKeys.includes("finance");
-  const canGenerateMessage = auth.roleKeys.some((r) => ["admin", "director_admin", "sales", "developer", "analyst"].includes(r));
+  const canGenerateMessage = auth.roleKeys.some((r) => ["director_admin", "sales", "analyst"].includes(r));
+  const canFilterByApproval = auth.roleKeys.some((r) => ["admin", "director_admin"].includes(r));
 
   const loadProjects = useCallback(async () => {
     try {
@@ -94,6 +98,13 @@ export default function ProjectsPage() {
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  const filteredProjects =
+    filter === "all"
+      ? projects
+      : filter === "pending"
+        ? projects.filter((p) => p.approvalStatus === "pending_approval")
+        : projects.filter((p) => p.approvalStatus === "approved");
 
   useEffect(() => {
     if (!createOpen || !canCreateProject) return;
@@ -178,28 +189,72 @@ export default function ProjectsPage() {
             Sales and Directors create projects. Developers only work on assigned projects (accept when invited). Directors can invite multiple developers and comment on tasks; daily reports remain on Developer reports.
           </p>
         </div>
-        {canCreateProject && (
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-          >
-            New project
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canFilterByApproval && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`rounded px-3 py-2 text-sm ${
+                  filter === "all"
+                    ? "bg-slate-600 text-white"
+                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter("pending")}
+                className={`rounded px-3 py-2 text-sm ${
+                  filter === "pending"
+                    ? "bg-amber-700/70 text-white"
+                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter("approved")}
+                className={`rounded px-3 py-2 text-sm ${
+                  filter === "approved"
+                    ? "bg-emerald-700/70 text-white"
+                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                Approved
+              </button>
+            </div>
+          )}
+
+          {canCreateProject && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            >
+              New project
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Card grid: 3 per row desktop, 1 mobile */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project) => (
+        {filteredProjects.map((project) => (
           <div
             key={project.id}
             className="flex flex-col rounded-xl border border-slate-700 bg-slate-900/60 p-4 shadow-sm"
           >
             <div className="mb-2 flex items-start justify-between gap-2">
-              <Link href={`/projects/${project.id}`} className="min-w-0 flex-1">
-                <h3 className="truncate font-medium text-slate-100">{project.name}</h3>
-              </Link>
+              {isDeveloperOnly ? (
+                <h3 className="min-w-0 flex-1 truncate font-medium text-slate-100">{project.name}</h3>
+              ) : (
+                <Link href={`/projects/${project.id}`} className="min-w-0 flex-1">
+                  <h3 className="truncate font-medium text-slate-100">{project.name}</h3>
+                </Link>
+              )}
               <span className="shrink-0 rounded bg-slate-700 px-2 py-0.5 text-xs capitalize text-slate-300">
                 {project.status}
               </span>
@@ -263,9 +318,9 @@ export default function ProjectsPage() {
                 href={`/projects/${project.id}`}
                 className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
               >
-                View
+                {isDeveloperOnly ? "View details" : "View"}
               </Link>
-              {canGenerateMessage && (
+              {!isDeveloperOnly && canGenerateMessage && (
                 <>
                   <input
                     type="url"
@@ -288,9 +343,11 @@ export default function ProjectsPage() {
           </div>
         ))}
       </div>
-      {projects.length === 0 && (
+      {filteredProjects.length === 0 && (
         <div className="shell text-center text-sm text-slate-400">
-          No projects yet. {canCreateProject && "Create one to get started."}
+          {filter === "all"
+            ? `No projects yet.${canCreateProject ? " Create one to get started." : ""}`
+            : `No ${filter} projects.`}
         </div>
       )}
 

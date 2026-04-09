@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
-import { OnboardingPrompt } from "./onboarding-prompt";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
 import { ALL_APP_ROLE_KEYS } from "../lib/app-roles";
+import { ring } from "./browser-notify";
 
 type NavSection = {
   title: string;
@@ -34,25 +34,21 @@ const SIDEBAR_SECTIONS: NavSection[] = [
       { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
       { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
-      { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"] },
-      { href: "/meeting-requests", label: "Director meeting", roles: ["admin", "sales"] }
+      { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"] }
     ]
   },
   {
     title: "Delivery",
     items: [
       { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
-      { href: "/developer-reports", label: "Reports", roles: ["admin", "director_admin", "developer"] },
-      { href: "/meeting-requests", label: "Director meeting", roles: ["admin", "director_admin", "developer"] }
+      { href: "/developer-reports", label: "Reports", roles: ["admin", "director_admin", "developer"] }
     ]
   },
   {
     title: "Finance",
     items: [
       { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst"] },
-      { href: "/finance/invoices", label: "Invoice Approvals", roles: ["admin", "finance"] },
-      { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] },
-      { href: "/voice", label: "Voice", roles: ["admin", "finance"] }
+      { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] }
     ]
   },
   {
@@ -64,9 +60,8 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Administration",
     items: [
-      { href: "/admin/users", label: "Users", roles: ["admin", "director_admin"] },
-      { href: "/admin", label: "Users & org", roles: ["admin"] },
-      { href: "/activity", label: "Activity log", roles: ["admin"] }
+      { href: "/admin/users", label: "Users", roles: ["admin"] },
+      { href: "/admin/org", label: "Org", roles: ["admin"] }
     ]
   }
 ];
@@ -90,13 +85,37 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const roles = auth.roleKeys;
   const [overdueCount, setOverdueCount] = useState(0);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [communityUnread, setCommunityUnread] = useState(0);
+  const [tasksUnread, setTasksUnread] = useState(0);
+  const [devProjectsNeedAttention, setDevProjectsNeedAttention] = useState(0);
+  const [devReportReminderDue, setDevReportReminderDue] = useState(false);
+  const [unreadByKeyword, setUnreadByKeyword] = useState<Record<string, number>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<"preferences" | "account">("account");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const canSeeApprovals = useMemo(
+    () => roles.some((r) => ["admin", "director_admin", "finance"].includes(r)),
+    [roles]
+  );
+
+  const lastSeenKey = (section: string) => `cresos_sidebar_seen_${section}`;
+  const getLastSeen = (section: string): number => {
+    if (typeof window === "undefined") return 0;
+    const raw = window.localStorage.getItem(lastSeenKey(section));
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) ? n : 0;
+  };
+  const setLastSeen = (section: string) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(lastSeenKey(section), String(Date.now()));
+  };
+
   useEffect(() => {
-    if (!roles.includes("sales")) return;
+    if (!roles.some((r) => ["sales", "director_admin", "admin"].includes(r))) return;
     let cancelled = false;
     apiFetch("/reports/alarms/overdue")
       .then((res) => res.ok ? res.json() : null)
@@ -106,6 +125,205 @@ export function AppShell({ children }: { children: ReactNode }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [roles, apiFetch]);
+
+  const prevUnseenRef = useRef<number | null>(null);
+  const loadSidebarAttention = useCallback(async () => {
+    try {
+      const needsDevAttention = roles.includes("developer");
+      const [nCountRes, nRes, aRes, attnRes] = await Promise.all([
+        apiFetch("/notifications/me/unseen-count"),
+        apiFetch("/notifications/me"),
+        canSeeApprovals ? apiFetch("/finance/approvals") : Promise.resolve(null as unknown as Response)
+        ,
+        needsDevAttention ? apiFetch("/dashboard/attention") : Promise.resolve(null as unknown as Response)
+      ]);
+
+      if (nCountRes.ok) {
+        const j = (await nCountRes.json()) as { count?: number };
+        const next = j.count ?? 0;
+        setUnseenCount(next);
+
+        const prev = prevUnseenRef.current;
+        prevUnseenRef.current = next;
+        if (prev != null && next > prev) {
+          // Ring on new unseen notifications (messages/tasks/approvals/etc.)
+          ring();
+        }
+      }
+
+      if (nRes.ok) {
+        const list = (await nRes.json()) as { id: string; type?: string; body?: string; createdAt?: string; readAt?: string | null }[];
+        const unread = list.filter((x) => !x.readAt);
+        const blob = unread
+          .map((n) => `${n.type ?? ""} ${n.body ?? ""}`.toLowerCase())
+          .join("\n");
+        const community = unread.filter((n) => {
+          const t = (n.type ?? "").toLowerCase();
+          const b = (n.body ?? "").toLowerCase();
+          return t.includes("community") || t.includes("chat") || b.includes("community") || b.includes("message");
+        }).length;
+        const tasks = unread.filter((n) => {
+          const t = (n.type ?? "").toLowerCase();
+          const b = (n.body ?? "").toLowerCase();
+          return t.includes("task") || b.includes("task") || b.includes("assigned") || b.includes("due");
+        }).length;
+        setCommunityUnread(community);
+        setTasksUnread(tasks);
+
+        // Very lightweight keyword buckets to show “something needs attention” per section.
+        // This uses only unread notification text; it’s safe even if we don’t have per-module counts.
+        const buckets: Array<[string, string[]]> = [
+          ["projects", ["project", "milestone"]],
+          ["crm", ["crm", "client"]],
+          ["leads", ["lead", "deal", "pipeline"]],
+          ["finance", ["invoice", "payment", "expense", "payout", "approval"]],
+          ["reports", ["report"]],
+          ["community", ["community", "chat", "message"]],
+          ["tasks", ["task", "assigned", "due", "schedule"]]
+        ];
+        const next: Record<string, number> = {};
+        for (const [k, words] of buckets) {
+          next[k] = words.some((w) => blob.includes(w)) ? 1 : 0; // dot-level signal
+        }
+        setUnreadByKeyword(next);
+      }
+
+      if (canSeeApprovals && aRes && (aRes as any).ok) {
+        const list = (await (aRes as any).json()) as { status: string; entityType: string }[];
+        const pending = list.filter(
+          (a) =>
+            a.status === "pending" &&
+            (a.entityType === "expense" || a.entityType === "payout" || a.entityType === "invoice")
+        ).length;
+        // Only show as "attention" if user hasn't opened Approvals since last time.
+        const seenAt = getLastSeen("approvals");
+        setPendingApprovalsCount(seenAt > 0 ? 0 : pending);
+      } else if (!canSeeApprovals) {
+        setPendingApprovalsCount(0);
+      }
+
+      if (needsDevAttention && attnRes && (attnRes as any).ok) {
+        const j = (await (attnRes as any).json()) as {
+          stats?: { tasksOverdue?: number; needsAttentionCount?: number };
+          projectsNeedingReview?: unknown[];
+          handoffRequestsReceived?: unknown[];
+          reportReminderDue?: boolean;
+        };
+        const projectsCount =
+          (Array.isArray(j.projectsNeedingReview) ? j.projectsNeedingReview.length : 0) +
+          (Array.isArray(j.handoffRequestsReceived) ? j.handoffRequestsReceived.length : 0);
+        const tasksOverdue = j.stats?.tasksOverdue ?? 0;
+        setDevProjectsNeedAttention(projectsCount + tasksOverdue);
+        setDevReportReminderDue(j.reportReminderDue === true);
+      } else if (!needsDevAttention) {
+        setDevProjectsNeedAttention(0);
+        setDevReportReminderDue(false);
+      }
+    } catch {
+      // ignore
+    }
+  }, [apiFetch, canSeeApprovals, roles]);
+
+  // When user opens a section, treat it as "attended": clear that section's badge by
+  // (a) marking related notifications as read (when possible) and (b) storing last-seen timestamp.
+  useEffect(() => {
+    const seg = pathname.split("?")[0].split("#")[0].split("/").filter(Boolean)[0] ?? "";
+    const section =
+      seg === "developer-reports" ? "reports" :
+      seg === "schedule" ? "tasks" :
+      seg === "community" ? "community" :
+      seg === "approvals" ? "approvals" :
+      seg === "reports" ? "reports" :
+      seg === "projects" ? "projects" :
+      seg === "crm" ? "crm" :
+      seg === "leads" ? "leads" :
+      seg === "finance" ? "finance" :
+      "";
+    if (!section) return;
+
+    setLastSeen(section);
+
+    const keywords: Record<string, string[]> = {
+      community: ["community", "chat", "message"],
+      tasks: ["task", "assigned", "due", "schedule"],
+      projects: ["project", "milestone"],
+      crm: ["crm", "client"],
+      leads: ["lead", "deal", "pipeline"],
+      finance: ["invoice", "payment", "expense", "payout", "approval"],
+      reports: ["report"]
+    };
+
+    void (async () => {
+      try {
+        const res = await apiFetch("/notifications/me");
+        if (!res.ok) return;
+        const list = (await res.json()) as { id: string; type?: string; body?: string; readAt?: string | null }[];
+        const words = keywords[section] ?? [];
+        const unread = list.filter((n) => !n.readAt);
+        const toMark = unread.filter((n) => {
+          const t = `${n.type ?? ""} ${n.body ?? ""}`.toLowerCase();
+          return words.some((w) => t.includes(w));
+        });
+        await Promise.all(
+          toMark.map((n) => apiFetch(`/notifications/${n.id}/read`, { method: "PATCH" }).catch(() => null))
+        );
+        await loadSidebarAttention();
+      } catch {
+        // ignore
+      }
+    })();
+  }, [pathname, apiFetch, loadSidebarAttention]);
+
+  useEffect(() => {
+    void loadSidebarAttention();
+    const t = window.setInterval(() => void loadSidebarAttention(), 30_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadSidebarAttention();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadSidebarAttention]);
+
+  const badgeForItem = (href: string, label: string): { count: number; tone: "rose" | "amber" | "sky" } | null => {
+    // No badges on the dashboard (requested)
+    if (href === "/dashboard") return null;
+
+    // Hard counts (DB / alarms)
+    if (href === "/approvals" && pendingApprovalsCount > 0) {
+      return { count: pendingApprovalsCount, tone: pendingApprovalsCount > 3 ? "amber" : "sky" };
+    }
+    if (href === "/reports" && overdueCount > 0) {
+      const seenAt = getLastSeen("reports");
+      return seenAt > 0 ? null : { count: overdueCount, tone: "rose" };
+    }
+    if (href === "/community" && communityUnread > 0) return { count: communityUnread, tone: "sky" };
+    if (href === "/schedule" && tasksUnread > 0) return { count: tasksUnread, tone: "amber" };
+    if (href === "/projects" && devProjectsNeedAttention > 0 && roles.includes("developer")) {
+      const seenAt = getLastSeen("projects");
+      return seenAt > 0 ? null : { count: devProjectsNeedAttention, tone: "amber" };
+    }
+    if (href === "/developer-reports" && devReportReminderDue && roles.includes("developer")) {
+      const seenAt = getLastSeen("reports");
+      return seenAt > 0 ? null : { count: 1, tone: "rose" };
+    }
+
+    // Dot-level attention for the rest (based on unread notifications text)
+    const key = href.split("/").filter(Boolean)[0] || label.toLowerCase();
+    const k = key.toLowerCase();
+    const dot =
+      (k.includes("project") && unreadByKeyword.projects) ||
+      (k === "crm" && unreadByKeyword.crm) ||
+      (k === "leads" && unreadByKeyword.leads) ||
+      (k === "finance" && unreadByKeyword.finance) ||
+      (k === "reports" && unreadByKeyword.reports) ||
+      (k === "community" && unreadByKeyword.community) ||
+      (k === "schedule" && unreadByKeyword.tasks);
+    if (dot) return { count: 1, tone: "sky" };
+    return null;
+  };
 
   const visibleSections = SIDEBAR_SECTIONS.map((section) => ({
     ...section,
@@ -154,7 +372,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   // Check if current page should be fullscreen
-  const isFullscreenPage = pathname === '/community' || pathname === '/voice';
+  const isFullscreenPage = pathname === '/community';
 
   return (
     <div className={`flex h-screen overflow-hidden ${isFullscreenPage && isFullscreen ? 'bg-slate-950' : ''}`}>
@@ -186,7 +404,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       (item.href === "/reports" && pathname.startsWith("/reports")) ||
                       (item.href === "/leads" && pathname.startsWith("/leads")) ||
                       (item.href === "/crm" && pathname.startsWith("/crm"));
-                    const showAlarm = item.href === "/reports" && overdueCount > 0;
+                    const badge = badgeForItem(item.href, item.label);
                     return (
                       <Link
                         key={`${section.title}-${item.href}-${item.label}`}
@@ -198,9 +416,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                         }`}
                       >
                         {item.label}
-                        {showAlarm && (
-                          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            {overdueCount}
+                        {badge && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
+                              badge.tone === "rose"
+                                ? "bg-rose-500"
+                                : badge.tone === "amber"
+                                  ? "bg-amber-500"
+                                  : "bg-sky-500"
+                            }`}
+                            title={`${badge.count} needs attention`}
+                          >
+                            {badge.count > 99 ? "99+" : badge.count}
                           </span>
                         )}
                       </Link>
@@ -227,7 +454,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       (item.href === "/reports" && pathname.startsWith("/reports")) ||
                       (item.href === "/leads" && pathname.startsWith("/leads")) ||
                       (item.href === "/crm" && pathname.startsWith("/crm"));
-                    const showAlarm = item.href === "/reports" && overdueCount > 0;
+                    const badge = badgeForItem(item.href, item.label);
                     return (
                       <Link
                         key={`${section.title}-${item.href}-${item.label}`}
@@ -240,8 +467,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                         title={item.label}
                       >
                         {item.label.charAt(0)}
-                        {showAlarm && (
-                          <span className="absolute -top-1 -right-1 rounded-full bg-rose-500 w-2 h-2"></span>
+                        {badge && (
+                          <span
+                            className={`absolute -top-1 -right-1 rounded-full w-2 h-2 ${
+                              badge.tone === "rose"
+                                ? "bg-rose-500"
+                                : badge.tone === "amber"
+                                  ? "bg-amber-500"
+                                  : "bg-sky-500"
+                            }`}
+                          />
                         )}
                       </Link>
                     );
@@ -344,15 +579,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
-        <OnboardingPrompt
-          onOpenAccountSettings={() => {
-            setSettingsOpen(true);
-            setSettingsInitialTab("account");
-          }}
-        />
-        <div className={`mx-auto px-6 py-6 ${
-          isFullscreenPage && isFullscreen ? 'max-w-none' : 'max-w-5xl'
-        }`}>
+        <div
+          className={`mx-auto ${
+            isFullscreenPage
+              ? "max-w-none px-0 py-0"
+              : "max-w-none px-6 py-6"
+          } ${isFullscreenPage && isFullscreen ? "max-w-none" : ""}`}
+        >
           {children}
         </div>
       </main>

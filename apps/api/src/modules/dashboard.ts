@@ -111,6 +111,171 @@ async function reportSubmissionStreak(prisma: PrismaClient, userId: string): Pro
 export default function dashboardRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
+  router.get(
+    "/kpis",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      const [
+        revenueThisMonthAgg,
+        expensesThisMonthAgg,
+        outstandingInvoicesAgg,
+        overdueInvoicesCount,
+        activeProjectsCount,
+        overdueTasksCount,
+        blockedTasksCount,
+        milestonesDone,
+        milestonesPending,
+        projectsFromLeadsThisMonth,
+        dealsWon,
+        dealsLost,
+        closedDeals
+      ] = await Promise.all([
+        prisma.payment.aggregate({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: "confirmed",
+            receivedAt: { gte: startOfMonth, lt: startOfNextMonth }
+          },
+          _sum: { amount: true }
+        }),
+        prisma.expense.aggregate({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { in: ["approved", "paid"] },
+            spentAt: { gte: startOfMonth, lt: startOfNextMonth }
+          },
+          _sum: { amount: true }
+        }),
+        prisma.invoice.aggregate({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { in: ["sent", "partial", "overdue"] }
+          },
+          _sum: { totalAmount: true }
+        }),
+        prisma.invoice.count({
+          where: {
+            orgId,
+            deletedAt: null,
+            OR: [
+              { status: "overdue" },
+              {
+                status: { in: ["sent", "partial"] },
+                dueDate: { not: null, lt: now }
+              }
+            ]
+          }
+        }),
+        prisma.project.count({
+          where: { orgId, deletedAt: null, status: "active" }
+        }),
+        prisma.task.count({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { not: "done" },
+            dueDate: { not: null, lt: now }
+          }
+        }),
+        prisma.task.count({
+          where: { orgId, deletedAt: null, status: "blocked" }
+        }),
+        prisma.milestone.count({
+          where: { orgId, deletedAt: null, status: "completed" }
+        }),
+        prisma.milestone.count({
+          where: { orgId, deletedAt: null, status: { not: "completed" } }
+        }),
+        prisma.lead
+          .groupBy({
+            by: ["projectId"],
+            where: {
+              orgId,
+              deletedAt: null,
+              projectId: { not: null },
+              createdAt: { gte: startOfMonth, lt: startOfNextMonth }
+            }
+          })
+          .then((rows) => rows.filter((r) => r.projectId != null).length),
+        prisma.deal.count({
+          where: {
+            orgId,
+            deletedAt: null,
+            stage: "won",
+            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+          }
+        }),
+        prisma.deal.count({
+          where: {
+            orgId,
+            deletedAt: null,
+            stage: "lost",
+            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+          }
+        }),
+        prisma.deal.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            stage: { in: ["won", "lost"] },
+            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+          },
+          select: { createdAt: true, updatedAt: true }
+        })
+      ]);
+
+      const won = dealsWon;
+      const lost = dealsLost;
+      const closedCount = won + lost;
+      const winRate = closedCount > 0 ? (won / closedCount) * 100 : 0;
+
+      const avgTimeToCloseDays =
+        closedDeals.length === 0
+          ? 0
+          : closedDeals.reduce((sum, d) => {
+              const ms = d.updatedAt.getTime() - d.createdAt.getTime();
+              return sum + ms / (1000 * 60 * 60 * 24);
+            }, 0) / closedDeals.length;
+
+      res.json({
+        period: {
+          startOfMonth: startOfMonth.toISOString(),
+          endExclusive: startOfNextMonth.toISOString()
+        },
+        finance: {
+          revenueThisMonth: Number(revenueThisMonthAgg._sum.amount ?? 0),
+          outstandingInvoicesAmount: Number(outstandingInvoicesAgg._sum.totalAmount ?? 0),
+          overdueInvoicesCount,
+          expensesThisMonth: Number(expensesThisMonthAgg._sum.amount ?? 0)
+        },
+        projectHealth: {
+          activeProjects: activeProjectsCount,
+          overdueTasks: overdueTasksCount,
+          blockedTasks: blockedTasksCount,
+          milestonesDone,
+          milestonesPending
+        },
+        leadConversion: {
+          // For leadership KPIs we treat “leads” as “lead → project created” so counts align with project reality.
+          leadsThisMonth: projectsFromLeadsThisMonth,
+          dealsWon: won,
+          dealsLost: lost,
+          winRate,
+          avgTimeToCloseDays
+        }
+      });
+    }
+  );
+
   // What needs your attention + stats (notifications, messages, due, work progress, report streak)
   router.get(
     "/attention",

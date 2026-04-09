@@ -187,7 +187,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
         where: { orgId, deletedAt: null },
         orderBy: { name: "asc" },
         include: { 
-          _count: { select: { roles: true, members: true } },
+          _count: { select: { roles: true } },
           roles: {
             select: {
               id: true,
@@ -221,7 +221,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
         where: { orgId, deletedAt: null },
         orderBy: { name: "asc" },
         include: { 
-          _count: { select: { roles: true, members: true } },
+          _count: { select: { roles: true } },
           roles: {
             select: {
               id: true,
@@ -1486,10 +1486,14 @@ export default function adminRouter(prisma: PrismaClient): Router {
           },
           memberships: {
             select: {
-              department: {
+              role: {
                 select: {
-                  id: true,
-                  name: true
+                  department: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  }
                 }
               }
             }
@@ -1516,7 +1520,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
         })),
         departments: [
           ...user.roles.map(r => r.role.department).filter(Boolean),
-          ...user.memberships.map(m => m.department).filter(Boolean)
+          ...user.memberships.map(m => m.role?.department ?? null).filter(Boolean)
         ].reduce((unique, dept) => {
           if (dept && !unique.find(d => d.id === dept.id)) {
             unique.push(dept);
@@ -1607,6 +1611,78 @@ export default function adminRouter(prisma: PrismaClient): Router {
       }
 
       res.json(updated);
+    }
+  );
+
+  router.delete(
+    "/users/:id",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const adminId = req.auth!.userId;
+      const { id } = req.params;
+
+      if (id === adminId) {
+        res.status(400).json({ error: "You cannot delete your own user." });
+        return;
+      }
+
+      const target = await prisma.user.findFirst({
+        where: { id, orgId, deletedAt: null },
+        select: { id: true, email: true }
+      });
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      const adminRole = await prisma.role.findFirst({
+        where: { orgId, key: ROLE_KEYS.admin },
+        select: { id: true }
+      });
+      if (adminRole) {
+        const [targetIsAdmin, adminCount] = await Promise.all([
+          prisma.userRole.findFirst({ where: { userId: id, roleId: adminRole.id }, select: { id: true } }),
+          prisma.userRole.count({
+            where: {
+              roleId: adminRole.id,
+              user: { orgId, deletedAt: null }
+            }
+          })
+        ]);
+        if (targetIsAdmin && adminCount <= 1) {
+          res.status(400).json({ error: "You cannot delete the last admin user in this organization." });
+          return;
+        }
+      }
+
+      await prisma.user.update({
+        where: { id },
+        data: {
+          deletedAt: new Date()
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: adminId,
+          type: "admin.user.deleted",
+          entityType: "user",
+          entityId: id,
+          metadata: { email: target.email }
+        }
+      });
+
+      await notifyAdminsInApp(
+        prisma,
+        orgId,
+        "[Visibility] User deleted",
+        `An admin deleted a user: ${target.email}`,
+        { type: "admin.user.deleted", tier: "structural", excludeUserIds: [adminId] }
+      );
+
+      res.json({ success: true });
     }
   );
 

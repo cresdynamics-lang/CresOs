@@ -143,6 +143,49 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Director/Admin: mark developer report as viewed/checked and attach remarks.
+  router.patch(
+    "/:id/review",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { reviewStatus, remarks } = req.body as { reviewStatus?: string; remarks?: string };
+
+      if (!reviewStatus || !["pending", "viewed", "checked"].includes(reviewStatus)) {
+        res.status(400).json({ error: "reviewStatus must be one of: pending, viewed, checked" });
+        return;
+      }
+
+      const existing = await prisma.developerReport.findFirst({
+        where: { id, orgId }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+
+      const note = (remarks ?? "").trim();
+      if (reviewStatus === "checked" && note.length === 0) {
+        res.status(400).json({ error: "Remarks are required to mark a report as checked." });
+        return;
+      }
+
+      const updated = await prisma.developerReport.update({
+        where: { id },
+        data: {
+          reviewStatus,
+          reviewedAt: new Date(),
+          reviewedById: userId,
+          ...(remarks !== undefined && { remarks: note || null })
+        },
+        include: { submittedBy: { select: { id: true, name: true, email: true } } }
+      });
+      res.json(updated);
+    }
+  );
+
   // Update — leadership only (developers cannot edit filed history)
   router.patch(
     "/:id",

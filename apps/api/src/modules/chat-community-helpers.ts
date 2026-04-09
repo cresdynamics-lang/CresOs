@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 export function displayNameOrEmail(name: string | null | undefined, email: string): string {
   const n = name?.trim();
   if (n) return n;
-  return email;
+  return "User";
 }
 
 /** All active user IDs tied to an org (primary org field, OrgMember, and UserRole in that org). */

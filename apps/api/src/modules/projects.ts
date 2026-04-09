@@ -16,7 +16,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // List users that can be assigned as developer (developer role in org)
   router.get(
     "/assignable-developers",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.developer, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.developer]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const memberIds = (await prisma.orgMember.findMany({ where: { orgId }, select: { userId: true } })).map((m) => m.userId);
@@ -29,23 +29,43 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Projects list (role-based: sales=created by me, developer=approved+assigned to me, finance=approved, director=all)
+  // Projects list (role-based):
+  // - admin/director: all
+  // - sales: created by me (all statuses)
+  // - finance: approved only
+  // - everyone else: assigned to me (approved only)
   router.get(
     "/",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const roleKeys = req.auth!.roleKeys;
-      const isDirector = roleKeys.includes(ROLE_KEYS.director) || roleKeys.includes(ROLE_KEYS.admin);
+      const isDirector = roleKeys.includes(ROLE_KEYS.director);
       const isDeveloper = roleKeys.includes(ROLE_KEYS.developer);
       const isFinance = roleKeys.includes(ROLE_KEYS.finance);
       const isSales = roleKeys.includes(ROLE_KEYS.sales);
+      const isAdmin = roleKeys.includes(ROLE_KEYS.admin);
 
       let where: Record<string, unknown> = { orgId, deletedAt: null };
-      if (isDirector || roleKeys.includes(ROLE_KEYS.admin) || roleKeys.includes(ROLE_KEYS.analyst)) {
-        // director/admin/analyst: all
-      } else if (isDeveloper && !isDirector) {
+      if (isDirector || isAdmin) {
+        // director/admin: all
+      } else if (isSales) {
+        where.createdByUserId = userId;
+      } else if (isFinance) {
+        where.approvalStatus = "approved";
+      } else if (isDeveloper) {
+        // Developer: projects assigned or invited to (even if approval pending).
+        where.OR = [
+          { assignedDeveloperId: userId },
+          {
+            developerAssignments: {
+              some: { userId, status: { in: ["pending", "accepted"] } }
+            }
+          }
+        ];
+      } else {
+        // Other roles: only approved projects they are assigned to.
         where.approvalStatus = "approved";
         where.OR = [
           { assignedDeveloperId: userId },
@@ -55,12 +75,6 @@ export default function projectsRouter(prisma: PrismaClient): Router {
             }
           }
         ];
-      } else if (isFinance) {
-        where.approvalStatus = "approved";
-      } else if (isSales) {
-        where.createdByUserId = userId;
-      } else {
-        where = { orgId, deletedAt: null, id: { in: [] } };
       }
 
       const projects = await prisma.project.findMany({
@@ -96,7 +110,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }
 
       // Strip price/phone/email for developer view
-      const stripSensitive = isDeveloper && !isDirector;
+      const stripSensitive = isDeveloper && !isDirector && !isAdmin;
       const out = projects.map((p) => {
         const row = {
           ...p,
@@ -122,7 +136,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Create project: Sales (demo/project → pending director approval) or Director/Admin (approved immediately). Developers cannot create projects.
   router.post(
     "/",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.sales, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.sales]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -147,8 +161,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(400).json({ error: "Name is required" });
         return;
       }
-      const isDirectorLike =
-        req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isDirectorLike = req.auth!.roleKeys.includes(ROLE_KEYS.director);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       if (!isDirectorLike && !isSales) {
         res.status(403).json({ error: "Only Sales or Director can create projects" });
@@ -349,12 +362,13 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Update project: sales (pending only), finance (contact/price), anyone (clientLink)
   router.patch(
     "/:projectId",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.sales, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.sales]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { projectId } = req.params;
       const body = req.body as {
+        name?: string;
         clientLink?: string | null;
         clientOrOwnerName?: string | null;
         phone?: string | null;
@@ -366,6 +380,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         timeline?: { date?: string; title?: string }[] | null;
         managementMonthlyAmount?: string | number | null;
         managementMonths?: string | number | null;
+        startDate?: string | null;
+        endDate?: string | null;
       };
       const project = await prisma.project.findFirst({
         where: { id: projectId, orgId, deletedAt: null }
@@ -374,15 +390,14 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
-      const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
+      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       const canEditSales = isSales && project.createdByUserId === userId && project.approvalStatus === "pending_approval";
-      const canEditFinance = isFinance && project.approvalStatus === "approved";
 
       const data: Record<string, unknown> = {};
       if (body.clientLink !== undefined) data.clientLink = body.clientLink && String(body.clientLink).trim() ? String(body.clientLink).trim() : null;
       if (isDirector) {
+        if (body.name !== undefined) data.name = body.name && String(body.name).trim() ? String(body.name).trim() : project.name;
         if (body.clientOrOwnerName !== undefined) data.clientOrOwnerName = body.clientOrOwnerName && String(body.clientOrOwnerName).trim() ? String(body.clientOrOwnerName).trim() : null;
         if (body.phone !== undefined) data.phone = body.phone && String(body.phone).trim() ? String(body.phone).trim() : null;
         if (body.email !== undefined) data.email = body.email && String(body.email).trim() ? String(body.email).trim() : null;
@@ -393,13 +408,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         if (body.timeline !== undefined) data.timeline = body.timeline;
         if (body.managementMonthlyAmount !== undefined) data.managementMonthlyAmount = body.managementMonthlyAmount != null && body.managementMonthlyAmount !== "" ? new Prisma.Decimal(Number(body.managementMonthlyAmount)) : null;
         if (body.managementMonths !== undefined) data.managementMonths = body.managementMonths != null && body.managementMonths !== "" ? Math.max(0, Math.floor(Number(body.managementMonths))) : null;
-      } else if (canEditFinance) {
-        if (body.clientOrOwnerName !== undefined) data.clientOrOwnerName = body.clientOrOwnerName && String(body.clientOrOwnerName).trim() ? String(body.clientOrOwnerName).trim() : null;
-        if (body.phone !== undefined) data.phone = body.phone && String(body.phone).trim() ? String(body.phone).trim() : null;
-        if (body.email !== undefined) data.email = body.email && String(body.email).trim() ? String(body.email).trim() : null;
-        if (body.price !== undefined) data.price = body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : null;
-        if (body.managementMonthlyAmount !== undefined) data.managementMonthlyAmount = body.managementMonthlyAmount != null && body.managementMonthlyAmount !== "" ? new Prisma.Decimal(Number(body.managementMonthlyAmount)) : null;
-        if (body.managementMonths !== undefined) data.managementMonths = body.managementMonths != null && body.managementMonths !== "" ? Math.max(0, Math.floor(Number(body.managementMonths))) : null;
+        if (body.startDate !== undefined) data.startDate = body.startDate ? new Date(body.startDate) : null;
+        if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
       } else if (canEditSales) {
         if (body.clientOrOwnerName !== undefined) data.clientOrOwnerName = body.clientOrOwnerName && String(body.clientOrOwnerName).trim() ? String(body.clientOrOwnerName).trim() : null;
         if (body.phone !== undefined) data.phone = body.phone && String(body.phone).trim() ? String(body.phone).trim() : null;
@@ -409,6 +419,11 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         if (body.status !== undefined) data.status = body.status;
         if (body.assignedDeveloperId !== undefined) data.assignedDeveloperId = body.assignedDeveloperId && String(body.assignedDeveloperId).trim() ? String(body.assignedDeveloperId).trim() : null;
         if (body.timeline !== undefined) data.timeline = body.timeline;
+      }
+
+      if (Object.keys(data).length === 0) {
+        res.status(403).json({ error: "You do not have permission to update this project" });
+        return;
       }
 
       const updated = await prisma.project.update({
@@ -527,7 +542,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Single project (role-based visibility: developer sees no price/phone/email)
   router.get(
     "/:projectId",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -562,7 +577,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director);
       const isDeveloper = req.auth!.roleKeys.includes(ROLE_KEYS.developer);
       const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
@@ -622,7 +637,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Director invites additional developers (pending accept)
   router.post(
     "/:projectId/developer-assignments",
-    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.director]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -740,6 +755,15 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(403).json({ error: "Only an assigned developer who accepted the project can mark as reviewed" });
         return;
       }
+
+      const [taskCount, milestoneCount] = await Promise.all([
+        prisma.task.count({ where: { orgId, projectId, deletedAt: null } }),
+        prisma.milestone.count({ where: { orgId, projectId, deletedAt: null } })
+      ]);
+      if (taskCount === 0 || milestoneCount === 0) {
+        res.status(400).json({ error: "Project must have at least 1 task and 1 milestone before it can be marked reviewed." });
+        return;
+      }
       const updated = await prisma.project.update({
         where: { id: projectId },
         data: { developerReviewedAt: new Date() }
@@ -765,8 +789,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         return;
       }
       const handoffAccess = await getProjectDeveloperAccess(prisma, project, userId);
-      if (!isDirector && handoffAccess !== "active") {
-        res.status(403).json({ error: "Only an accepted developer on this project can request handoff" });
+      if (!isDirector && handoffAccess === "none") {
+        res.status(403).json({ error: "Only an invited/accepted developer on this project can request handoff" });
         return;
       }
       const toUserId = body.toUserId?.trim();
@@ -800,6 +824,26 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       });
       const toName = handoff.toUser?.name || handoff.toUser?.email || "a developer";
       await notifyDirectors(prisma, orgId, "Project handoff requested", `Project "${project.name}" handoff was requested to ${toName}. Waiting for their response.`);
+      await prisma.notification.create({
+        data: {
+          orgId,
+          channel: "in_app",
+          to: toUserId,
+          subject: "Project swap requested",
+          body: `A developer requested to swap work on "${project.name}" to you. Open Projects → View details to accept.`,
+          status: "sent",
+          type: "project.handoff.requested",
+          tier: "execution"
+        }
+      });
+
+      // If the requester was only invited (pending), treat swap as their response: they won't accept themselves.
+      if (!isDirector && handoffAccess === "invited") {
+        await prisma.projectDeveloperAssignment.updateMany({
+          where: { projectId, userId, status: "pending" },
+          data: { status: "rejected", respondedAt: new Date() }
+        });
+      }
       res.status(201).json(handoff);
     }
   );
@@ -920,12 +964,12 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Tasks (assigned developer or director/analyst only for add/edit)
   router.get(
     "/:projectId/tasks",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { projectId } = req.params;
-      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director);
       const isAnalyst = req.auth!.roleKeys.includes(ROLE_KEYS.analyst);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
@@ -941,6 +985,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const devAccess = await getProjectDeveloperAccess(prisma, project, userId);
       const canSeeTasks =
         isDirector ||
+        req.auth!.roleKeys.includes(ROLE_KEYS.admin) ||
         isAnalyst ||
         (isFinance && project.approvalStatus === "approved") ||
         devAccess !== "none" ||
@@ -975,14 +1020,30 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(403).json({ error: "Only a developer who accepted this project can add tasks" });
         return;
       }
-      const { title, description, milestoneId, dueDate } = req.body as {
+      const { title, description, milestoneId, dueDate, estimatedHours } = req.body as {
         title: string;
         description?: string;
         milestoneId?: string;
         dueDate?: string;
+        estimatedHours?: string | number;
       };
       if (!title?.trim()) {
         res.status(400).json({ error: "Title is required" });
+        return;
+      }
+
+      let estimated: Prisma.Decimal | undefined = undefined;
+      if (estimatedHours !== undefined && estimatedHours !== null && String(estimatedHours).trim() !== "") {
+        const parsed = Number(estimatedHours);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          res.status(400).json({ error: "estimatedHours must be a non-negative number" });
+          return;
+        }
+        estimated = new Prisma.Decimal(parsed.toFixed(2));
+      }
+
+      if (project.status === "active" && !estimated) {
+        res.status(400).json({ error: "estimatedHours is required when project status is active" });
         return;
       }
       const task = await prisma.task.create({
@@ -994,7 +1055,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           description: description?.trim() || undefined,
           status: "not_started",
           assigneeId: userId,
-          dueDate: dueDate ? new Date(dueDate) : undefined
+          dueDate: dueDate ? new Date(dueDate) : undefined,
+          estimatedHours: estimated
         }
       });
       await prisma.eventLog.create({
@@ -1015,12 +1077,12 @@ export default function projectsRouter(prisma: PrismaClient): Router {
   // Task comments (assigned developer or director/analyst)
   router.get(
     "/tasks/:taskId/comments",
-    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.analyst, ROLE_KEYS.sales, ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { taskId } = req.params;
-      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director);
       const isAnalyst = req.auth!.roleKeys.includes(ROLE_KEYS.analyst);
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       const isFinance = req.auth!.roleKeys.includes(ROLE_KEYS.finance);
@@ -1036,6 +1098,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const devAccess = await getProjectDeveloperAccess(prisma, task.project, userId);
       const canSeeComments =
         isDirector ||
+        req.auth!.roleKeys.includes(ROLE_KEYS.admin) ||
         isAnalyst ||
         (isFinance && task.project.approvalStatus === "approved") ||
         devAccess !== "none" ||
@@ -1131,6 +1194,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const userId = req.auth!.userId;
       const { taskId } = req.params;
       const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const isDeveloperActor = req.auth!.roleKeys.includes(ROLE_KEYS.developer) && !isDirector;
       const existing = await prisma.task.findUnique({ where: { id: taskId }, include: { project: true } });
       if (!existing || existing.orgId !== orgId) {
         res.status(404).json({ error: "Task not found" });
@@ -1141,8 +1205,10 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(403).json({ error: "Only an accepted developer on this project can edit this task" });
         return;
       }
-    const { status, priority, blockedReason, dueDate, estimatedHours, actualHours } =
+    const { title, description, status, priority, blockedReason, dueDate, estimatedHours, actualHours } =
       req.body as {
+        title?: string;
+        description?: string | null;
         status?: string;
         priority?: string;
         blockedReason?: string;
@@ -1178,6 +1244,19 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       blockedReason,
       dueDate: dueDate ? new Date(dueDate) : undefined
     };
+
+    if (typeof title === "string") {
+      const next = title.trim();
+      if (!next) {
+        res.status(400).json({ error: "title cannot be empty" });
+        return;
+      }
+      data.title = next;
+    }
+    if (description !== undefined) {
+      const next = typeof description === "string" ? description.trim() : "";
+      data.description = next ? next : null;
+    }
 
     if (estimatedHours !== undefined) {
       const parsed = Number(estimatedHours);
@@ -1221,18 +1300,38 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }))
     });
 
-    await notifyProjectExecutionStakeholders(
-      prisma,
-      orgId,
-      {
-        name: existing.project.name,
-        createdByUserId: existing.project.createdByUserId,
-        assignedDeveloperId: existing.project.assignedDeveloperId
-      },
-      "Task updated",
-      `Task "${task.title}" on project "${existing.project.name}" was updated. Status: ${task.status}.`,
-      { type: "project.task", excludeUserId: userId, projectId: existing.project.id }
-    );
+    if (isDeveloperActor) {
+      const actor = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true }
+      });
+      const actorLabel = actor?.name?.trim() || actor?.email || "Developer";
+      const details =
+        task.status === "blocked"
+          ? `Blocked: ${(task.blockedReason ?? "").trim() || "—"}`
+          : task.status === "done"
+            ? "Marked done"
+            : `Status: ${task.status}`;
+
+      await notifyProjectExecutionStakeholders(
+        prisma,
+        orgId,
+        {
+          name: existing.project.name,
+          createdByUserId: existing.project.createdByUserId,
+          assignedDeveloperId: existing.project.assignedDeveloperId
+        },
+        "Developer task update",
+        `${actorLabel} updated a task on "${existing.project.name}".\n\nTask: ${task.title}\n${details}`,
+        {
+          type: "project.task",
+          excludeUserId: userId,
+          projectId: existing.project.id,
+          includeAdmins: false,
+          emailDirectors: false
+        }
+      );
+    }
     res.json(task);
     }
   );

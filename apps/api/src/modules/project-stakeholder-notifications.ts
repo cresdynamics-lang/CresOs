@@ -15,10 +15,17 @@ export async function notifyProjectExecutionStakeholders(
   project: { name: string; createdByUserId: string | null; assignedDeveloperId: string | null },
   subject: string,
   body: string,
-  options?: { type?: string; excludeUserId?: string; emailDirectors?: boolean; projectId?: string }
+  options?: {
+    type?: string;
+    excludeUserId?: string;
+    emailDirectors?: boolean;
+    projectId?: string;
+    includeAdmins?: boolean;
+  }
 ): Promise<void> {
   const directors = await getDirectorUsers(prisma, orgId);
-  const admins = await getAdminUsers(prisma, orgId);
+  const includeAdmins = options?.includeAdmins !== false;
+  const admins = includeAdmins ? await getAdminUsers(prisma, orgId) : [];
   const recipientIds = new Set<string>();
   for (const d of directors) recipientIds.add(d.id);
   for (const a of admins) recipientIds.add(a.id);

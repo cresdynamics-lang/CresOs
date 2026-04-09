@@ -57,8 +57,19 @@ export default function FinanceInvoicesPage() {
     if (!hydrated || !auth.accessToken) return;
     if (!canAccessFinanceInvoices) {
       router.replace("/dashboard");
+      return;
     }
+    // Invoice approvals are now unified under /approvals
+    router.replace("/approvals");
   }, [hydrated, auth.accessToken, canAccessFinanceInvoices, router]);
+
+  if (hydrated && auth.accessToken && canAccessFinanceInvoices) {
+    return (
+      <div className="shell text-sm text-slate-400">
+        Redirecting to unified approvals…
+      </div>
+    );
+  }
 
   // Fetch dashboard data
   useEffect(() => {

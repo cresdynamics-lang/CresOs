@@ -596,7 +596,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Invoices
   router.get(
     "/invoices",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const invoices = await prisma.invoice.findMany({
@@ -613,18 +613,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const { clientId, projectId, number, issueDate, dueDate, currency, items } =
+      const { clientId, projectId, issueDate, dueDate, currency, items } =
         req.body as {
           clientId: string;
           projectId?: string;
-          number: string;
           issueDate: string;
           dueDate?: string;
           currency?: string;
           items: { description: string; quantity: number; unitPrice: string }[];
         };
 
-      if (!clientId || !number || !issueDate || !items?.length) {
+      if (!clientId || !projectId || !issueDate || !items?.length) {
         res.status(400).json({ error: "Missing fields" });
         return;
       }
@@ -646,6 +645,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
             Number(item.unitPrice) * (item.quantity || 1);
           return sum + value;
         }, 0);
+
+        // Generate invoice number: CD-INV-<projectSeq3>/<invoiceSeq>/<yy>
+        const project = await tx.project.findFirst({
+          where: { id: projectId, orgId, deletedAt: null },
+          select: { id: true }
+        });
+        if (!project) {
+          throw new Error("Project not found");
+        }
+        const orderedProjects = await tx.project.findMany({
+          where: { orgId, deletedAt: null },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true }
+        });
+        const idx = orderedProjects.findIndex((p) => p.id === projectId);
+        const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
+        const invoiceSeq = (await tx.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
+        const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+        const number = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
 
         const invoice = await tx.invoice.create({
           data: {
@@ -709,7 +727,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
           type: "invoice.sent"
         });
       }
-      res.status(201).json(result);
+      res.status(201).json({
+        success: true,
+        data: {
+          invoice: result,
+          downloadUrl: `/finance/invoices/${result.id}/pdf`
+        }
+      });
     }
   );
 
@@ -836,6 +860,30 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }
       });
       res.json(updated);
+    }
+  );
+
+  // Delete payment (pending only)
+  router.delete(
+    "/payments/:id",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const payment = await prisma.payment.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!payment) {
+        res.status(404).json({ error: "Payment not found" });
+        return;
+      }
+      if (payment.status !== "pending") {
+        res.status(403).json({ error: "Only pending payments can be deleted" });
+        return;
+      }
+      await prisma.payment.update({ where: { id }, data: { deletedAt: new Date() } });
+      await prisma.eventLog.create({
+        data: { orgId, type: "payment.deleted", entityType: "payment", entityId: id }
+      });
+      res.json({ success: true });
     }
   );
 
@@ -1014,6 +1062,210 @@ export default function financeRouter(prisma: PrismaClient): Router {
       });
 
       res.status(201).json(expense);
+    }
+  );
+
+  router.patch(
+    "/expenses/:id",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const {
+        category,
+        description,
+        amount,
+        currency,
+        spentAt,
+        notes,
+        source,
+        transactionCode,
+        account,
+        paymentMethod
+      } = req.body as {
+        category?: string;
+        description?: string;
+        amount?: string;
+        currency?: string;
+        spentAt?: string;
+        notes?: string;
+        source?: string;
+        transactionCode?: string;
+        account?: string;
+        paymentMethod?: string;
+      };
+
+      const existing = await prisma.expense.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Expense not found" });
+        return;
+      }
+      if (existing.status !== "pending") {
+        res.status(403).json({ error: "Only pending expenses can be edited" });
+        return;
+      }
+
+      const updated = await prisma.expense.update({
+        where: { id },
+        data: {
+          category: category ?? undefined,
+          description: description ?? undefined,
+          notes: notes ?? undefined,
+          source: source ?? undefined,
+          transactionCode: transactionCode ?? undefined,
+          account: account ?? undefined,
+          paymentMethod: paymentMethod ?? undefined,
+          currency: currency ?? undefined,
+          amount: amount != null ? new Prisma.Decimal(amount) : undefined,
+          spentAt: spentAt != null ? new Date(spentAt) : undefined
+        }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          type: "expense.updated",
+          entityType: "expense",
+          entityId: id
+        }
+      });
+
+      res.json(updated);
+    }
+  );
+
+  router.delete(
+    "/expenses/:id",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+
+      const existing = await prisma.expense.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Expense not found" });
+        return;
+      }
+      if (existing.status !== "pending") {
+        res.status(403).json({ error: "Only pending expenses can be deleted" });
+        return;
+      }
+
+      await prisma.expense.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          type: "expense.deleted",
+          entityType: "expense",
+          entityId: id
+        }
+      });
+
+      res.json({ ok: true });
+    }
+  );
+
+  // Update invoice (finance only). Limited fields: dates, status, items.
+  router.patch(
+    "/invoices/:id",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const { status, issueDate, dueDate, currency, items } = req.body as {
+        status?: string;
+        issueDate?: string;
+        dueDate?: string;
+        currency?: string;
+        items?: Array<{ description: string; quantity: number; unitPrice: string | number }>;
+      };
+      const existing = await prisma.invoice.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: { payments: { where: { deletedAt: null }, select: { status: true } } }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Invoice not found" });
+        return;
+      }
+      const hasConfirmedPayment = existing.payments.some((p) => p.status === "confirmed");
+      if (hasConfirmedPayment) {
+        res.status(403).json({ error: "Invoices with confirmed payments cannot be edited" });
+        return;
+      }
+
+      const nextTotal =
+        Array.isArray(items) && items.length > 0
+          ? items.reduce((sum, it) => sum + Number(it.unitPrice) * Number(it.quantity || 0), 0)
+          : undefined;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const inv = await tx.invoice.update({
+          where: { id },
+          data: {
+            ...(status !== undefined && { status }),
+            ...(issueDate !== undefined && { issueDate: new Date(issueDate) }),
+            ...(dueDate !== undefined && { dueDate: new Date(dueDate) }),
+            ...(currency !== undefined && { currency }),
+            ...(nextTotal !== undefined && { totalAmount: new Prisma.Decimal(nextTotal) })
+          }
+        });
+        if (Array.isArray(items)) {
+          await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+          if (items.length > 0) {
+            await tx.invoiceItem.createMany({
+              data: items.map((it) => ({
+                invoiceId: id,
+                description: String(it.description ?? "").trim(),
+                quantity: Number(it.quantity || 0),
+                unitPrice: Number(it.unitPrice),
+                total: Number(it.unitPrice) * Number(it.quantity || 0)
+              }))
+            });
+          }
+        }
+        return inv;
+      });
+
+      await prisma.eventLog.create({
+        data: { orgId, type: "invoice.updated", entityType: "invoice", entityId: id }
+      });
+      res.json(updated);
+    }
+  );
+
+  // Delete invoice (only if no confirmed payments)
+  router.delete(
+    "/invoices/:id",
+    requireRoles([ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { id } = req.params;
+      const existing = await prisma.invoice.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: { payments: { where: { deletedAt: null }, select: { status: true } } }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Invoice not found" });
+        return;
+      }
+      const hasConfirmedPayment = existing.payments.some((p) => p.status === "confirmed");
+      if (hasConfirmedPayment) {
+        res.status(403).json({ error: "Invoices with confirmed payments cannot be deleted" });
+        return;
+      }
+      await prisma.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
+      await prisma.eventLog.create({
+        data: { orgId, type: "invoice.deleted", entityType: "invoice", entityId: id }
+      });
+      res.json({ success: true });
     }
   );
 
@@ -1305,6 +1557,77 @@ export default function financeRouter(prisma: PrismaClient): Router {
       }
     });
     res.json(approvals);
+    }
+  );
+
+  // Pending approvals queue for Admin approvals page (enriched with amounts)
+  router.get(
+    "/approvals/pending",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+
+      const approvals = await prisma.approval.findMany({
+        where: {
+          orgId,
+          status: "pending",
+          entityType: { in: ["expense", "payout"] }
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          requester: { select: { id: true, name: true, email: true } }
+        }
+      });
+
+      const expenseIds = approvals
+        .filter((a) => a.entityType === "expense")
+        .map((a) => a.entityId);
+      const payoutIds = approvals
+        .filter((a) => a.entityType === "payout")
+        .map((a) => a.entityId);
+
+      const [expenses, payouts] = await Promise.all([
+        expenseIds.length
+          ? prisma.expense.findMany({
+              where: { orgId, deletedAt: null, id: { in: expenseIds } },
+              select: { id: true, amount: true, currency: true, description: true, notes: true, category: true, spentAt: true, status: true }
+            })
+          : Promise.resolve([]),
+        payoutIds.length
+          ? prisma.payout.findMany({
+              where: { orgId, deletedAt: null, id: { in: payoutIds } },
+              select: { id: true, amount: true, currency: true, description: true, notes: true, scheduledAt: true, paidAt: true }
+            })
+          : Promise.resolve([])
+      ]);
+
+      const expenseById = new Map(expenses.map((e) => [e.id, e]));
+      const payoutById = new Map(payouts.map((p) => [p.id, p]));
+
+      res.json(
+        approvals.map((a) => {
+          const entity =
+            a.entityType === "expense"
+              ? expenseById.get(a.entityId)
+              : a.entityType === "payout"
+                ? payoutById.get(a.entityId)
+                : null;
+
+          return {
+            id: a.id,
+            entityType: a.entityType,
+            entityId: a.entityId,
+            status: a.status,
+            reason: a.reason ?? null,
+            createdAt: a.createdAt,
+            requester: a.requester ?? null,
+            amount: entity ? Number((entity as any).amount) : null,
+            currency: entity ? (entity as any).currency ?? null : null,
+            description: entity ? (entity as any).description ?? null : null,
+            notes: entity ? (entity as any).notes ?? null : null
+          };
+        })
+      );
     }
   );
 
@@ -1664,17 +1987,32 @@ export default function financeRouter(prisma: PrismaClient): Router {
         const orgId = req.auth!.orgId;
         const createdBy = req.auth!.userId;
         const invoiceData = req.body;
-
-        // Generate unique invoice number
-        const { DocxTemplateParser } = require("../services/invoice/docx-parser");
-        const docxParser = new DocxTemplateParser(
-          '/Users/airm1/Projects/CresOs/apps/api/src/services/invoice/Invoice.docx'
-        );
-        
-        const invoiceNumber = docxParser.generateInvoiceNumber(
-          invoiceData.projectId || invoiceData.clientId,
-          orgId
-        );
+        // Invoice number format:
+        // CD-INV-<projectSeq3>/<invoiceSeqWithinProject>/<yy>
+        // Example: CD-INV-002/1/26
+        if (!invoiceData.projectId) {
+          res.status(400).json({ error: "projectId is required for invoice numbering" });
+          return;
+        }
+        const projectId = String(invoiceData.projectId);
+        const project = await prisma.project.findFirst({
+          where: { id: projectId, orgId, deletedAt: null },
+          select: { id: true, createdAt: true }
+        });
+        if (!project) {
+          res.status(400).json({ error: "Project not found" });
+          return;
+        }
+        const orderedProjects = await prisma.project.findMany({
+          where: { orgId, deletedAt: null },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true }
+        });
+        const idx = orderedProjects.findIndex((p) => p.id === projectId);
+        const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
+        const invoiceSeq = (await prisma.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
+        const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+        const invoiceNumber = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
 
         // Create invoice in database
         const invoice = await prisma.invoice.create({
@@ -1777,7 +2115,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
           data: {
             invoice,
             pdfGenerated: true,
-            pdfSize: `${(pdfBuffer.length / 1024).toFixed(2)} KB`
+            pdfSize: `${(pdfBuffer.length / 1024).toFixed(2)} KB`,
+            downloadUrl: `/finance/invoices/${invoice.id}/pdf`
           }
         });
 

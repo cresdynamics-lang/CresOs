@@ -24,6 +24,11 @@ function playNotifySound(): void {
   }
 }
 
+/** Ring sound without requiring system notification permission. */
+export function ring(): void {
+  playNotifySound();
+}
+
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (typeof window === "undefined" || !("Notification" in window)) return "denied";
   if (Notification.permission === "granted") return "granted";

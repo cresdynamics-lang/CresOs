@@ -214,16 +214,40 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
       try {
         const orgId = req.auth!.orgId;
         const userId = req.auth!.userId;
+        const roleKeys = req.auth!.roleKeys;
+        const isClient = roleKeys.includes(ROLE_KEYS.client);
 
         const orgUserIds = await getUserIdsInOrg(prisma, orgId);
         const users = await prisma.user.findMany({
-          where: { id: { in: orgUserIds }, deletedAt: null },
+          where: {
+            id: { in: orgUserIds },
+            deletedAt: null,
+            ...(isClient
+              ? {
+                  roles: {
+                    some: {
+                      role: {
+                        key: { in: [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin] }
+                      }
+                    }
+                  }
+                }
+              : {
+                  roles: {
+                    none: {
+                      role: {
+                        key: ROLE_KEYS.client
+                      }
+                    }
+                  }
+                })
+          },
           select: {
             id: true,
             name: true,
-            email: true,
             profilePicture: true,
             createdAt: true,
+            notificationPreferences: true,
             chatUser: {
               select: {
                 status: true,
@@ -246,22 +270,25 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             const cu = u.chatUser;
             const isOnline = Boolean(cu?.isOnline && cu.status !== "offline");
             const status = (cu?.status as "online" | "offline" | "away" | "busy") || "offline";
-            const label = displayNameOrEmail(u.name, u.email);
+            const label = displayNameOrEmail(u.name, "");
             const roleList = u.roles.map((ur) => ({
               key: ur.role.key,
               name: ur.role.name
             }));
+
+            const privacy = (u.notificationPreferences as any)?.privacy ?? {};
+            const onlineHours = typeof privacy?.onlineHours === "string" ? privacy.onlineHours : null;
             return {
               id: u.id,
               name: label,
-              email: u.email,
               hasDisplayName: Boolean(u.name?.trim()),
               displayName: cu?.displayName || label,
               roles: roleList,
               status: isOnline ? status : "offline",
               isOnline,
               lastSeen: (cu?.lastSeen ?? u.createdAt).toISOString(),
-              avatar: u.profilePicture || null
+              avatar: u.profilePicture || null,
+              onlineHours
             };
           })
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -294,6 +321,11 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
       try {
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
+        const roleKeys = req.auth!.roleKeys;
+        const isClient = roleKeys.includes(ROLE_KEYS.client);
+        const callerCanMessageClients = roleKeys.some((k) =>
+          [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin].includes(k as any)
+        );
 
         const rows = await prisma.conversation.findMany({
           where: {
@@ -309,11 +341,34 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           .filter((id): id is string => Boolean(id));
 
         const others = await prisma.user.findMany({
-          where: { id: { in: otherIds } },
+          where: {
+            id: { in: otherIds },
+            deletedAt: null,
+            ...(isClient
+              ? {
+                  roles: {
+                    some: {
+                      role: {
+                        key: { in: [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin] }
+                      }
+                    }
+                  }
+                }
+              : callerCanMessageClients
+                ? {}
+                : {
+                    roles: {
+                      none: {
+                        role: {
+                          key: ROLE_KEYS.client
+                        }
+                      }
+                    }
+                  })
+          },
           select: {
             id: true,
             name: true,
-            email: true,
             chatUser: { select: { isOnline: true, status: true } },
             roles: {
               select: { role: { select: { name: true, key: true } } }
@@ -326,6 +381,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           .map((conv) => {
           const otherId = conv.participants.find((p) => p !== userId) ?? "";
           const other = otherById.get(otherId);
+          if (!other) return null;
           const unreadMap = conv.unreadCounts as Record<string, number> | null;
           const unreadCount = unreadMap?.[userId] ?? 0;
           const lm = conv.lastMessage as {
@@ -343,9 +399,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
                 senderName:
                   lm.senderId === userId
                     ? "You"
-                    : other
-                      ? displayNameOrEmail(other.name, other.email)
-                      : "User",
+                    : displayNameOrEmail(other.name, ""),
                 timestamp:
                   typeof lm.timestamp === "string"
                     ? lm.timestamp
@@ -367,7 +421,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             other?.chatUser?.isOnline && other.chatUser.status !== "offline"
           );
 
-          const peerLabel = other ? displayNameOrEmail(other.name, other.email) : "Direct chat";
+          const peerLabel = displayNameOrEmail(other.name, "");
           return {
             id: conv.id,
             type: "direct" as const,
@@ -378,7 +432,6 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
               ? {
                   id: other.id,
                   name: peerLabel,
-                  email: other.email,
                   hasDisplayName: Boolean(other.name?.trim()),
                   roles: other.roles.map((ur) => ({
                     key: ur.role.key,
@@ -398,7 +451,8 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             createdAt: conv.createdAt.toISOString(),
             updatedAt: conv.updatedAt.toISOString()
           };
-        });
+        })
+          .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
         res.json({
           success: true,
@@ -426,6 +480,8 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const { participantId } = req.body as { participantId?: string };
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
+        const roleKeys = req.auth!.roleKeys;
+        const isClient = roleKeys.includes(ROLE_KEYS.client);
 
         if (!participantId || participantId === userId) {
           return res.status(400).json({ error: "Invalid participant" });
@@ -444,7 +500,6 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           select: {
             id: true,
             name: true,
-            email: true,
             chatUser: { select: { isOnline: true, status: true } },
             roles: { select: { role: { select: { name: true, key: true } } } }
           }
@@ -452,6 +507,27 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
 
         if (!participant) {
           return res.status(404).json({ error: "Participant not found" });
+        }
+
+        const participantRoleKeys = participant.roles.map((r) => r.role.key);
+        const participantIsClient = participantRoleKeys.includes(ROLE_KEYS.client);
+
+        if (isClient) {
+          const allowed = participantRoleKeys.some((k) =>
+            [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin].includes(k as any)
+          );
+          if (!allowed) {
+            return res.status(403).json({ error: "Clients can only message Sales or Director." });
+          }
+        }
+
+        if (participantIsClient) {
+          const callerAllowed = roleKeys.some((k) =>
+            [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin].includes(k as any)
+          );
+          if (!callerAllowed) {
+            return res.status(403).json({ error: "Only Sales or Director can message clients." });
+          }
         }
 
         await ensureChatUserAndInbox(prisma, userId, orgId, { touchPresence: true });
@@ -463,7 +539,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           participant.chatUser?.isOnline && participant.chatUser.status !== "offline"
         );
 
-        const peerLabel = displayNameOrEmail(participant.name, participant.email);
+        const peerLabel = displayNameOrEmail(participant.name, "");
 
         const conversation = {
           id: conv.id,
@@ -474,7 +550,6 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           otherUser: {
             id: participant.id,
             name: peerLabel,
-            email: participant.email,
             hasDisplayName: Boolean(participant.name?.trim()),
             roles: participant.roles.map((ur) => ({
               key: ur.role.key,
@@ -561,7 +636,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const senderIds = [...new Set(rows.map((m) => m.senderId))];
         const senders = await prisma.user.findMany({
           where: { id: { in: senderIds } },
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true }
         });
         const senderById = new Map(senders.map((s) => [s.id, s]));
 
@@ -581,7 +656,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             id: m.id,
             conversationId: m.conversationId,
             senderId: m.senderId,
-            senderName: s ? displayNameOrEmail(s.name, s.email) : "User",
+            senderName: s ? displayNameOrEmail(s.name, "") : "User",
             content: m.content,
             type: m.type,
             status: m.status,
@@ -652,7 +727,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
 
         const sender = await prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true }
         });
 
         const unreadNext = mergeUnreadCounts(conv.unreadCounts, conv.participants, userId);
@@ -676,7 +751,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           id: created.id,
           conversationId: created.conversationId,
           senderId: created.senderId,
-          senderName: sender ? displayNameOrEmail(sender.name, sender.email) : "User",
+          senderName: sender ? displayNameOrEmail(sender.name, "") : "User",
           content: created.content,
           type: created.type,
           status: created.status,

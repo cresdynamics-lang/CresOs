@@ -1141,15 +1141,21 @@ model SalesReport {
   title         String
   body          String
   status        String    @default("draft") // draft, submitted
+  reviewStatus  String    @default("pending") // pending, viewed, checked (after submission)
+  reviewedAt    DateTime?
+  reviewedById  String?
+  remarks       String?   @db.Text
   submittedAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   org         Org                  @relation(fields: [orgId], references: [id])
   submittedBy User                 @relation(fields: [submittedById], references: [id])
+  reviewedBy  User?                @relation("SalesReportReviewedBy", fields: [reviewedById], references: [id])
   comments    SalesReportComment[]
 
   @@index([orgId, submittedById, status])
+  @@index([orgId, reviewStatus])
 }
 
 model SalesReportComment {
@@ -1181,14 +1187,20 @@ model DeveloperReport {
   implemented    String?  @db.Text
   pending        String?  @db.Text
   nextPlan       String?  @db.Text // what's planned for next day
+  reviewStatus   String   @default("pending") // pending, viewed, checked
+  reviewedAt     DateTime?
+  reviewedById   String?
+  remarks        String?  @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   org         Org  @relation(fields: [orgId], references: [id])
   submittedBy User @relation(fields: [submittedById], references: [id])
+  reviewedBy  User? @relation("DeveloperReportReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([orgId, submittedById])
   @@index([orgId, reportDate])
+  @@index([orgId, reviewStatus])
 }
 
 model DailyReminderSent {

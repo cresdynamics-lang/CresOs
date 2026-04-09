@@ -161,18 +161,29 @@ export function attachChatCommunityWs(server: http.Server, prisma: PrismaClient)
       return;
     }
 
-    if (!auth.sessionId) {
-      ws.close(1008, "Invalid session");
-      return;
+    // Some access tokens may not include sessionId. Prefer verifying by sessionId when present,
+    // otherwise fall back to an active, non-revoked session for the user.
+    let sessionUserId: string | null = null;
+    if (auth.sessionId) {
+      const session = await prisma.session.findUnique({ where: { id: auth.sessionId } });
+      if (!session || session.revokedAt) {
+        ws.close(1008, "Session revoked");
+        return;
+      }
+      sessionUserId = session.userId;
+    } else {
+      const session = await prisma.session.findFirst({
+        where: { userId: auth.userId, revokedAt: null },
+        orderBy: { createdAt: "desc" }
+      });
+      if (!session) {
+        ws.close(1008, "Could not verify session");
+        return;
+      }
+      sessionUserId = session.userId;
     }
 
-    const session = await prisma.session.findUnique({ where: { id: auth.sessionId } });
-    if (!session || session.revokedAt) {
-      ws.close(1008, "Session revoked");
-      return;
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: session.userId } });
+    const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
     if (!user || user.status !== "active") {
       ws.close(1008, "User not active");
       return;

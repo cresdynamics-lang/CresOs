@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
@@ -162,14 +162,42 @@ export default function FinancePage() {
     account: "",
     paymentMethod: "bank"
   });
-  const [paymentForm, setPaymentForm] = useState<{ projectId: string; method: string; amount: string; receivedAt: string; notes: string; source: string; invoiceId: string }>({
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editExpenseForm, setEditExpenseForm] = useState<{
+    category: string;
+    description: string;
+    notes: string;
+    amount: string;
+    spentAt: string;
+    source: string;
+    transactionCode: string;
+    account: string;
+    paymentMethod: string;
+  } | null>(null);
+  const [paymentForm, setPaymentForm] = useState<{
+    projectId: string;
+    method: string;
+    amount: string;
+    receivedAt: string;
+    notes: string;
+    source: string;
+    invoiceId: string;
+    account: string;
+    reference: string;
+    howToProceed: string;
+    confirmNow: boolean;
+  }>({
     projectId: "",
     method: "mpesa",
     amount: "",
     receivedAt: new Date().toISOString().slice(0, 10),
     notes: "",
     source: "",
-    invoiceId: ""
+    invoiceId: "",
+    account: "",
+    reference: "",
+    howToProceed: "",
+    confirmNow: true
   });
   const [confirmPaymentId, setConfirmPaymentId] = useState<string | null>(null);
   const [confirmForm, setConfirmForm] = useState<{ source: string; account: string; reference: string; howToProceed: string }>({
@@ -188,7 +216,6 @@ export default function FinancePage() {
   const [invoiceForm, setInvoiceForm] = useState<{
     clientId: string;
     projectId: string;
-    number: string;
     issueDate: string;
     dueDate: string;
     description: string;
@@ -197,7 +224,6 @@ export default function FinancePage() {
   }>({
     clientId: "",
     projectId: "",
-    number: "",
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: "",
     description: "",
@@ -211,6 +237,29 @@ export default function FinancePage() {
   // Only Finance role can perform actions; Director/Admin see read-only
   const isFinance = auth.roleKeys.includes("finance");
   const isAdmin = auth.roleKeys.includes("admin");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<
+    "expenses" | "financial_report" | "project_status" | "project_analysis" | "invoices"
+  >("financial_report");
+  const [financeTab, setFinanceTab] = useState<
+    "financial_report" | "project_status" | "invoices" | "payments" | "expenses" | "clients_due"
+  >("financial_report");
+
+  const projectFinanceAnalysis = useMemo(() => {
+    const allocated = projectFinancials.reduce((s, p) => s + (p.allocated ?? 0), 0);
+    const received = projectFinancials.reduce((s, p) => s + (p.received ?? 0), 0);
+    const remaining = projectFinancials.reduce((s, p) => s + (p.remaining ?? 0), 0);
+    const mgmtTotal = projectFinancials.reduce((s, p) => {
+      if (p.managementMonthlyAmount == null || p.managementMonths == null) return s;
+      return s + p.managementMonthlyAmount * p.managementMonths;
+    }, 0);
+    return {
+      allocated,
+      received,
+      remaining,
+      managementExpectedTotal: mgmtTotal,
+      activeApprovedProjects: projectFinancials.length
+    };
+  }, [projectFinancials]);
 
   const fetchReport = useCallback(async () => {
     if (!canAccessFinance || !canSeeReport) return;
@@ -380,6 +429,69 @@ export default function FinancePage() {
     }
   };
 
+  const startEditExpense = (exp: Expense) => {
+    setEditingExpenseId(exp.id);
+    setEditExpenseForm({
+      category: exp.category ?? "other",
+      description: exp.description ?? "",
+      notes: exp.notes ?? "",
+      amount: String(exp.amount ?? ""),
+      spentAt: exp.spentAt ? String(exp.spentAt).slice(0, 10) : new Date().toISOString().slice(0, 10),
+      source: exp.source ?? "",
+      transactionCode: exp.transactionCode ?? "",
+      account: exp.account ?? "",
+      paymentMethod: exp.paymentMethod ?? "bank"
+    });
+  };
+
+  const cancelEditExpense = () => {
+    setEditingExpenseId(null);
+    setEditExpenseForm(null);
+  };
+
+  const saveEditExpense = async () => {
+    if (!editingExpenseId || !editExpenseForm) return;
+    try {
+      const res = await apiFetch(`/finance/expenses/${editingExpenseId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          category: editExpenseForm.category,
+          description: editExpenseForm.description || undefined,
+          notes: editExpenseForm.notes || undefined,
+          amount: editExpenseForm.amount,
+          spentAt: editExpenseForm.spentAt,
+          source: editExpenseForm.source || undefined,
+          transactionCode: editExpenseForm.transactionCode || undefined,
+          account: editExpenseForm.account || undefined,
+          paymentMethod: editExpenseForm.paymentMethod || undefined,
+          currency: "KES"
+        })
+      });
+      if (res.ok) {
+        cancelEditExpense();
+        await loadData();
+        if (canSeeReport) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const deleteExpense = async (id: string) => {
+    if (!window.confirm("Delete this pending expense?")) return;
+    try {
+      const res = await apiFetch(`/finance/expenses/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadData();
+        if (canSeeReport) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const saveReminderDay = async (clientId: string, day: number | null) => {
     try {
       const res = await apiFetch(`/finance/clients/${clientId}/reminder`, {
@@ -407,6 +519,9 @@ export default function FinancePage() {
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentForm.amount || !paymentForm.receivedAt) return;
+    if (paymentForm.confirmNow) {
+      if (!paymentForm.source.trim() || !paymentForm.account.trim() || !paymentForm.reference.trim()) return;
+    }
     try {
       const res = await apiFetch("/finance/payments", {
         method: "POST",
@@ -420,7 +535,29 @@ export default function FinancePage() {
         })
       });
       if (res.ok) {
-        setPaymentForm((f) => ({ ...f, amount: "", notes: "", source: "" }));
+        const created = (await res.json().catch(() => null)) as { id?: string } | null;
+        if (paymentForm.confirmNow && created?.id) {
+          await apiFetch(`/finance/payments/${created.id}/confirm`, {
+            method: "POST",
+            body: JSON.stringify({
+              source: paymentForm.source.trim(),
+              account: paymentForm.account.trim(),
+              reference: paymentForm.reference.trim(),
+              howToProceed: paymentForm.howToProceed.trim() || undefined
+            })
+          }).catch(() => {});
+        }
+        setPaymentForm((f) => ({
+          ...f,
+          amount: "",
+          notes: "",
+          source: "",
+          account: "",
+          reference: "",
+          howToProceed: "",
+          invoiceId: "",
+          projectId: ""
+        }));
         loadData();
       }
     } catch {
@@ -436,6 +573,34 @@ export default function FinancePage() {
       reference: p.reference ?? "",
       howToProceed: p.howToProceed ?? ""
     });
+  };
+
+  const deleteInvoice = async (id: string) => {
+    if (!window.confirm("Delete this invoice?")) return;
+    try {
+      const res = await apiFetch(`/finance/invoices/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadData();
+        if (canSeeReport) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const deletePayment = async (id: string) => {
+    if (!window.confirm("Delete this pending payment?")) return;
+    try {
+      const res = await apiFetch(`/finance/payments/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadData();
+        if (canSeeReport) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const submitConfirmPayment = async (e: React.FormEvent) => {
@@ -460,7 +625,7 @@ export default function FinancePage() {
 
   const submitInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!invoiceForm.clientId || !invoiceForm.number || !invoiceForm.issueDate || !invoiceForm.description.trim() || !invoiceForm.unitPrice) return;
+    if (!invoiceForm.clientId || !invoiceForm.projectId || !invoiceForm.issueDate || !invoiceForm.description.trim() || !invoiceForm.unitPrice) return;
     const qty = parseInt(invoiceForm.quantity, 10) || 1;
     try {
       const res = await apiFetch("/finance/invoices", {
@@ -468,7 +633,6 @@ export default function FinancePage() {
         body: JSON.stringify({
           clientId: invoiceForm.clientId,
           projectId: invoiceForm.projectId || undefined,
-          number: invoiceForm.number.trim(),
           issueDate: invoiceForm.issueDate,
           dueDate: invoiceForm.dueDate || undefined,
           currency: "KES",
@@ -476,7 +640,14 @@ export default function FinancePage() {
         })
       });
       if (res.ok) {
-        setInvoiceForm((f) => ({ ...f, number: "", description: "", quantity: "1", unitPrice: "" }));
+        const j = (await res.json().catch(() => null)) as
+          | { success?: boolean; data?: { invoice?: { id?: string }; downloadUrl?: string } }
+          | null;
+        const createdId = j?.data?.invoice?.id;
+        const downloadUrl = j?.data?.downloadUrl ? String(j.data.downloadUrl) : null;
+        if (downloadUrl) window.location.assign(`/api${downloadUrl}`);
+        else if (createdId) window.location.assign(`/api/finance/invoices/${createdId}/pdf`);
+        setInvoiceForm((f) => ({ ...f, description: "", quantity: "1", unitPrice: "" }));
         loadData();
       }
     } catch {
@@ -576,10 +747,131 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeReport && projectFinancials.length > 0 && (
+      {isAdmin && (
+        <div className="shell border border-slate-700/70 bg-slate-950/40">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Admin finance sections
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "expenses" as const, label: "Expenses" },
+                { key: "financial_report" as const, label: "Financial report" },
+                { key: "project_status" as const, label: "Projects finance status" },
+                { key: "project_analysis" as const, label: "Project finance analysis" },
+                { key: "invoices" as const, label: "Invoices" }
+              ].map((b) => (
+                <button
+                  key={b.key}
+                  type="button"
+                  onClick={() => setAdminFinanceTab(b.key)}
+                  className={
+                    adminFinanceTab === b.key
+                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
+                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  }
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            These panels load live from your workspace database via the API.
+          </p>
+        </div>
+      )}
+
+      {isFinance && !isAdmin && (
+        <div className="shell border border-slate-700/70 bg-slate-950/40">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Finance sections
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "financial_report" as const, label: "Financial report" },
+                { key: "project_status" as const, label: "Projects finance status" },
+                { key: "invoices" as const, label: "Invoices" },
+                { key: "payments" as const, label: "Payments" },
+                { key: "expenses" as const, label: "Expenses" },
+                { key: "clients_due" as const, label: "Clients due" }
+              ].map((b) => (
+                <button
+                  key={b.key}
+                  type="button"
+                  onClick={() => setFinanceTab(b.key)}
+                  className={
+                    financeTab === b.key
+                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
+                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  }
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Use these buttons to switch views; data loads live from the database.
+          </p>
+        </div>
+      )}
+
+      {canSeeReport && (!isAdmin || adminFinanceTab === "financial_report") && (!isFinance || isAdmin || financeTab === "financial_report") && (
+        <div className="shell border-emerald-800/40 bg-slate-900/60">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Financial report (real-time)
+            </h3>
+            <button
+              type="button"
+              onClick={fetchReport}
+              disabled={reportLoading}
+              className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {reportLoading ? "Loading…" : report ? "Refresh report" : "Load report"}
+            </button>
+          </div>
+          {report && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs text-slate-400">Revenue</p>
+                <p className="text-slate-200">This month: {formatMoney(report.revenue.thisMonth)}</p>
+                <p className="text-xs text-slate-400">All time: {formatMoney(report.revenue.allTime)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Invoices</p>
+                <p className="text-amber-400">Outstanding: {formatMoney(report.invoices.outstandingAmount)}</p>
+                <p className="text-xs text-slate-400">Overdue: {report.invoices.overdueCount}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Expenses</p>
+                <p className="text-slate-200">This month: {formatMoney(report.expenses.thisMonth)}</p>
+                <p className="text-xs text-slate-400">All time: {formatMoney(report.expenses.allTime)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Cash flow (month)</p>
+                <p className="text-slate-200">In: {formatMoney(report.cashFlow.revenueThisMonth)}</p>
+                <p className="text-slate-200">Out: {formatMoney(report.cashFlow.expensesThisMonth)}</p>
+                <p className={report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                  Net: {formatMoney(report.cashFlow.netThisMonth)}
+                </p>
+              </div>
+            </div>
+          )}
+          {report && (
+            <p className="mt-3 text-xs text-slate-500">
+              Generated {new Date(report.generatedAt).toLocaleString()} · Pending payouts: {formatMoney(report.payouts.pendingAmount)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {canSeeReport && (!isAdmin || adminFinanceTab === "project_status") && (!isFinance || isAdmin || financeTab === "project_status") && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Project financials (platform) — deduction &amp; what is there
+            Projects finance status
           </h3>
           <p className="mb-3 text-xs text-slate-400">
             Allocated vs received per project; when on management: expected per month and for how long (to plan upgrades).
@@ -634,57 +926,39 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeReport && (
-        <div className="shell border-emerald-800/40 bg-slate-900/60">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Financial report (real-time)
-            </h3>
-            <button
-              type="button"
-              onClick={fetchReport}
-              disabled={reportLoading}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {reportLoading ? "Loading…" : report ? "Refresh report" : "Load report"}
-            </button>
-          </div>
-          {report && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p className="text-xs text-slate-400">Revenue</p>
-                <p className="text-slate-200">This month: {formatMoney(report.revenue.thisMonth)}</p>
-                <p className="text-xs text-slate-400">All time: {formatMoney(report.revenue.allTime)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Invoices</p>
-                <p className="text-amber-400">Outstanding: {formatMoney(report.invoices.outstandingAmount)}</p>
-                <p className="text-xs text-slate-400">Overdue: {report.invoices.overdueCount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Expenses</p>
-                <p className="text-slate-200">This month: {formatMoney(report.expenses.thisMonth)}</p>
-                <p className="text-xs text-slate-400">All time: {formatMoney(report.expenses.allTime)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Cash flow (month)</p>
-                <p className="text-slate-200">In: {formatMoney(report.cashFlow.revenueThisMonth)}</p>
-                <p className="text-slate-200">Out: {formatMoney(report.cashFlow.expensesThisMonth)}</p>
-                <p className={report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                  Net: {formatMoney(report.cashFlow.netThisMonth)}
-                </p>
-              </div>
+      {canSeeReport && isAdmin && adminFinanceTab === "project_analysis" && (
+        <div className="shell border border-slate-700/70 bg-slate-900/50">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Project finance analysis
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Approved projects tracked</p>
+              <p className="mt-1 text-xl font-semibold text-slate-100">{projectFinanceAnalysis.activeApprovedProjects}</p>
             </div>
-          )}
-          {report && (
-            <p className="mt-3 text-xs text-slate-500">
-              Generated {new Date(report.generatedAt).toLocaleString()} · Pending payouts: {formatMoney(report.payouts.pendingAmount)}
-            </p>
-          )}
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Allocated total</p>
+              <p className="mt-1 text-xl font-semibold text-slate-200">{formatMoney(projectFinanceAnalysis.allocated)}</p>
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received total</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-400">{formatMoney(projectFinanceAnalysis.received)}</p>
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Remaining total</p>
+              <p className="mt-1 text-xl font-semibold text-amber-300">{formatMoney(projectFinanceAnalysis.remaining)}</p>
+            </div>
+          </div>
+          <div className="mt-3 rounded border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-300">
+            Expected management total (across projects):{" "}
+            <span className="font-semibold text-slate-100">
+              {formatMoney(projectFinanceAnalysis.managementExpectedTotal)}
+            </span>
+          </div>
         </div>
       )}
 
-      {canSeeReport && clientsDue.length > 0 && (
+      {canSeeReport && (!isFinance || isAdmin || financeTab === "clients_due") && clientsDue.length > 0 && (
         <div className="shell border-amber-800/40">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Amount due per client
@@ -770,7 +1044,7 @@ export default function FinancePage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="shell">
+        <div className={`${(isAdmin && adminFinanceTab !== "invoices") || (isFinance && !isAdmin && financeTab !== "invoices") ? "hidden" : "shell"}`}>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
             Invoices (for work done — link to project for clarity)
           </p>
@@ -787,7 +1061,24 @@ export default function FinancePage() {
                     <p className="text-xs text-sky-400">For project: {inv.project.name}</p>
                   )}
                 </div>
-                <span className="text-emerald-400">{formatMoney(inv.totalAmount)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-400">{formatMoney(inv.totalAmount)}</span>
+                  <a
+                    href={`/api/finance/invoices/${inv.id}/pdf`}
+                    className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                  >
+                    Download PDF
+                  </a>
+                  {isFinance && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteInvoice(inv.id)}
+                      className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
             {invoices.length === 0 && (
@@ -812,20 +1103,16 @@ export default function FinancePage() {
                 value={invoiceForm.projectId}
                 onChange={(e) => setInvoiceForm((f) => ({ ...f, projectId: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                required
               >
-                <option value="">No project</option>
+                <option value="">Select project</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <input
-                type="text"
-                placeholder="Invoice number"
-                value={invoiceForm.number}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, number: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                required
-              />
+              <p className="text-xs text-slate-500">
+                Invoice number is generated automatically (e.g. <span className="text-slate-300">CD-INV-002/1/26</span>).
+              </p>
               <div className="flex gap-2">
                 <input
                   type="date"
@@ -873,7 +1160,7 @@ export default function FinancePage() {
             </form>
           )}
         </div>
-        <div className="shell">
+        <div className={`${(isAdmin && adminFinanceTab !== "invoices") || (isFinance && !isAdmin && financeTab !== "payments") ? "hidden" : "shell"}`}>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
             Payments received — confirm with: where from, transaction code, which account, how to proceed
           </p>
@@ -907,6 +1194,15 @@ export default function FinancePage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-emerald-400">{formatMoney(p.amount)}</span>
+                  {p.status === "pending" && isFinance && (
+                    <button
+                      type="button"
+                      onClick={() => void deletePayment(p.id)}
+                      className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
+                    >
+                      Delete
+                    </button>
+                  )}
                   {p.status === "pending" && isFinance && (
                     confirmPaymentId === p.id ? (
                       <form onSubmit={submitConfirmPayment} className="mt-2 flex flex-col gap-1 rounded border border-slate-600 bg-slate-800/80 p-2">
@@ -998,6 +1294,29 @@ export default function FinancePage() {
                 onChange={(e) => setPaymentForm((f) => ({ ...f, source: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
               />
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  type="text"
+                  placeholder="Transaction code / receipt ref"
+                  value={paymentForm.reference}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, reference: e.target.value }))}
+                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Which account it landed in"
+                  value={paymentForm.account}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, account: e.target.value }))}
+                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="How to proceed (optional)"
+                value={paymentForm.howToProceed}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, howToProceed: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
+              />
               <select
                 value={paymentForm.method}
                 onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}
@@ -1028,6 +1347,14 @@ export default function FinancePage() {
                 onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
               />
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={paymentForm.confirmNow}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, confirmNow: e.target.checked }))}
+                />
+                Mark as confirmed immediately (requires source, tx code, account)
+              </label>
               <button
                 type="submit"
                 className="rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500"
@@ -1040,7 +1367,7 @@ export default function FinancePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="shell">
+        <div className={`${(isAdmin && adminFinanceTab !== "expenses") || (isFinance && !isAdmin && financeTab !== "expenses") ? "hidden" : "shell"}`}>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Expenses (need admin approval) — where from, receipt code, which account, how paid
@@ -1090,13 +1417,29 @@ export default function FinancePage() {
                     pendingApprovalIds.has(exp.id) ? (
                       <p className="text-xs text-amber-400">Pending admin approval</p>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => submitForApproval("expense", exp.id)}
-                        className="mt-1 rounded border border-amber-600 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-900/30"
-                      >
-                        Submit for admin approval
-                      </button>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => submitForApproval("expense", exp.id)}
+                          className="rounded border border-amber-600 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-900/30"
+                        >
+                          Submit for admin approval
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startEditExpense(exp)}
+                          className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteExpense(exp.id)}
+                          className="rounded border border-rose-700 px-2 py-0.5 text-xs text-rose-300 hover:bg-rose-950/40"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )
                   )}
                 </div>
@@ -1110,7 +1453,7 @@ export default function FinancePage() {
             )}
           </ul>
         </div>
-        {isFinance && (
+        {isFinance && (!isAdmin ? financeTab === "expenses" : true) && (
           <div className="shell">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
               Add expense (where from, receipt code, which account, how paid) — needs admin approval
@@ -1189,6 +1532,100 @@ export default function FinancePage() {
                 Record expense (then submit for admin approval)
               </button>
             </form>
+
+            {editingExpenseId && editExpenseForm && (
+              <div className="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Edit pending expense
+                </p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <select
+                    value={editExpenseForm.category}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, category: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  >
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Amount (KES)"
+                    value={editExpenseForm.amount}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, amount: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  />
+                  <input
+                    type="date"
+                    value={editExpenseForm.spentAt}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, spentAt: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  />
+                  <select
+                    value={editExpenseForm.paymentMethod}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, paymentMethod: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  >
+                    <option value="bank">Bank</option>
+                    <option value="card">Card</option>
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+                <div className="mt-2 grid gap-2">
+                  <input
+                    type="text"
+                    placeholder="Description"
+                    value={editExpenseForm.description}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, description: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Where from (vendor/supplier)"
+                    value={editExpenseForm.source}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, source: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Receipt / transaction code"
+                    value={editExpenseForm.transactionCode}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, transactionCode: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Which account paid from"
+                    value={editExpenseForm.account}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, account: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <textarea
+                    placeholder="Notes / comment"
+                    value={editExpenseForm.notes}
+                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, notes: e.target.value }))}
+                    className="min-h-[48px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveEditExpense()}
+                    className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
+                  >
+                    Save changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditExpense}
+                    className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

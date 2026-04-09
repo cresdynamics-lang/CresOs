@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "../format-money";
@@ -63,10 +63,22 @@ export default function CrmPage() {
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [templateChoice, setTemplateChoice] = useState<string>("");
+  const [tab, setTab] = useState<"outreach" | "bulk" | "leads_deals" | "clients">("leads_deals");
 
   const canAccessCrm = auth.roleKeys.some((r) => ["admin", "sales", "director_admin", "finance"].includes(r));
   const canManageContacts = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
   const canBulkMessage = auth.roleKeys.some((r) => ["admin", "sales", "director_admin"].includes(r));
+
+  const tabs = useMemo(
+    () =>
+      [
+        { key: "outreach" as const, label: "Outreach" },
+        { key: "bulk" as const, label: "Bulk messages", hidden: !canBulkMessage },
+        { key: "leads_deals" as const, label: "Leads & deals" },
+        { key: "clients" as const, label: "Clients" }
+      ].filter((t) => !t.hidden),
+    [canBulkMessage]
+  );
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -297,6 +309,30 @@ export default function CrmPage() {
         </Link>
       </div>
 
+      {loadedOnce && (
+        <div className="shell border border-slate-700/70 bg-slate-950/40">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">CRM sections</p>
+            <div className="flex flex-wrap gap-2">
+              {tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={
+                    tab === t.key
+                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
+                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  }
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {!loadedOnce && (
         <div className="shell">
           <p className="text-sm text-slate-400">Loading CRM…</p>
@@ -305,45 +341,49 @@ export default function CrmPage() {
 
       {loadedOnce && (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="shell">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Leads</p>
-              <ul className="space-y-2 text-sm">
-                {leads.map((lead) => (
-                  <li key={lead.id}>
-                    <Link
-                      href={`/leads/${lead.id}`}
-                      className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-600"
+          {tab === "leads_deals" && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="shell">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Leads</p>
+                <ul className="space-y-2 text-sm">
+                  {leads.map((lead) => (
+                    <li key={lead.id}>
+                      <Link
+                        href={`/leads/${lead.id}`}
+                        className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-600"
+                      >
+                        <span className="text-slate-100">{lead.title}</span>
+                        <span className="text-xs text-slate-400">{lead.status}</span>
+                      </Link>
+                    </li>
+                  ))}
+                  {leads.length === 0 && <li className="text-sm text-slate-400">No leads yet.</li>}
+                </ul>
+              </div>
+              <div className="shell">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Deals</p>
+                <ul className="space-y-2 text-sm">
+                  {deals.map((deal) => (
+                    <li
+                      key={deal.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
                     >
-                      <span className="text-slate-100">{lead.title}</span>
-                      <span className="text-xs text-slate-400">{lead.status}</span>
-                    </Link>
-                  </li>
-                ))}
-                {leads.length === 0 && <li className="text-sm text-slate-400">No leads yet.</li>}
-              </ul>
+                      <div>
+                        <p className="text-slate-100">{deal.title}</p>
+                        <p className="text-xs text-slate-400">{deal.stage}</p>
+                      </div>
+                      {deal.value !== undefined && (
+                        <span className="text-emerald-400">{formatMoney(deal.value)}</span>
+                      )}
+                    </li>
+                  ))}
+                  {deals.length === 0 && <li className="text-sm text-slate-400">No deals yet.</li>}
+                </ul>
+              </div>
             </div>
-            <div className="shell">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Deals</p>
-              <ul className="space-y-2 text-sm">
-                {deals.map((deal) => (
-                  <li
-                    key={deal.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-slate-100">{deal.title}</p>
-                      <p className="text-xs text-slate-400">{deal.stage}</p>
-                    </div>
-                    {deal.value !== undefined && (
-                      <span className="text-emerald-400">{formatMoney(deal.value)}</span>
-                    )}
-                  </li>
-                ))}
-                {deals.length === 0 && <li className="text-sm text-slate-400">No deals yet.</li>}
-              </ul>
-            </div>
+          )}
 
+          {tab === "clients" && (
             <div className="shell">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                 Clients ({clientSummary?.total ?? 0})
@@ -352,7 +392,7 @@ export default function CrmPage() {
                 All project owners/clients are listed here automatically. Use this list to contact clients and track project status.
               </p>
               <ul className="space-y-2 text-sm">
-                {(clientSummary?.clients ?? []).slice(0, 12).map((c) => (
+                {(clientSummary?.clients ?? []).slice(0, 30).map((c) => (
                   <li key={c.key} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -370,10 +410,12 @@ export default function CrmPage() {
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-slate-500">{c.projects.length} project{c.projects.length === 1 ? "" : "s"}</span>
+                      <span className="text-xs text-slate-500">
+                        {c.projects.length} project{c.projects.length === 1 ? "" : "s"}
+                      </span>
                     </div>
                     <div className="mt-2 flex flex-col gap-1">
-                      {c.projects.slice(0, 3).map((p) => (
+                      {c.projects.slice(0, 5).map((p) => (
                         <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center justify-between text-xs hover:underline">
                           <span className="truncate text-slate-300">{p.name}</span>
                           <span className="ml-2 shrink-0 text-slate-500">
@@ -381,7 +423,7 @@ export default function CrmPage() {
                           </span>
                         </Link>
                       ))}
-                      {c.projects.length > 3 && <span className="text-xs text-slate-500">+{c.projects.length - 3} more</span>}
+                      {c.projects.length > 5 && <span className="text-xs text-slate-500">+{c.projects.length - 5} more</span>}
                     </div>
                   </li>
                 ))}
@@ -389,13 +431,10 @@ export default function CrmPage() {
                   <li className="text-sm text-slate-400">No clients yet. Add a project with client details to populate.</li>
                 )}
               </ul>
-              {(clientSummary?.clients?.length ?? 0) > 12 && (
-                <p className="mt-2 text-xs text-slate-500">Showing first 12 clients. Use Contacts below for full outreach list.</p>
-              )}
             </div>
-          </div>
+          )}
 
-          {canBulkMessage && (
+          {tab === "bulk" && canBulkMessage && (
             <div className="shell border-sky-800/40 bg-sky-950/20">
               <h3 className="mb-1 text-sm font-semibold text-sky-200">Bulk messages to clients &amp; contacts</h3>
               <p className="mb-4 text-xs text-slate-400">
@@ -496,7 +535,8 @@ export default function CrmPage() {
             </div>
           )}
 
-          <div className="shell">
+          {tab === "outreach" && (
+            <div className="shell">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
               Outreach contacts (manual) and clients with projects
             </p>
@@ -597,7 +637,8 @@ export default function CrmPage() {
                 </li>
               )}
             </ul>
-          </div>
+            </div>
+          )}
         </>
       )}
     </section>

@@ -16,11 +16,37 @@ type Approval = {
   requester?: { id: string; name: string | null; email: string } | null;
 };
 
+type PendingFinanceApproval = Approval & {
+  amount: number | null;
+  currency: string | null;
+  description: string | null;
+  notes: string | null;
+};
+
+type PendingInvoice = {
+  id: string;
+  invoiceNumber: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  totalAmount: number;
+  currency: string;
+  notes?: string | null;
+  createdAt: string;
+  client: { name: string; email: string };
+  project?: { name: string } | null;
+  items: { id: string; description: string; quantity: number; unitPrice: number; total: number }[];
+  createdBy: { displayName: string };
+};
+
 export default function ApprovalsPage() {
   const { apiFetch, auth } = useAuth();
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [amounts, setAmounts] = useState<Record<string, number | null>>({});
+  const [pending, setPending] = useState<PendingFinanceApproval[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
+  const [approvalTab, setApprovalTab] = useState<"payments" | "invoices">("payments");
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<PendingInvoice | null>(null);
+  const [invoiceRejectionReason, setInvoiceRejectionReason] = useState("");
+  const [invoiceApprovalNotes, setInvoiceApprovalNotes] = useState("");
 
   const isAdmin = auth.roleKeys.includes("admin");
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
@@ -28,25 +54,20 @@ export default function ApprovalsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [res, expRes, payRes] = await Promise.all([
+      const [res, pendingRes, invRes] = await Promise.all([
         apiFetch("/finance/approvals"),
-        apiFetch("/finance/expenses"),
-        apiFetch("/finance/payouts")
+        apiFetch("/finance/approvals/pending"),
+        apiFetch("/finance/invoices/pending?limit=50&page=1")
       ]);
       if (!res.ok) return;
       const data = (await res.json()) as Approval[];
       setApprovals(data);
-
-      const expenses = expRes.ok ? ((await expRes.json()) as { id: string; amount: number }[]) : [];
-      const payouts = payRes.ok ? ((await payRes.json()) as { id: string; amount: number }[]) : [];
-      const expById = new Map(expenses.map((e) => [e.id, Number(e.amount)]));
-      const payById = new Map(payouts.map((p) => [p.id, Number(p.amount)]));
-      const nextAmounts: Record<string, number | null> = {};
-      for (const a of data) {
-        if (a.entityType === "expense") nextAmounts[a.id] = expById.get(a.entityId) ?? null;
-        else if (a.entityType === "payout") nextAmounts[a.id] = payById.get(a.entityId) ?? null;
-      }
-      setAmounts(nextAmounts);
+      const pendingJson = pendingRes.ok ? ((await pendingRes.json()) as PendingFinanceApproval[]) : [];
+      setPending(pendingJson);
+      const invJson = invRes.ok
+        ? ((await invRes.json()) as { data?: { invoices?: PendingInvoice[] } }).data?.invoices ?? []
+        : [];
+      setPendingInvoices(invJson);
     } catch {
       // ignore
     }
@@ -56,10 +77,7 @@ export default function ApprovalsPage() {
     load();
   }, [load]);
 
-  const pendingFinance = useMemo(
-    () => approvals.filter((a) => isFinanceSubmission(a) && a.status === "pending"),
-    [approvals]
-  );
+  const pendingFinance = useMemo(() => pending, [pending]);
 
   const decideFinance = async (
     approvalId: string,
@@ -98,79 +116,223 @@ export default function ApprovalsPage() {
     await decideFinance(approvalId, "rejected", note.trim());
   };
 
+  const approveInvoice = async (invoiceId: string) => {
+    setDecidingId(invoiceId);
+    try {
+      const res = await apiFetch(`/finance/invoices/${invoiceId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: invoiceApprovalNotes || undefined })
+      });
+      if (res.ok) {
+        setSelectedInvoice(null);
+        setInvoiceApprovalNotes("");
+        await load();
+        emitDataRefresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert((data as { error?: string }).error ?? "Failed to approve invoice.");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
+  const rejectInvoice = async (invoiceId: string) => {
+    if (!invoiceRejectionReason.trim()) {
+      alert("Please provide a rejection reason.");
+      return;
+    }
+    setDecidingId(invoiceId);
+    try {
+      const res = await apiFetch(`/finance/invoices/${invoiceId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: invoiceRejectionReason.trim() })
+      });
+      if (res.ok) {
+        setSelectedInvoice(null);
+        setInvoiceRejectionReason("");
+        await load();
+        emitDataRefresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert((data as { error?: string }).error ?? "Failed to reject invoice.");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
   return (
     <section className="flex flex-col gap-6">
       <PageHeader
         title="Approval queue"
-        description="Finance expense and payout requests. Admin authorises; Director may view. Declines require a logged note."
+        description="Unified approvals: invoice approvals + finance expense/payout requests. Admin authorises; Director may view. Declines require a logged note."
       />
 
-      <div className="shell border border-amber-600/40 bg-slate-950/40">
-        <h3 className="text-sm font-semibold text-amber-100">Pending approval requests</h3>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 pr-3">Request</th>
-                <th className="pb-2 pr-3 text-right">Amount (KES)</th>
-                <th className="pb-2 pr-3">Requested by</th>
-                <th className="pb-2 pr-3">Submitted</th>
-                <th className="pb-2 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingFinance.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-500">
-                    No pending requests
-                  </td>
+      <div className="shell border border-slate-700/70 bg-slate-950/40">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-200">Pending approvals</h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setApprovalTab("payments")}
+              className={
+                approvalTab === "payments"
+                  ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
+                  : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              }
+            >
+              Expenses &amp; payouts ({pendingFinance.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setApprovalTab("invoices")}
+              className={
+                approvalTab === "invoices"
+                  ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
+                  : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              }
+            >
+              Invoices ({pendingInvoices.length})
+            </button>
+          </div>
+        </div>
+
+        {approvalTab === "payments" && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="pb-2 pr-3">Request</th>
+                  <th className="pb-2 pr-3 text-right">Amount (KES)</th>
+                  <th className="pb-2 pr-3">Requested by</th>
+                  <th className="pb-2 pr-3">Submitted</th>
+                  <th className="pb-2 text-right">Action</th>
                 </tr>
-              ) : (
-                pendingFinance.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-800/80">
-                    <td className="py-3 pr-3 align-top text-slate-200">
-                      <span className="capitalize">{a.entityType}</span> · {a.entityId.slice(0, 8)}…
-                      <p className="mt-0.5 text-xs text-slate-500">{a.reason ?? "—"}</p>
+              </thead>
+              <tbody>
+                {pendingFinance.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-slate-500">
+                      No pending requests
                     </td>
-                    <td className="py-3 pr-3 text-right align-top text-slate-200">
-                      {amounts[a.id] != null ? formatMoney(amounts[a.id]!) : "—"}
+                  </tr>
+                ) : (
+                  pendingFinance.map((a) => (
+                    <tr key={a.id} className="border-b border-slate-800/80">
+                      <td className="py-3 pr-3 align-top text-slate-200">
+                        <span className="capitalize">{a.entityType}</span> · {a.entityId.slice(0, 8)}…
+                        <p className="mt-0.5 text-xs text-slate-500">{a.description ?? a.reason ?? "—"}</p>
+                      </td>
+                      <td className="py-3 pr-3 text-right align-top font-mono tabular-nums text-slate-200 whitespace-nowrap">
+                        {a.amount != null ? formatMoney(a.amount) : "—"}
+                      </td>
+                      <td className="py-3 pr-3 align-top text-slate-300">
+                        {a.requester?.name ?? a.requester?.email ?? "—"}
+                      </td>
+                      <td className="py-3 pr-3 align-top text-slate-400 whitespace-nowrap">
+                        {new Date(a.createdAt).toLocaleString()}
+                      </td>
+                      <td className="py-3 text-right align-top">
+                        {isAdmin ? (
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => decideFinance(a.id, "approved")}
+                              disabled={decidingId === a.id}
+                              className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => rejectWithNote(a.id)}
+                              disabled={decidingId === a.id}
+                              className="rounded bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-amber-400">View only</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {approvalTab === "invoices" && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="pb-2 pr-3">Invoice</th>
+                  <th className="pb-2 pr-3">Client</th>
+                  <th className="pb-2 pr-3 text-right">Amount</th>
+                  <th className="pb-2 pr-3">Created by</th>
+                  <th className="pb-2 pr-3">Submitted</th>
+                  <th className="pb-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-500">
+                      No pending invoices
                     </td>
-                    <td className="py-3 pr-3 align-top text-slate-300">
-                      {a.requester?.name ?? a.requester?.email ?? "—"}
-                    </td>
-                    <td className="py-3 pr-3 align-top text-slate-400">
-                      {new Date(a.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-3 text-right align-top">
-                      {isAdmin ? (
+                  </tr>
+                ) : (
+                  pendingInvoices.map((inv) => (
+                    <tr key={inv.id} className="border-b border-slate-800/80">
+                      <td className="py-3 pr-3 align-top text-slate-200 whitespace-nowrap">
+                        {inv.invoiceNumber}
+                      </td>
+                      <td className="py-3 pr-3 align-top text-slate-300">
+                        <div className="min-w-0">
+                          <p className="truncate text-slate-200">{inv.client?.name ?? "—"}</p>
+                          {inv.project?.name ? (
+                            <p className="truncate text-xs text-slate-500">Project: {inv.project.name}</p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3 text-right align-top font-mono tabular-nums text-slate-200 whitespace-nowrap">
+                        {formatMoney(inv.totalAmount)}{" "}
+                        {inv.currency ? <span className="text-xs text-slate-500">{inv.currency}</span> : null}
+                      </td>
+                      <td className="py-3 pr-3 align-top text-slate-300">
+                        {inv.createdBy?.displayName ?? "—"}
+                      </td>
+                      <td className="py-3 pr-3 align-top text-slate-400 whitespace-nowrap">
+                        {new Date(inv.createdAt).toLocaleString()}
+                      </td>
+                      <td className="py-3 text-right align-top">
                         <div className="flex flex-wrap justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() => decideFinance(a.id, "approved")}
-                            disabled={decidingId === a.id}
-                            className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                            onClick={() => setSelectedInvoice(inv)}
+                            className="rounded border border-slate-600 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800"
                           >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => rejectWithNote(a.id)}
-                            disabled={decidingId === a.id}
-                            className="rounded bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
-                          >
-                            Decline
+                            Review
                           </button>
                         </div>
-                      ) : (
-                        <span className="text-xs text-amber-400">View only</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -224,6 +386,104 @@ export default function ApprovalsPage() {
                 </li>
               ))}
           </ul>
+        </div>
+      )}
+
+      {selectedInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-3xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Invoice {selectedInvoice.invoiceNumber}</p>
+                <p className="text-xs text-slate-500">
+                  {selectedInvoice.client?.name ?? "—"} · {new Date(selectedInvoice.createdAt).toLocaleString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedInvoice(null);
+                  setInvoiceRejectionReason("");
+                  setInvoiceApprovalNotes("");
+                }}
+                className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="shell border border-slate-800 bg-slate-950/40">
+                  <p className="text-xs text-slate-400">Total</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-100">{formatMoney(selectedInvoice.totalAmount)}</p>
+                </div>
+                <div className="shell border border-slate-800 bg-slate-950/40">
+                  <p className="text-xs text-slate-400">Created by</p>
+                  <p className="mt-1 text-sm text-slate-200">{selectedInvoice.createdBy?.displayName ?? "—"}</p>
+                </div>
+              </div>
+
+              {Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0 && (
+                <div className="shell border border-slate-800 bg-slate-950/40">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Items</p>
+                  <ul className="space-y-2 text-sm">
+                    {selectedInvoice.items.map((it) => (
+                      <li key={it.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/40 px-3 py-2">
+                        <span className="text-slate-200">{it.description}</span>
+                        <span className="text-slate-400">
+                          {it.quantity} × {formatMoney(it.unitPrice)} ={" "}
+                          <span className="font-mono tabular-nums text-slate-100">{formatMoney(it.total)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {isAdmin ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="shell border border-slate-800 bg-slate-950/40">
+                    <p className="mb-2 text-xs text-slate-400">Approval notes (optional)</p>
+                    <textarea
+                      value={invoiceApprovalNotes}
+                      onChange={(e) => setInvoiceApprovalNotes(e.target.value)}
+                      rows={3}
+                      className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                      placeholder="Optional notes for approval…"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => approveInvoice(selectedInvoice.id)}
+                      disabled={decidingId === selectedInvoice.id}
+                      className="mt-3 rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      Approve invoice
+                    </button>
+                  </div>
+                  <div className="shell border border-slate-800 bg-slate-950/40">
+                    <p className="mb-2 text-xs text-slate-400">Rejection reason (required)</p>
+                    <textarea
+                      value={invoiceRejectionReason}
+                      onChange={(e) => setInvoiceRejectionReason(e.target.value)}
+                      rows={3}
+                      className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                      placeholder="Why is this invoice rejected?"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => rejectInvoice(selectedInvoice.id)}
+                      disabled={decidingId === selectedInvoice.id}
+                      className="mt-3 rounded bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                    >
+                      Reject invoice
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-300">View only — Admin approves invoices.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -21,6 +21,7 @@ export function NotificationBell() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const [markingAll, setMarkingAll] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const loadCount = useCallback(async () => {
     try {
@@ -80,11 +81,8 @@ export function NotificationBell() {
         method: "PATCH"
       });
       if (!res.ok) return;
-      setItems((prev) =>
-        prev.map((n) =>
-          n.id === id ? { ...n, readAt: new Date().toISOString() } : n
-        )
-      );
+      // Remove from the "unread" list immediately; it remains in History (server-side).
+      setItems((prev) => prev.filter((n) => n.id !== id));
       setUnseenCount((c) => (c > 0 ? c - 1 : 0));
     } catch {
       // ignore
@@ -98,12 +96,8 @@ export function NotificationBell() {
         method: "PATCH"
       });
       if (res.ok) {
-        setItems((prev) =>
-          prev.map((n) => ({
-            ...n,
-            readAt: n.readAt ?? new Date().toISOString()
-          }))
-        );
+        // Clear unread list; history remains server-side.
+        setItems([]);
         setUnseenCount(0);
       }
     } catch {
@@ -147,13 +141,20 @@ export function NotificationBell() {
         <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-sm shadow-lg backdrop-blur">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Notifications
+              {showHistory ? "Notification history" : "Notifications"}
             </p>
             {loading && (
               <span className="text-[10px] text-slate-500">Loading…</span>
             )}
           </div>
           <div className="mb-3 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="rounded border border-slate-600 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-800"
+            >
+              {showHistory ? "Back to unread" : "History"}
+            </button>
             <button
               type="button"
               disabled={markingAll || unseenCount === 0}
@@ -170,46 +171,86 @@ export function NotificationBell() {
               Controls
             </Link>
           </div>
-          {items.length === 0 && !loading && (
-            <p className="text-xs text-slate-500">No notifications yet.</p>
-          )}
-          <ul className="max-h-72 space-y-1 overflow-y-auto">
-            {items.map((n) => {
-              const isRead = Boolean(n.readAt);
-              const created = new Date(n.createdAt);
-              return (
-                <li
-                  key={n.id}
-                  className={`flex items-start justify-between gap-2 rounded-lg px-2 py-2 ${
-                    isRead ? "bg-slate-900/40" : "bg-slate-900/80"
-                  }`}
-                >
-                  <div>
-                    {n.tier && (
-                      <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
-                        {n.tier}
-                      </p>
-                    )}
-                    <p className="text-xs text-slate-300">{n.body}</p>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      {created.toLocaleString()}
-                    </p>
-                  </div>
-                  {!isRead && (
-                    <button
-                      type="button"
-                      onClick={() => void markRead(n.id)}
-                      className="mt-0.5 shrink-0 rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+          {showHistory ? (
+            <NotificationHistory apiFetch={apiFetch} />
+          ) : (
+            <>
+              {items.length === 0 && !loading && (
+                <p className="text-xs text-slate-500">No unread notifications.</p>
+              )}
+              <ul className="max-h-72 space-y-1 overflow-y-auto">
+                {items.map((n) => {
+                  const created = new Date(n.createdAt);
+                  return (
+                    <li
+                      key={n.id}
+                      className="flex items-start justify-between gap-2 rounded-lg bg-slate-900/80 px-2 py-2"
                     >
-                      Mark read
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                      <div>
+                        {n.tier && (
+                          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                            {n.tier}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-300">{n.body}</p>
+                        <p className="mt-1 text-[10px] text-slate-500">
+                          {created.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void markRead(n.id)}
+                        className="mt-0.5 shrink-0 rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+                      >
+                        Mark read
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function NotificationHistory({ apiFetch }: { apiFetch: (input: string, init?: RequestInit) => Promise<Response> }) {
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    apiFetch("/notifications/me")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (cancelled) return;
+        const list = (Array.isArray(data) ? (data as Notification[]) : []).filter((n) => Boolean(n.readAt));
+        setItems(list);
+      })
+      .catch(() => setItems([]))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch]);
+
+  if (loading) return <p className="text-xs text-slate-500">Loading history…</p>;
+  if (items.length === 0) return <p className="text-xs text-slate-500">No history yet.</p>;
+
+  return (
+    <ul className="max-h-72 space-y-1 overflow-y-auto">
+      {items.map((n) => (
+        <li key={n.id} className="rounded-lg bg-slate-900/40 px-2 py-2">
+          {n.tier && <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">{n.tier}</p>}
+          <p className="text-xs text-slate-300">{n.body}</p>
+          <p className="mt-1 text-[10px] text-slate-500">{new Date(n.createdAt).toLocaleString()}</p>
+        </li>
+      ))}
+    </ul>
   );
 }

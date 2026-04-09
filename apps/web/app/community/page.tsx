@@ -35,13 +35,13 @@ interface OnlineUser {
   id: string;
   /** Resolved label: profile name, or email if no name */
   name: string;
-  email?: string;
   hasDisplayName?: boolean;
   roles?: OrgRoleRef[];
   status: "online" | "busy" | "away" | "offline";
   lastSeen: string | null;
   isOnline: boolean;
   avatar?: string | null;
+  onlineHours?: string | null;
 }
 
 interface CallState {
@@ -649,7 +649,6 @@ export default function CommunityPage() {
     if (!q) return conversations;
     return conversations.filter((c) => {
       if (c.name.toLowerCase().includes(q)) return true;
-      if (c.otherUser?.email?.toLowerCase().includes(q)) return true;
       if (c.otherUser?.roles?.some((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q)))
         return true;
       if (c.lastMessage.content.toLowerCase().includes(q)) return true;
@@ -664,7 +663,6 @@ export default function CommunityPage() {
     if (!q) return sorted;
     return sorted.filter((u) => {
       if (u.name.toLowerCase().includes(q)) return true;
-      if (u.email?.toLowerCase().includes(q)) return true;
       if (u.roles?.some((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q))) return true;
       return false;
     });
@@ -1058,7 +1056,7 @@ export default function CommunityPage() {
   return (
     <>
       {chatError && (
-        <div className="mx-auto mb-2 w-full max-w-[1600px] px-2 font-body">
+        <div className="mb-2 w-full px-2 font-body">
           <div className="flex items-start justify-between gap-3 rounded-lg border border-rose-600/50 bg-rose-950/50 px-3 py-2 text-sm text-rose-100">
             <span className="min-w-0">{chatError}</span>
             <button
@@ -1071,7 +1069,7 @@ export default function CommunityPage() {
           </div>
         </div>
       )}
-    <div className="mx-auto flex h-[calc(100vh-5.5rem)] min-h-[480px] max-w-[1600px] flex-col overflow-hidden rounded-lg border border-[#2A3942] font-body shadow-xl md:flex-row">
+    <div className="flex h-[calc(100vh-5.5rem)] min-h-[480px] w-full flex-col overflow-hidden border border-[#2A3942] font-body md:flex-row">
       {/* ——— Left: Chats + People (partitioned) ——— On small screens, hide when a 1:1 chat is open so the thread is full width. */}
       <div
         className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
@@ -1091,7 +1089,7 @@ export default function CommunityPage() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-medium text-[#E9EDEF]">Community</h1>
-            <p className="truncate text-xs text-[#8696A0]">All org accounts — names or email</p>
+            <p className="truncate text-xs text-[#8696A0]">All org accounts — names and roles</p>
           </div>
         </div>
 
@@ -1106,7 +1104,7 @@ export default function CommunityPage() {
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name, email, or role"
+              placeholder="Search name or role"
               className="w-full rounded-lg border-0 bg-[#202C33] py-2 pl-9 pr-3 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/50"
             />
           </div>
@@ -1156,7 +1154,7 @@ export default function CommunityPage() {
                       selectedConversation?.id === c.id ? wa.listActive : ""
                     }`}
                   >
-                    <div className="relative h-12 w-12 flex-shrink-0 rounded-full bg-[#6B7B8C] text-lg font-medium leading-[3rem] text-white">
+                    <div className="relative h-12 w-12 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-lg font-medium leading-[3rem] text-white">
                       {initialsFromLabel(c.name)}
                       {c.otherUser?.isOnline && (
                         <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#111B21] bg-[#25D366]" />
@@ -1169,9 +1167,6 @@ export default function CommunityPage() {
                           {formatMessageTime(c.lastMessage.timestamp)}
                         </span>
                       </div>
-                      {c.otherUser?.hasDisplayName && c.otherUser.email && (
-                        <p className="truncate text-[11px] text-[#8696A0]">{c.otherUser.email}</p>
-                      )}
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm text-[#8696A0]">
                           {c.lastMessage.senderId === auth.userId ? "You: " : ""}
@@ -1230,9 +1225,6 @@ export default function CommunityPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-[#E9EDEF]">{user.name}</div>
-                      {user.hasDisplayName && user.email && (
-                        <div className="truncate text-[11px] text-[#8696A0]">{user.email}</div>
-                      )}
                       {user.roles && user.roles.length > 0 && (
                         <div className="mt-0.5 flex flex-wrap gap-1">
                           {user.roles.map((r) => (
@@ -1244,6 +1236,9 @@ export default function CommunityPage() {
                             </span>
                           ))}
                         </div>
+                      )}
+                      {user.onlineHours && (
+                        <div className="truncate text-[11px] text-[#8696A0]">Hours online: {user.onlineHours}</div>
                       )}
                       <div className={`truncate text-xs ${user.isOnline ? "text-[#25D366]" : "text-[#8696A0]"}`}>
                         {user.isOnline
@@ -1340,9 +1335,6 @@ export default function CommunityPage() {
                   </div>
                 )}
                 <div className="truncate text-xs text-[#8696A0]">
-                  {selectedPeer?.hasDisplayName && selectedPeer.email ? (
-                    <span className="text-[#8696A0]">{selectedPeer.email} · </span>
-                  ) : null}
                   {peerSubtitle(selectedConversation, onlineUsers, auth.userId)}
                 </div>
               </div>

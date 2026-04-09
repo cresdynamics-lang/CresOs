@@ -14,6 +14,8 @@ type DeveloperReport = {
   nextPlan: string | null;
   createdAt: string;
   updatedAt: string;
+  reviewStatus?: string;
+  remarks?: string | null;
   submittedBy?: { id: string; name: string | null; email: string };
 };
 
@@ -51,6 +53,8 @@ export default function DeveloperReportsPage() {
   const [submitting, setSubmitting] = useState(false);
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
   const isDeveloper = auth.roleKeys.includes("developer");
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [remarks, setRemarks] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +68,31 @@ export default function DeveloperReportsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const updateReview = async (id: string, reviewStatus: "viewed" | "checked") => {
+    const note = remarks.trim();
+    if (reviewStatus === "checked" && auth.roleKeys.includes("director_admin") && !note) {
+      alert("Director remarks are required to mark as checked.");
+      return;
+    }
+    try {
+      const res = await apiFetch(`/developer-reports/${id}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewStatus, remarks: note || undefined })
+      });
+      if (res.ok) {
+        setEditingReviewId(null);
+        setRemarks("");
+        await load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "Failed to update review status");
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -174,52 +203,109 @@ export default function DeveloperReportsPage() {
             No reports yet. {isDeveloper && "Use “New report” to add one."}
           </p>
         ) : (
-          <ul className="space-y-3">
-            {list.map((report) => (
-              <li key={report.id} className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <span className="font-medium text-slate-100">
-                      {new Date(report.reportDate).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric"
-                      })}
-                    </span>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Filed {new Date(report.createdAt).toLocaleString()}
-                      {report.updatedAt &&
-                        new Date(report.updatedAt).getTime() !== new Date(report.createdAt).getTime() && (
-                          <> · Updated {new Date(report.updatedAt).toLocaleString()}</>
-                        )}
-                    </p>
-                  </div>
-                  {report.submittedBy && (
-                    <span className="text-xs text-slate-400">
-                      {report.submittedBy.name ?? report.submittedBy.email}
-                    </span>
-                  )}
-                </div>
-                <dl className="grid gap-2 text-sm">
-                  {FIELDS.map(({ key, label }) => {
-                    const value = report[key as keyof DeveloperReport];
-                    if (value == null || value === "") return null;
-                    const display =
-                      typeof value === "string" ? value : JSON.stringify(value);
-                    return (
-                      <div key={key}>
-                        <dt className="text-slate-400">{label}</dt>
-                        <dd className="mt-0.5 whitespace-pre-wrap text-slate-200">
-                          {display}
-                        </dd>
-                      </div>
-                    );
-                  })}
-                </dl>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="pb-2 pr-3">Date</th>
+                  {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
+                  <th className="pb-2 pr-3">Status</th>
+                  <th className="pb-2 pr-3">Remarks</th>
+                  <th className="pb-2 pr-3">Filed</th>
+                  {isDirector && <th className="pb-2 text-right">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((report) => (
+                  <tr key={report.id} className="border-b border-slate-800">
+                    <td className="py-2 pr-3 text-slate-200">
+                      {new Date(report.reportDate).toLocaleDateString()}
+                    </td>
+                    {isDirector && (
+                      <td className="py-2 pr-3 text-xs text-slate-400">
+                        {report.submittedBy ? report.submittedBy.name ?? report.submittedBy.email : "—"}
+                      </td>
+                    )}
+                    <td className="py-2 pr-3 text-xs">
+                      <span
+                        className={
+                          report.reviewStatus === "checked"
+                            ? "rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
+                            : report.reviewStatus === "viewed"
+                              ? "rounded bg-sky-500/15 px-2 py-0.5 text-sky-300"
+                              : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200"
+                        }
+                      >
+                        {report.reviewStatus ?? "pending"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-slate-400">
+                      {report.remarks?.trim() ? report.remarks.trim().slice(0, 80) : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-slate-500">
+                      {new Date(report.createdAt).toLocaleString()}
+                    </td>
+                    {isDirector && (
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingReviewId(report.id);
+                            setRemarks(report.remarks ?? "");
+                          }}
+                          className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          Review
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {isDirector && editingReviewId && (
+          <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+            <p className="text-sm font-medium text-slate-200">Review report</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Director remarks are required to mark checked.
+            </p>
+            <textarea
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              rows={3}
+              className="mt-3 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              placeholder="Remarks…"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void updateReview(editingReviewId, "viewed")}
+                className="rounded border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Mark viewed
+              </button>
+              <button
+                type="button"
+                onClick={() => void updateReview(editingReviewId, "checked")}
+                className="rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              >
+                Mark checked
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingReviewId(null);
+                  setRemarks("");
+                }}
+                className="rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </section>

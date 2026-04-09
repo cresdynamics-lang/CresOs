@@ -61,6 +61,29 @@ type DirectorDashboard = {
   riskSummary: { financial: unknown[]; operational: unknown[]; sales: unknown[] };
 };
 
+type DashboardKpis = {
+  finance: {
+    revenueThisMonth: number;
+    outstandingInvoicesAmount: number;
+    overdueInvoicesCount: number;
+    expensesThisMonth: number;
+  };
+  projectHealth: {
+    activeProjects: number;
+    overdueTasks: number;
+    blockedTasks: number;
+    milestonesDone: number;
+    milestonesPending: number;
+  };
+  leadConversion: {
+    leadsThisMonth: number;
+    dealsWon: number;
+    dealsLost: number;
+    winRate: number;
+    avgTimeToCloseDays: number;
+  };
+};
+
 type Attention = {
   notifications: { id: string; subject: string | null; body: string; readAt: string | null; createdAt: string; type: string }[];
   upcomingMeetings: { id: string; type: string; scheduledAt: string; name: string | null; lead: { id: string; title: string } }[];
@@ -88,6 +111,14 @@ type Attention = {
   latestDeveloperReportNeedsAttention?: string | null;
 };
 
+type ProjectListRow = {
+  id: string;
+  name: string;
+  status: string;
+  approvalStatus?: string;
+  createdBy?: { id: string; name: string | null; email: string } | null;
+};
+
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   director_admin: "Director",
@@ -103,26 +134,24 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
     { href: "/crm", label: "CRM" },
     { href: "/leads", label: "Leads" },
     { href: "/reports", label: "My reports" },
-    { href: "/meeting-requests", label: "Director meeting" }
+    { href: "/approvals", label: "Approvals" }
   ],
   developer: [
     { href: "/projects", label: "Projects" },
     { href: "/developer-reports", label: "Reports" },
-    { href: "/meeting-requests", label: "Director meeting" }
+    { href: "/community", label: "Community" }
   ],
   director_admin: [
     { href: "/projects", label: "Projects" },
     { href: "/leads", label: "Leads" },
     { href: "/approvals", label: "Approvals" },
     { href: "/analytics", label: "Analytics" },
-    { href: "/developer-reports", label: "Reports" },
-    { href: "/meeting-requests", label: "Meeting requests" }
+    { href: "/developer-reports", label: "Reports" }
   ],
   finance: [{ href: "/finance", label: "Finance" }, { href: "/approvals", label: "Approvals" }],
   analyst: [{ href: "/analytics", label: "Analytics" }, { href: "/crm", label: "CRM" }],
   admin: [
     { href: "/admin", label: "Users & org" },
-    { href: "/meeting-requests", label: "Meetings" },
     { href: "/analytics", label: "Analytics" }
   ],
   client: []
@@ -140,8 +169,11 @@ export default function DashboardPage() {
     return until ? Date.now() < parseInt(until, 10) : false;
   });
   const [directorDashboard, setDirectorDashboard] = useState<DirectorDashboard | null>(null);
+  const [projects, setProjects] = useState<ProjectListRow[]>([]);
+  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+  const [kpisError, setKpisError] = useState(false);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
-  const { apiFetch, auth } = useAuth();
+  const { apiFetch, auth, hydrated } = useAuth();
   const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
   const isDirectorOnly =
     auth.roleKeys.includes("director_admin") && !auth.roleKeys.includes("admin");
@@ -164,6 +196,7 @@ export default function DashboardPage() {
   };
 
   const loadSummaryAndAttention = useCallback(async () => {
+    if (!hydrated || !auth.accessToken) return;
     try {
       if (canViewOrgAnalyticsSummary) {
         const summaryRes = await apiFetch("/analytics/summary");
@@ -203,10 +236,11 @@ export default function DashboardPage() {
         setSummaryError(true);
       }
     }
-  }, [apiFetch, canViewOrgAnalyticsSummary]);
+  }, [apiFetch, canViewOrgAnalyticsSummary, hydrated, auth.accessToken]);
 
   const loadDirectorDashboard = useCallback(async () => {
     if (!isDirectorOrAdmin) return;
+    if (!hydrated || !auth.accessToken) return;
     try {
       const res = await apiFetch("/director/dashboard");
       if (res.ok) {
@@ -216,7 +250,48 @@ export default function DashboardPage() {
     } catch {
       // ignore
     }
-  }, [isDirectorOrAdmin, apiFetch]);
+  }, [isDirectorOrAdmin, apiFetch, hydrated, auth.accessToken]);
+
+  const loadProjects = useCallback(async () => {
+    if (!hydrated || !auth.accessToken) return;
+    try {
+      const res = await apiFetch("/projects");
+      if (!res.ok) return;
+      const data = (await res.json()) as any[];
+      setProjects(
+        data.map((p) => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          approvalStatus: p.approvalStatus,
+          createdBy: p.createdBy ?? null
+        }))
+      );
+    } catch {
+      // ignore
+    }
+  }, [apiFetch, hydrated, auth.accessToken]);
+
+  const canViewKpis = useMemo(
+    () => auth.roleKeys.some((r) => ["admin", "director_admin", "finance"].includes(r)),
+    [auth.roleKeys]
+  );
+
+  const loadKpis = useCallback(async () => {
+    if (!canViewKpis) return;
+    if (!hydrated || !auth.accessToken) return;
+    try {
+      const res = await apiFetch("/dashboard/kpis");
+      if (res.ok) {
+        setKpis((await res.json()) as DashboardKpis);
+        setKpisError(false);
+      } else {
+        setKpisError(true);
+      }
+    } catch {
+      setKpisError(true);
+    }
+  }, [apiFetch, canViewKpis, hydrated, auth.accessToken]);
 
   useEffect(() => {
     void loadSummaryAndAttention();
@@ -227,22 +302,34 @@ export default function DashboardPage() {
   }, [loadDirectorDashboard]);
 
   useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
+
+  useEffect(() => {
+    void loadKpis();
+  }, [loadKpis]);
+
+  useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
         void loadSummaryAndAttention();
         void loadDirectorDashboard();
+        void loadProjects();
+        void loadKpis();
       }
     };
     document.addEventListener("visibilitychange", onVis);
     const unsub = subscribeDataRefresh(() => {
       void loadSummaryAndAttention();
       void loadDirectorDashboard();
+      void loadProjects();
+      void loadKpis();
     });
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       unsub();
     };
-  }, [loadSummaryAndAttention, loadDirectorDashboard]);
+  }, [loadSummaryAndAttention, loadDirectorDashboard, loadProjects, loadKpis]);
 
   const quickLinks = Array.from(
     new Map(
@@ -267,6 +354,172 @@ export default function DashboardPage() {
   const latestDeveloperReportNeedsAttention = attention?.latestDeveloperReportNeedsAttention ?? null;
   const isDeveloper = auth.roleKeys.includes("developer");
   const isAdmin = auth.roleKeys.includes("admin");
+  const navCards = useMemo(() => {
+    const cards: { href: string; title: string; description: string; badge?: string }[] = [];
+    const pendingApprovals = attention?.approvalsPending?.length ?? 0;
+    const pendingApprovalsBadge = pendingApprovals > 0 ? String(pendingApprovals) : undefined;
+
+    if (auth.roleKeys.includes("admin")) {
+      cards.push(
+        {
+          href: "/projects",
+          title: "Projects",
+          description: "View all projects and their status.",
+          badge: projects.length > 0 ? String(projects.length) : undefined
+        },
+        {
+          href: "/approvals",
+          title: "Approvals",
+          description: "Review pending finance requests and decisions.",
+          badge: pendingApprovalsBadge
+        },
+        {
+          href: "/finance",
+          title: "Finance",
+          description: "Read-only governance overview and summaries."
+        },
+        {
+          href: "/analytics",
+          title: "Analytics",
+          description: "Extended admin analytics dashboard."
+        },
+        {
+          href: "/admin",
+          title: "Users & org",
+          description: "Users, departments, roles (admin tools)."
+        },
+        {
+          href: "/community",
+          title: "Community",
+          description: "Workspace chat and updates."
+        }
+      );
+      return cards;
+    }
+
+    // Non-admin: use their quick links but present as cards.
+    for (const l of quickLinks) {
+      cards.push({
+        href: l.href,
+        title: l.label,
+        description: "Open section"
+      });
+    }
+    return cards;
+  }, [auth.roleKeys, attention?.approvalsPending?.length, projects.length, quickLinks]);
+
+  const actionCards = useMemo(() => {
+    const cards: Array<{
+      href: string;
+      title: string;
+      value: number;
+      sub: string;
+      tone: "sky" | "amber" | "rose" | "emerald";
+    }> = [];
+
+    const approvalsCount =
+      attention?.approvalsPending?.length ??
+      directorDashboard?.approvalQueue.totalPending ??
+      0;
+    const leadsPendingApprovalCount = attention?.leadsPendingApproval?.length ?? 0;
+
+    if (auth.roleKeys.some((r) => ["admin", "director_admin", "finance"].includes(r))) {
+      cards.push({
+        href: "/approvals",
+        title: "Approvals",
+        value: approvalsCount,
+        sub: "pending",
+        tone: approvalsCount > 0 ? "amber" : "sky"
+      });
+    }
+
+    if (auth.roleKeys.some((r) => ["sales", "director_admin", "admin", "finance"].includes(r))) {
+      cards.push({
+        href: "/leads",
+        title: "Due today",
+        value: dueCount,
+        sub: "follow-ups",
+        tone: dueCount > 0 ? "amber" : "sky"
+      });
+    }
+
+    if (auth.roleKeys.includes("sales")) {
+      cards.push({
+        href: "/reports",
+        title: "Messages",
+        value: messagesCount,
+        sub: "need reply",
+        tone: messagesCount > 0 ? "rose" : "sky"
+      });
+    }
+
+    if (auth.roleKeys.includes("developer")) {
+      cards.push({
+        href: "/projects",
+        title: "Tasks",
+        value: tasksOverdue,
+        sub: "overdue",
+        tone: tasksOverdue > 0 ? "rose" : "sky"
+      });
+      cards.push({
+        href: "/projects",
+        title: "Projects",
+        value: projectsNeedingReview.length + handoffRequests.length,
+        sub: "need attention",
+        tone: (projectsNeedingReview.length + handoffRequests.length) > 0 ? "amber" : "sky"
+      });
+    }
+
+    if (auth.roleKeys.includes("director_admin")) {
+      cards.push({
+        href: "/leads",
+        title: "Leads",
+        value: leadsPendingApprovalCount,
+        sub: "pending approval",
+        tone: leadsPendingApprovalCount > 0 ? "amber" : "sky"
+      });
+    }
+
+    // Always keep a couple of general entry points.
+    cards.push(
+      {
+        href: "/community",
+        title: "Community",
+        value: unreadCount,
+        sub: "unread notifs",
+        tone: unreadCount > 0 ? "sky" : "sky"
+      },
+      {
+        href: "/projects",
+        title: "Projects",
+        value: projects.length,
+        sub: isAdmin ? "all" : "visible",
+        tone: "sky"
+      }
+    );
+
+    // De-dup by href+title, keep first occurrence.
+    const seen = new Set<string>();
+    return cards.filter((c) => {
+      const k = `${c.href}::${c.title}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [
+    attention?.approvalsPending?.length,
+    attention?.leadsPendingApproval?.length,
+    auth.roleKeys,
+    directorDashboard?.approvalQueue.totalPending,
+    dueCount,
+    messagesCount,
+    tasksOverdue,
+    projectsNeedingReview.length,
+    handoffRequests.length,
+    unreadCount,
+    projects.length,
+    isAdmin
+  ]);
   const hasAttention =
     unreadCount > 0 ||
     messagesCount > 0 ||
@@ -300,6 +553,324 @@ export default function DashboardPage() {
               : "Operating System for Growth — one place for approvals, delivery signals, and your work."
         }
       />
+
+      {actionCards.length > 0 && (
+        <div className="shell border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Quick actions
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadSummaryAndAttention()}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Refresh alerts
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadProjects()}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Refresh projects
+              </button>
+              {canViewKpis && (
+                <button
+                  type="button"
+                  onClick={() => void loadKpis()}
+                  className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+                >
+                  Refresh KPIs
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {actionCards.slice(0, 8).map((c) => {
+              const tone =
+                c.tone === "rose"
+                  ? "text-rose-300"
+                  : c.tone === "amber"
+                    ? "text-amber-300"
+                    : c.tone === "emerald"
+                      ? "text-emerald-300"
+                      : "text-sky-300";
+              return (
+                <Link
+                  key={`${c.href}-${c.title}`}
+                  href={c.href}
+                  className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.title}</p>
+                  <p className={`mt-1 text-2xl font-semibold ${tone}`}>{c.value}</p>
+                  <p className="mt-1 text-xs text-slate-500">{c.sub}</p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isDeveloper && hydrated && auth.accessToken && (
+        <div className="shell border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Developer overview
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadSummaryAndAttention()}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Refresh
+              </button>
+              <Link
+                href="/projects"
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Open projects →
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Link
+              href="/projects"
+              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tasks</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-300">{tasksOverdue}</p>
+              <p className="mt-1 text-xs text-slate-500">Overdue</p>
+              {tasksDueSoon > 0 && (
+                <p className="mt-1 text-xs text-amber-200">{tasksDueSoon} due soon</p>
+              )}
+            </Link>
+
+            <Link
+              href="/developer-reports"
+              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
+              <p className="mt-1 text-2xl font-semibold text-sky-300">{messagesCount}</p>
+              <p className="mt-1 text-xs text-slate-500">Need a reply</p>
+            </Link>
+
+            <Link
+              href="/developer-reports"
+              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Reports</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-400">
+                {developerReportStreak}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Streak (days)</p>
+            </Link>
+
+            <Link
+              href="/projects"
+              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Projects</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-300">
+                {projectsNeedingReview.length + handoffRequests.length}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Need attention</p>
+            </Link>
+          </div>
+
+          {(overdueTasks.length > 0 ||
+            (attention?.messages?.length ?? 0) > 0 ||
+            projectsNeedingReview.length > 0 ||
+            handoffRequests.length > 0) && (
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {(overdueTasks.length > 0 || projectsNeedingReview.length > 0 || handoffRequests.length > 0) && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Next actions</p>
+                  <ul className="space-y-2 text-sm">
+                    {projectsNeedingReview.slice(0, 3).map((p) => (
+                      <li key={p.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <Link href={`/projects/${p.id}`} className="text-sky-300 hover:underline">
+                          Review project: {p.name}
+                        </Link>
+                      </li>
+                    ))}
+                    {handoffRequests.slice(0, 2).map((h) => (
+                      <li key={h.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-200">
+                        Handoff request: <span className="text-slate-100">{h.project.name}</span>
+                        <span className="ml-1 text-xs text-slate-400">from {h.fromUser.name ?? h.fromUser.email}</span>
+                      </li>
+                    ))}
+                    {overdueTasks.slice(0, 3).map((t) => (
+                      <li key={t.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <Link href={`/projects/${t.projectId}`} className="text-rose-200 hover:underline">
+                          Overdue: {t.title}
+                        </Link>
+                        <span className="ml-2 text-xs text-slate-500">
+                          Due {new Date(t.dueDate).toLocaleDateString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(attention?.messages?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
+                  <ul className="space-y-2 text-sm">
+                    {(attention?.messages ?? []).slice(0, 5).map((m) => (
+                      <li key={m.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <Link href={`/reports/${m.reportId}`} className="text-brand hover:underline">
+                          {m.content.slice(0, 90)}
+                          {m.content.length > 90 ? "…" : ""}
+                        </Link>
+                        <span className="ml-2 text-xs text-slate-500">
+                          {new Date(m.askedAt).toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/developer-reports"
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              Submit report →
+            </Link>
+            <Link
+              href="/community"
+              className="rounded-lg border border-slate-600 bg-slate-950/30 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-900/40"
+            >
+              Community →
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {navCards.length > 0 && (
+        <div className="shell border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Navigate
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {canViewKpis && (
+                <button
+                  type="button"
+                  onClick={() => void loadKpis()}
+                  className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+                >
+                  Refresh KPIs
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadSummaryAndAttention()}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                Refresh alerts
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {navCards.map((c) => (
+              <Link
+                key={c.href}
+                href={c.href}
+                className="group rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100 group-hover:text-white">
+                      {c.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">{c.description}</p>
+                  </div>
+                  {c.badge && (
+                    <span className="rounded-full border border-slate-600 bg-slate-900 px-2 py-0.5 text-xs tabular-nums text-slate-200">
+                      {c.badge}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canViewKpis && (
+        <div className="shell border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Overview (live from database)
+            </h3>
+            <button
+              type="button"
+              onClick={() => void loadKpis()}
+              className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {kpisError && !kpis && <p className="mb-3 text-sm text-rose-300">Could not load overview KPIs.</p>}
+          {kpisError && kpis && (
+            <p className="mb-3 text-xs text-amber-200">
+              Latest refresh failed — showing the last saved KPI snapshot.
+            </p>
+          )}
+
+          {kpis && (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Finance
+                </p>
+                <ul className="space-y-1 text-sm text-slate-200">
+                  <li>Revenue this month: <span className="text-emerald-400">{formatMoney(kpis.finance.revenueThisMonth)}</span></li>
+                  <li>Outstanding invoices: <span className="text-amber-300">{formatMoney(kpis.finance.outstandingInvoicesAmount)}</span></li>
+                  <li>Overdue invoices: <span className="text-rose-300">{kpis.finance.overdueInvoicesCount}</span></li>
+                  <li>Expenses this month: <span className="text-amber-300">{formatMoney(kpis.finance.expensesThisMonth)}</span></li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Project health
+                </p>
+                <ul className="space-y-1 text-sm text-slate-200">
+                  <li>Active projects: <span className="text-sky-300">{kpis.projectHealth.activeProjects}</span></li>
+                  <li>Overdue tasks: <span className="text-rose-300">{kpis.projectHealth.overdueTasks}</span></li>
+                  <li>Blocked tasks: <span className="text-amber-300">{kpis.projectHealth.blockedTasks}</span></li>
+                  <li>Milestones done / pending: <span className="text-slate-100">{kpis.projectHealth.milestonesDone} / {kpis.projectHealth.milestonesPending}</span></li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Lead conversion
+                </p>
+                <ul className="space-y-1 text-sm text-slate-200">
+                  <li>Leads this month: <span className="text-sky-300">{kpis.leadConversion.leadsThisMonth}</span></li>
+                  <li>Deals won: <span className="text-emerald-400">{kpis.leadConversion.dealsWon}</span></li>
+                  <li>Deals lost: <span className="text-rose-300">{kpis.leadConversion.dealsLost}</span></li>
+                  <li>Win rate: <span className="text-slate-100">{kpis.leadConversion.winRate.toFixed(1)}%</span></li>
+                  <li>Avg time to close: <span className="text-slate-100">{kpis.leadConversion.avgTimeToCloseDays.toFixed(1)} days</span></li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {!canViewOrgAnalyticsSummary && isSalesOrDeveloper && (
         <div className="shell border-sky-800/50 bg-sky-950/25">
@@ -404,6 +975,63 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {isAdmin && (
+        <div className="shell border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Projects (all)</h3>
+            <Link
+              href="/projects"
+              className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Open projects →
+            </Link>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-slate-700/80">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-2 font-medium">Project</th>
+                  <th className="px-3 py-2 font-medium">Created by</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Approval</th>
+                  <th className="px-3 py-2 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.slice(0, 15).map((p) => (
+                  <tr key={p.id} className="border-b border-slate-800/80 text-slate-200">
+                    <td className="px-3 py-2 font-medium text-slate-100">{p.name}</td>
+                    <td className="px-3 py-2 text-slate-300">
+                      {p.createdBy?.name ?? p.createdBy?.email ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 capitalize text-slate-300">{p.status}</td>
+                    <td className="px-3 py-2 text-xs text-slate-400">{p.approvalStatus ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {projects.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-10 text-center text-slate-500">
+                      No projects yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {projects.length > 15 && (
+            <p className="mt-2 text-xs text-slate-500">Showing latest 15. Open Projects for full list.</p>
+          )}
+        </div>
+      )}
+
       {projectsNeedingReview.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-sky-600/50 bg-sky-950/40 px-4 py-3">
           <p className="text-sm text-sky-200">
@@ -456,21 +1084,21 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(auth.roleKeys.includes("developer") || auth.roleKeys.includes("sales")) && (
-        <CurrentFocusPanel apiFetch={apiFetch} />
+      {auth.roleKeys.includes("developer") && <CurrentFocusPanel apiFetch={apiFetch} />}
+
+      {/* Stats row (hide for developers — replaced by simple cards above) */}
+      {!isDeveloper && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Notifications" value={unreadCount} />
+          <StatCard label="Messages" value={messagesCount} sub="to respond" />
+          <StatCard label="Due today" value={dueCount} />
+          <StatCard label="Work progress" value={`${workProgress}%`} />
+          <StatCard label="Report streak" value={isDeveloper ? developerReportStreak : reportStreak} sub="days" />
+          {isDeveloper && <StatCard label="Needs attention" value={needsAttentionCount} />}
+        </div>
       )}
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Notifications" value={unreadCount} />
-        <StatCard label="Messages" value={messagesCount} sub="to respond" />
-        <StatCard label="Due today" value={dueCount} />
-        <StatCard label="Work progress" value={`${workProgress}%`} />
-        <StatCard label="Report streak" value={isDeveloper ? developerReportStreak : reportStreak} sub="days" />
-        {isDeveloper && <StatCard label="Needs attention" value={needsAttentionCount} />}
-      </div>
-
-      {hasAttention && attention && (
+      {!isDeveloper && hasAttention && attention && (
         <div className="shell border-brand/30 bg-brand/5">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
             What needs your attention
@@ -607,7 +1235,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isDeveloper && (workProgress > 0 || developerReportStreak > 0 || tasksOverdue > 0 || tasksDueSoon > 0) && (
+      {!isDeveloper && (workProgress > 0 || developerReportStreak > 0 || tasksOverdue > 0 || tasksDueSoon > 0) && (
         <div className="shell border-sky-800/40 bg-sky-950/20">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Performance</h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

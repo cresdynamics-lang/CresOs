@@ -21,6 +21,8 @@ type Report = {
   title: string;
   body: string;
   status: string;
+  reviewStatus?: string;
+  remarks?: string | null;
   submittedAt: string | null;
   submittedBy: { id: string; name: string | null; email: string };
   comments: Comment[];
@@ -47,6 +49,7 @@ export default function ReportDetailPage() {
   const [newKind, setNewKind] = useState<"comment" | "question">("comment");
   const [responseByParent, setResponseByParent] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [remarks, setRemarks] = useState("");
 
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
   const isAuthor = report?.submittedBy?.id === auth.userId;
@@ -58,6 +61,7 @@ export default function ReportDetailPage() {
         if (res.ok) {
           const data = (await res.json()) as Report;
           setReport(data);
+          setRemarks(data.remarks ?? "");
         } else if (res.status === 404) {
           router.replace("/reports");
         }
@@ -121,6 +125,34 @@ export default function ReportDetailPage() {
 
   const topLevel = report.comments.filter((c) => !c.parentId);
 
+  const setReview = async (reviewStatus: "viewed" | "checked") => {
+    if (!report) return;
+    const note = remarks.trim();
+    if (reviewStatus === "checked" && auth.roleKeys.includes("director_admin") && !note) {
+      alert("Director remarks are required to mark a report as checked.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/reports/${id}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ reviewStatus, remarks: note || undefined })
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as Report;
+        setReport(updated);
+        setRemarks(updated.remarks ?? "");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert((data as { error?: string }).error ?? "Failed to update review status");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="flex flex-col gap-4">
       <div className="shell flex flex-wrap items-start justify-between gap-4 border-cres-border bg-cres-surface/70">
@@ -153,6 +185,51 @@ export default function ReportDetailPage() {
 
       {report.status === "submitted" && (
         <>
+          {isDirector && (
+            <div className="shell border-cres-border bg-cres-card/80">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-cres-muted">Review status</p>
+                  <p className="mt-1 text-sm text-cres-text">
+                    {report.reviewStatus ?? "pending"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void setReview("viewed")}
+                    className="rounded border border-cres-border px-3 py-2 text-sm text-cres-text hover:bg-cres-surface disabled:opacity-60"
+                  >
+                    Mark viewed
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void setReview("checked")}
+                    className="rounded bg-cres-accent px-3 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                  >
+                    Mark checked
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="block">
+                  <span className="mb-1 block text-sm text-cres-text-muted">
+                    Remarks {auth.roleKeys.includes("director_admin") ? "(required to mark checked)" : "(optional)"}
+                  </span>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text"
+                    placeholder="Director/admin remarks…"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="shell border-cres-border bg-cres-card/80">
             <h3 className="mb-3 text-sm font-semibold text-cres-text">Comments & questions</h3>
 
