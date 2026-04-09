@@ -127,6 +127,32 @@ export default function FinancePage() {
   const { apiFetch, auth, hydrated } = useAuth();
   const canAccessFinance = auth.roleKeys.some((r) => ["admin", "finance", "analyst"].includes(r));
 
+  const downloadWithAuth = useCallback(
+    async (path: string, fallbackFilename: string) => {
+      try {
+        const res = await apiFetch(path, { method: "GET" });
+        if (!res.ok) return;
+
+        const cd = res.headers.get("content-disposition") ?? "";
+        const match = cd.match(/filename\*?=(?:UTF-8''|")?([^\";]+)"?/i);
+        const filename = (match?.[1] ? decodeURIComponent(match[1]) : fallbackFilename) || fallbackFilename;
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    },
+    [apiFetch]
+  );
+
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
     if (!canAccessFinance) {
@@ -213,23 +239,31 @@ export default function FinancePage() {
   const [pendingFinanceApprovalCount, setPendingFinanceApprovalCount] = useState(0);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  type InvoiceLineForm = { id: string; description: string; quantity: string; unitPrice: string };
+
+  const emptyInvoiceLine = (): InvoiceLineForm => ({
+    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `l-${Date.now()}-${Math.random()}`,
+    description: "",
+    quantity: "1",
+    unitPrice: ""
+  });
+
   const [invoiceForm, setInvoiceForm] = useState<{
     clientId: string;
     projectId: string;
     issueDate: string;
     dueDate: string;
-    description: string;
-    quantity: string;
-    unitPrice: string;
+    lines: InvoiceLineForm[];
+    notes: string;
   }>({
     clientId: "",
     projectId: "",
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: "",
-    description: "",
-    quantity: "1",
-    unitPrice: ""
+    lines: [emptyInvoiceLine()],
+    notes: ""
   });
+  const [invoiceSubmitError, setInvoiceSubmitError] = useState<string | null>(null);
 
   const canSeeReport = auth.roleKeys.some((r) =>
     ["finance", "director_admin", "admin"].includes(r)
@@ -237,6 +271,7 @@ export default function FinancePage() {
   // Only Finance role can perform actions; Director/Admin see read-only
   const isFinance = auth.roleKeys.includes("finance");
   const isAdmin = auth.roleKeys.includes("admin");
+  const canCreateInvoice = isFinance || isAdmin;
   const [adminFinanceTab, setAdminFinanceTab] = useState<
     "expenses" | "financial_report" | "project_status" | "project_analysis" | "invoices"
   >("financial_report");
@@ -356,7 +391,7 @@ export default function FinancePage() {
         setPendingFinanceApprovalCount(pendingRows.length);
         setPendingApprovalIds(new Set(pendingRows.map((a) => a.entityId)));
       }
-      if (isFinance) {
+      if (canCreateInvoice) {
         const [clientsRes, projectsRes] = await Promise.all([
           apiFetch("/crm/clients"),
           apiFetch("/projects")
@@ -373,7 +408,7 @@ export default function FinancePage() {
     } catch {
       // ignore
     }
-  }, [apiFetch, canSeeReport, isFinance, canAccessFinance]);
+  }, [apiFetch, canSeeReport, canCreateInvoice, canAccessFinance]);
 
   useEffect(() => {
     loadData();
@@ -625,8 +660,22 @@ export default function FinancePage() {
 
   const submitInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!invoiceForm.clientId || !invoiceForm.projectId || !invoiceForm.issueDate || !invoiceForm.description.trim() || !invoiceForm.unitPrice) return;
-    const qty = parseInt(invoiceForm.quantity, 10) || 1;
+    setInvoiceSubmitError(null);
+    const items = invoiceForm.lines
+      .map((l) => ({
+        description: l.description.trim(),
+        quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
+        unitPrice: l.unitPrice.trim()
+      }))
+      .filter((l) => l.description && l.unitPrice);
+    if (!invoiceForm.clientId || !invoiceForm.projectId || !invoiceForm.issueDate) {
+      setInvoiceSubmitError("Select client, project, and issue date.");
+      return;
+    }
+    if (items.length === 0) {
+      setInvoiceSubmitError("Add at least one line with description and unit price.");
+      return;
+    }
     try {
       const res = await apiFetch("/finance/invoices", {
         method: "POST",
@@ -636,22 +685,33 @@ export default function FinancePage() {
           issueDate: invoiceForm.issueDate,
           dueDate: invoiceForm.dueDate || undefined,
           currency: "KES",
-          items: [{ description: invoiceForm.description.trim(), quantity: qty, unitPrice: invoiceForm.unitPrice }]
+          notes: invoiceForm.notes.trim() || undefined,
+          items
         })
       });
-      if (res.ok) {
-        const j = (await res.json().catch(() => null)) as
-          | { success?: boolean; data?: { invoice?: { id?: string }; downloadUrl?: string } }
-          | null;
-        const createdId = j?.data?.invoice?.id;
-        const downloadUrl = j?.data?.downloadUrl ? String(j.data.downloadUrl) : null;
-        if (downloadUrl) window.location.assign(`/api${downloadUrl}`);
-        else if (createdId) window.location.assign(`/api/finance/invoices/${createdId}/pdf`);
-        setInvoiceForm((f) => ({ ...f, description: "", quantity: "1", unitPrice: "" }));
-        loadData();
+      const j = (await res.json().catch(() => null)) as
+        | {
+            success?: boolean;
+            error?: string;
+            message?: string;
+            data?: { invoice?: { id?: string }; downloadUrl?: string };
+          }
+        | null;
+      if (!res.ok) {
+        setInvoiceSubmitError(
+          j?.message || j?.error || `Could not create invoice (${res.status}).`
+        );
+        return;
       }
-    } catch {
-      // ignore
+      const createdId = j?.data?.invoice?.id;
+      const downloadUrl = j?.data?.downloadUrl ? String(j.data.downloadUrl) : null;
+      if (downloadUrl) await downloadWithAuth(downloadUrl, `invoice-${createdId ?? "download"}.pdf`);
+      else if (createdId) await downloadWithAuth(`/finance/invoices/${createdId}/pdf`, `invoice-${createdId}.pdf`);
+      setInvoiceForm((f) => ({ ...f, lines: [emptyInvoiceLine()], notes: "" }));
+      setInvoiceSubmitError(null);
+      loadData();
+    } catch (err) {
+      setInvoiceSubmitError(err instanceof Error ? err.message : "Network error creating invoice.");
     }
   };
 
@@ -1064,7 +1124,11 @@ export default function FinancePage() {
                 <div className="flex items-center gap-3">
                   <span className="text-emerald-400">{formatMoney(inv.totalAmount)}</span>
                   <a
-                    href={`/api/finance/invoices/${inv.id}/pdf`}
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void downloadWithAuth(`/finance/invoices/${inv.id}/pdf`, `${inv.number}.pdf`);
+                    }}
                     className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
                   >
                     Download PDF
@@ -1085,9 +1149,14 @@ export default function FinancePage() {
               <li className="text-sm text-slate-400">No invoices yet.</li>
             )}
           </ul>
-          {isFinance && clients.length > 0 && (
+          {canCreateInvoice && clients.length > 0 && (
             <form onSubmit={submitInvoice} className="mt-3 flex flex-col gap-2 border-t border-slate-700 pt-3">
               <p className="text-xs font-medium text-slate-400">Create invoice (for work done — link to project)</p>
+              {invoiceSubmitError && (
+                <p className="rounded border border-rose-800 bg-rose-950/40 px-2 py-1 text-xs text-rose-200">
+                  {invoiceSubmitError}
+                </p>
+              )}
               <select
                 value={invoiceForm.clientId}
                 onChange={(e) => setInvoiceForm((f) => ({ ...f, clientId: e.target.value }))}
@@ -1128,32 +1197,80 @@ export default function FinancePage() {
                   className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
                 />
               </div>
-              <input
-                type="text"
-                placeholder="Line: description"
-                value={invoiceForm.description}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-              />
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="Qty"
-                  value={invoiceForm.quantity}
-                  onChange={(e) => setInvoiceForm((f) => ({ ...f, quantity: e.target.value }))}
-                  className="w-20 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  placeholder="Unit price (KES)"
-                  value={invoiceForm.unitPrice}
-                  onChange={(e) => setInvoiceForm((f) => ({ ...f, unitPrice: e.target.value }))}
-                  className="flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                />
+              <p className="text-xs font-medium text-slate-400">Line items</p>
+              <div className="flex flex-col gap-2">
+                {invoiceForm.lines.map((line, idx) => (
+                  <div key={line.id} className="flex flex-wrap items-end gap-2 rounded border border-slate-700 bg-slate-950/40 p-2">
+                    <span className="pb-2 text-xs text-slate-500">#{idx + 1}</span>
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={line.description}
+                      onChange={(e) =>
+                        setInvoiceForm((f) => ({
+                          ...f,
+                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, description: e.target.value } : l))
+                        }))
+                      }
+                      className="min-w-[140px] flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Qty"
+                      value={line.quantity}
+                      onChange={(e) =>
+                        setInvoiceForm((f) => ({
+                          ...f,
+                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, quantity: e.target.value } : l))
+                        }))
+                      }
+                      className="w-16 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="Unit (KES)"
+                      value={line.unitPrice}
+                      onChange={(e) =>
+                        setInvoiceForm((f) => ({
+                          ...f,
+                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, unitPrice: e.target.value } : l))
+                        }))
+                      }
+                      className="w-28 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                    />
+                    {invoiceForm.lines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInvoiceForm((f) => ({
+                            ...f,
+                            lines: f.lines.filter((l) => l.id !== line.id)
+                          }))
+                        }
+                        className="rounded border border-rose-800 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setInvoiceForm((f) => ({ ...f, lines: [...f.lines, emptyInvoiceLine()] }))}
+                className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Add line item
+              </button>
+              <textarea
+                placeholder="Notes (shown on PDF under NOTES — e.g. payment terms, reference)"
+                value={invoiceForm.notes}
+                onChange={(e) => setInvoiceForm((f) => ({ ...f, notes: e.target.value }))}
+                className="min-h-[64px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
               <button type="submit" className="rounded bg-sky-600 px-2 py-1.5 text-sm text-white hover:bg-sky-500">
                 Create invoice
               </button>
@@ -1420,6 +1537,13 @@ export default function FinancePage() {
                       <div className="mt-1 flex flex-wrap gap-2">
                         <button
                           type="button"
+                          onClick={() => void downloadWithAuth(`/finance/expenses/${exp.id}/receipt/pdf`, `expense-${exp.id}.pdf`)}
+                          className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+                        >
+                          Download receipt
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => submitForApproval("expense", exp.id)}
                           className="rounded border border-amber-600 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-900/30"
                         >
@@ -1441,6 +1565,17 @@ export default function FinancePage() {
                         </button>
                       </div>
                     )
+                  )}
+                  {(!isFinance || exp.status !== "pending") && (
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void downloadWithAuth(`/finance/expenses/${exp.id}/receipt/pdf`, `expense-${exp.id}.pdf`)}
+                        className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+                      >
+                        Download receipt
+                      </button>
+                    </div>
                   )}
                 </div>
                 <span className="text-amber-400">{formatMoney(exp.amount)}</span>

@@ -6,6 +6,23 @@ import { Prisma } from "@prisma/client";
 import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
+import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
+
+const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
+
+/** Avoid Invalid Date from empty due-date strings (breaks Prisma / Postgres). */
+function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
+  if (raw == null || String(raw).trim() === "") return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function buildInvoicePdfNotes(savedNotes: string | null | undefined): string {
+  const user = savedNotes?.trim() ?? "";
+  const standard =
+    "Late payments attract 2% monthly interest after the due date. For payment queries contact info@cresdynamics.com or +254 0708 805 496.";
+  return [user, standard].filter(Boolean).join("\n\n");
+}
 
 export default function financeRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -610,130 +627,204 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/invoices",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const { clientId, projectId, issueDate, dueDate, currency, items } =
+      const { clientId, projectId, issueDate, dueDate, currency, items, notes } =
         req.body as {
           clientId: string;
           projectId?: string;
           issueDate: string;
           dueDate?: string;
           currency?: string;
-          items: { description: string; quantity: number; unitPrice: string }[];
+          notes?: string | null;
+          items: { description: string; quantity: number; unitPrice: string | number }[];
         };
 
-      if (!clientId || !projectId || !issueDate || !items?.length) {
+      const normalizedItems = (items ?? [])
+        .map((it) => ({
+          description: String(it.description ?? "").trim(),
+          quantity: Math.max(1, Number(it.quantity) || 1),
+          unitPrice: String(it.unitPrice ?? "").trim()
+        }))
+        .filter((it) => it.description && it.unitPrice && !Number.isNaN(Number(it.unitPrice)));
+
+      if (!clientId || !projectId || !issueDate || normalizedItems.length === 0) {
         res.status(400).json({ error: "Missing fields" });
         return;
       }
 
-      const client = await prisma.client.findFirst({
-        where: { id: clientId, orgId, deletedAt: null },
-        select: { id: true, name: true, email: true }
-      });
-      if (!client) {
-        res.status(404).json({ error: "Client not found" });
-        return;
-      }
-
-      const clientEmail = client.email?.trim() || "";
-
-      const result = await prisma.$transaction(async (tx) => {
-        const totalAmount = items.reduce((sum, item) => {
-          const value =
-            Number(item.unitPrice) * (item.quantity || 1);
-          return sum + value;
-        }, 0);
-
-        // Generate invoice number: CD-INV-<projectSeq3>/<invoiceSeq>/<yy>
-        const project = await tx.project.findFirst({
-          where: { id: projectId, orgId, deletedAt: null },
-          select: { id: true }
+      try {
+        const client = await prisma.client.findFirst({
+          where: { id: clientId, orgId, deletedAt: null },
+          select: { id: true, name: true, email: true }
         });
-        if (!project) {
-          throw new Error("Project not found");
+        if (!client) {
+          res.status(404).json({ error: "Client not found" });
+          return;
         }
-        const orderedProjects = await tx.project.findMany({
-          where: { orgId, deletedAt: null },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true }
-        });
-        const idx = orderedProjects.findIndex((p) => p.id === projectId);
-        const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
-        const invoiceSeq = (await tx.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
-        const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
-        const number = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
 
-        const invoice = await tx.invoice.create({
-          data: {
-            orgId,
-            clientId,
-            projectId,
-            number,
-            status: "sent",
-            issueDate: new Date(issueDate),
-            dueDate: dueDate ? new Date(dueDate) : null,
-            currency: currency ?? "KES",
-            totalAmount: new Prisma.Decimal(totalAmount.toFixed(2))
+        const clientEmail = client.email?.trim() || "";
+
+        const result = await prisma.$transaction(async (tx) => {
+          const totalAmount = normalizedItems.reduce((sum, item) => {
+            const value = Number(item.unitPrice) * item.quantity;
+            return sum + value;
+          }, 0);
+
+          const project = await tx.project.findFirst({
+            where: { id: projectId, orgId, deletedAt: null },
+            select: { id: true }
+          });
+          if (!project) {
+            throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
           }
-        });
+          const orderedProjects = await tx.project.findMany({
+            where: { orgId, deletedAt: null },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { id: true }
+          });
+          const idx = orderedProjects.findIndex((p) => p.id === projectId);
+          const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
+          const invoiceSeq = (await tx.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
+          const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+          const number = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
 
-        await tx.invoiceItem.createMany({
-          data: items.map((item) => ({
-            invoiceId: invoice.id,
-            description: item.description,
-            quantity: item.quantity || 1,
-            unitPrice: new Prisma.Decimal(item.unitPrice)
-          }))
-        });
-
-        await tx.eventLog.create({
-          data: {
-            orgId,
-            type: "invoice.sent",
-            entityType: "invoice",
-            entityId: invoice.id,
-            metadata: { number: invoice.number, clientId: invoice.clientId }
+          const issue = new Date(issueDate);
+          if (Number.isNaN(issue.getTime())) {
+            throw Object.assign(new Error("Invalid issue date"), { code: "BAD_ISSUE_DATE" });
           }
+
+          const invoice = await tx.invoice.create({
+            data: {
+              orgId,
+              clientId,
+              projectId,
+              number,
+              status: "sent",
+              issueDate: issue,
+              dueDate: parseInvoiceDueDate(dueDate),
+              currency: currency ?? "KES",
+              totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
+              notes: notes?.trim() ? notes.trim() : null
+            }
+          });
+
+          await tx.invoiceItem.createMany({
+            data: normalizedItems.map((item) => ({
+              invoiceId: invoice.id,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: new Prisma.Decimal(item.unitPrice)
+            }))
+          });
+
+          await tx.eventLog.create({
+            data: {
+              orgId,
+              type: "invoice.sent",
+              entityType: "invoice",
+              entityId: invoice.id,
+              metadata: { number: invoice.number, clientId: invoice.clientId }
+            }
+          });
+
+          if (clientEmail) {
+            const greeting = client.name ? `Hello ${client.name},` : "Hello,";
+            const body = `${greeting}\n\nInvoice ${invoice.number} has been issued.\nTotal: ${invoice.currency} ${totalAmount.toFixed(2)}.\n\nThank you.`;
+            await tx.notification.create({
+              data: {
+                orgId,
+                channel: "email",
+                to: clientEmail,
+                subject: `Invoice ${invoice.number}`,
+                body,
+                status: "queued",
+                type: "invoice.sent",
+                tier: "financial"
+              }
+            });
+          }
+
+          return invoice;
         });
 
         if (clientEmail) {
-          const greeting = client.name ? `Hello ${client.name},` : "Hello,";
-          const body = `${greeting}\n\nInvoice ${invoice.number} has been issued.\nTotal: ${invoice.currency} ${totalAmount.toFixed(2)}.\n\nThank you.`;
-          await tx.notification.create({
-            data: {
+          try {
+            await logEmailSent(prisma, {
               orgId,
-              channel: "email",
               to: clientEmail,
-              subject: `Invoice ${invoice.number}`,
-              body,
-              status: "queued",
-              type: "invoice.sent",
-              tier: "financial"
-            }
-          });
+              subject: `Invoice ${result.number}`,
+              body: `Invoice ${result.number} queued for ${clientEmail}.`,
+              type: "invoice.sent"
+            });
+          } catch (logErr) {
+            console.error("logEmailSent after invoice create:", logErr);
+          }
         }
 
-        return invoice;
-      });
+        const invoiceJson = {
+          id: result.id,
+          orgId: result.orgId,
+          clientId: result.clientId,
+          projectId: result.projectId,
+          number: result.number,
+          status: result.status,
+          issueDate: result.issueDate,
+          dueDate: result.dueDate,
+          currency: result.currency,
+          totalAmount: Number(result.totalAmount),
+          notes: result.notes ?? null,
+          createdAt: result.createdAt,
+          updatedAt: result.updatedAt
+        };
 
-      if (clientEmail) {
-        await logEmailSent(prisma, {
-          orgId,
-          to: clientEmail,
-          subject: `Invoice ${result.number}`,
-          body: `Invoice ${result.number} queued for ${clientEmail}.`,
-          type: "invoice.sent"
+        res.status(201).json({
+          success: true,
+          data: {
+            invoice: invoiceJson,
+            downloadUrl: `/finance/invoices/${result.id}/pdf`
+          }
+        });
+      } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        if (err?.code === "PROJECT_NOT_FOUND" || err?.message === "Project not found") {
+          res.status(400).json({ error: "Project not found" });
+          return;
+        }
+        if (err?.code === "BAD_ISSUE_DATE") {
+          res.status(400).json({ error: "Invalid issue date", message: err.message });
+          return;
+        }
+        if (e instanceof Prisma.PrismaClientKnownRequestError) {
+          if (e.code === "P2002") {
+            res.status(409).json({
+              error: "Duplicate invoice number",
+              message:
+                "An invoice with this number already exists for this project. Try again in a moment or contact support."
+            });
+            return;
+          }
+          console.error("POST /finance/invoices Prisma:", e.code, e.message);
+          res.status(500).json({
+            error: "Failed to create invoice",
+            message: e.message
+          });
+          return;
+        }
+        if (e instanceof Prisma.PrismaClientValidationError) {
+          res.status(400).json({
+            error: "Invalid invoice data",
+            message: e.message
+          });
+          return;
+        }
+        console.error("POST /finance/invoices:", e);
+        res.status(500).json({
+          error: "Failed to create invoice",
+          message: e instanceof Error ? e.message : "Unknown error"
         });
       }
-      res.status(201).json({
-        success: true,
-        data: {
-          invoice: result,
-          downloadUrl: `/finance/invoices/${result.id}/pdf`
-        }
-      });
     }
   );
 
@@ -1173,6 +1264,59 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Download expense receipt PDF
+  router.get(
+    "/expenses/:id/receipt/pdf",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const { id } = req.params;
+
+        const expense = await prisma.expense.findFirst({
+          where: { id, orgId, deletedAt: null }
+        });
+        if (!expense) {
+          res.status(404).json({ error: "Expense not found" });
+          return;
+        }
+
+        const { generateExpenseReceiptPdf } = require("../services/finance/expense-receipt-pdf");
+        const spentAt = expense.spentAt.toISOString().split("T")[0];
+        const createdAt = expense.createdAt.toISOString().split("T")[0];
+        const receiptNumber = `EXP-${String(expense.id).slice(0, 8).toUpperCase()}`;
+
+        const pdfBuffer: Buffer = await generateExpenseReceiptPdf({
+          receiptNumber,
+          company: { ...INVOICE_PDF_COMPANY },
+          currency: expense.currency,
+          amount: Number(expense.amount),
+          category: expense.category,
+          description: expense.description,
+          notes: expense.notes,
+          source: expense.source,
+          transactionCode: expense.transactionCode,
+          account: expense.account,
+          paymentMethod: expense.paymentMethod,
+          spentAt,
+          status: expense.status,
+          createdAt
+        });
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${receiptNumber}.pdf"`);
+        res.setHeader("Content-Length", pdfBuffer.length);
+        res.send(pdfBuffer);
+      } catch (error) {
+        console.error("Error generating expense receipt PDF:", error);
+        res.status(500).json({
+          error: "Failed to generate receipt",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
   // Update invoice (finance only). Limited fields: dates, status, items.
   router.patch(
     "/invoices/:id",
@@ -1180,11 +1324,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
-      const { status, issueDate, dueDate, currency, items } = req.body as {
+      const { status, issueDate, dueDate, currency, items, notes } = req.body as {
         status?: string;
         issueDate?: string;
         dueDate?: string;
         currency?: string;
+        notes?: string | null;
         items?: Array<{ description: string; quantity: number; unitPrice: string | number }>;
       };
       const existing = await prisma.invoice.findFirst({
@@ -1214,7 +1359,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
             ...(issueDate !== undefined && { issueDate: new Date(issueDate) }),
             ...(dueDate !== undefined && { dueDate: new Date(dueDate) }),
             ...(currency !== undefined && { currency }),
-            ...(nextTotal !== undefined && { totalAmount: new Prisma.Decimal(nextTotal) })
+            ...(nextTotal !== undefined && { totalAmount: new Prisma.Decimal(nextTotal) }),
+            ...(notes !== undefined && { notes: notes?.trim() ? notes.trim() : null })
           }
         });
         if (Array.isArray(items)) {
@@ -1224,9 +1370,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
               data: items.map((it) => ({
                 invoiceId: id,
                 description: String(it.description ?? "").trim(),
-                quantity: Number(it.quantity || 0),
-                unitPrice: Number(it.unitPrice),
-                total: Number(it.unitPrice) * Number(it.quantity || 0)
+                quantity: Math.max(1, Number(it.quantity) || 1),
+                unitPrice: new Prisma.Decimal(String(it.unitPrice))
               }))
             });
           }
@@ -1978,158 +2123,6 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Create new invoice
-  router.post(
-    "/invoices",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
-    async (req, res) => {
-      try {
-        const orgId = req.auth!.orgId;
-        const createdBy = req.auth!.userId;
-        const invoiceData = req.body;
-        // Invoice number format:
-        // CD-INV-<projectSeq3>/<invoiceSeqWithinProject>/<yy>
-        // Example: CD-INV-002/1/26
-        if (!invoiceData.projectId) {
-          res.status(400).json({ error: "projectId is required for invoice numbering" });
-          return;
-        }
-        const projectId = String(invoiceData.projectId);
-        const project = await prisma.project.findFirst({
-          where: { id: projectId, orgId, deletedAt: null },
-          select: { id: true, createdAt: true }
-        });
-        if (!project) {
-          res.status(400).json({ error: "Project not found" });
-          return;
-        }
-        const orderedProjects = await prisma.project.findMany({
-          where: { orgId, deletedAt: null },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true }
-        });
-        const idx = orderedProjects.findIndex((p) => p.id === projectId);
-        const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
-        const invoiceSeq = (await prisma.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
-        const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
-        const invoiceNumber = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
-
-        // Create invoice in database
-        const invoice = await prisma.invoice.create({
-          data: {
-            orgId,
-            clientId: invoiceData.clientId,
-            projectId: invoiceData.projectId || null,
-            number: invoiceNumber,
-            status: "sent",
-            issueDate: new Date(invoiceData.issueDate),
-            dueDate: new Date(invoiceData.dueDate),
-            currency: invoiceData.currency || "KES",
-            totalAmount: invoiceData.items.reduce(
-              (sum: number, item: any) => sum + (Number(item.unitPrice) * item.quantity), 
-              0
-            ),
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          include: {
-            client: { select: { name: true, email: true, phone: true } },
-            project: { select: { name: true } }
-          }
-        });
-
-        // Create invoice items
-        await prisma.invoiceItem.createMany({
-          data: invoiceData.items.map((item: any, index: number) => ({
-            invoiceId: invoice.id,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: Number(item.unitPrice),
-            total: Number(item.unitPrice) * item.quantity
-          }))
-        });
-
-        // Generate PDF
-        const { PDFGenerator } = require("../services/invoice/pdf-generator");
-        const { FinanceInvoiceService } = require("../services/invoice/finance-integration");
-        
-        const financeService = new FinanceInvoiceService(prisma);
-        const { pdfBuffer } = await financeService.generateInvoicePDF({
-          invoice_number: invoice.number,
-          invoice_date: invoice.issueDate.toISOString().split('T')[0],
-          due_date: invoice.dueDate.toISOString().split('T')[0],
-          status: invoice.status,
-          currency: invoice.currency,
-          client: {
-            id: invoice.clientId,
-            name: invoice.client.name,
-            email: invoice.client.email,
-            phone: invoice.client.phone
-          },
-          company: {
-            name: "CresOS Solutions Ltd",
-            email: "info@cresos.com",
-            phone: "+254-700-123456"
-          },
-          project: invoice.project ? {
-            id: invoice.projectId!,
-            name: invoice.project.name
-          } : undefined,
-          items: invoiceData.items.map((item: any) => ({
-            id: `item-${index}`,
-            name: item.description,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: Number(item.unitPrice),
-            total_price: Number(item.unitPrice) * item.quantity,
-            type: 'service' as const,
-            category: 'general'
-          })),
-          summary: {
-            subtotal: Number(invoice.totalAmount),
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: Number(invoice.totalAmount),
-            balance_due: Number(invoice.totalAmount)
-          },
-          payment_terms: {
-            due_in_days: 7
-          },
-          notes: {
-            client_message: "Thank you for your business! Payment is due within 7 days."
-          },
-          automation: {
-            auto_reminders_enabled: true,
-            reminder_schedule: [3, 1],
-            late_fee_enabled: false
-          },
-          created_at: invoice.createdAt.toISOString(),
-          updated_at: invoice.updatedAt.toISOString(),
-          created_by: createdBy,
-          organization_id: orgId
-        } as any);
-
-        res.status(201).json({
-          success: true,
-          message: `Invoice ${invoice.number} created successfully`,
-          data: {
-            invoice,
-            pdfGenerated: true,
-            pdfSize: `${(pdfBuffer.length / 1024).toFixed(2)} KB`,
-            downloadUrl: `/finance/invoices/${invoice.id}/pdf`
-          }
-        });
-
-      } catch (error) {
-        console.error("Error creating invoice:", error);
-        res.status(500).json({ 
-          error: "Failed to create invoice", 
-          message: error instanceof Error ? error.message : "Unknown error" 
-        });
-      }
-    }
-  );
-
   // Get invoice PDF
   router.get(
     "/invoices/:invoiceId/pdf",
@@ -2173,25 +2166,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
             email: invoice.client.email,
             phone: invoice.client.phone
           },
-          company: {
-            name: "CresOS Solutions Ltd",
-            email: "info@cresos.com",
-            phone: "+254-700-123456"
-          },
+          company: { ...INVOICE_PDF_COMPANY },
           project: invoice.project ? {
             id: invoice.projectId!,
             name: invoice.project.name
           } : undefined,
-          items: invoice.items.map((item, index) => ({
-            id: item.id,
-            name: item.description,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: Number(item.unitPrice),
-            total_price: Number(item.total),
-            type: 'service' as const,
-            category: 'general'
-          })),
+          items: invoice.items.map((item) => {
+            const unit = Number(item.unitPrice);
+            const line = unit * item.quantity;
+            return {
+              id: item.id,
+              name: item.description,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: unit,
+              total_price: line,
+              type: "service" as const,
+              category: "general"
+            };
+          }),
           summary: {
             subtotal: Number(invoice.totalAmount),
             tax_rate: 0,
@@ -2203,7 +2196,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
             due_in_days: 7
           },
           notes: {
-            client_message: "Thank you for your business! Payment is due within 7 days."
+            client_message: buildInvoicePdfNotes(invoice.notes)
           },
           automation: {
             auto_reminders_enabled: true,

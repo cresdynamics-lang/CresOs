@@ -8,14 +8,38 @@
 
 import { Resend } from "resend";
 
-const API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "CresOS <onboarding@resend.dev>";
+const DEFAULT_FROM_EMAIL = "CresOS <onboarding@resend.dev>";
 
 let client: Resend | null = null;
+let clientKey: string | null = null;
+
+function pickApiKey(): string | null {
+  const candidates = [
+    process.env.RESEND_API_KEY,
+    process.env.RESEND_API_KEY_SECONDARY,
+    process.env.RESEND_API_KEY_TERTIARY
+  ];
+  const found = candidates.find((k) => typeof k === "string" && k.trim().length > 0);
+  return found ? found.trim() : null;
+}
+
+function pickFromEmail(): string {
+  const candidates = [
+    process.env.RESEND_FROM_EMAIL,
+    process.env.RESEND_FROM_EMAIL_SECONDARY,
+    process.env.RESEND_FROM_EMAIL_TERTIARY
+  ];
+  const found = candidates.find((s) => typeof s === "string" && s.trim().length > 0);
+  return (found ? found.trim() : DEFAULT_FROM_EMAIL) || DEFAULT_FROM_EMAIL;
+}
 
 function getClient(): Resend | null {
-  if (!API_KEY?.trim()) return null;
-  if (!client) client = new Resend(API_KEY);
+  const key = pickApiKey();
+  if (!key) return null;
+  if (!client || clientKey !== key) {
+    client = new Resend(key);
+    clientKey = key;
+  }
   return client;
 }
 
@@ -31,6 +55,7 @@ export async function sendWelcomeEmail(to: string, name?: string | null): Promis
 
   const displayName = name?.trim() || "there";
   const subject = "You're all set — we'll send updates to this email";
+  const fromEmail = pickFromEmail();
   const html = `
 <!DOCTYPE html>
 <html>
@@ -47,7 +72,7 @@ export async function sendWelcomeEmail(to: string, name?: string | null): Promis
 
   try {
     const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: fromEmail,
       to: [to],
       subject,
       html,

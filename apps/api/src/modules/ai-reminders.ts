@@ -22,11 +22,20 @@ import {
 const GROQ_MODEL = process.env.GROQ_REMINDER_MODEL ?? "llama-3.1-8b-instant";
 
 let groqClient: Groq | null = null;
+let groqKey: string | null = null;
 
 function getClient(): Groq | null {
-  const key = process.env.GROQ_API_KEY;
-  if (!key || !key.trim()) return null;
-  if (!groqClient) groqClient = new Groq({ apiKey: key });
+  const candidates = [
+    process.env.GROQ_API_KEY,
+    process.env.GROQ_API_KEY_SECONDARY,
+    process.env.GROQ_API_KEY_TERTIARY
+  ];
+  const key = candidates.find((k) => typeof k === "string" && k.trim().length > 0)?.trim();
+  if (!key) return null;
+  if (!groqClient || groqKey !== key) {
+    groqClient = new Groq({ apiKey: key });
+    groqKey = key;
+  }
   return groqClient;
 }
 

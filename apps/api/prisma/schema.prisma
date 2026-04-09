@@ -179,8 +179,10 @@ model User {
   changeRequestsCreated        ChangeRequest[]              @relation("ChangeRequestCreatedBy")
   changeRequestsApproved       ChangeRequest[]              @relation("ChangeRequestApprovedBy")
   salesReportsSubmitted        SalesReport[]
+  salesReportsReviewed         SalesReport[]                @relation("SalesReportReviewedBy")
   salesReportComments          SalesReportComment[]
   developerReportsSubmitted    DeveloperReport[]
+  developerReportsReviewed     DeveloperReport[]            @relation("DeveloperReportReviewedBy")
   meetingRequestsRequested     MeetingRequest[]             @relation("MeetingRequestedBy")
   meetingRequestsResponded     MeetingRequest[]             @relation("MeetingRespondedBy")
   adminActivityMessages        AdminActivityMessage[]       @relation("ActivityActor")
@@ -633,6 +635,7 @@ model Invoice {
   dueDate     DateTime?
   currency    String    @default("USD")
   totalAmount Decimal   @db.Decimal(14, 2)
+  notes       String?   @db.Text // client-facing / PDF notes
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
