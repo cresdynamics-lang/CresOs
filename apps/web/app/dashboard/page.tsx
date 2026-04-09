@@ -131,6 +131,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   sales: [
+    { href: "/sales", label: "Sales hub" },
     { href: "/crm", label: "CRM" },
     { href: "/leads", label: "Leads" },
     { href: "/reports", label: "My reports" },

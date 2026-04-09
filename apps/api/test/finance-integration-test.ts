@@ -21,6 +21,7 @@ const mockPrisma = {
     findFirst: jest.fn(),
   },
   invoice: {
+    count: jest.fn(),
     create: jest.fn(),
     findFirst: jest.fn(),
   },
@@ -174,7 +175,7 @@ describe('Finance Invoice Integration', () => {
       // Mock transaction
       const mockInvoice = {
         id: 'invoice-123',
-        number: 'INV-ABC123-04/26',
+        number: 'CD-INV-000001/26',
         clientId: 'test-client-456',
         projectId: 'test-project-789',
         status: 'sent',
@@ -186,10 +187,11 @@ describe('Finance Invoice Integration', () => {
         updatedAt: new Date()
       };
 
+      mockPrisma.invoice.count.mockResolvedValue(0);
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         return await callback(mockPrisma);
       });
-      
+
       mockPrisma.invoice.create.mockResolvedValue(mockInvoice);
       mockPrisma.invoiceItem.createMany.mockResolvedValue({ count: 2 });
       mockPrisma.eventLog.create.mockResolvedValue({});
@@ -204,7 +206,7 @@ describe('Finance Invoice Integration', () => {
       expect(result.invoice).toBeDefined();
       expect(result.pdfBuffer).toBeDefined();
       expect(result.pdfBuffer.length).toBeGreaterThan(1000);
-      expect(result.invoice.number).toMatch(/^INV-[A-Z0-9]{3}-\d{2}\/\d{2}$/);
+      expect(result.invoice.number).toMatch(/^CD-INV-\d{6}\/\d{2}$/);
     });
 
     test('should generate project invoice automatically', async () => {
@@ -216,7 +218,7 @@ describe('Finance Invoice Integration', () => {
       // Mock transaction
       const mockInvoice = {
         id: 'invoice-456',
-        number: 'INV-DEF456-04/26',
+        number: 'CD-INV-000001/26',
         clientId: 'test-client-456',
         projectId: 'test-project-789',
         status: 'sent',
@@ -228,10 +230,11 @@ describe('Finance Invoice Integration', () => {
         updatedAt: new Date()
       };
 
+      mockPrisma.invoice.count.mockResolvedValue(0);
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         return await callback(mockPrisma);
       });
-      
+
       mockPrisma.invoice.create.mockResolvedValue(mockInvoice);
       mockPrisma.invoiceItem.createMany.mockResolvedValue({ count: 1 });
       mockPrisma.eventLog.create.mockResolvedValue({});
@@ -246,14 +249,14 @@ describe('Finance Invoice Integration', () => {
       expect(result.invoice).toBeDefined();
       expect(result.pdfBuffer).toBeDefined();
       expect(result.invoice.projectId).toBe('test-project-789');
-      expect(result.invoice.number).toMatch(/^INV-[A-Z0-9]{3}-\d{2}\/\d{2}$/);
+      expect(result.invoice.number).toMatch(/^CD-INV-\d{6}\/\d{2}$/);
     });
 
     test('should get invoice with PDF', async () => {
       // Mock database responses
       const mockInvoice = {
         id: 'invoice-789',
-        number: 'INV-GHI789-04/26',
+        number: 'CD-INV-000003/26',
         clientId: 'test-client-456',
         projectId: 'test-project-789',
         status: 'sent',
@@ -292,7 +295,7 @@ describe('Finance Invoice Integration', () => {
       expect(result).toBeDefined();
       expect(result.invoice).toBeDefined();
       expect(result.pdfBuffer).toBeDefined();
-      expect(result.invoice.number).toBe('INV-GHI789-04/26');
+      expect(result.invoice.number).toBe('CD-INV-000003/26');
       expect(result.pdfBuffer.length).toBeGreaterThan(1000);
     });
 

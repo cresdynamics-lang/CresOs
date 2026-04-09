@@ -2,6 +2,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { FinanceInvoiceService } from "../services/invoice/finance-integration";
+import { formatOrgInvoiceNumber } from "../services/invoice/invoice-number";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import financeSidePanelRouter from "./finance-side-panel";
 
@@ -171,22 +172,14 @@ export default function enhancedFinanceRouter(prisma: PrismaClient): Router {
         const { clientId, projectId } = req.body;
         const orgId = req.auth!.orgId;
 
-        // Generate invoice number using the DOCX template format
-        const { DocxTemplateParser } = require("../services/invoice/docx-parser");
-        const docxParser = new DocxTemplateParser(
-          '/Users/airm1/Projects/CresOs/apps/api/src/services/invoice/Invoice.docx'
-        );
-        
-        const invoiceNumber = docxParser.generateInvoiceNumber(
-          projectId || clientId,
-          orgId
-        );
+        const totalCreated = await prisma.invoice.count({ where: { orgId } });
+        const invoiceNumber = formatOrgInvoiceNumber(totalCreated + 1, new Date());
 
         res.json({
           success: true,
           invoiceNumber,
-          format: "INV-{sequence}-{month}/{year}",
-          basedOn: "DOCX template format"
+          format: "CD-INV-{seq:6}/{yy}",
+          basedOn: "Next org-wide sequence (creation order)"
         });
 
       } catch (error) {

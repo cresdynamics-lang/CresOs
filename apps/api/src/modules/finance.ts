@@ -7,6 +7,7 @@ import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
+import { allocateNextInvoiceNumber } from "../services/invoice/invoice-number";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 
@@ -664,9 +665,16 @@ export default function financeRouter(prisma: PrismaClient): Router {
           return;
         }
 
+        const issue = new Date(issueDate);
+        if (Number.isNaN(issue.getTime())) {
+          res.status(400).json({ error: "Invalid issue date", message: "Invalid issue date" });
+          return;
+        }
+
         const clientEmail = client.email?.trim() || "";
 
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(
+          async (tx) => {
           const totalAmount = normalizedItems.reduce((sum, item) => {
             const value = Number(item.unitPrice) * item.quantity;
             return sum + value;
@@ -679,21 +687,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
           if (!project) {
             throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
           }
-          const orderedProjects = await tx.project.findMany({
-            where: { orgId, deletedAt: null },
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-            select: { id: true }
-          });
-          const idx = orderedProjects.findIndex((p) => p.id === projectId);
-          const projectSeq = (idx >= 0 ? idx + 1 : orderedProjects.length + 1).toString().padStart(3, "0");
-          const invoiceSeq = (await tx.invoice.count({ where: { orgId, projectId, deletedAt: null } })) + 1;
-          const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
-          const number = `CD-INV-${projectSeq}/${invoiceSeq}/${yy}`;
 
-          const issue = new Date(issueDate);
-          if (Number.isNaN(issue.getTime())) {
-            throw Object.assign(new Error("Invalid issue date"), { code: "BAD_ISSUE_DATE" });
-          }
+          const number = await allocateNextInvoiceNumber(tx, orgId, issue);
 
           const invoice = await tx.invoice.create({
             data: {
@@ -747,7 +742,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
 
           return invoice;
-        });
+        },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 5000,
+            timeout: 10000
+          }
+        );
 
         if (clientEmail) {
           try {

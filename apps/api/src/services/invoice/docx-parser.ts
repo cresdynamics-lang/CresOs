@@ -214,7 +214,8 @@ export class DocxTemplateParser {
   }
 
   /**
-   * Generate a unique invoice number based on project and organization
+   * @deprecated Platform invoices use DB-backed creation-order numbers (`invoice-number.ts`).
+   * Kept for scripts/tests that need a deterministic placeholder from project + org ids.
    */
   generateInvoiceNumber(projectId: string, orgId: string): string {
     const now = new Date();

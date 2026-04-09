@@ -31,6 +31,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Sales",
     items: [
+      { href: "/sales", label: "Sales hub", roles: ["admin", "sales", "director_admin", "finance"] },
       { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
       { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },

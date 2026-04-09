@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
+import { PageHeader } from "../../page-header";
+import { SalesWorkspaceNav } from "../sales-workspace-nav";
 
 interface Invoice {
   id: string;
@@ -263,21 +265,22 @@ export default function SalesInvoicesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading sales dashboard...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Sales Invoices</h1>
-        <p className="text-slate-400">Create and manage invoices. All invoices require finance approval before generation.</p>
+    <div className="mx-auto max-w-6xl px-4 pb-10">
+      <PageHeader
+        title="Sales invoices"
+        description="Create and manage invoices. All invoices require finance approval before generation."
+      />
+      <div className="mb-6">
+        <SalesWorkspaceNav />
       </div>
 
+      {loading ? (
+        <div className="flex h-48 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/30">
+          <p className="text-slate-400">Loading…</p>
+        </div>
+      ) : (
+        <>
       {/* Tabs */}
       <div className="flex border-b border-slate-800 mb-6">
         <button
@@ -592,6 +595,8 @@ export default function SalesInvoicesPage() {
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );

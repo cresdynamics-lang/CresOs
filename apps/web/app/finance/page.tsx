@@ -1180,7 +1180,8 @@ export default function FinancePage() {
                 ))}
               </select>
               <p className="text-xs text-slate-500">
-                Invoice number is generated automatically (e.g. <span className="text-slate-300">CD-INV-002/1/26</span>).
+                Invoice number is generated automatically in creation order (e.g.{" "}
+                <span className="text-slate-300">CD-INV-000042/26</span>).
               </p>
               <div className="flex gap-2">
                 <input

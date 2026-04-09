@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PDFGenerator } from './pdf-generator';
 import { DocxTemplateParser } from './docx-parser';
+import { allocateNextInvoiceNumber } from './invoice-number';
 import { InvoiceSchema } from './schema';
 
 /**
@@ -63,19 +64,8 @@ export class FinanceInvoiceService {
         project = await this.getProjectData(invoiceData.projectId, orgId);
       }
 
-      // 3. Generate invoice number using the DOCX template format
-      const invoiceNumber = this.docxParser.generateInvoiceNumber(
-        invoiceData.projectId || invoiceData.clientId,
-        orgId
-      );
-
-      // 4. Create invoice in database (using existing finance logic)
-      const invoice = await this.createInvoiceInDatabase(
-        orgId,
-        invoiceData,
-        invoiceNumber,
-        createdBy
-      );
+      // 3. Create invoice in database (number = next org-wide sequence by creation order)
+      const invoice = await this.createInvoiceInDatabase(orgId, invoiceData, createdBy);
 
       // 5. Map to invoice schema for PDF generation
       const invoiceSchema = await this.mapToInvoiceSchema(
@@ -145,10 +135,7 @@ export class FinanceInvoiceService {
       // 3. Create invoice items from project data
       const invoiceItems = this.createItemsFromProject(project);
 
-      // 4. Generate invoice number
-      const invoiceNumber = this.docxParser.generateInvoiceNumber(projectId, orgId);
-
-      // 5. Create invoice data
+      // 4. Create invoice data
       const financeInvoiceData: FinanceInvoiceData = {
         clientId: client.id,
         projectId: project.id,
@@ -158,15 +145,10 @@ export class FinanceInvoiceService {
         dueDate: this.calculateDueDate(new Date()).toISOString().split('T')[0]
       };
 
-      // 6. Create invoice
-      const invoice = await this.createInvoiceInDatabase(
-        orgId,
-        financeInvoiceData,
-        invoiceNumber,
-        createdBy
-      );
+      // 5. Create invoice (number allocated inside transaction)
+      const invoice = await this.createInvoiceInDatabase(orgId, financeInvoiceData, createdBy);
 
-      // 7. Map to schema and generate PDF
+      // 6. Map to schema and generate PDF
       const invoiceSchema = await this.mapToInvoiceSchema(
         invoice,
         client,
@@ -256,15 +238,18 @@ export class FinanceInvoiceService {
   private async createInvoiceInDatabase(
     orgId: string,
     invoiceData: FinanceInvoiceData,
-    invoiceNumber: string,
     createdBy: string
   ): Promise<any> {
-    const result = await this.prisma.$transaction(async (tx) => {
+    const referenceDate = invoiceData.issueDate ? new Date(invoiceData.issueDate) : new Date();
+    const result = await this.prisma.$transaction(
+      async (tx) => {
       // Calculate total amount
       const totalAmount = invoiceData.items.reduce((sum, item) => {
         const value = Number(item.unitPrice) * (item.quantity || 1);
         return sum + value;
       }, 0);
+
+      const invoiceNumber = await allocateNextInvoiceNumber(tx, orgId, referenceDate);
 
       // Create invoice
       const invoice = await tx.invoice.create({
@@ -309,7 +294,13 @@ export class FinanceInvoiceService {
       });
 
       return invoice;
-    });
+    },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000,
+        timeout: 10000
+      }
+    );
 
     return result;
   }
