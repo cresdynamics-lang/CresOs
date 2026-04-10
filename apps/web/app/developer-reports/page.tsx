@@ -60,6 +60,7 @@ export default function DeveloperReportsPage() {
   const [viewId, setViewId] = useState<string | null>(null);
 
   const viewReport = viewId ? list.find((r) => r.id === viewId) ?? null : null;
+  const directorReviewReport = editingReviewId ? list.find((r) => r.id === editingReviewId) ?? null : null;
 
   const load = useCallback(async () => {
     try {
@@ -280,6 +281,7 @@ export default function DeveloperReportsPage() {
                                   onClick={() => {
                                     setEditingReviewId(report.id);
                                     setRemarks(report.remarks ?? "");
+                                    setViewId(report.id);
                                   }}
                                   className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
                                 >
@@ -375,6 +377,82 @@ export default function DeveloperReportsPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
                     {(viewReport as any)[key]?.trim?.() ? (viewReport as any)[key].trim() : "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDirector && directorReviewReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-slate-500">Developer report — Review</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-100">
+                  {new Date(directorReviewReport.reportDate).toLocaleDateString()}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Filed {new Date(directorReviewReport.createdAt).toLocaleString()}
+                  {directorReviewReport.submittedBy
+                    ? ` · By ${directorReviewReport.submittedBy.name ?? directorReviewReport.submittedBy.email}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingReviewId(null);
+                  setViewId(null);
+                  setRemarks("");
+                }}
+                className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-900"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Review</p>
+              <div className="mt-2 text-sm text-slate-200">
+                Current status: <span className="ml-2">{directorReviewReport.reviewStatus ?? "pending"}</span>
+              </div>
+              <label className="mt-3 block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Remarks</span>
+                <textarea
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+                  placeholder="Add director remarks (required to mark checked)."
+                />
+              </label>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void updateReview(directorReviewReport.id, "viewed")}
+                  className="rounded border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                >
+                  Mark viewed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void updateReview(directorReviewReport.id, "checked")}
+                  className="rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                >
+                  Mark checked
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {FIELDS.map(({ key, label }) => (
+                <div key={`${directorReviewReport.id}-director-modal-${key}`} className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
+                    {(directorReviewReport as any)[key]?.trim?.() ? (directorReviewReport as any)[key].trim() : "—"}
                   </p>
                 </div>
               ))}
