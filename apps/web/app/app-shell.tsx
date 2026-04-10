@@ -29,11 +29,17 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     ]
   },
   {
+    title: "Reports",
+    items: [
+      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
+      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] }
+    ]
+  },
+  {
     title: "Sales",
     items: [
       { href: "/sales", label: "Sales hub", roles: ["admin", "sales", "director_admin", "finance"] },
       { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
-      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
       { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
       { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"] }
     ]
@@ -41,8 +47,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Delivery",
     items: [
-      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
-      { href: "/developer-reports", label: "Reports", roles: ["admin", "director_admin", "developer"] }
+      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] }
     ]
   },
   {
@@ -403,6 +408,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     const isActive =
                       pathname === item.href ||
                       (item.href === "/reports" && pathname.startsWith("/reports")) ||
+                      (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
                       (item.href === "/leads" && pathname.startsWith("/leads")) ||
                       (item.href === "/crm" && pathname.startsWith("/crm"));
                     const badge = badgeForItem(item.href, item.label);
@@ -453,6 +459,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     const isActive =
                       pathname === item.href ||
                       (item.href === "/reports" && pathname.startsWith("/reports")) ||
+                      (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
                       (item.href === "/leads" && pathname.startsWith("/leads")) ||
                       (item.href === "/crm" && pathname.startsWith("/crm"));
                     const badge = badgeForItem(item.href, item.label);

@@ -230,6 +230,38 @@ export default function ReportDetailPage() {
             </div>
           )}
 
+          {!isDirector && isAuthor && (
+            <div className="shell border-cres-border bg-cres-card/80">
+              <p className="text-xs uppercase tracking-wide text-cres-muted">Director review</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={
+                    report.reviewStatus === "checked"
+                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
+                      : report.reviewStatus === "viewed"
+                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300"
+                        : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200"
+                  }
+                >
+                  {report.reviewStatus ?? "pending"}
+                </span>
+                <span className="text-xs text-cres-muted">
+                  {report.reviewStatus === "checked"
+                    ? "Checked — see remarks below"
+                    : report.reviewStatus === "viewed"
+                      ? "Viewed"
+                      : "Pending review"}
+                </span>
+              </div>
+              <div className="mt-3">
+                <p className="text-sm text-cres-text-muted">Remarks</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-cres-text">
+                  {report.remarks?.trim() ? report.remarks.trim() : "—"}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="shell border-cres-border bg-cres-card/80">
             <h3 className="mb-3 text-sm font-semibold text-cres-text">Comments & questions</h3>
 
