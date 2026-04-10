@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth-context";
 
 type DeveloperReport = {
@@ -232,7 +232,7 @@ export default function DeveloperReportsPage() {
                         : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200";
 
                   return (
-                    <div key={report.id} style={{ display: "contents" }}>
+                    <Fragment key={report.id}>
                       <tr className="border-b border-slate-800">
                         <td className="py-2 pr-3 text-slate-200">
                           {new Date(report.reportDate).toLocaleDateString()}
@@ -320,7 +320,7 @@ export default function DeveloperReportsPage() {
                           </td>
                         </tr>
                       )}
-                    </div>
+                    </Fragment>
                   );
                 })}
               </tbody>

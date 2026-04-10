@@ -1,6 +1,7 @@
 # Multi-stage: compile TypeScript, run slim Node image with Prisma CLI for migrations
-FROM node:20-alpine AS build
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY prisma ./prisma
@@ -8,9 +9,10 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npx prisma generate && npm run build
 
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY prisma ./prisma
