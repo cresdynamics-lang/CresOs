@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../auth-context";
+import { browserNotificationSoundAllowed } from "../../lib/notification-signals";
 
 interface Message {
   id: string;
@@ -11,6 +13,9 @@ interface Message {
   timestamp: string;
   type: "text" | "system" | string;
   status: "sent" | "delivered" | "read" | string;
+  metadata?: Record<string, unknown> | null;
+  editedAt?: string | null;
+  revokedAt?: string | null;
 }
 
 interface OrgRoleRef {
@@ -54,16 +59,6 @@ interface CallState {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   peerConnection: RTCPeerConnection | null;
-}
-
-interface VoiceMessage {
-  id: string;
-  audioBlob: Blob;
-  duration: number;
-  timestamp: string;
-  senderId: string;
-  senderName: string;
-  isPlaying: boolean;
 }
 
 /** WhatsApp-inspired dark palette (Web-style) */
@@ -159,6 +154,83 @@ function avatarUrl(pathOrUrl: string | null | undefined): string | null {
   return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
+function ChatMessageBody({ message }: { message: Message }) {
+  const md = message.metadata;
+  const fileUrl = md && typeof md.url === "string" ? avatarUrl(md.url) : null;
+
+  if (message.type === "deleted" || message.revokedAt) {
+    return <div className="italic text-[#8696A0]">This message was deleted.</div>;
+  }
+
+  if (message.type === "location" && md) {
+    const lat = Number(md.lat);
+    const lng = Number(md.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const href = `https://www.google.com/maps?q=${lat},${lng}`;
+      return (
+        <a href={href} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+          Open location in Maps
+        </a>
+      );
+    }
+  }
+
+  if (message.type === "contact" && md) {
+    const name = typeof md.name === "string" ? md.name : "";
+    const phone = typeof md.phone === "string" ? md.phone : "";
+    return (
+      <div className="rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-1.5 text-xs">
+        <div className="font-medium text-[#E9EDEF]">{name || "Contact"}</div>
+        {phone ? <div className="mt-0.5 text-[#AEBAC1]">{phone}</div> : null}
+      </div>
+    );
+  }
+
+  if (message.type === "image" && fileUrl) {
+    return (
+      <div className="space-y-1">
+        <img src={fileUrl} alt="" className="max-h-64 max-w-full rounded-md object-contain" />
+        {message.content?.trim() ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (message.type === "video" && fileUrl) {
+    return (
+      <div className="space-y-1">
+        <video src={fileUrl} controls className="max-h-56 max-w-full rounded-md" />
+        {message.content?.trim() ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (message.type === "voice" && fileUrl) {
+    return (
+      <div className="space-y-1">
+        <audio src={fileUrl} controls className="h-9 w-full max-w-[280px]" />
+        {message.content?.trim() ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if ((message.type === "file" || message.type === "music") && fileUrl) {
+    const fn = typeof md?.fileName === "string" ? md.fileName : "Attachment";
+    return (
+      <a href={fileUrl} target="_blank" rel="noreferrer" className="break-all text-[#53BDEB] underline">
+        {fn}
+      </a>
+    );
+  }
+
+  return <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>;
+}
+
 function formatTimestampShort(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -182,7 +254,15 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messageInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileAttachRef = useRef<HTMLInputElement>(null);
+  const attachWrapRef = useRef<HTMLDivElement>(null);
+  const attachPortalRef = useRef<HTMLDivElement>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [attachMenuPos, setAttachMenuPos] = useState<{ left: number; top: number } | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
 
   const [callState, setCallState] = useState<CallState>({
     isInCall: false,
@@ -204,7 +284,6 @@ export default function CommunityPage() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
-  const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [voiceRecordingTimer, setVoiceRecordingTimer] = useState<NodeJS.Timeout | null>(null);
@@ -481,7 +560,11 @@ export default function CommunityPage() {
         const next = (data.data.conversations || []) as Conversation[];
         setConversations(next);
 
-        if (playCommunitySound && audioUnlockedRef.current) {
+        if (
+          playCommunitySound &&
+          audioUnlockedRef.current &&
+          browserNotificationSoundAllowed(auth.roleKeys ?? [])
+        ) {
           const totalUnread = next.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
           const prevTotal = lastUnreadTotalRef.current;
           lastUnreadTotalRef.current = totalUnread;
@@ -504,7 +587,7 @@ export default function CommunityPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth.accessToken, apiFetch]);
+  }, [auth.accessToken, auth.roleKeys, apiFetch, playCommunitySound]);
 
   useEffect(() => {
     if (!auth.accessToken) return;
@@ -641,8 +724,61 @@ export default function CommunityPage() {
   }, [selectedConversation, auth.accessToken, auth.userId, apiFetch, loadConversations]);
 
   useEffect(() => {
+    setEditingMessageId(null);
+    setEditDraft("");
+    setMessageMenuId(null);
+    setAttachMenuOpen(false);
+  }, [selectedConversation?.id]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedConversation?.id]);
+
+  useLayoutEffect(() => {
+    if (!attachMenuOpen) {
+      setAttachMenuPos(null);
+      return;
+    }
+    const el = attachWrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setAttachMenuPos({ left: r.left, top: r.top });
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [attachMenuOpen]);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    let removeListener: (() => void) | undefined;
+    const openAt = window.setTimeout(() => {
+      const onDown = (e: MouseEvent) => {
+        const n = e.target as Node;
+        if (attachWrapRef.current?.contains(n)) return;
+        if (attachPortalRef.current?.contains(n)) return;
+        setAttachMenuOpen(false);
+      };
+      document.addEventListener("mousedown", onDown);
+      removeListener = () => document.removeEventListener("mousedown", onDown);
+    }, 0);
+    return () => {
+      window.clearTimeout(openAt);
+      removeListener?.();
+    };
+  }, [attachMenuOpen]);
+
+  useEffect(() => {
+    if (!messageMenuId) return;
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest?.("[data-msg-menu-root]")) return;
+      setMessageMenuId(null);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [messageMenuId]);
 
   const filteredConversations = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -677,6 +813,10 @@ export default function CommunityPage() {
   }, [selectedConversation, auth.userId, onlineUsers]);
 
   const handleSendMessage = async () => {
+    if (editingMessageId) {
+      await saveEditMessage();
+      return;
+    }
     if (!newMessage.trim() || !selectedConversation || !auth.accessToken) return;
     if (!auth.userId) {
       setChatError("Session is missing your user id. Refresh the page or sign out and sign in again.");
@@ -706,7 +846,10 @@ export default function CommunityPage() {
           senderName: raw.senderName ?? "You",
           timestamp: raw.timestamp,
           type: raw.type === "system" ? "system" : "text",
-          status: raw.status === "delivered" ? "delivered" : "sent"
+          status: raw.status === "delivered" ? "delivered" : "sent",
+          metadata: raw.metadata ?? null,
+          editedAt: raw.editedAt ?? null,
+          revokedAt: raw.revokedAt ?? null
         };
         setMessages((prev) => [...prev, nextMsg]);
         setNewMessage("");
@@ -921,49 +1064,6 @@ export default function CommunityPage() {
     }));
   };
 
-  const startVoiceRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const voiceMessage: VoiceMessage = {
-          id: Date.now().toString(),
-          audioBlob: blob,
-          duration: voiceRecordingDuration,
-          timestamp: new Date().toISOString(),
-          senderId: auth.userId || "",
-          senderName: auth.userName || "You",
-          isPlaying: false
-        };
-
-        setVoiceMessages((prev) => [...prev, voiceMessage]);
-        setVoiceRecordingDuration(0);
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecordingVoice(true);
-
-      const timer = setInterval(() => {
-        setVoiceRecordingDuration((prev) => prev + 1);
-      }, 1000);
-      setVoiceRecordingTimer(timer);
-    } catch (error) {
-      console.error("Failed to start voice recording:", error);
-      alert("Failed to access microphone. Please check permissions.");
-    }
-  };
-
   const stopVoiceRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
@@ -975,21 +1075,6 @@ export default function CommunityPage() {
     }
 
     setIsRecordingVoice(false);
-  };
-
-  const playVoiceMessage = (voiceMessage: VoiceMessage) => {
-    const audio = new Audio(URL.createObjectURL(voiceMessage.audioBlob));
-    audio.play();
-
-    setVoiceMessages((prev) =>
-      prev.map((vm) => (vm.id === voiceMessage.id ? { ...vm, isPlaying: true } : vm))
-    );
-
-    audio.onended = () => {
-      setVoiceMessages((prev) =>
-        prev.map((vm) => (vm.id === voiceMessage.id ? { ...vm, isPlaying: false } : vm))
-      );
-    };
   };
 
   const sendMessageToUser = async (user: OnlineUser) => {
@@ -1024,7 +1109,7 @@ export default function CommunityPage() {
         setSelectedConversation(conv);
         await loadConversations();
         requestAnimationFrame(() => {
-          messageInputRef.current?.focus();
+          composerRef.current?.focus();
         });
       } else {
         const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -1038,26 +1123,267 @@ export default function CommunityPage() {
     }
   };
 
-  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const apiOrigin = useMemo(
+    () => (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, ""),
+    []
+  );
+
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = typeof window !== "undefined" ? Math.floor(window.innerHeight * 0.4) : 320;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+  }, [newMessage, editingMessageId, editDraft]);
+
+  const appendMessageFromApi = useCallback((raw: Record<string, unknown>) => {
+    const nextMsg: Message = {
+      id: String(raw.id),
+      content: String(raw.content ?? ""),
+      senderId: String(raw.senderId),
+      senderName: String(raw.senderName ?? "You"),
+      timestamp: String(raw.timestamp),
+      type: raw.type === "system" ? "system" : String(raw.type ?? "text"),
+      status: raw.status === "delivered" ? "delivered" : "sent",
+      metadata: (raw.metadata as Record<string, unknown>) ?? null,
+      editedAt: raw.editedAt ? String(raw.editedAt) : null,
+      revokedAt: raw.revokedAt ? String(raw.revokedAt) : null
+    };
+    setMessages((prev) => [...prev, nextMsg]);
+  }, []);
+
+  const openChatFilePicker = useCallback((accept: string) => {
+    const input = fileAttachRef.current;
+    if (!input) return;
+    if (accept) input.setAttribute("accept", accept);
+    else input.removeAttribute("accept");
+    input.click();
+    setAttachMenuOpen(false);
+  }, []);
+
+  const uploadChatFile = useCallback(
+    async (file: File) => {
+      if (!selectedConversation?.id || !auth.accessToken) return;
+      setChatError(null);
+      const fd = new FormData();
+      fd.append("file", file);
+      const cap = newMessage.trim();
+      if (cap) fd.append("caption", cap);
+      const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
+        method: "POST",
+        body: fd
+      });
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+        setChatError(err.error ?? err.message ?? "Upload failed");
+        return;
+      }
+      const data = (await response.json()) as { data?: { message?: Record<string, unknown> } };
+      const raw = data.data?.message;
+      if (raw) {
+        appendMessageFromApi(raw);
+        if (cap) setNewMessage("");
+        void loadConversations();
+      }
+    },
+    [selectedConversation, auth.accessToken, apiFetch, newMessage, appendMessageFromApi, loadConversations]
+  );
+
+  const startVoiceRecording = async () => {
+    try {
+      setVoiceRecordingDuration(0);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      let mimeType = "";
+      for (const t of preferredTypes) {
+        if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) {
+          mimeType = t;
+          break;
+        }
+      }
+      const recorder =
+        mimeType && typeof MediaRecorder !== "undefined"
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const mt = (recorder.mimeType && recorder.mimeType.length > 0 ? recorder.mimeType : mimeType) || "audio/webm";
+        const blob = new Blob(chunks, { type: mt });
+        const ext = mt.includes("mp4") ? "m4a" : "webm";
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mt });
+        void uploadChatFile(file);
+        setVoiceRecordingDuration(0);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      /* Timeslice so browsers reliably emit chunks before stop (important for Safari). */
+      recorder.start(500);
+      setMediaRecorder(recorder);
+      setIsRecordingVoice(true);
+
+      const timer = setInterval(() => {
+        setVoiceRecordingDuration((prev) => prev + 1);
+      }, 1000);
+      setVoiceRecordingTimer(timer);
+    } catch (error) {
+      console.error("Failed to start voice recording:", error);
+      alert("Failed to access microphone. Please check permissions.");
+    }
+  };
+
+  const deleteMessageApi = useCallback(
+    async (messageId: string, scope: "self" | "everyone") => {
+      if (!selectedConversation?.id) return;
+      setMessageMenuId(null);
+      const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages/${messageId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope })
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setChatError(err.error ?? "Delete failed");
+        return;
+      }
+      if (scope === "everyone") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  content: "This message was deleted.",
+                  type: "deleted",
+                  revokedAt: new Date().toISOString(),
+                  metadata: null,
+                  editedAt: null
+                }
+              : m
+          )
+        );
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+      void loadConversations();
+    },
+    [selectedConversation, apiFetch, loadConversations]
+  );
+
+  const saveEditMessage = useCallback(async () => {
+    if (!editingMessageId || !selectedConversation?.id) return;
+    const trimmed = editDraft.trim();
+    if (!trimmed) return;
+    const res = await apiFetch(
+      `/chat-community/conversations/${selectedConversation.id}/messages/${editingMessageId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: trimmed })
+      }
+    );
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      setChatError(err.error ?? "Could not save edit");
+      return;
+    }
+    const data = (await res.json()) as { data?: { message?: Message } };
+    const updated = data.data?.message;
+    if (updated) {
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+    }
+    setEditingMessageId(null);
+    setEditDraft("");
+    void loadConversations();
+  }, [editingMessageId, editDraft, selectedConversation, apiFetch, loadConversations]);
+
+  const sendLocationMessage = useCallback(async () => {
+    if (!selectedConversation?.id) {
+      setChatError("Select a chat first.");
+      return;
+    }
+    if (!navigator.geolocation) {
+      setChatError("Location is not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: "",
+            type: "location",
+            metadata: { lat: latitude, lng: longitude, accuracyM: pos.coords.accuracy }
+          })
+        });
+        if (!res.ok) {
+          setChatError("Could not send location");
+          return;
+        }
+        const data = (await res.json()) as { data?: { message?: Record<string, unknown> } };
+        const raw = data.data?.message;
+        if (raw) appendMessageFromApi(raw);
+        void loadConversations();
+        setAttachMenuOpen(false);
+      },
+      () => setChatError("Location permission denied."),
+      { enableHighAccuracy: true, timeout: 12_000 }
+    );
+  }, [selectedConversation, apiFetch, appendMessageFromApi, loadConversations]);
+
+  const sendContactMessage = useCallback(async () => {
+    const name = window.prompt("Contact name")?.trim();
+    const phone = window.prompt("Phone or email")?.trim();
+    if (!name && !phone) return;
+    if (!selectedConversation?.id) return;
+    const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: "",
+        type: "contact",
+        metadata: { name: name || undefined, phone: phone || undefined }
+      })
+    });
+    if (!res.ok) {
+      setChatError("Could not send contact");
+      return;
+    }
+    const data = (await res.json()) as { data?: { message?: Record<string, unknown> } };
+    const raw = data.data?.message;
+    if (raw) appendMessageFromApi(raw);
+    void loadConversations();
+    setAttachMenuOpen(false);
+  }, [selectedConversation, apiFetch, appendMessageFromApi, loadConversations]);
+
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      void handleSendMessage();
+      if (editingMessageId) void saveEditMessage();
+      else void handleSendMessage();
     }
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center font-body">
+      <div className="flex min-h-0 flex-1 items-center justify-center font-body">
         <div className="text-slate-400">Loading Community…</div>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col font-body">
       {chatError && (
-        <div className="mb-2 w-full px-2 font-body">
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-rose-600/50 bg-rose-950/50 px-3 py-2 text-sm text-rose-100">
+        <div className="w-full shrink-0 px-2 pt-1 sm:px-0 sm:pt-0">
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-rose-600/50 bg-rose-950/50 px-3 py-2 text-xs text-rose-100 sm:text-sm">
             <span className="min-w-0">{chatError}</span>
             <button
               type="button"
@@ -1069,7 +1395,7 @@ export default function CommunityPage() {
           </div>
         </div>
       )}
-    <div className="flex h-[calc(100vh-5.5rem)] min-h-[480px] w-full flex-col overflow-hidden border border-[#2A3942] font-body md:flex-row">
+      <div className="flex min-h-0 flex-1 w-full flex-col overflow-hidden border-0 md:flex-row md:border md:border-[#2A3942]">
       {/* ——— Left: Chats + People (partitioned) ——— On small screens, hide when a 1:1 chat is open so the thread is full width. */}
       <div
         className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
@@ -1393,18 +1719,82 @@ export default function CommunityPage() {
                           </span>
                         </div>
                       )}
-                      <div className={`mb-1 flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div className={`group/message mb-1 flex ${mine ? "justify-end" : "justify-start"}`}>
                         <div
-                          className={`max-w-[min(85%,520px)] rounded-lg px-2 py-1.5 shadow-sm ${
-                            mine ? `${wa.outgoing} text-[#E9EDEF]` : `${wa.incoming} text-[#E9EDEF]`
+                          className={`relative max-w-[min(85%,520px)] rounded-lg py-1.5 shadow-sm ${
+                            mine
+                              ? `${wa.outgoing} pl-2 pr-6 text-[#E9EDEF]`
+                              : `${wa.incoming} pl-6 pr-2 text-[#E9EDEF]`
                           }`}
                         >
-                          <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+                          {message.type !== "deleted" && !message.revokedAt && (
+                            <div
+                              className={`absolute -top-1 z-10 flex flex-col gap-0 ${
+                                mine ? "-right-1 items-end" : "-left-1 items-start"
+                              }`}
+                              data-msg-menu-root
+                            >
+                              <button
+                                type="button"
+                                aria-label="Message options"
+                                className="rounded-full bg-[#111B21]/80 px-1.5 py-0.5 text-[11px] text-[#AEBAC1] opacity-0 shadow-sm transition-opacity hover:bg-[#2A3942] group-hover/message:opacity-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMessageMenuId((id) => (id === message.id ? null : message.id));
+                                }}
+                              >
+                                ⋮
+                              </button>
+                              {messageMenuId === message.id ? (
+                            <div
+                              className="mt-1 min-w-[180px] rounded-lg border border-[#2A3942] bg-[#202C33] py-1 text-xs shadow-lg"
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              {mine && message.type === "text" && (
+                                <button
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                  onClick={() => {
+                                    setEditingMessageId(message.id);
+                                    setEditDraft(message.content);
+                                    setMessageMenuId(null);
+                                    requestAnimationFrame(() => composerRef.current?.focus());
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => void deleteMessageApi(message.id, "self")}
+                              >
+                                Delete for me
+                              </button>
+                              {mine && (
+                                <button
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-rose-200 hover:bg-[#2A3942]"
+                                  onClick={() => {
+                                    if (window.confirm("Delete this message for everyone in the chat?")) {
+                                      void deleteMessageApi(message.id, "everyone");
+                                    }
+                                  }}
+                                >
+                                  Delete for everyone
+                                </button>
+                              )}
+                            </div>
+                              ) : null}
+                            </div>
+                          )}
+                          <ChatMessageBody message={message} />
                           <div
-                            className={`mt-0.5 flex items-center justify-end gap-1 text-[11px] ${
+                            className={`mt-0.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] ${
                               mine ? "text-[#A3E0D4]" : "text-[#8696A0]"
                             }`}
                           >
+                            {message.editedAt ? <span className="opacity-80">edited</span> : null}
                             <span>{formatMessageTime(message.timestamp)}</span>
                             {mine && (
                               <span className="inline-flex" title={message.status}>
@@ -1425,62 +1815,162 @@ export default function CommunityPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {voiceMessages.length > 0 && (
-              <div className="border-t border-[#2A3942] bg-[#111B21] px-3 py-2">
-                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#8696A0]">Voice notes (local)</div>
-                <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto">
-                  {voiceMessages.map((vm) => (
-                    <button
-                      key={vm.id}
-                      type="button"
-                      onClick={() => playVoiceMessage(vm)}
-                      className="flex items-center gap-2 rounded-full bg-[#202C33] px-3 py-1.5 text-left text-xs text-[#E9EDEF] hover:bg-[#2A3942]"
-                    >
-                      <span className="text-[#25D366]">{vm.isPlaying ? "■" : "▶"}</span>
-                      {formatCallDuration(vm.duration)}
-                    </button>
-                  ))}
-                </div>
+            {editingMessageId && (
+              <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#2A3942] bg-[#111B21] px-3 py-2 text-xs text-[#AEBAC1]">
+                <span>Editing message</span>
+                <button
+                  type="button"
+                  className="text-[#53BDEB] hover:underline"
+                  onClick={() => {
+                    setEditingMessageId(null);
+                    setEditDraft("");
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             )}
 
-            <div className={`flex flex-shrink-0 items-end gap-2 px-3 py-2 ${wa.inputBar}`}>
-              <button
-                type="button"
-                onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                className={`mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-                  isRecordingVoice ? "bg-red-600 text-white" : "bg-[#2A3942] text-[#AEBAC1] hover:bg-[#3B4A54]"
-                }`}
-                title={isRecordingVoice ? "Stop" : "Record"}
-              >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                </svg>
-              </button>
-              {isRecordingVoice && (
-                <span className="mb-2 text-xs tabular-nums text-red-400">{formatCallDuration(voiceRecordingDuration)}</span>
-              )}
+            <div className={`flex flex-shrink-0 flex-col gap-1 px-3 py-2 ${wa.inputBar}`}>
               <input
-                ref={messageInputRef}
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={onInputKeyDown}
-                placeholder="Type a message"
-                className="mb-0.5 min-h-[42px] flex-1 rounded-lg border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                ref={fileAttachRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadChatFile(file);
+                  e.target.value = "";
+                  e.target.removeAttribute("accept");
+                  setAttachMenuOpen(false);
+                }}
               />
-              <button
-                type="button"
-                onClick={() => void handleSendMessage()}
-                disabled={!newMessage.trim()}
-                className="mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#111B21] transition-opacity disabled:opacity-40"
-                style={{ backgroundColor: wa.accent }}
-                title="Send"
-              >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              </button>
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                  className={`mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
+                    isRecordingVoice ? "bg-red-600 text-white" : "bg-[#2A3942] text-[#AEBAC1] hover:bg-[#3B4A54]"
+                  }`}
+                  title={
+                    isRecordingVoice
+                      ? "Stop and send voice message"
+                      : "Record voice — tap again when finished to upload"
+                  }
+                  aria-pressed={isRecordingVoice}
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                  </svg>
+                </button>
+                {isRecordingVoice && (
+                  <span className="mb-2 text-xs tabular-nums text-red-400">{formatCallDuration(voiceRecordingDuration)}</span>
+                )}
+                <div ref={attachWrapRef} className="relative z-10 mb-0.5">
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#2A3942] text-[#AEBAC1] hover:bg-[#3B4A54]"
+                    title="Attach file, photo, audio, or more"
+                    aria-expanded={attachMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAttachMenuOpen((o) => !o);
+                    }}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </button>
+                </div>
+                {typeof document !== "undefined" &&
+                  attachMenuOpen &&
+                  attachMenuPos &&
+                  createPortal(
+                    <div
+                      ref={attachPortalRef}
+                      role="menu"
+                      className="min-w-[200px] rounded-lg border border-[#2A3942] bg-[#202C33] py-1 text-xs shadow-xl"
+                      style={{
+                        position: "fixed",
+                        left: Math.max(8, attachMenuPos.left),
+                        bottom: window.innerHeight - attachMenuPos.top + 8,
+                        zIndex: 10050
+                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        onClick={() => openChatFilePicker("image/*")}
+                      >
+                        Photos
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        onClick={() => openChatFilePicker("audio/*")}
+                      >
+                        Audio / voice file
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        onClick={() => openChatFilePicker("")}
+                      >
+                        Any file
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          void sendLocationMessage();
+                        }}
+                      >
+                        Location
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          void sendContactMessage();
+                        }}
+                      >
+                        Contact
+                      </button>
+                    </div>,
+                    document.body
+                  )}
+                <textarea
+                  ref={composerRef}
+                  rows={1}
+                  value={editingMessageId ? editDraft : newMessage}
+                  onChange={(e) =>
+                    editingMessageId ? setEditDraft(e.target.value) : setNewMessage(e.target.value)
+                  }
+                  onKeyDown={onInputKeyDown}
+                  placeholder={editingMessageId ? "Edit message…" : "Type a message"}
+                  className="mb-0.5 max-h-[40vh] min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSendMessage()}
+                  disabled={!(editingMessageId ? editDraft.trim() : newMessage.trim())}
+                  className="mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#111B21] transition-opacity disabled:opacity-40"
+                  style={{ backgroundColor: wa.accent }}
+                  title="Send"
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </>
         ) : (
@@ -1586,6 +2076,6 @@ export default function CommunityPage() {
         </div>
       )}
     </div>
-    </>
+    </div>
   );
 }

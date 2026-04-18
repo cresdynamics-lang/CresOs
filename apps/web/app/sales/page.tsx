@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { PageHeader } from "../page-header";
 import { SalesWorkspaceNav } from "./sales-workspace-nav";
+import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { ScheduleKpiStrip, type ScheduleKpiStats } from "../../components/schedule-kpi-strip";
 
 type HubCard = {
   href: string;
@@ -70,6 +72,7 @@ export default function SalesHubPage() {
     null
   );
   const [statsLoaded, setStatsLoaded] = useState(false);
+  const [scheduleKpis, setScheduleKpis] = useState<ScheduleKpiStats | null>(null);
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -103,6 +106,25 @@ export default function SalesHubPage() {
     };
   }, [auth.accessToken, apiFetch, keys]);
 
+  useEffect(() => {
+    const canSchedule = keys.some((r) => ["sales", "admin", "director_admin"].includes(r));
+    if (!hydrated || !auth.accessToken || !canSchedule) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/schedule?period=week&completed=all");
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { stats?: ScheduleKpiStats };
+        if (body?.stats && !cancelled) setScheduleKpis(body.stats);
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, auth.accessToken, apiFetch, keys]);
+
   if (!hydrated || !canSeeHub) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -122,30 +144,49 @@ export default function SalesHubPage() {
         <SalesWorkspaceNav />
       </div>
 
-      {keys.some((r) => ["admin", "sales"].includes(r)) && statsLoaded && stats && (
-        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Invoice drafts (total)", value: stats.total, tone: "text-slate-200" },
-            { label: "Pending approval", value: stats.pending, tone: "text-amber-400" },
-            { label: "Approved", value: stats.approved, tone: "text-emerald-400" },
-            { label: "Rejected", value: stats.rejected, tone: "text-rose-400" }
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-4 shadow-sm"
-            >
-              <div className={`text-2xl font-semibold tabular-nums ${s.tone}`}>{s.value}</div>
-              <div className="text-xs text-slate-500">{s.label}</div>
-            </div>
-          ))}
+      {scheduleKpis && (
+        <div className="mb-6">
+          <div className="shell py-1.5 sm:py-2.5">
+            <ScheduleKpiStrip stats={scheduleKpis} />
+          </div>
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {keys.some((r) => ["admin", "sales"].includes(r)) && statsLoaded && stats && (
+        <div className="mb-8">
+          <div className="shell py-1.5 sm:py-2.5">
+            <div className="flex w-full min-w-0 flex-nowrap items-stretch divide-x divide-slate-700/70 overflow-x-auto">
+              {(
+                [
+                  { title: "Total", sub: "invoice drafts", value: stats.total, tone: "text-slate-100" },
+                  { title: "Pending", sub: "awaiting approval", value: stats.pending, tone: "text-amber-400" },
+                  { title: "Approved", sub: "cleared", value: stats.approved, tone: "text-emerald-400" },
+                  { title: "Rejected", sub: "declined", value: stats.rejected, tone: "text-rose-400" }
+                ] as const
+              ).map((s) => (
+                <div
+                  key={s.title}
+                  className="flex min-w-0 flex-1 flex-nowrap items-center justify-center gap-x-0.5 px-1 py-0.5 sm:gap-x-1.5 sm:px-2 sm:py-1"
+                >
+                  <span className="shrink-0 text-[8px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px]">
+                    {s.title}
+                  </span>
+                  <span className={`shrink-0 text-xs font-semibold tabular-nums leading-none sm:text-base ${s.tone}`}>
+                    {s.value}
+                  </span>
+                  <span className="min-w-0 truncate text-[8px] leading-tight text-slate-500 sm:text-[10px]">{s.sub}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DashboardCardRow lgCols={3}>
         {cards.map((card) => (
+          <DashboardScrollCard key={card.href} width="wide">
           <div
-            key={card.href}
-            className="group flex flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm transition-colors hover:border-slate-600 hover:bg-slate-900/70"
+            className="group flex h-full min-h-[200px] flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm transition-colors hover:border-slate-600 hover:bg-slate-900/70"
           >
             <h2 className="text-lg font-semibold text-slate-100">{card.title}</h2>
             <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">{card.description}</p>
@@ -156,8 +197,9 @@ export default function SalesHubPage() {
               {card.action}
             </Link>
           </div>
+          </DashboardScrollCard>
         ))}
-      </div>
+      </DashboardCardRow>
     </div>
   );
 }

@@ -691,59 +691,71 @@ export default function adminRouter(prisma: PrismaClient): Router {
         res.status(400).json({ error: "email and password are required" });
         return;
       }
-      const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-      if (existing) {
-        res.status(400).json({ error: "Email already in use" });
+      if (password.length < 8) {
+        res.status(400).json({ error: "Password must be at least 8 characters" });
         return;
       }
-      const role = roleId
-        ? await prisma.role.findFirst({ where: { id: roleId, orgId } })
-        : null;
-      const passwordHash = await bcrypt.hash(password, 10);
-      const user = await prisma.user.create({
-        data: {
-          email: email.trim().toLowerCase(),
-          name: name?.trim() || null,
-          passwordHash,
-          orgId
+      try {
+        const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+        if (existing) {
+          res.status(400).json({ error: "Email already in use" });
+          return;
         }
-      });
-      if (role) {
-        await prisma.userRole.create({
-          data: { userId: user.id, roleId: role.id }
+        const role = roleId
+          ? await prisma.role.findFirst({ where: { id: roleId, orgId } })
+          : null;
+        const passwordHash = await bcrypt.hash(password, 10);
+        const user = await prisma.user.create({
+          data: {
+            email: email.trim().toLowerCase(),
+            name: name?.trim() || null,
+            passwordHash,
+            orgId,
+            phoneNumbers: [],
+            workEmails: []
+          }
         });
-        await prisma.orgMember.create({
-          data: { orgId, userId: user.id, roleId: role.id }
-        });
-      } else {
-        await prisma.orgMember.create({
-          data: { orgId, userId: user.id }
-        });
-      }
-      await prisma.eventLog.create({
-        data: {
-          orgId,
-          actorId: adminId,
-          type: "admin.user.created",
-          entityType: "user",
-          entityId: user.id,
-          metadata: { email: user.email }
+        if (role) {
+          await prisma.userRole.create({
+            data: { userId: user.id, roleId: role.id }
+          });
+          await prisma.orgMember.create({
+            data: { orgId, userId: user.id, roleId: role.id }
+          });
+        } else {
+          await prisma.orgMember.create({
+            data: { orgId, userId: user.id }
+          });
         }
-      });
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            actorId: adminId,
+            type: "admin.user.created",
+            entityType: "user",
+            entityId: user.id,
+            metadata: { email: user.email }
+          }
+        });
 
-      await notifyAdminsInApp(
-        prisma,
-        orgId,
-        "[Visibility] User created",
-        `An admin created a new user: ${user.email}`,
-        { type: "admin.user.created", tier: "structural", excludeUserIds: [adminId] }
-      );
-      res.status(201).json({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        status: user.status
-      });
+        await notifyAdminsInApp(
+          prisma,
+          orgId,
+          "[Visibility] User created",
+          `An admin created a new user: ${user.email}`,
+          { type: "admin.user.created", tier: "structural", excludeUserIds: [adminId] }
+        );
+        res.status(201).json({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          status: user.status
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("admin POST /users failed", e);
+        res.status(500).json({ error: "Could not create user. Check server logs." });
+      }
     }
   );
 

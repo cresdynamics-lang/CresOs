@@ -1,7 +1,5 @@
-"use client";
-
-import { AdminConsole } from "./admin-console";
+import { redirect } from "next/navigation";
 
 export default function AdminPage() {
-  return <AdminConsole initialTab="users" />;
+  redirect("/admin/users");
 }

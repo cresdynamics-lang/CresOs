@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
 import { PageHeader } from "../../page-header";
 import { SalesWorkspaceNav } from "../sales-workspace-nav";
+import { DashboardCardRow, DashboardScrollCard } from "../../../components/dashboard-card-row";
 
 interface Invoice {
   id: string;
@@ -319,24 +320,32 @@ export default function SalesInvoicesPage() {
       {activeTab === "dashboard" && (
         <div className="space-y-6">
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <div className="text-2xl font-bold text-slate-200">{stats.total}</div>
-              <div className="text-sm text-slate-400">Total Invoices</div>
-            </div>
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
-              <div className="text-sm text-slate-400">Pending Approval</div>
-            </div>
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <div className="text-2xl font-bold text-green-400">{stats.approved}</div>
-              <div className="text-sm text-slate-400">Approved</div>
-            </div>
-            <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-              <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
-              <div className="text-sm text-slate-400">Rejected</div>
-            </div>
-          </div>
+          <DashboardCardRow lgCols={4} layout="scroll">
+            <DashboardScrollCard>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
+                <div className="text-2xl font-bold text-slate-200">{stats.total}</div>
+                <div className="text-sm text-slate-400">Total Invoices</div>
+              </div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
+                <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
+                <div className="text-sm text-slate-400">Pending Approval</div>
+              </div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
+                <div className="text-2xl font-bold text-green-400">{stats.approved}</div>
+                <div className="text-sm text-slate-400">Approved</div>
+              </div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
+                <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
+                <div className="text-sm text-slate-400">Rejected</div>
+              </div>
+            </DashboardScrollCard>
+          </DashboardCardRow>
 
           {/* Recent Invoices */}
           <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">

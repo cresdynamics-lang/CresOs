@@ -52,6 +52,12 @@ export async function getAdminUsers(
   return getOrgUsersForRoleKeys(prisma, orgId, [ROLE_KEY_ADMIN]);
 }
 
+/** User ids with Director or Admin role in the org (for leadership-scoped report automation). */
+export async function getDirectorAndAdminUserIds(prisma: PrismaClient, orgId: string): Promise<string[]> {
+  const [dirs, admins] = await Promise.all([getDirectorUsers(prisma, orgId), getAdminUsers(prisma, orgId)]);
+  return [...new Set([...dirs.map((d) => d.id), ...admins.map((a) => a.id)])];
+}
+
 const NOTIFICATION_TYPE = "director.activity";
 
 const ADMIN_VISIBILITY_TYPE = "admin.visibility";

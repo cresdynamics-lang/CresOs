@@ -14,6 +14,10 @@ type Report = {
   submittedAt: string | null;
   createdAt: string;
   submittedBy?: { id: string; name: string | null; email: string };
+  /** Leadership list only: short preview of submitted activity text. */
+  bodyPreview?: string;
+  bodyCharCount?: number;
+  hasAiLeadershipReply?: boolean;
 };
 
 type DeveloperReport = {
@@ -40,13 +44,13 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [developerReports, setDeveloperReports] = useState<DeveloperReport[]>([]);
   const [overdue, setOverdue] = useState<OverdueItem[]>([]);
-  const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const isLeadership = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
 
   useEffect(() => {
     async function load() {
       try {
         const calls: Promise<Response>[] = [apiFetch("/reports"), apiFetch("/reports/alarms/overdue")];
-        if (isDirector) {
+        if (isLeadership) {
           calls.push(apiFetch("/developer-reports"));
         }
         const [listRes, alarmRes, devRes] = await Promise.all(calls);
@@ -58,7 +62,7 @@ export default function ReportsPage() {
           const data = (await alarmRes.json()) as { overdue: OverdueItem[] };
           setOverdue(data.overdue ?? []);
         }
-        if (isDirector && devRes && devRes.ok) {
+        if (isLeadership && devRes && devRes.ok) {
           const data = (await devRes.json()) as DeveloperReport[];
           setDeveloperReports(data);
         }
@@ -67,23 +71,25 @@ export default function ReportsPage() {
       }
     }
     load();
-  }, [apiFetch, isDirector]);
+  }, [apiFetch, isLeadership]);
 
   return (
     <section className="flex flex-col gap-4">
       <div className="shell flex flex-col gap-3 border-cres-border bg-cres-surface/70 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="mb-2 text-lg font-semibold text-cres-text">
-            {isDirector ? "Submitted reports" : "My reports"}
+            {isLeadership ? "Submitted reports" : "My reports"}
           </h2>
           <p className="text-sm text-cres-text-muted">
-            {isDirector
-              ? "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
+            {isLeadership
+              ? auth.roleKeys.includes("admin")
+                ? "Admins and directors see who submitted each sales report, a short preview of what they wrote, character count, whether an automated leadership reply was added to the thread, and exact server timestamps."
+                : "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
               : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isDirector && (
+          {isLeadership && (
             <Link
               href="/reports/ai"
               className="inline-flex shrink-0 items-center justify-center rounded-lg border border-cres-border px-4 py-2 text-sm font-medium text-cres-text hover:bg-cres-surface"
@@ -91,7 +97,7 @@ export default function ReportsPage() {
               AI Reports →
             </Link>
           )}
-          {!isDirector && (
+          {!isLeadership && (
             <Link
               href="/reports/new"
               className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover"
@@ -102,7 +108,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {!isDirector && overdue.length > 0 && (
+      {!isLeadership && overdue.length > 0 && (
         <div className="rounded-xl border border-cres-accent/40 bg-cres-surface px-4 py-3">
           <p className="mb-2 font-semibold text-cres-accent">
             Alarm: {overdue.length} director question(s) not answered within 24 hours
@@ -124,14 +130,17 @@ export default function ReportsPage() {
       <div className="shell overflow-x-auto border-cres-border bg-cres-card/80">
         {reports.length === 0 ? (
           <p className="text-cres-muted">
-            {isDirector ? "No submitted reports yet." : "You have no reports yet. Create one to get started."}
+            {isLeadership ? "No submitted reports yet." : "You have no reports yet. Create one to get started."}
           </p>
         ) : (
           <table className="min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-cres-border text-xs uppercase tracking-wide text-cres-muted">
                 <th className="pb-2 pr-3">Title</th>
-                {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
+                {isLeadership && <th className="pb-2 pr-3">Submitted by</th>}
+                {isLeadership && <th className="pb-2 pr-3">Activity preview</th>}
+                {isLeadership && <th className="pb-2 pr-3">Chars</th>}
+                {isLeadership && <th className="pb-2 pr-3">Auto reply</th>}
                 <th className="pb-2 pr-3">Status</th>
                 <th className="pb-2 pr-3">Review</th>
                 <th className="pb-2 pr-3">Remarks</th>
@@ -153,11 +162,37 @@ export default function ReportsPage() {
                       {r.title}
                     </Link>
                   </td>
-                  {isDirector && (
+                  {isLeadership && (
                     <td className="py-2 pr-3 text-xs text-cres-text-muted">
                       {r.submittedBy
                         ? r.submittedBy.name ?? r.submittedBy.email
                         : "—"}
+                    </td>
+                  )}
+                  {isLeadership && (
+                    <td className="max-w-[14rem] py-2 pr-3 text-xs text-cres-text-muted" title={r.bodyPreview ?? r.body}>
+                      {(() => {
+                        if (r.bodyPreview?.trim()) return r.bodyPreview.trim();
+                        if (!r.body) return "—";
+                        const flat = r.body.replace(/\s+/g, " ").trim();
+                        return flat.length > 120 ? `${flat.slice(0, 120)}…` : flat;
+                      })()}
+                    </td>
+                  )}
+                  {isLeadership && (
+                    <td className="py-2 pr-3 text-xs text-cres-muted tabular-nums">
+                      {typeof r.bodyCharCount === "number" ? r.bodyCharCount : r.body?.length ?? "—"}
+                    </td>
+                  )}
+                  {isLeadership && (
+                    <td className="py-2 pr-3 text-xs">
+                      {r.hasAiLeadershipReply === true ? (
+                        <span className="rounded bg-sky-500/15 px-2 py-0.5 text-sky-300">Yes</span>
+                      ) : r.hasAiLeadershipReply === false ? (
+                        <span className="text-cres-text-muted">No</span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   )}
                   <td className="py-2 pr-3 text-xs">
@@ -202,13 +237,14 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {isDirector && (
+      {isLeadership && (
         <div className="shell overflow-x-auto border-cres-border bg-cres-card/80">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-cres-text">Developer reports</h3>
               <p className="text-sm text-cres-text-muted">
-                Filed developer reports (always visible once submitted). Drafts are not supported for developer reports.
+                Filed developer reports (always visible once submitted). Leadership can review remarks (including any
+                automated reply) and append director notes without removing the original text.
               </p>
             </div>
             <Link

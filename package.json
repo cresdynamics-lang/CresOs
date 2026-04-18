@@ -6,6 +6,7 @@
     "build:web": "npm run build --prefix apps/web",
     "build": "npm run build:api && npm run build:web",
     "test:api": "npm run test --prefix apps/api",
+    "test:director-ai-e2e": "npm run test:director-ai-e2e --prefix apps/api",
     "test": "npm run test:api",
     "lint:web": "npm run lint --prefix apps/web",
     "verify": "npm run test:api && npm run build && npm run lint:web"

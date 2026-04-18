@@ -3,9 +3,20 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
-import { notifyDirectors } from "./director-notifications";
+import { getDirectorAndAdminUserIds, notifyDirectors } from "./director-notifications";
+import { queueAutoDirectorReplyForSalesReport } from "./director-ai-automation";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const MARKED_REVIEWED_LINE = "Marked reviewed. ✓";
+const LEADERSHIP_APPEND_SEP =
+  "\n\n────────────────────────\nDirector / Admin note\n────────────────────────\n\n";
+
+function mergeAppendedRemarks(prev: string | null | undefined, addition: string): string {
+  const p = (prev ?? "").trim();
+  const a = addition.trim();
+  if (!a) return p;
+  return p ? `${p}${LEADERSHIP_APPEND_SEP}${a}` : a;
+}
 
 export default function reportsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -103,14 +114,40 @@ export default function reportsRouter(prisma: PrismaClient): Router {
       );
 
       if (isDirector) {
+        const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
         const list = await prisma.salesReport.findMany({
           where: { orgId, status: "submitted" },
           orderBy: { submittedAt: "desc" },
           include: {
-            submittedBy: { select: { id: true, email: true, name: true } }
+            submittedBy: { select: { id: true, email: true, name: true } },
+            comments: {
+              where: { parentId: null },
+              select: { authorId: true, source: true, content: true, createdAt: true }
+            }
           }
         });
-        return res.json(list);
+        const mapped = list.map((r) => {
+          const { comments, body, ...rest } = r;
+          const submittedAtMs = r.submittedAt ? new Date(r.submittedAt).getTime() : 0;
+          const hasAiLeadershipReply = (comments ?? []).some(
+            (c) =>
+              c.source === "ai_auto" ||
+              (leadershipIds.includes(c.authorId) &&
+                typeof c.content === "string" &&
+                c.content.includes(MARKED_REVIEWED_LINE) &&
+                submittedAtMs > 0 &&
+                new Date(c.createdAt).getTime() >= submittedAtMs)
+          );
+          const flat = body.replace(/\s+/g, " ").trim();
+          return {
+            ...rest,
+            body,
+            bodyPreview: flat.length > 220 ? `${flat.slice(0, 220)}…` : flat,
+            bodyCharCount: body.length,
+            hasAiLeadershipReply
+          };
+        });
+        return res.json(mapped);
       }
 
       const list = await prisma.salesReport.findMany({
@@ -193,7 +230,11 @@ export default function reportsRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { id } = req.params;
-      const { reviewStatus, remarks } = req.body as { reviewStatus?: string; remarks?: string };
+      const { reviewStatus, remarks, appendRemarks } = req.body as {
+        reviewStatus?: string;
+        remarks?: string;
+        appendRemarks?: boolean;
+      };
 
       if (!reviewStatus || !["pending", "viewed", "checked"].includes(reviewStatus)) {
         res.status(400).json({ error: "reviewStatus must be one of: pending, viewed, checked" });
@@ -208,10 +249,35 @@ export default function reportsRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      const note = (remarks ?? "").trim();
-      if (reviewStatus === "checked" && note.length === 0) {
-        res.status(400).json({ error: "Remarks are required to mark a report as checked." });
-        return;
+      const append = appendRemarks === true;
+      let nextRemarks: string | null | undefined;
+      if (append) {
+        const inc = (remarks ?? "").trim();
+        if (inc) nextRemarks = mergeAppendedRemarks(existing.remarks, inc);
+      } else if (remarks !== undefined) {
+        nextRemarks = (remarks ?? "").trim() || null;
+      }
+
+      const effectiveRemarks = ((nextRemarks !== undefined ? nextRemarks : existing.remarks) ?? "").trim();
+      if (reviewStatus === "checked" && effectiveRemarks.length === 0) {
+        const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
+        const threadOk =
+          Boolean(existing.submittedAt) &&
+          (await prisma.salesReportComment.count({
+            where: {
+              reportId: id,
+              parentId: null,
+              authorId: { in: leadershipIds },
+              createdAt: { gte: existing.submittedAt! }
+            }
+          })) > 0;
+        if (!threadOk) {
+          res.status(400).json({
+            error:
+              "Add remarks on the report, append a director note, or leave an existing leadership comment on this submission before marking checked."
+          });
+          return;
+        }
       }
 
       const updated = await prisma.salesReport.update({
@@ -220,7 +286,7 @@ export default function reportsRouter(prisma: PrismaClient): Router {
           reviewStatus,
           reviewedAt: new Date(),
           reviewedById: userId,
-          ...(remarks !== undefined && { remarks: note || null })
+          ...(nextRemarks !== undefined && { remarks: nextRemarks })
         },
         include: {
           submittedBy: { select: { id: true, email: true, name: true } }
@@ -300,6 +366,7 @@ export default function reportsRouter(prisma: PrismaClient): Router {
         `Report "${report.title}" was submitted by ${by}.\n\nSubmitted at (server, UTC): ${ts}\nThis time is stored on the server and is visible in the app even if you were offline when it arrived.`,
         { type: "sales_report.submitted" }
       );
+      queueAutoDirectorReplyForSalesReport(prisma, report.id);
       res.json(report);
     }
   );

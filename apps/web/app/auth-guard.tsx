@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { AppShell } from "./app-shell";
 
-const PUBLIC_PATHS = ["/", "/login"];
+const PUBLIC_PATHS = ["/", "/login", "/register"];
 
 function isPublicPath(path: string): boolean {
   const normalized = path.replace(/\/$/, "") || "/";
@@ -19,7 +19,8 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const hasToken = Boolean(auth.accessToken);
   const isPublic = isPublicPath(pathname);
   const mustRedirectToLogin = !hasToken && !isPublic;
-  const mustRedirectToDashboard = hasToken && (pathname === "/login" || pathname === "/");
+  const mustRedirectToDashboard =
+    hasToken && (pathname === "/login" || pathname === "/register" || pathname === "/");
 
   useEffect(() => {
     if (!hydrated) return;
@@ -49,7 +50,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (pathname === "/login" || pathname === "/") return null;
+  if (pathname === "/login" || pathname === "/" || pathname === "/register") return null;
 
   return <AppShell>{children}</AppShell>;
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth-context";
 import { notify, requestNotificationPermission } from "../browser-notify";
+import { ScheduleKpiStrip } from "../../components/schedule-kpi-strip";
 
 type ScheduleItem = {
   id: string;
@@ -98,11 +99,14 @@ export default function SchedulePage() {
         const triggerAt = scheduled - (item.reminderMinutesBefore ?? 0) * 60 * 1000;
         if (now >= triggerAt && !notifiedIdsRef.current.has(item.id)) {
           notifiedIdsRef.current.add(item.id);
+          // Browser alerts ring only for meetings, calls, and reports — not generic "task" schedule rows.
+          if (item.type === "task" || item.type === "other") continue;
           const typeLabel = { meeting: "Meeting", call: "Call", report: "Report", task: "Task", other: "Item" }[item.type] ?? "Item";
           notify(`Get ready: ${item.title}`, {
             body: `${typeLabel} in ${item.reminderMinutesBefore} min. ${item.notes ? item.notes.slice(0, 80) : ""}`.trim(),
             tag: `schedule-${item.id}`,
-            playSound: true
+            // Task reminders: visual notification only — sounds are for Community / projects / reports (see app-shell + dashboard).
+            playSound: false
           });
         }
       }
@@ -219,52 +223,48 @@ export default function SchedulePage() {
         )}
       </div>
 
-      {/* Accountability stats */}
-      {data && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="shell">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Total</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-100">{data.stats.total}</p>
-            <p className="text-xs text-slate-500">scheduled in period</p>
-          </div>
-          <div className="shell">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Done</p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-400">{data.stats.completed}</p>
-            <p className="text-xs text-slate-500">completed</p>
-          </div>
-          <div className="shell">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Pending</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-400">{data.stats.pending}</p>
-            <p className="text-xs text-slate-500">not done</p>
+      {/* Accountability stats + list filter — one strip; stats always 3 columns; Show stays one row */}
+      <div className="shell py-1.5 sm:py-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          {data ? <ScheduleKpiStrip stats={data.stats} className="min-w-0 flex-1" /> : null}
+          <div
+            className={`flex flex-nowrap items-center gap-0.5 border-t border-slate-700/70 pt-1.5 sm:gap-1 sm:pt-2 sm:shrink-0 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0 ${
+              data ? "" : "sm:ml-auto"
+            }`}
+          >
+            <span className="shrink-0 text-[8px] font-medium uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px]">
+              Show:
+            </span>
+            {(["all", "pending", "done"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setCompletedFilter(f)}
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-medium sm:px-2 sm:text-[11px] ${
+                  completedFilter === f
+                    ? "bg-slate-600 text-white"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                {f === "all" ? "All" : f === "done" ? "Done" : "Pending"}
+              </button>
+            ))}
           </div>
         </div>
-      )}
-
-      {/* Filter: All / Done / Pending */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-400">Show:</span>
-        {(["all", "pending", "done"] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setCompletedFilter(f)}
-            className={`rounded px-2 py-1 text-xs font-medium ${completedFilter === f ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"}`}
-          >
-            {f === "all" ? "All" : f === "done" ? "Done" : "Pending"}
-          </button>
-        ))}
       </div>
 
       {/* List */}
       <div className="shell">
-        <h3 className="mb-3 text-sm font-semibold text-slate-200">
+        <h3 className="mb-2 text-xs font-semibold text-slate-200 sm:mb-3 sm:text-sm">
           {PERIODS.find((p) => p.value === period)?.label}
           {data?.scope === "org" ? " · org-wide" : ""} — {data?.items.length ?? 0} items
         </h3>
         {!data ? (
-          <p className="text-sm text-slate-400">Getting your schedule…</p>
+          <p className="text-xs text-slate-400 sm:text-sm">Getting your schedule…</p>
         ) : data.items.length === 0 ? (
-          <p className="text-sm text-slate-400">No items in this period. Add meetings, calls, reports, or tasks to stay on track.</p>
+          <p className="text-xs text-slate-400 sm:text-sm">
+            No items in this period. Add meetings, calls, reports, or tasks to stay on track.
+          </p>
         ) : (
           <ul className="space-y-2">
             {data.items.map((item) => (
@@ -273,28 +273,32 @@ export default function SchedulePage() {
                 className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${item.completedAt ? "border-slate-700 bg-slate-800/40 opacity-90" : "border-slate-700 bg-slate-800/60"}`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className={`font-medium text-slate-100 ${item.completedAt ? "line-through text-slate-400" : ""}`}>
+                  <p
+                    className={`text-sm font-medium text-slate-100 sm:text-base ${item.completedAt ? "line-through text-slate-400" : ""}`}
+                  >
                     {item.title}
                   </p>
                   {item.user && (
-                    <p className="text-xs text-sky-400/90">
+                    <p className="text-[11px] text-sky-400/90 sm:text-xs">
                       {item.user.name ?? item.user.email}
                     </p>
                   )}
-                  <p className="text-xs text-slate-400">
+                  <p className="text-[11px] text-slate-400 sm:text-xs">
                     {TYPES.find((t) => t.value === item.type)?.label ?? item.type} · {new Date(item.scheduledAt).toLocaleString()}
                     {item.reminderMinutesBefore != null && (
                       <span className="ml-1.5 text-sky-400">· Reminder {item.reminderMinutesBefore} min before</span>
                     )}
                   </p>
-                  {item.notes && <p className="mt-1 text-xs text-slate-500">{item.notes}</p>}
+                  {item.notes && (
+                    <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">{item.notes}</p>
+                  )}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={() => toggleDone(item)}
                     disabled={togglingId === item.id}
-                    className={`rounded px-2 py-1 text-xs font-medium ${item.completedAt ? "bg-slate-600 text-slate-200 hover:bg-slate-500" : "bg-emerald-600 text-white hover:bg-emerald-500"} disabled:opacity-50`}
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-medium sm:px-2 sm:py-1 sm:text-xs ${item.completedAt ? "bg-slate-600 text-slate-200 hover:bg-slate-500" : "bg-emerald-600 text-white hover:bg-emerald-500"} disabled:opacity-50`}
                   >
                     {togglingId === item.id ? "…" : item.completedAt ? "Undo" : "Mark done"}
                   </button>

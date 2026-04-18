@@ -31,7 +31,7 @@ export function SalesWorkspaceNav() {
 
   return (
     <nav
-      className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-900/40 p-2"
+      className="-mx-1 flex gap-2 overflow-x-auto overflow-y-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-2 sm:mx-0 sm:flex-wrap"
       aria-label="Sales workspace"
     >
       {visible.map((item) => {
@@ -40,7 +40,7 @@ export function SalesWorkspaceNav() {
           <Link
             key={item.href + item.label}
             href={item.href}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               active
                 ? "bg-brand/15 text-brand ring-1 ring-brand/40"
                 : "text-slate-400 hover:bg-slate-800/80 hover:text-slate-200"

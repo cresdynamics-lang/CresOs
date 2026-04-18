@@ -8,6 +8,7 @@
 import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { requireRoles, ALL_APP_ROLE_KEYS, ROLE_KEYS } from "./auth-middleware";
 import multer from "multer";
 import {
@@ -17,22 +18,45 @@ import {
   displayNameOrEmail,
   getUserIdsInOrg
 } from "./chat-community-helpers";
+import { saveChatUpload, messageTypeFromMime } from "../lib/chat-uploads";
 
-// Configure multer for file uploads
+// Configure multer for file uploads (images, docs, audio, video; block obvious executables)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 25 * 1024 * 1024
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type'));
+  fileFilter: (_req, file, cb) => {
+    const n = (file.originalname || "").toLowerCase();
+    if (/\.(exe|bat|cmd|msi|scr|pif|cpl|com)$/i.test(n)) {
+      cb(new Error("File type not allowed"));
+      return;
     }
+    cb(null, true);
   }
 });
+
+async function refreshConversationLastMessage(prisma: PrismaClient, conversationId: string) {
+  const latest = await prisma.message.findFirst({
+    where: { conversationId, deletedAt: null, revokedAt: null },
+    orderBy: { createdAt: "desc" }
+  });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      lastMessage: latest
+        ? {
+            id: latest.id,
+            content: latest.content,
+            senderId: latest.senderId,
+            timestamp: latest.createdAt.toISOString(),
+            type: latest.type
+          }
+        : Prisma.JsonNull,
+      updatedAt: new Date()
+    }
+  });
+}
 
 export default function chatCommunityRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -621,12 +645,16 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         }
 
         const skip = (page - 1) * limit;
+        const whereMessages = {
+          conversationId,
+          deletedAt: null,
+          NOT: { hides: { some: { userId } } }
+        };
+
         const [total, rows] = await Promise.all([
-          prisma.message.count({
-            where: { conversationId, deletedAt: null }
-          }),
+          prisma.message.count({ where: whereMessages }),
           prisma.message.findMany({
-            where: { conversationId, deletedAt: null },
+            where: whereMessages,
             orderBy: { createdAt: "asc" },
             skip,
             take: limit
@@ -652,16 +680,20 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
 
         const messages = rows.map((m) => {
           const s = senderById.get(m.senderId);
+          const revoked = Boolean(m.revokedAt);
           return {
             id: m.id,
             conversationId: m.conversationId,
             senderId: m.senderId,
             senderName: s ? displayNameOrEmail(s.name, "") : "User",
-            content: m.content,
-            type: m.type,
+            content: revoked ? "This message was deleted." : m.content,
+            type: revoked ? "deleted" : m.type,
             status: m.status,
             timestamp: m.createdAt.toISOString(),
-            readBy: m.readBy
+            readBy: m.readBy,
+            metadata: m.metadata,
+            editedAt: m.editedAt?.toISOString() ?? null,
+            revokedAt: m.revokedAt?.toISOString() ?? null
           };
         });
 
@@ -699,12 +731,33 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         if (!conversationId) {
           return res.status(400).json({ error: "Missing conversation id" });
         }
-        const { content, type = "text" } = req.body as { content?: string; type?: string };
+        const { content, type = "text", metadata, replyTo } = req.body as {
+          content?: string;
+          type?: string;
+          metadata?: Record<string, unknown>;
+          replyTo?: string;
+        };
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
 
-        if (!content || typeof content !== "string" || !content.trim()) {
-          return res.status(400).json({ error: "Message content is required" });
+        const trimmed = typeof content === "string" ? content.trim() : "";
+        const t = typeof type === "string" && type.trim() ? type.trim() : "text";
+        const meta =
+          metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : undefined;
+        const hasUrl = typeof (meta as { url?: string } | undefined)?.url === "string" && Boolean((meta as { url: string }).url);
+        const locOk =
+          t === "location" &&
+          meta &&
+          typeof (meta as { lat?: unknown }).lat === "number" &&
+          typeof (meta as { lng?: unknown }).lng === "number";
+        const contactOk =
+          t === "contact" &&
+          meta &&
+          (typeof (meta as { phone?: unknown }).phone === "string" ||
+            typeof (meta as { name?: unknown }).name === "string");
+
+        if (!trimmed && !hasUrl && !locOk && !contactOk) {
+          return res.status(400).json({ error: "Message content or attachment metadata is required" });
         }
 
         const conv = await prisma.conversation.findFirst({
@@ -714,12 +767,20 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "Conversation not found" });
         }
 
+        const displayContent =
+          trimmed ||
+          (locOk ? "📍 Shared location" : "") ||
+          (contactOk ? `👤 ${String((meta as { name?: string }).name || "Contact")}` : "") ||
+          (hasUrl ? "Attachment" : "");
+
         const created = await prisma.message.create({
           data: {
             conversationId,
             senderId: userId,
-            content: content.trim(),
-            type: type || "text",
+            content: displayContent,
+            type: t,
+            metadata: meta === undefined ? undefined : (meta as Prisma.InputJsonValue),
+            replyTo: typeof replyTo === "string" && replyTo.trim() ? replyTo.trim() : undefined,
             status: "sent",
             readBy: [{ userId, readAt: new Date().toISOString() }]
           }
@@ -756,7 +817,10 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           type: created.type,
           status: created.status,
           timestamp: created.createdAt.toISOString(),
-          readBy: created.readBy
+          readBy: created.readBy,
+          metadata: created.metadata,
+          editedAt: created.editedAt?.toISOString() ?? null,
+          revokedAt: created.revokedAt?.toISOString() ?? null
         };
 
         res.status(201).json({
@@ -768,6 +832,159 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         console.error("Error sending message:", error);
         res.status(500).json({
           error: "Failed to send message",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.patch(
+    "/conversations/:conversationId/messages/:messageId",
+    requireRoles(ALL_APP_ROLE_KEYS),
+    async (req, res) => {
+      try {
+        const conversationId = Array.isArray(req.params.conversationId)
+          ? req.params.conversationId[0]
+          : req.params.conversationId;
+        const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
+        if (!conversationId || !messageId) {
+          return res.status(400).json({ error: "Missing conversation or message id" });
+        }
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const { content } = req.body as { content?: string };
+        const trimmed = typeof content === "string" ? content.trim() : "";
+        if (!trimmed) {
+          return res.status(400).json({ error: "Content is required" });
+        }
+
+        const existing = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId,
+            senderId: userId,
+            deletedAt: null,
+            revokedAt: null,
+            conversation: { orgId, participants: { has: userId } }
+          }
+        });
+        if (!existing) {
+          return res.status(404).json({ error: "Message not found or cannot be edited" });
+        }
+
+        const updated = await prisma.message.update({
+          where: { id: messageId },
+          data: { content: trimmed, editedAt: new Date() }
+        });
+
+        const conv = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { lastMessage: true }
+        });
+        const lm = conv?.lastMessage as { id?: string } | null;
+        if (lm?.id === messageId) {
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: {
+              lastMessage: {
+                id: updated.id,
+                content: updated.content,
+                senderId: updated.senderId,
+                timestamp: updated.updatedAt.toISOString(),
+                type: updated.type
+              },
+              updatedAt: new Date()
+            }
+          });
+        }
+
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, name: true }
+        });
+
+        res.json({
+          success: true,
+          data: {
+            message: {
+              id: updated.id,
+              conversationId: updated.conversationId,
+              senderId: updated.senderId,
+              senderName: sender ? displayNameOrEmail(sender.name, "") : "User",
+              content: updated.content,
+              type: updated.type,
+              status: updated.status,
+              timestamp: updated.createdAt.toISOString(),
+              readBy: updated.readBy,
+              metadata: updated.metadata,
+              editedAt: updated.editedAt?.toISOString() ?? null,
+              revokedAt: updated.revokedAt?.toISOString() ?? null
+            }
+          }
+        });
+      } catch (error) {
+        console.error("Error editing message:", error);
+        res.status(500).json({
+          error: "Failed to edit message",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.delete(
+    "/conversations/:conversationId/messages/:messageId",
+    requireRoles(ALL_APP_ROLE_KEYS),
+    async (req, res) => {
+      try {
+        const conversationId = Array.isArray(req.params.conversationId)
+          ? req.params.conversationId[0]
+          : req.params.conversationId;
+        const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
+        if (!conversationId || !messageId) {
+          return res.status(400).json({ error: "Missing conversation or message id" });
+        }
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const scope = (req.body as { scope?: string }).scope === "everyone" ? "everyone" : "self";
+
+        const msg = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId,
+            deletedAt: null,
+            conversation: { orgId, participants: { has: userId } }
+          }
+        });
+        if (!msg) {
+          return res.status(404).json({ error: "Message not found" });
+        }
+
+        if (scope === "everyone") {
+          if (msg.senderId !== userId) {
+            return res.status(403).json({ error: "Only the sender can delete this message for everyone" });
+          }
+          if (msg.revokedAt) {
+            return res.json({ success: true, message: "Already deleted" });
+          }
+          await prisma.message.update({
+            where: { id: messageId },
+            data: { revokedAt: new Date(), content: "", type: "deleted" }
+          });
+          await refreshConversationLastMessage(prisma, conversationId);
+          return res.json({ success: true, message: "Deleted for everyone" });
+        }
+
+        await prisma.messageHide.upsert({
+          where: { messageId_userId: { messageId, userId } },
+          create: { messageId, userId },
+          update: {}
+        });
+        res.json({ success: true, message: "Hidden for you" });
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        res.status(500).json({
+          error: "Failed to delete message",
           message: error instanceof Error ? error.message : "Unknown error"
         });
       }
@@ -802,26 +1019,70 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "Conversation not found" });
         }
 
-        const message = {
-          id: `msg-${Date.now()}`,
-          conversationId,
-          senderId: userId,
-          content: `Shared a file: ${file.originalname}`,
-          type: 'file' as const,
-          metadata: {
-            fileName: file.originalname,
-            fileSize: file.size,
-            mimeType: file.mimetype
-          },
-          status: 'sent' as const,
-          readBy: [{ userId, readAt: new Date() }],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          sender: {
-            id: userId,
-            displayName: 'Current User',
-            avatar: null
+        const urlPath = saveChatUpload(orgId, conversationId, file.originalname, file.buffer);
+        const msgType = messageTypeFromMime(file.mimetype);
+        const metadata = {
+          url: urlPath,
+          fileName: file.originalname,
+          fileSize: file.size,
+          mimeType: file.mimetype
+        };
+
+        const caption =
+          typeof req.body?.caption === "string" && req.body.caption.trim()
+            ? req.body.caption.trim()
+            : msgType === "image"
+              ? "📷 Photo"
+              : msgType === "voice"
+                ? "🎤 Voice message"
+                : `📎 ${file.originalname}`;
+
+        const created = await prisma.message.create({
+          data: {
+            conversationId,
+            senderId: userId,
+            content: caption,
+            type: msgType,
+            metadata: metadata as Prisma.InputJsonValue,
+            status: "sent",
+            readBy: [{ userId, readAt: new Date().toISOString() }]
           }
+        });
+
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, name: true }
+        });
+
+        const unreadNext = mergeUnreadCounts(conv.unreadCounts, conv.participants, userId);
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            lastMessage: {
+              id: created.id,
+              content: created.content,
+              senderId: created.senderId,
+              timestamp: created.createdAt.toISOString(),
+              type: created.type
+            },
+            updatedAt: new Date(),
+            unreadCounts: unreadNext
+          }
+        });
+
+        const message = {
+          id: created.id,
+          conversationId: created.conversationId,
+          senderId: created.senderId,
+          senderName: sender ? displayNameOrEmail(sender.name, "") : "User",
+          content: created.content,
+          type: created.type,
+          status: created.status,
+          timestamp: created.createdAt.toISOString(),
+          readBy: created.readBy,
+          metadata: created.metadata,
+          editedAt: created.editedAt?.toISOString() ?? null,
+          revokedAt: created.revokedAt?.toISOString() ?? null
         };
 
         res.status(201).json({
@@ -829,12 +1090,11 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           message: "File uploaded successfully",
           data: { message }
         });
-
       } catch (error) {
         console.error("Error uploading file:", error);
-        res.status(500).json({ 
-          error: "Failed to upload file", 
-          message: error instanceof Error ? error.message : "Unknown error" 
+        res.status(500).json({
+          error: "Failed to upload file",
+          message: error instanceof Error ? error.message : "Unknown error"
         });
       }
     }

@@ -198,6 +198,7 @@ model User {
   inbox             Inbox?              @relation("UserInbox")
   conversations     Conversation[]      @relation("ConversationCreator")
   messages          Message[]           @relation("MessageSender")
+  messageHides      MessageHide[]
   DailyReminderSent DailyReminderSent[]
 }
 
@@ -831,23 +832,38 @@ model Message {
   conversationId String
   senderId       String
   content        String
-  type           String    @default("text") // text, file, image, system, voice, video
-  metadata       Json? // {fileName, fileSize, mimeType, duration, thumbnail}
+  type           String    @default("text") // text, file, image, system, voice, video, location, contact, deleted
+  metadata       Json? // {fileName, fileSize, mimeType, duration, thumbnail, url, lat, lng, contactName, ...}
   replyTo        String?
   reactions      Json      @default("[]") // [{emoji, users, count}]
   status         String    @default("sent") // sent, delivered, read, failed
   readBy         Json      @default("[]") // [{userId, readAt}]
   editedAt       DateTime?
   deletedAt      DateTime?
+  revokedAt      DateTime? // delete for everyone — all participants see placeholder
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   conversation  Conversation       @relation(fields: [conversationId], references: [id])
   sender        User               @relation("MessageSender", fields: [senderId], references: [id])
   notifications ChatNotification[]
+  hides         MessageHide[]
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+}
+
+model MessageHide {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
 }
 
 model Inbox {
@@ -1168,6 +1184,8 @@ model SalesReportComment {
   kind      String // question, comment, response
   parentId  String?
   content   String
+  /// When set to "ai_auto", this row was created by CresOS leadership automation (not hand-typed).
+  source    String?
   createdAt DateTime @default(now())
 
   report  SalesReport          @relation(fields: [reportId], references: [id], onDelete: Cascade)

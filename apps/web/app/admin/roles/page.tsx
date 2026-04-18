@@ -2,7 +2,6 @@
 
 import { AdminConsole } from "../admin-console";
 
-export default function AdminOrgPage() {
+export default function AdminRolesPage() {
   return <AdminConsole />;
 }
-

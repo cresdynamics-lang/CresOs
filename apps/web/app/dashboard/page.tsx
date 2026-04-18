@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { PageHeader } from "../page-header";
+import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
+import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
 
 type Summary = {
   leadsThisWeek: number;
@@ -85,7 +87,14 @@ type DashboardKpis = {
 };
 
 type Attention = {
-  notifications: { id: string; subject: string | null; body: string; readAt: string | null; createdAt: string; type: string }[];
+  notifications: {
+    id: string;
+    subject: string | null;
+    body: string;
+    readAt: string | null;
+    createdAt: string;
+    type?: string;
+  }[];
   upcomingMeetings: { id: string; type: string; scheduledAt: string; name: string | null; lead: { id: string; title: string } }[];
   upcomingCalls: { id: string; type: string; scheduledAt: string; name: string | null; lead: { id: string; title: string } }[];
   leadsPendingApproval: { id: string; title: string; owner: { name: string | null; email: string } | null }[];
@@ -152,7 +161,7 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   finance: [{ href: "/finance", label: "Finance" }, { href: "/approvals", label: "Approvals" }],
   analyst: [{ href: "/analytics", label: "Analytics" }, { href: "/crm", label: "CRM" }],
   admin: [
-    { href: "/admin", label: "Users & org" },
+    { href: "/admin/users", label: "Users & org" },
     { href: "/analytics", label: "Analytics" }
   ],
   client: []
@@ -219,16 +228,17 @@ export default function DashboardPage() {
         setAttention(data);
         if (data?.notifications) {
           const unread = data.notifications.filter((n) => !n.readAt);
-          let first = true;
-          for (const n of unread.slice(0, 5)) {
+          let firstRinging = true;
+          for (const n of unread.slice(0, 8)) {
             if (notifiedIdsRef.current.has(n.id)) continue;
+            if (!shouldPlayBrowserSoundForUser(n, auth.roleKeys)) continue;
             notifiedIdsRef.current.add(n.id);
-            notify(n.subject ?? "Reminder", {
+            notify(n.subject ?? "CresOS", {
               body: n.body?.slice(0, 120) ?? "",
               tag: `notif-${n.id}`,
-              playSound: first
+              playSound: firstRinging
             });
-            first = false;
+            firstRinging = false;
           }
         }
       }
@@ -237,7 +247,7 @@ export default function DashboardPage() {
         setSummaryError(true);
       }
     }
-  }, [apiFetch, canViewOrgAnalyticsSummary, hydrated, auth.accessToken]);
+  }, [apiFetch, canViewOrgAnalyticsSummary, hydrated, auth.accessToken, auth.roleKeys]);
 
   const loadDirectorDashboard = useCallback(async () => {
     if (!isDirectorOrAdmin) return;
@@ -385,7 +395,7 @@ export default function DashboardPage() {
           description: "Extended admin analytics dashboard."
         },
         {
-          href: "/admin",
+          href: "/admin/users",
           title: "Users & org",
           description: "Users, departments, roles (admin tools)."
         },
@@ -542,8 +552,41 @@ export default function DashboardPage() {
   const atRiskProjects = directorDashboard?.operationalHealth.projectsAtRisk ?? 0;
   const teamMembers = summary?.teamMembers ?? 0;
 
+  const attentionSignalSummary = useMemo(() => {
+    const unread = attention?.notifications?.filter((n) => !n.readAt) ?? [];
+    let fromNotifs = { message: 0, project: 0, inquiry: 0 };
+    for (const n of unread) {
+      const k = classifyAttentionSignal(n);
+      if (k === "message") fromNotifs.message++;
+      else if (k === "project") fromNotifs.project++;
+      else if (k === "inquiry") fromNotifs.inquiry++;
+    }
+    const reportMessages = messagesCount;
+    const leadsQueue = attention?.leadsPendingApproval?.length ?? 0;
+    const devProjectQueue =
+      isDeveloper ? projectsNeedingReview.length + handoffRequests.length : 0;
+    return {
+      message: fromNotifs.message + reportMessages,
+      project: fromNotifs.project + devProjectQueue,
+      inquiry: fromNotifs.inquiry + leadsQueue
+    };
+  }, [
+    attention?.notifications,
+    attention?.leadsPendingApproval?.length,
+    messagesCount,
+    isDeveloper,
+    projectsNeedingReview.length,
+    handoffRequests.length
+  ]);
+
+  const messageJumpHref =
+    auth.roleKeys.includes("sales") && messagesCount > 0 ? "/developer-reports" : "/community";
+
+  const hasAttentionSignalRow =
+    attentionSignalSummary.message + attentionSignalSummary.project + attentionSignalSummary.inquiry > 0;
+
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4">
       <PageHeader
         title={`${primaryRoleLabel} dashboard`}
         description={
@@ -555,10 +598,79 @@ export default function DashboardPage() {
         }
       />
 
+      {hasAttentionSignalRow && (
+        <div className="shell min-w-0 border-brand/35 bg-brand/5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Alerts — sounds only for sales, developer, and director (messages, projects, reports, inquiries). Admins see
+            the same signals here without audio. Task reminders never play a sound.
+          </p>
+          <DashboardCardRow lgCols={3}>
+            <DashboardScrollCard>
+              <Link
+                href={messageJumpHref}
+                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
+                  attentionSignalSummary.message > 0
+                    ? "border-sky-600/50 bg-sky-950/40 hover:border-sky-500/70"
+                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
+                }`}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Messages</span>
+                <span className="mt-1 text-2xl font-semibold text-sky-100">{attentionSignalSummary.message}</span>
+                <span className="mt-0.5 text-[11px] text-slate-500">Chat and report threads</span>
+              </Link>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+              <Link
+                href="/projects"
+                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
+                  attentionSignalSummary.project > 0
+                    ? "border-amber-600/50 bg-amber-950/30 hover:border-amber-500/70"
+                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
+                }`}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">Project updates</span>
+                <span className="mt-1 text-2xl font-semibold text-amber-50">{attentionSignalSummary.project}</span>
+                <span className="mt-0.5 text-[11px] text-slate-500">Assignments, tasks, and handoffs</span>
+              </Link>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+              <Link
+                href="/leads"
+                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
+                  attentionSignalSummary.inquiry > 0
+                    ? "border-emerald-600/50 bg-emerald-950/25 hover:border-emerald-500/70"
+                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
+                }`}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200">Inquiries</span>
+                <span className="mt-1 text-2xl font-semibold text-emerald-50">{attentionSignalSummary.inquiry}</span>
+                <span className="mt-0.5 text-[11px] text-slate-500">Leads and meeting requests</span>
+              </Link>
+            </DashboardScrollCard>
+          </DashboardCardRow>
+        </div>
+      )}
+
+      <div className="shell min-w-0 flex flex-col gap-2 border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-400">
+          Backlog and reminders are managed in{" "}
+          <Link href="/schedule" className="font-medium text-sky-400 underline-offset-2 hover:underline">
+            Tasks
+          </Link>
+          .
+        </p>
+        <Link
+          href="/schedule"
+          className="shrink-0 self-start rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 sm:self-auto"
+        >
+          Open Tasks
+        </Link>
+      </div>
+
       {actionCards.length > 0 && (
-        <div className="shell border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
               Quick actions
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -588,7 +700,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DashboardCardRow lgCols={4}>
             {actionCards.slice(0, 8).map((c) => {
               const tone =
                 c.tone === "rose"
@@ -599,25 +711,26 @@ export default function DashboardPage() {
                       ? "text-emerald-300"
                       : "text-sky-300";
               return (
-                <Link
-                  key={`${c.href}-${c.title}`}
-                  href={c.href}
-                  className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.title}</p>
-                  <p className={`mt-1 text-2xl font-semibold ${tone}`}>{c.value}</p>
-                  <p className="mt-1 text-xs text-slate-500">{c.sub}</p>
-                </Link>
+                <DashboardScrollCard key={`${c.href}-${c.title}`} width="wide">
+                  <Link
+                    href={c.href}
+                    className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.title}</p>
+                    <p className={`mt-1 text-2xl font-semibold ${tone}`}>{c.value}</p>
+                    <p className="mt-1 text-xs text-slate-500">{c.sub}</p>
+                  </Link>
+                </DashboardScrollCard>
               );
             })}
-          </div>
+          </DashboardCardRow>
         </div>
       )}
 
       {isDeveloper && hydrated && auth.accessToken && (
-        <div className="shell border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
               Developer overview
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -637,50 +750,58 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Link
-              href="/projects"
-              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tasks</p>
-              <p className="mt-1 text-2xl font-semibold text-rose-300">{tasksOverdue}</p>
-              <p className="mt-1 text-xs text-slate-500">Overdue</p>
-              {tasksDueSoon > 0 && (
-                <p className="mt-1 text-xs text-amber-200">{tasksDueSoon} due soon</p>
-              )}
-            </Link>
+          <DashboardCardRow lgCols={4}>
+            <DashboardScrollCard>
+              <Link
+                href="/projects"
+                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tasks</p>
+                <p className="mt-1 text-2xl font-semibold text-rose-300">{tasksOverdue}</p>
+                <p className="mt-1 text-xs text-slate-500">Overdue</p>
+                {tasksDueSoon > 0 && (
+                  <p className="mt-1 text-xs text-amber-200">{tasksDueSoon} due soon</p>
+                )}
+              </Link>
+            </DashboardScrollCard>
 
-            <Link
-              href="/developer-reports"
-              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
-              <p className="mt-1 text-2xl font-semibold text-sky-300">{messagesCount}</p>
-              <p className="mt-1 text-xs text-slate-500">Need a reply</p>
-            </Link>
+            <DashboardScrollCard>
+              <Link
+                href="/developer-reports"
+                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
+                <p className="mt-1 text-2xl font-semibold text-sky-300">{messagesCount}</p>
+                <p className="mt-1 text-xs text-slate-500">Need a reply</p>
+              </Link>
+            </DashboardScrollCard>
 
-            <Link
-              href="/developer-reports"
-              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Reports</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-400">
-                {developerReportStreak}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">Streak (days)</p>
-            </Link>
+            <DashboardScrollCard>
+              <Link
+                href="/developer-reports"
+                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Reports</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-400">
+                  {developerReportStreak}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Streak (days)</p>
+              </Link>
+            </DashboardScrollCard>
 
-            <Link
-              href="/projects"
-              className="rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Projects</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-300">
-                {projectsNeedingReview.length + handoffRequests.length}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">Need attention</p>
-            </Link>
-          </div>
+            <DashboardScrollCard>
+              <Link
+                href="/projects"
+                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Projects</p>
+                <p className="mt-1 text-2xl font-semibold text-amber-300">
+                  {projectsNeedingReview.length + handoffRequests.length}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Need attention</p>
+              </Link>
+            </DashboardScrollCard>
+          </DashboardCardRow>
 
           {(overdueTasks.length > 0 ||
             (attention?.messages?.length ?? 0) > 0 ||
@@ -757,9 +878,9 @@ export default function DashboardPage() {
       )}
 
       {navCards.length > 0 && (
-        <div className="shell border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
               Navigate
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -782,36 +903,37 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <DashboardCardRow lgCols={3}>
             {navCards.map((c) => (
-              <Link
-                key={c.href}
-                href={c.href}
-                className="group rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100 group-hover:text-white">
-                      {c.title}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">{c.description}</p>
+              <DashboardScrollCard key={c.href} width="wide">
+                <Link
+                  href={c.href}
+                  className="group flex h-full min-h-[100px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-100 group-hover:text-white">
+                        {c.title}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">{c.description}</p>
+                    </div>
+                    {c.badge && (
+                      <span className="rounded-full border border-slate-600 bg-slate-900 px-2 py-0.5 text-xs tabular-nums text-slate-200">
+                        {c.badge}
+                      </span>
+                    )}
                   </div>
-                  {c.badge && (
-                    <span className="rounded-full border border-slate-600 bg-slate-900 px-2 py-0.5 text-xs tabular-nums text-slate-200">
-                      {c.badge}
-                    </span>
-                  )}
-                </div>
-              </Link>
+                </Link>
+              </DashboardScrollCard>
             ))}
-          </div>
+          </DashboardCardRow>
         </div>
       )}
 
       {canViewKpis && (
-        <div className="shell border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
               Overview (live from database)
             </h3>
             <button
@@ -831,50 +953,56 @@ export default function DashboardPage() {
           )}
 
           {kpis && (
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Finance
-                </p>
-                <ul className="space-y-1 text-sm text-slate-200">
-                  <li>Revenue this month: <span className="text-emerald-400">{formatMoney(kpis.finance.revenueThisMonth)}</span></li>
-                  <li>Outstanding invoices: <span className="text-amber-300">{formatMoney(kpis.finance.outstandingInvoicesAmount)}</span></li>
-                  <li>Overdue invoices: <span className="text-rose-300">{kpis.finance.overdueInvoicesCount}</span></li>
-                  <li>Expenses this month: <span className="text-amber-300">{formatMoney(kpis.finance.expensesThisMonth)}</span></li>
-                </ul>
-              </div>
+            <DashboardCardRow lgCols={3}>
+              <DashboardScrollCard width="wide">
+                <div className="shell min-h-[180px]">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Finance
+                  </p>
+                  <ul className="space-y-1 break-words text-sm text-slate-200">
+                    <li>Revenue this month: <span className="text-emerald-400">{formatMoney(kpis.finance.revenueThisMonth)}</span></li>
+                    <li>Outstanding invoices: <span className="text-amber-300">{formatMoney(kpis.finance.outstandingInvoicesAmount)}</span></li>
+                    <li>Overdue invoices: <span className="text-rose-300">{kpis.finance.overdueInvoicesCount}</span></li>
+                    <li>Expenses this month: <span className="text-amber-300">{formatMoney(kpis.finance.expensesThisMonth)}</span></li>
+                  </ul>
+                </div>
+              </DashboardScrollCard>
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Project health
-                </p>
-                <ul className="space-y-1 text-sm text-slate-200">
-                  <li>Active projects: <span className="text-sky-300">{kpis.projectHealth.activeProjects}</span></li>
-                  <li>Overdue tasks: <span className="text-rose-300">{kpis.projectHealth.overdueTasks}</span></li>
-                  <li>Blocked tasks: <span className="text-amber-300">{kpis.projectHealth.blockedTasks}</span></li>
-                  <li>Milestones done / pending: <span className="text-slate-100">{kpis.projectHealth.milestonesDone} / {kpis.projectHealth.milestonesPending}</span></li>
-                </ul>
-              </div>
+              <DashboardScrollCard width="wide">
+                <div className="shell min-h-[180px]">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Project health
+                  </p>
+                  <ul className="space-y-1 break-words text-sm text-slate-200">
+                    <li>Active projects: <span className="text-sky-300">{kpis.projectHealth.activeProjects}</span></li>
+                    <li>Overdue tasks: <span className="text-rose-300">{kpis.projectHealth.overdueTasks}</span></li>
+                    <li>Blocked tasks: <span className="text-amber-300">{kpis.projectHealth.blockedTasks}</span></li>
+                    <li>Milestones done / pending: <span className="text-slate-100">{kpis.projectHealth.milestonesDone} / {kpis.projectHealth.milestonesPending}</span></li>
+                  </ul>
+                </div>
+              </DashboardScrollCard>
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Lead conversion
-                </p>
-                <ul className="space-y-1 text-sm text-slate-200">
-                  <li>Leads this month: <span className="text-sky-300">{kpis.leadConversion.leadsThisMonth}</span></li>
-                  <li>Deals won: <span className="text-emerald-400">{kpis.leadConversion.dealsWon}</span></li>
-                  <li>Deals lost: <span className="text-rose-300">{kpis.leadConversion.dealsLost}</span></li>
-                  <li>Win rate: <span className="text-slate-100">{kpis.leadConversion.winRate.toFixed(1)}%</span></li>
-                  <li>Avg time to close: <span className="text-slate-100">{kpis.leadConversion.avgTimeToCloseDays.toFixed(1)} days</span></li>
-                </ul>
-              </div>
-            </div>
+              <DashboardScrollCard width="wide">
+                <div className="shell min-h-[180px]">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Lead conversion
+                  </p>
+                  <ul className="space-y-1 break-words text-sm text-slate-200">
+                    <li>Leads this month: <span className="text-sky-300">{kpis.leadConversion.leadsThisMonth}</span></li>
+                    <li>Deals won: <span className="text-emerald-400">{kpis.leadConversion.dealsWon}</span></li>
+                    <li>Deals lost: <span className="text-rose-300">{kpis.leadConversion.dealsLost}</span></li>
+                    <li>Win rate: <span className="text-slate-100">{kpis.leadConversion.winRate.toFixed(1)}%</span></li>
+                    <li>Avg time to close: <span className="text-slate-100">{kpis.leadConversion.avgTimeToCloseDays.toFixed(1)} days</span></li>
+                  </ul>
+                </div>
+              </DashboardScrollCard>
+            </DashboardCardRow>
           )}
         </div>
       )}
 
       {!canViewOrgAnalyticsSummary && isSalesOrDeveloper && (
-        <div className="shell border-sky-800/50 bg-sky-950/25">
+        <div className="shell min-w-0 border-sky-800/50 bg-sky-950/25">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Your work history (read-only)
           </h3>
@@ -904,33 +1032,41 @@ export default function DashboardPage() {
       )}
 
       {isAdmin && directorDashboard && summary && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="shell border-slate-700/80">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Active projects</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-100">{summary.activeProjects}</p>
-            <p className="text-xs text-slate-500">Across all teams</p>
-          </div>
-          <div className="shell border-slate-700/80">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending approvals</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-300">{pendingFinanceApprovals}</p>
-            <p className="text-xs text-slate-500">Finance requests</p>
-          </div>
-          <div className="shell border-slate-700/80">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">At risk</p>
-            <p className="mt-1 text-2xl font-semibold text-rose-300">{atRiskProjects}</p>
-            <p className="text-xs text-slate-500">Delayed or stalled</p>
-          </div>
-          <div className="shell border-slate-700/80">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Team members</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-100">{teamMembers}</p>
-            <p className="text-xs text-slate-500">Seats in this workspace</p>
-          </div>
-        </div>
+        <DashboardCardRow lgCols={4}>
+          <DashboardScrollCard>
+            <div className="shell min-w-0 border-slate-700/80">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Active projects</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-100">{summary.activeProjects}</p>
+              <p className="text-xs text-slate-500">Across all teams</p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell min-w-0 border-slate-700/80">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending approvals</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-300">{pendingFinanceApprovals}</p>
+              <p className="text-xs text-slate-500">Finance requests</p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell min-w-0 border-slate-700/80">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">At risk</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-300">{atRiskProjects}</p>
+              <p className="text-xs text-slate-500">Delayed or stalled</p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell min-w-0 border-slate-700/80">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Team members</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-100">{teamMembers}</p>
+              <p className="text-xs text-slate-500">Seats in this workspace</p>
+            </div>
+          </DashboardScrollCard>
+        </DashboardCardRow>
       )}
 
       {isAdmin && directorDashboard && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="shell border-l-4 border-amber-500/60 bg-slate-900/40">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="shell min-w-0 border-l-4 border-amber-500/60 bg-slate-900/40">
             <h3 className="text-sm font-semibold text-amber-100/90">Director-level overview</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
               Read-only revenue, outstanding amounts, net flow, pipeline value, win rate, stalled deals, and active or at-risk projects — aligned for governance.
@@ -942,7 +1078,7 @@ export default function DashboardPage() {
               See data sources →
             </Link>
           </div>
-          <div className="shell border-l-4 border-emerald-500/60 bg-slate-900/40">
+          <div className="shell min-w-0 border-l-4 border-emerald-500/60 bg-slate-900/40">
             <h3 className="text-sm font-semibold text-emerald-200">Approval queue</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
               Pending Finance requests surface here and in the header. The badge turns warning when more than three requests are waiting.
@@ -954,20 +1090,20 @@ export default function DashboardPage() {
               Go to approvals →
             </Link>
           </div>
-          <div className="shell border-l-4 border-sky-500/60 bg-slate-900/40">
+          <div className="shell min-w-0 border-l-4 border-sky-500/60 bg-slate-900/40">
             <h3 className="text-sm font-semibold text-sky-200">Work progress tracker</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
               Aggregated module completion across active projects updates as developers complete work. You can&apos;t edit this directly — it reflects live delivery.
             </p>
             <p className="mt-3 text-2xl font-semibold text-sky-300">{workProgress}%</p>
           </div>
-          <div className="shell border-l-4 border-rose-500/50 bg-slate-900/40">
+          <div className="shell min-w-0 border-l-4 border-rose-500/50 bg-slate-900/40">
             <h3 className="text-sm font-semibold text-rose-200">Your duties</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
               Admin-scoped items only: pending approvals, access requests, and governance reviews — not developer or sales task lists.
             </p>
             <Link
-              href="/admin"
+              href="/admin/users"
               className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-rose-200/90 hover:text-rose-100"
             >
               Users &amp; org →
@@ -977,9 +1113,9 @@ export default function DashboardPage() {
       )}
 
       {isAdmin && (
-        <div className="shell border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Projects (all)</h3>
+        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">Projects (all)</h3>
             <Link
               href="/projects"
               className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
@@ -987,27 +1123,27 @@ export default function DashboardPage() {
               Open projects →
             </Link>
           </div>
-          <div className="overflow-x-auto rounded-lg border border-slate-700/80">
-            <table className="min-w-full text-left text-sm">
+          <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
+            <table className="min-w-[36rem] text-left text-sm sm:min-w-full">
               <thead>
                 <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-3 py-2 font-medium">Project</th>
-                  <th className="px-3 py-2 font-medium">Created by</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Approval</th>
-                  <th className="px-3 py-2 text-right font-medium">Action</th>
+                  <th className="px-2 py-2 font-medium sm:px-3">Project</th>
+                  <th className="px-2 py-2 font-medium sm:px-3">Created by</th>
+                  <th className="px-2 py-2 font-medium sm:px-3">Status</th>
+                  <th className="px-2 py-2 font-medium sm:px-3">Approval</th>
+                  <th className="px-2 py-2 text-right font-medium sm:px-3">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.slice(0, 15).map((p) => (
                   <tr key={p.id} className="border-b border-slate-800/80 text-slate-200">
-                    <td className="px-3 py-2 font-medium text-slate-100">{p.name}</td>
-                    <td className="px-3 py-2 text-slate-300">
+                    <td className="max-w-[10rem] px-2 py-2 font-medium text-slate-100 break-words sm:max-w-none sm:px-3">{p.name}</td>
+                    <td className="min-w-0 px-2 py-2 text-slate-300 break-words sm:px-3">
                       {p.createdBy?.name ?? p.createdBy?.email ?? "—"}
                     </td>
-                    <td className="px-3 py-2 capitalize text-slate-300">{p.status}</td>
-                    <td className="px-3 py-2 text-xs text-slate-400">{p.approvalStatus ?? "—"}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="whitespace-nowrap px-2 py-2 capitalize text-slate-300 sm:px-3">{p.status}</td>
+                    <td className="min-w-0 px-2 py-2 text-xs text-slate-400 break-words sm:px-3">{p.approvalStatus ?? "—"}</td>
+                    <td className="whitespace-nowrap px-2 py-2 text-right sm:px-3">
                       <Link
                         href={`/projects/${p.id}`}
                         className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
@@ -1034,13 +1170,18 @@ export default function DashboardPage() {
       )}
 
       {projectsNeedingReview.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-sky-600/50 bg-sky-950/40 px-4 py-3">
-          <p className="text-sm text-sky-200">
+        <div className="flex flex-col gap-3 rounded-xl border border-sky-600/50 bg-sky-950/40 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-4">
+          <p className="min-w-0 text-sm leading-snug text-sky-200">
             Review and add tasks for {projectsNeedingReview.length} project(s) assigned to you.
           </p>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-2">
             {projectsNeedingReview.map((p) => (
-              <Link key={p.id} href={`/projects/${p.id}`} className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">
+              <Link
+                key={p.id}
+                href={`/projects/${p.id}`}
+                className="max-w-full truncate rounded-lg bg-sky-600 px-3 py-1.5 text-center text-sm font-medium text-white hover:bg-sky-500 sm:max-w-[14rem]"
+                title={p.name}
+              >
                 {p.name}
               </Link>
             ))}
@@ -1060,11 +1201,11 @@ export default function DashboardPage() {
       )}
 
       {reportReminderDue && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-600/50 bg-amber-950/40 px-4 py-3">
-          <p className="text-sm text-amber-200">
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-600/50 bg-amber-950/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <p className="min-w-0 flex-1 text-sm leading-snug text-amber-200">
             It’s been 12+ hours since your last report (and no current-focus update in that window). Submit a report to keep your streak and stay on track.
           </p>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Link
               href="/reports/new"
               className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
@@ -1089,23 +1230,33 @@ export default function DashboardPage() {
 
       {/* Stats row (hide for developers — replaced by simple cards above) */}
       {!isDeveloper && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Notifications" value={unreadCount} />
-          <StatCard label="Messages" value={messagesCount} sub="to respond" />
-          <StatCard label="Due today" value={dueCount} />
-          <StatCard label="Work progress" value={`${workProgress}%`} />
-          <StatCard label="Report streak" value={isDeveloper ? developerReportStreak : reportStreak} sub="days" />
-          {isDeveloper && <StatCard label="Needs attention" value={needsAttentionCount} />}
-        </div>
+        <DashboardCardRow lgCols={5} layout="scroll">
+          <DashboardScrollCard>
+            <StatCard label="Notifications" value={unreadCount} />
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <StatCard label="Messages" value={messagesCount} sub="to respond" />
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <StatCard label="Due today" value={dueCount} />
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <StatCard label="Work progress" value={`${workProgress}%`} />
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <StatCard label="Report streak" value={reportStreak} sub="days" />
+          </DashboardScrollCard>
+        </DashboardCardRow>
       )}
 
       {!isDeveloper && hasAttention && attention && (
-        <div className="shell border-brand/30 bg-brand/5">
+        <div className="shell min-w-0 border-brand/30 bg-brand/5">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
             What needs your attention
           </h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <DashboardCardRow lgCols={3} layout="scroll">
             {unreadCount > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Notifications</p>
                 <ul className="space-y-1 text-sm">
@@ -1117,8 +1268,10 @@ export default function DashboardPage() {
                   {unreadCount > 5 && <li className="text-slate-400">+{unreadCount - 5} more</li>}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {messagesCount > 0 && attention.messages && attention.messages.length > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Messages (need response)</p>
                 <ul className="space-y-1 text-sm">
@@ -1131,8 +1284,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {dueCount > 0 && attention.dueToday && attention.dueToday.length > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Due today</p>
                 <ul className="space-y-1 text-sm">
@@ -1146,8 +1301,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {(attention.upcomingMeetings?.length ?? 0) > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Upcoming meetings</p>
                 <ul className="space-y-1 text-sm">
@@ -1161,8 +1318,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {(attention.upcomingCalls?.length ?? 0) > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Upcoming calls</p>
                 <ul className="space-y-1 text-sm">
@@ -1176,8 +1335,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {(attention.leadsPendingApproval?.length ?? 0) > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Leads pending approval</p>
                 <ul className="space-y-1 text-sm">
@@ -1191,8 +1352,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {(attention.approvalsPending?.length ?? 0) > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Approvals pending</p>
                 <ul className="space-y-1 text-sm">
@@ -1206,8 +1369,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {isDeveloper && overdueTasks.length > 0 && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">Overdue tasks</p>
                 <ul className="space-y-1 text-sm">
@@ -1222,8 +1387,10 @@ export default function DashboardPage() {
                   {overdueTasks.length > 5 && <li className="text-slate-400">+{overdueTasks.length - 5} more</li>}
                 </ul>
               </div>
+              </DashboardScrollCard>
             )}
             {isDeveloper && latestDeveloperReportNeedsAttention && (
+              <DashboardScrollCard width="wide">
               <div>
                 <p className="mb-1 text-xs text-slate-400">From your last report — needs attention</p>
                 <p className="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-sm text-slate-200">
@@ -1231,117 +1398,143 @@ export default function DashboardPage() {
                   {latestDeveloperReportNeedsAttention.length > 200 ? "…" : ""}
                 </p>
               </div>
+              </DashboardScrollCard>
             )}
-          </div>
+          </DashboardCardRow>
         </div>
       )}
 
       {!isDeveloper && (workProgress > 0 || developerReportStreak > 0 || tasksOverdue > 0 || tasksDueSoon > 0) && (
-        <div className="shell border-sky-800/40 bg-sky-950/20">
+        <div className="shell min-w-0 border-sky-800/40 bg-sky-950/20">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Performance</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
+          <DashboardCardRow lgCols={4}>
+            <DashboardScrollCard>
+            <div className="min-w-0">
               <p className="text-xs text-slate-400">Work progress</p>
               <p className="mt-1 text-2xl font-semibold text-sky-400">{workProgress}%</p>
               <p className="text-xs text-slate-500">Tasks done vs assigned</p>
             </div>
-            <div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+            <div className="min-w-0">
               <p className="text-xs text-slate-400">Report streak</p>
               <p className="mt-1 text-2xl font-semibold text-emerald-400">{developerReportStreak} day{developerReportStreak !== 1 ? "s" : ""}</p>
               <p className="text-xs text-slate-500">Consecutive days with reports</p>
             </div>
-            <div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+            <div className="min-w-0">
               <p className="text-xs text-slate-400">Tasks overdue</p>
               <p className="mt-1 text-2xl font-semibold text-rose-400">{tasksOverdue}</p>
               <p className="text-xs text-slate-500">Past due date</p>
             </div>
-            <div>
+            </DashboardScrollCard>
+            <DashboardScrollCard>
+            <div className="min-w-0">
               <p className="text-xs text-slate-400">Tasks due soon</p>
               <p className="mt-1 text-2xl font-semibold text-amber-400">{tasksDueSoon}</p>
               <p className="text-xs text-slate-500">Next 7 days</p>
             </div>
-          </div>
+            </DashboardScrollCard>
+          </DashboardCardRow>
         </div>
       )}
 
       {isDirectorOrAdmin && directorDashboard && (
-        <div className="shell border-sky-800/50 bg-sky-950/30">
+        <div className="shell min-w-0 border-sky-800/50 bg-sky-950/30">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Director overview — aligned view</h3>
           <p className="mb-4 text-xs text-slate-400">
             {isDirectorOnly
               ? "Sales, delivery, and operational signals in one place. Invoice and billing detail live under Finance for Admin."
               : "Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES)."}
           </p>
-          <div
-            className={`grid gap-4 ${isDirectorOnly ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"}`}
-          >
+          <DashboardCardRow layout="scroll" lgCols={isDirectorOnly ? 3 : 4}>
             {!isDirectorOnly && (
-              <div>
-                <p className="text-xs text-slate-400">Financial health</p>
-                <p className="mt-1 text-sm text-slate-200">
-                  Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
+              <DashboardScrollCard width="wide">
+                <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Financial health</p>
+                  <p className="mt-2 break-words text-sm text-slate-200">
+                    Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
+                  </p>
+                  <p className="break-words text-sm text-slate-200">
+                    Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
+                  </p>
+                  <p className="break-words text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
+                  <p className="mt-auto text-xs text-slate-400">
+                    Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}
+                  </p>
+                </div>
+              </DashboardScrollCard>
+            )}
+            <DashboardScrollCard width="wide">
+              <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sales health</p>
+                <p className="mt-2 break-words text-sm text-slate-200">
+                  Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
                 </p>
+                <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
+                <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
+              </div>
+            </DashboardScrollCard>
+            <DashboardScrollCard width="wide">
+              <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operational health</p>
+                <p className="mt-2 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
+                <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
                 <p className="text-sm text-slate-200">
-                  Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
-                </p>
-                <p className="text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
-                <p className="text-xs text-slate-400">
-                  Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}
+                  Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}
                 </p>
               </div>
-            )}
-            <div>
-              <p className="text-xs text-slate-400">Sales health</p>
-              <p className="mt-1 text-sm text-slate-200">Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}</p>
-              <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
-              <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Operational health</p>
-              <p className="mt-1 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
-              <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
-              <p className="text-sm text-slate-200">Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Approval queue</p>
-              <p className="mt-1 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
-              <Link href="/approvals" className="mt-1 inline-block text-sm text-sky-400 hover:underline">View approvals →</Link>
-            </div>
-          </div>
-          <div className="mt-6">
+            </DashboardScrollCard>
+            <DashboardScrollCard width="wide">
+              <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Approval queue</p>
+                <p className="mt-2 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
+                <Link href="/approvals" className="mt-auto inline-block text-sm text-sky-400 hover:underline">
+                  View approvals →
+                </Link>
+              </div>
+            </DashboardScrollCard>
+          </DashboardCardRow>
+          <div className="mt-6 min-w-0">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Team — current project focus</h4>
-            <div className="overflow-x-auto rounded-lg border border-slate-700/80">
-              <table className="min-w-full text-left text-sm">
+            <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
+              <table className="min-w-[44rem] text-left text-sm sm:min-w-full">
                 <caption className="sr-only">Team current focus</caption>
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-3 py-2 font-medium">Person</th>
-                    <th className="px-3 py-2 font-medium">Roles</th>
-                    <th className="px-3 py-2 font-medium">Project</th>
-                    <th className="px-3 py-2 font-medium">Note</th>
-                    <th className="px-3 py-2 font-medium">Updated</th>
+                    <th className="px-2 py-2 font-medium sm:px-3">Person</th>
+                    <th className="px-2 py-2 font-medium sm:px-3">Roles</th>
+                    <th className="px-2 py-2 font-medium sm:px-3">Project</th>
+                    <th className="px-2 py-2 font-medium sm:px-3">Note</th>
+                    <th className="px-2 py-2 font-medium sm:px-3">Updated</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(directorDashboard.teamCurrentFocus ?? []).map((row) => (
                     <tr key={row.userId} className="border-b border-slate-800/80 text-slate-200">
-                      <td className="px-3 py-2">
-                        <span className="font-medium text-slate-100">{row.name?.trim() || row.email}</span>
+                      <td className="min-w-0 px-2 py-2 sm:px-3">
+                        <span className="font-medium break-words text-slate-100">{row.name?.trim() || row.email}</span>
                       </td>
-                      <td className="px-3 py-2 text-xs text-slate-400">
+                      <td className="min-w-0 px-2 py-2 text-xs break-words text-slate-400 sm:px-3">
                         {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="min-w-0 px-2 py-2 sm:px-3">
                         {row.project ? (
-                          <Link href={`/projects/${row.project.id}`} className="text-sky-400 hover:underline">
+                          <Link
+                            href={`/projects/${row.project.id}`}
+                            className="break-words text-sky-400 hover:underline"
+                          >
                             {row.project.name}
                           </Link>
                         ) : (
                           <span className="text-slate-500">—</span>
                         )}
                       </td>
-                      <td className="max-w-[14rem] px-3 py-2 text-slate-400">{row.note?.trim() || "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">
+                      <td className="min-w-0 max-w-[12rem] px-2 py-2 break-words text-slate-400 sm:max-w-[14rem] sm:px-3">
+                        {row.note?.trim() || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-xs text-slate-500 sm:px-3">
                         {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
                       </td>
                     </tr>
@@ -1354,21 +1547,37 @@ export default function DashboardPage() {
       )}
 
       {hasMetrics && (
-        <div
-          className={`grid gap-4 ${isDirectorOnly ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"}`}
-        >
-          <Metric label="Leads this week" value={summary!.leadsThisWeek} tone="green" />
-          <Metric label="Deals won" value={summary!.dealsWon} tone="green" />
-          <Metric label="Active projects" value={summary!.activeProjects} tone="blue" />
-          <Metric label="Revenue received" value={formatMoney(summary!.revenueReceived)} tone="green" />
-          {!isDirectorOnly && (
-            <Metric label="Invoices outstanding" value={formatMoney(summary!.invoiceOutstanding)} tone="amber" />
-          )}
+        <div className="flex w-full min-w-0 flex-nowrap items-stretch gap-1.5 sm:gap-3">
+          {(
+            [
+              { key: "leads", label: "Leads this week", value: summary!.leadsThisWeek, tone: "green" as const },
+              { key: "deals", label: "Deals won", value: summary!.dealsWon, tone: "green" as const },
+              { key: "projects", label: "Active projects", value: summary!.activeProjects, tone: "blue" as const },
+              { key: "revenue", label: "Revenue received", value: formatMoney(summary!.revenueReceived), tone: "green" as const },
+              ...(!isDirectorOnly
+                ? [
+                    {
+                      key: "inv",
+                      label: "Invoices outstanding",
+                      value: formatMoney(summary!.invoiceOutstanding),
+                      tone: "amber" as const
+                    }
+                  ]
+                : [])
+            ] as const
+          ).map((m) => (
+            <div
+              key={m.key}
+              className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col justify-center rounded-xl border border-slate-800 bg-slate-900/70 px-1 py-1.5 text-center shadow-sm sm:px-3 sm:py-3 sm:text-left"
+            >
+              <Metric label={m.label} value={m.value} tone={m.tone} />
+            </div>
+          ))}
         </div>
       )}
 
       {auth.roleKeys.includes("sales") && (
-        <div className="shell border-amber-800/40 bg-amber-950/20">
+        <div className="shell min-w-0 border-amber-800/40 bg-amber-950/20">
           <h3 className="mb-2 text-sm font-semibold text-slate-200">Report submission streak</h3>
           <p className="text-2xl font-bold text-amber-400">{reportStreak} day{reportStreak !== 1 ? "s" : ""}</p>
           <p className="mt-1 text-xs text-slate-400">
@@ -1378,14 +1587,14 @@ export default function DashboardPage() {
       )}
 
       {quickLinks.length > 0 && (
-        <div className="shell">
+        <div className="shell min-w-0">
           <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Your duties</p>
           <div className="flex flex-wrap gap-2">
             {quickLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-lg border border-brand/40 bg-brand/10 px-4 py-2 text-sm font-medium text-brand hover:bg-brand/20"
+                className="min-w-0 rounded-lg border border-brand/40 bg-brand/10 px-3 py-2 text-center text-sm font-medium text-brand hover:bg-brand/20 sm:px-4"
               >
                 {link.label}
               </Link>
@@ -1466,26 +1675,26 @@ function CurrentFocusPanel({
 
   if (loading) {
     return (
-      <div className="shell border-slate-700/60">
+      <div className="shell min-w-0 border-slate-700/60">
         <p className="text-sm text-slate-400">Loading current focus…</p>
       </div>
     );
   }
 
   return (
-    <div className="shell border-emerald-800/40 bg-emerald-950/15">
+    <div className="shell min-w-0 border-emerald-800/40 bg-emerald-950/15">
       <h3 className="mb-1 text-sm font-semibold text-slate-200">Today&apos;s project focus</h3>
       <p className="mb-3 text-xs text-slate-400">
         Choose the project you are mainly working on so admin and director see it on the strategic overview. Developers: an approved project you are assigned to. Sales: a project you created.
       </p>
       {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <label className="flex flex-1 flex-col gap-1 text-xs text-slate-400">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-slate-400">
           Project
           <select
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            className="w-full min-w-0 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
           >
             <option value="">— No project selected —</option>
             {projects.map((p) => (
@@ -1495,21 +1704,21 @@ function CurrentFocusPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-[2] flex-col gap-1 text-xs text-slate-400">
+        <label className="flex min-w-0 flex-[2] flex-col gap-1 text-xs text-slate-400">
           Short note (optional)
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. finishing API integration"
-            className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+            className="w-full min-w-0 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
           />
         </label>
         <button
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          className="w-full shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 sm:w-auto"
         >
           {saving ? "Saving…" : "Save"}
         </button>
@@ -1531,9 +1740,9 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="shell">
+    <div className="shell min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-slate-100">
+      <p className="mt-1 break-words text-xl font-semibold text-slate-100">
         {value}
         {sub && <span className="ml-1 text-sm font-normal text-slate-400">{sub}</span>}
       </p>
@@ -1557,11 +1766,15 @@ function Metric({
         ? "text-amber-400"
         : "text-sky-400";
   return (
-    <div className="shell">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+    <div className="min-h-0 min-w-0">
+      <p className="line-clamp-2 text-[7px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px] sm:leading-snug sm:text-slate-400 md:text-xs">
         {label}
       </p>
-      <p className={`mt-1 text-xl font-semibold ${color}`}>{value}</p>
+      <p
+        className={`mt-0.5 truncate text-[10px] font-semibold leading-tight sm:mt-1 sm:text-base sm:leading-normal md:text-xl ${color}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -1595,11 +1808,11 @@ function HandoffRespondRow({
     }
   }
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
-      <span className="text-slate-200">
+    <li className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <span className="min-w-0 text-slate-200">
         <strong>{fromName}</strong> requested to hand off <strong>{projectName}</strong> to you.
       </span>
-      <div className="flex gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         <button type="button" onClick={() => respond(true)} disabled={loading} className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
           Accept
         </button>

@@ -69,6 +69,59 @@ type AdminExtendedAnalytics = {
   };
 };
 
+/** Admin-only: what the extended analytics API covers (shown as cards on the analytics page). */
+const ADMIN_ANALYTICS_SCOPE_GROUPS: {
+  key: string;
+  title: string;
+  titleClass: string;
+  borderClass: string;
+  items: string[];
+}[] = [
+  {
+    key: "project",
+    title: "Project analytics",
+    titleClass: "text-emerald-300",
+    borderClass: "border-l-emerald-500/60",
+    items: [
+      "Completion rates per project",
+      "Average days to close",
+      "Module velocity per developer",
+      "Delay frequency by project type"
+    ]
+  },
+  {
+    key: "finance",
+    title: "Finance analytics",
+    titleClass: "text-amber-300",
+    borderClass: "border-l-amber-500/60",
+    items: [
+      "Approval turnaround time",
+      "Decline rate and reasons",
+      "Outstanding vs collected",
+      "Cash flow trend (rolling windows)"
+    ]
+  },
+  {
+    key: "team",
+    title: "Team analytics",
+    titleClass: "text-sky-300",
+    borderClass: "border-l-sky-500/60",
+    items: [
+      "Developer utilisation signals",
+      "Swap / handoff frequency",
+      "Overload vs underutilised patterns",
+      "Report streak per user"
+    ]
+  },
+  {
+    key: "risk",
+    title: "Risk analytics",
+    titleClass: "text-rose-300",
+    borderClass: "border-l-rose-500/50",
+    items: ["Projects with no update in 72h+", "Blocked tasks above threshold"]
+  }
+];
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const { apiFetch, auth, hydrated } = useAuth();
@@ -136,79 +189,80 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <PageHeader
-        title="Analytics"
-        description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
-      />
+    <section className="flex flex-col gap-4 text-[11px] leading-snug text-slate-300 max-sm:gap-3 max-sm:text-[10px] sm:gap-6 sm:text-sm sm:leading-normal">
+      <div className="max-sm:[&_h1]:text-base max-sm:[&_p]:leading-snug sm:[&_h1]:text-xl [&_p]:text-[10px] sm:[&_p]:text-sm">
+        <PageHeader
+          title="Analytics"
+          description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
+        />
+      </div>
 
       {isAdmin && (
         <>
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">Admin analytics scope</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="shell border-l-4 border-emerald-500/60 bg-slate-900/40">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Project analytics</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
-                  <li>Completion rates per project</li>
-                  <li>Average days to close</li>
-                  <li>Module velocity per developer</li>
-                  <li>Delay frequency by project type</li>
-                </ul>
-              </div>
-              <div className="shell border-l-4 border-amber-500/60 bg-slate-900/40">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Finance analytics</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
-                  <li>Approval turnaround time</li>
-                  <li>Decline rate and reasons</li>
-                  <li>Outstanding vs collected</li>
-                  <li>Cash flow trend (rolling windows)</li>
-                </ul>
-              </div>
-              <div className="shell border-l-4 border-sky-500/60 bg-slate-900/40">
-                <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">Team analytics</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
-                  <li>Developer utilisation signals</li>
-                  <li>Swap / handoff frequency</li>
-                  <li>Overload vs underutilised patterns</li>
-                  <li>Report streak per user</li>
-                </ul>
-              </div>
-              <div className="shell border-l-4 border-rose-500/50 bg-slate-900/40">
-                <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Risk analytics</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
-                  <li>Projects with no update in 72h+</li>
-                  <li>Blocked tasks above threshold</li>
-                  <li>Stalled deals in pipeline</li>
-                  <li>Repeat swap patterns</li>
-                </ul>
-              </div>
+            <h3 className="mb-2 text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:mb-3 sm:text-sm">
+              Admin analytics scope
+            </h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+              {ADMIN_ANALYTICS_SCOPE_GROUPS.map((g) => (
+                <div
+                  key={g.key}
+                  className={`rounded-xl border border-slate-700/70 border-l-4 bg-slate-900/45 p-2.5 shadow-sm sm:p-3 ${g.borderClass}`}
+                >
+                  <p className={`text-[10px] font-bold uppercase tracking-wide max-sm:leading-tight sm:text-xs ${g.titleClass}`}>
+                    {g.title}
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-1 sm:gap-1.5">
+                    {g.items.map((item) => (
+                      <div
+                        key={item}
+                        className="rounded-lg border border-slate-600/35 bg-slate-950/50 px-2 py-1.5 text-[10px] text-slate-400 max-sm:py-1 max-sm:leading-snug sm:text-xs sm:text-slate-400"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="shell border border-slate-600/80">
-            <h3 className="text-sm font-semibold text-slate-200">What Admin cannot see in analytics</h3>
-            <p className="mt-2 text-sm text-slate-500">Hard exclusions (PII / commercial sensitivity):</p>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-400">
-              <li>Individual client names tied to revenue line items</li>
-              <li>Client contact details in CRM exports</li>
-              <li>Sales call transcripts and developer–client comms</li>
+          <div className="rounded-xl border border-slate-600/80 bg-slate-900/35 p-2.5 sm:p-4">
+            <h3 className="text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:text-sm">
+              What Admin cannot see in analytics
+            </h3>
+            <p className="mt-1.5 text-[10px] text-slate-500 sm:mt-2 sm:text-xs">Hard exclusions (PII / commercial sensitivity):</p>
+            <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:mt-2 sm:gap-1.5">
+              {[
+                "Individual client names tied to revenue line items",
+                "Client contact details in CRM exports",
+                "Sales call transcripts and developer–client comms"
+              ].map((line) => (
+                <li
+                  key={line}
+                  className="rounded-lg border border-slate-700/50 bg-slate-950/40 px-2 py-1.5 text-[10px] text-slate-400 sm:text-xs"
+                >
+                  {line}
+                </li>
+              ))}
             </ul>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-3 py-1.5 text-xs text-slate-500">
+            <div className="mt-3 flex flex-wrap gap-2 sm:mt-4 sm:gap-3">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-2 py-1 text-[10px] text-slate-500 sm:px-3 sm:py-1.5 sm:text-xs">
                 Design the analytics charts ↗
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-3 py-1.5 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-2 py-1 text-[10px] text-slate-500 sm:px-3 sm:py-1.5 sm:text-xs">
                 Export logic ↗
               </span>
             </div>
           </div>
 
           {adminExtended && (
-            <div className="shell border border-slate-700/70 bg-slate-900/40">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-200">Admin extended analytics</h3>
-                <div className="flex flex-wrap gap-2">
+            <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-2.5 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <h3 className="text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:text-sm">
+                  Admin extended analytics
+                </h3>
+                <div className="flex flex-wrap gap-1 sm:gap-2">
                   {adminSectionButtons.map((b) => (
                     <button
                       key={b.key}
@@ -216,8 +270,8 @@ export default function AnalyticsPage() {
                       onClick={() => setAdminSection(b.key)}
                       className={
                         adminSection === b.key
-                          ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
-                          : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                          ? "rounded-md bg-slate-600 px-2 py-1.5 text-[10px] text-white sm:px-3 sm:py-2 sm:text-sm"
+                          : "rounded-md border border-slate-600 px-2 py-1.5 text-[10px] text-slate-300 hover:bg-slate-800 sm:px-3 sm:py-2 sm:text-sm"
                       }
                     >
                       {b.label}
@@ -227,30 +281,40 @@ export default function AnalyticsPage() {
               </div>
 
               {adminSection === "project" && (
-                <div className="mt-4">
-                  <h4 className="mb-3 text-sm font-semibold text-slate-200">PROJECT ANALYTICS</h4>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-slate-400">Completion rates per project</p>
+                <div className="mt-3 sm:mt-4">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
+                    Project analytics
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                        Completion rates per project
+                      </p>
                       <div className="mt-2 overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
+                        <table className="min-w-full text-left text-[10px] sm:text-sm">
                           <thead>
-                            <tr className="border-b border-slate-700 text-xs text-slate-400">
-                              <th className="py-2 pr-3">Project</th>
-                              <th className="py-2 pr-3">Approval</th>
-                              <th className="py-2 pr-3">Done/Total</th>
-                              <th className="py-2 pr-3">Rate</th>
+                            <tr className="border-b border-slate-700 text-[9px] text-slate-500 sm:text-xs sm:text-slate-400">
+                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Project</th>
+                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Approval</th>
+                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Done/Total</th>
+                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Rate</th>
                             </tr>
                           </thead>
                           <tbody>
                             {adminExtended.projectAnalytics.completionRates.map((p) => (
-                              <tr key={p.projectId} className="border-b border-slate-800">
-                                <td className="py-2 pr-3 text-slate-200">{p.name}</td>
-                                <td className="py-2 pr-3 text-xs text-slate-400">{p.approvalStatus ?? "—"}</td>
-                                <td className="py-2 pr-3 text-slate-300">
+                              <tr key={p.projectId} className="border-b border-slate-800/80">
+                                <td className="py-1.5 pr-2 text-slate-200 max-sm:max-w-[7rem] max-sm:truncate sm:py-2 sm:pr-3">
+                                  {p.name}
+                                </td>
+                                <td className="py-1.5 pr-2 text-[10px] text-slate-400 sm:py-2 sm:pr-3 sm:text-xs">
+                                  {p.approvalStatus ?? "—"}
+                                </td>
+                                <td className="py-1.5 pr-2 text-slate-300 sm:py-2 sm:pr-3">
                                   {p.doneTasks}/{p.totalTasks}
                                 </td>
-                                <td className="py-2 pr-3 text-slate-100">{(p.completionRate * 100).toFixed(0)}%</td>
+                                <td className="py-1.5 pr-2 text-slate-100 sm:py-2 sm:pr-3">
+                                  {(p.completionRate * 100).toFixed(0)}%
+                                </td>
                               </tr>
                             ))}
                             {adminExtended.projectAnalytics.completionRates.length === 0 && (
@@ -264,127 +328,161 @@ export default function AnalyticsPage() {
                         </table>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Average days to close</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-100">
-                        {adminExtended.projectAnalytics.avgDaysToClose.toFixed(1)}
-                      </p>
-                      <p className="mt-4 text-xs text-slate-400">Module velocity per developer (tasks completed in 14d)</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        {adminExtended.projectAnalytics.moduleVelocityPerDeveloper.slice(0, 10).map((u) => (
-                          <li key={u.userId} className="flex justify-between">
-                            <span className="text-slate-300">{u.name ?? u.email}</span>
-                            <span className="text-slate-100">{u.tasksCompleted14d}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-4 text-xs text-slate-400">Delay frequency by project type</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        {Object.entries(adminExtended.projectAnalytics.delayFrequencyByProjectType)
-                          .sort((a, b) => b[1] - a[1])
-                          .slice(0, 10)
-                          .map(([k, v]) => (
-                            <li key={k} className="flex justify-between">
-                              <span className="text-slate-300">{k}</span>
-                              <span className="text-amber-300">{v}</span>
+                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Average days to close
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-slate-100 max-sm:text-base sm:mt-2 sm:text-2xl">
+                          {adminExtended.projectAnalytics.avgDaysToClose.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Module velocity per developer (14d)
+                        </p>
+                        <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
+                          {adminExtended.projectAnalytics.moduleVelocityPerDeveloper.slice(0, 10).map((u) => (
+                            <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                              <span className="truncate text-slate-300">{u.name ?? u.email}</span>
+                              <span className="shrink-0 text-slate-100">{u.tasksCompleted14d}</span>
                             </li>
                           ))}
-                        {Object.keys(adminExtended.projectAnalytics.delayFrequencyByProjectType).length === 0 && (
-                          <li className="text-slate-500">No delays detected.</li>
-                        )}
-                      </ul>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Delay frequency by project type
+                        </p>
+                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
+                          {Object.entries(adminExtended.projectAnalytics.delayFrequencyByProjectType)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 10)
+                            .map(([k, v]) => (
+                              <li key={k} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                                <span className="truncate text-slate-300">{k}</span>
+                                <span className="shrink-0 text-amber-300">{v}</span>
+                              </li>
+                            ))}
+                          {Object.keys(adminExtended.projectAnalytics.delayFrequencyByProjectType).length === 0 && (
+                            <li className="text-slate-500">No delays detected.</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
               {adminSection === "finance" && (
-                <div className="mt-4">
-                  <h4 className="mb-3 text-sm font-semibold text-slate-200">FINANCE ANALYTICS</h4>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-slate-400">Approval turnaround time (hours)</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        <li>
-                          Avg:{" "}
-                          <span className="text-slate-100">
-                            {adminExtended.financeAnalytics.approvalTurnaroundHours.avg.toFixed(1)}
-                          </span>
-                        </li>
-                        <li>
-                          P50:{" "}
-                          <span className="text-slate-100">
-                            {adminExtended.financeAnalytics.approvalTurnaroundHours.p50.toFixed(1)}
-                          </span>
-                        </li>
-                        <li>
-                          P90:{" "}
-                          <span className="text-slate-100">
-                            {adminExtended.financeAnalytics.approvalTurnaroundHours.p90.toFixed(1)}
-                          </span>
-                        </li>
-                      </ul>
-                      <p className="mt-4 text-xs text-slate-400">Decline rate</p>
-                      <p className="mt-1 text-xl font-semibold text-rose-300">
-                        {(adminExtended.financeAnalytics.declineRate * 100).toFixed(1)}%
-                      </p>
-                      <p className="mt-3 text-xs text-slate-400">Top decline reasons</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        {adminExtended.financeAnalytics.topDeclineReasons.slice(0, 10).map((r, i) => (
-                          <li key={i} className="flex justify-between gap-2">
-                            <span className="truncate text-slate-300">{r.reason}</span>
-                            <span className="shrink-0 text-slate-100">{r.count}</span>
+                <div className="mt-3 sm:mt-4">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
+                    Finance analytics
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
+                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Approval turnaround (hours)
+                        </p>
+                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
+                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="text-slate-400">Avg</span>
+                            <span className="text-slate-100">
+                              {adminExtended.financeAnalytics.approvalTurnaroundHours.avg.toFixed(1)}
+                            </span>
                           </li>
-                        ))}
-                        {adminExtended.financeAnalytics.topDeclineReasons.length === 0 && (
-                          <li className="text-slate-500">No declines recorded.</li>
-                        )}
-                      </ul>
+                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="text-slate-400">P50</span>
+                            <span className="text-slate-100">
+                              {adminExtended.financeAnalytics.approvalTurnaroundHours.p50.toFixed(1)}
+                            </span>
+                          </li>
+                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="text-slate-400">P90</span>
+                            <span className="text-slate-100">
+                              {adminExtended.financeAnalytics.approvalTurnaroundHours.p90.toFixed(1)}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Decline rate
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-rose-300 max-sm:text-base sm:text-xl">
+                          {(adminExtended.financeAnalytics.declineRate * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Top decline reasons
+                        </p>
+                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
+                          {adminExtended.financeAnalytics.topDeclineReasons.slice(0, 10).map((r, i) => (
+                            <li key={i} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                              <span className="truncate text-slate-300">{r.reason}</span>
+                              <span className="shrink-0 text-slate-100">{r.count}</span>
+                            </li>
+                          ))}
+                          {adminExtended.financeAnalytics.topDeclineReasons.length === 0 && (
+                            <li className="text-slate-500">No declines recorded.</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Outstanding vs collected</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        <li>
-                          Outstanding:{" "}
-                          <span className="text-amber-300">
-                            {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.outstandingInvoices)}
-                          </span>
-                        </li>
-                        <li>
-                          Collected:{" "}
-                          <span className="text-emerald-400">
-                            {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.collectedPayments)}
-                          </span>
-                        </li>
-                      </ul>
-                      <p className="mt-4 text-xs text-slate-400">Cash flow trend (rolling windows)</p>
-                      <div className="mt-2 overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-700 text-xs text-slate-400">
-                              <th className="py-2 pr-3">Window</th>
-                              <th className="py-2 pr-3">In</th>
-                              <th className="py-2 pr-3">Out</th>
-                              <th className="py-2 pr-3">Net</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {adminExtended.financeAnalytics.cashFlowTrend.map((w) => (
-                              <tr key={w.window} className="border-b border-slate-800">
-                                <td className="py-2 pr-3 text-slate-300">{w.window}</td>
-                                <td className="py-2 pr-3 text-emerald-300">{formatMoney(w.in)}</td>
-                                <td className="py-2 pr-3 text-amber-300">{formatMoney(w.out)}</td>
-                                <td
-                                  className={`py-2 pr-3 ${
-                                    w.net >= 0 ? "text-emerald-400" : "text-rose-300"
-                                  }`}
-                                >
-                                  {formatMoney(w.net)}
-                                </td>
+                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Outstanding vs collected
+                        </p>
+                        <ul className="mt-2 space-y-1.5 text-[10px] text-slate-200 sm:text-sm">
+                          <li className="rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            Outstanding:{" "}
+                            <span className="text-amber-300">
+                              {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.outstandingInvoices)}
+                            </span>
+                          </li>
+                          <li className="rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            Collected:{" "}
+                            <span className="text-emerald-400">
+                              {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.collectedPayments)}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Cash flow trend (rolling windows)
+                        </p>
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="min-w-full text-left text-[10px] sm:text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-700 text-[9px] text-slate-500 sm:text-xs sm:text-slate-400">
+                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Window</th>
+                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">In</th>
+                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Out</th>
+                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Net</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {adminExtended.financeAnalytics.cashFlowTrend.map((w) => (
+                                <tr key={w.window} className="border-b border-slate-800/80">
+                                  <td className="py-1.5 pr-2 text-slate-300 sm:py-2 sm:pr-3">{w.window}</td>
+                                  <td className="py-1.5 pr-2 text-emerald-300 sm:py-2 sm:pr-3">{formatMoney(w.in)}</td>
+                                  <td className="py-1.5 pr-2 text-amber-300 sm:py-2 sm:pr-3">{formatMoney(w.out)}</td>
+                                  <td
+                                    className={`py-1.5 pr-2 sm:py-2 sm:pr-3 ${
+                                      w.net >= 0 ? "text-emerald-400" : "text-rose-300"
+                                    }`}
+                                  >
+                                    {formatMoney(w.net)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -392,61 +490,74 @@ export default function AnalyticsPage() {
               )}
 
               {adminSection === "team" && (
-                <div className="mt-4">
-                  <h4 className="mb-3 text-sm font-semibold text-slate-200">TEAM ANALYTICS</h4>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-slate-400">Developer utilisation signals (active tasks)</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
+                <div className="mt-3 sm:mt-4">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
+                    Team analytics
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                        Developer utilisation (active tasks)
+                      </p>
+                      <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
                         {adminExtended.teamAnalytics.developerUtilisationSignals.slice(0, 15).map((u) => (
-                          <li key={u.userId} className="flex justify-between">
-                            <span className="text-slate-300">{u.name ?? u.email}</span>
-                            <span className="text-slate-100">{u.activeTasks}</span>
+                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
+                            <span className="shrink-0 text-slate-100">{u.activeTasks}</span>
                           </li>
                         ))}
                       </ul>
-                      <p className="mt-4 text-xs text-slate-400">Swap / handoff frequency (accepted, 30d)</p>
-                      <p className="mt-1 text-xl font-semibold text-sky-300">
+                    </div>
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                        Swap / handoff frequency (30d, accepted)
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-sky-300 max-sm:text-base sm:text-xl">
                         {adminExtended.teamAnalytics.swapHandoffFrequency30d}
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">
-                        Overload vs underutilised (median active tasks: {adminExtended.teamAnalytics.overloadPatterns.medianActiveTasks})
+                      <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                        Overload vs underutilised (median {adminExtended.teamAnalytics.overloadPatterns.medianActiveTasks}{" "}
+                        active tasks)
                       </p>
-                      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Overloaded</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
+                      <p className="mt-2 text-[9px] font-semibold uppercase text-slate-500 sm:text-[10px]">Overloaded</p>
+                      <ul className="mt-1 space-y-1 text-[10px] text-slate-200 sm:text-sm">
                         {adminExtended.teamAnalytics.overloadPatterns.overloaded.map((u) => (
-                          <li key={u.userId} className="flex justify-between">
-                            <span className="text-slate-300">{u.name ?? u.email}</span>
-                            <span className="text-rose-300">{u.activeTasks}</span>
+                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
+                            <span className="shrink-0 text-rose-300">{u.activeTasks}</span>
                           </li>
                         ))}
-                        {adminExtended.teamAnalytics.overloadPatterns.overloaded.length === 0 && <li className="text-slate-500">None</li>}
+                        {adminExtended.teamAnalytics.overloadPatterns.overloaded.length === 0 && (
+                          <li className="text-slate-500">None</li>
+                        )}
                       </ul>
-                      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Underutilised</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
+                      <p className="mt-2 text-[9px] font-semibold uppercase text-slate-500 sm:text-[10px]">Underutilised</p>
+                      <ul className="mt-1 space-y-1 text-[10px] text-slate-200 sm:text-sm">
                         {adminExtended.teamAnalytics.overloadPatterns.underutilised.map((u) => (
-                          <li key={u.userId} className="flex justify-between">
-                            <span className="text-slate-300">{u.name ?? u.email}</span>
-                            <span className="text-amber-300">{u.activeTasks}</span>
+                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
+                            <span className="shrink-0 text-amber-300">{u.activeTasks}</span>
                           </li>
                         ))}
-                        {adminExtended.teamAnalytics.overloadPatterns.underutilised.length === 0 && <li className="text-slate-500">None</li>}
+                        {adminExtended.teamAnalytics.overloadPatterns.underutilised.length === 0 && (
+                          <li className="text-slate-500">None</li>
+                        )}
                       </ul>
                     </div>
                   </div>
-                  <div className="mt-4">
-                    <p className="text-xs text-slate-400">Report streak per user (top)</p>
-                    <ul className="mt-2 grid gap-2 md:grid-cols-2">
+                  <div className="mt-2 sm:mt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                      Report streak per user
+                    </p>
+                    <ul className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
                       {adminExtended.teamAnalytics.reportStreakPerUser.slice(0, 12).map((u) => (
                         <li
                           key={u.userId}
-                          className="rounded border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-200"
+                          className="rounded-lg border border-slate-700/60 bg-slate-900/50 px-2 py-1.5 text-[10px] text-slate-200 sm:px-3 sm:py-2 sm:text-sm"
                         >
-                          <div className="flex justify-between gap-2">
+                          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
                             <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                            <span className="text-slate-100">
+                            <span className="shrink-0 text-slate-100">
                               Sales {u.salesReportStreakDays}d · Dev {u.developerReportStreakDays}d
                             </span>
                           </div>
@@ -458,40 +569,69 @@ export default function AnalyticsPage() {
               )}
 
               {adminSection === "risk" && (
-                <div className="mt-4">
-                  <h4 className="mb-3 text-sm font-semibold text-slate-200">RISK ANALYTICS</h4>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-slate-400">Projects with no update in 72h+</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
+                <div className="mt-3 sm:mt-4">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
+                    Risk analytics
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                        Projects with no update in 72h+
+                      </p>
+                      <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
                         {adminExtended.riskAnalytics.projectsNoUpdate72h.slice(0, 12).map((p) => (
-                          <li key={p.id} className="flex justify-between gap-2">
+                          <li key={p.id} className="flex flex-col gap-0.5 rounded-md bg-slate-900/50 px-1.5 py-1 sm:flex-row sm:justify-between sm:gap-2 sm:px-2">
                             <span className="truncate text-slate-300">{p.name}</span>
-                            <span className="shrink-0 text-slate-500">{new Date(p.updatedAt).toLocaleString()}</span>
+                            <span className="shrink-0 text-[9px] text-slate-500 sm:text-xs">
+                              {new Date(p.updatedAt).toLocaleString()}
+                            </span>
                           </li>
                         ))}
-                        {adminExtended.riskAnalytics.projectsNoUpdate72h.length === 0 && <li className="text-slate-500">None</li>}
+                        {adminExtended.riskAnalytics.projectsNoUpdate72h.length === 0 && (
+                          <li className="text-slate-500">None</li>
+                        )}
                       </ul>
-                      <p className="mt-4 text-xs text-slate-400">Blocked tasks above threshold (72h)</p>
-                      <p className="mt-1 text-xl font-semibold text-amber-300">
-                        {adminExtended.riskAnalytics.blockedTasksAbove72h.length}
-                      </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Stalled deals in pipeline (14d)</p>
-                      <p className="mt-1 text-xl font-semibold text-rose-300">
-                        {adminExtended.riskAnalytics.stalledDeals14d.length}
-                      </p>
-                      <p className="mt-4 text-xs text-slate-400">Repeat swap patterns (90d)</p>
-                      <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                        {adminExtended.riskAnalytics.repeatSwapPatterns.slice(0, 12).map((r) => (
-                          <li key={r.projectId} className="flex justify-between gap-2">
-                            <span className="truncate text-slate-300">{r.projectName}</span>
-                            <span className="shrink-0 text-slate-100">{r.count90d}</span>
-                          </li>
-                        ))}
-                        {adminExtended.riskAnalytics.repeatSwapPatterns.length === 0 && <li className="text-slate-500">None</li>}
-                      </ul>
+                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Blocked tasks above threshold (72h)
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-amber-300 max-sm:text-base sm:text-xl">
+                          {adminExtended.riskAnalytics.blockedTasksAbove72h.length}
+                        </p>
+                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-[10px] text-slate-300 sm:max-h-40 sm:text-xs">
+                          {adminExtended.riskAnalytics.blockedTasksAbove72h.slice(0, 8).map((t) => (
+                            <li key={t.id} className="truncate rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                              {t.title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Stalled deals (14d)
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-rose-300 max-sm:text-base sm:text-xl">
+                          {adminExtended.riskAnalytics.stalledDeals14d.length}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                          Repeat swap patterns (90d)
+                        </p>
+                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
+                          {adminExtended.riskAnalytics.repeatSwapPatterns.slice(0, 12).map((r) => (
+                            <li key={r.projectId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
+                              <span className="truncate text-slate-300">{r.projectName}</span>
+                              <span className="shrink-0 text-slate-100">{r.count90d}</span>
+                            </li>
+                          ))}
+                          {adminExtended.riskAnalytics.repeatSwapPatterns.length === 0 && (
+                            <li className="text-slate-500">None</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -502,12 +642,12 @@ export default function AnalyticsPage() {
       )}
 
       {data && (
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="shell">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
               Revenue health
             </p>
-            <ul className="space-y-1 text-sm text-slate-200">
+            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
               <li>
                 Revenue this month:{" "}
                 <span className="text-emerald-400">
@@ -532,11 +672,11 @@ export default function AnalyticsPage() {
               </li>
             </ul>
           </div>
-          <div className="shell">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
               Project health
             </p>
-            <ul className="space-y-1 text-sm text-slate-200">
+            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
               <li>Active projects: {data.projectHealth.activeProjects}</li>
               <li>Overdue tasks: {data.projectHealth.overdueTasks}</li>
               <li>Blocked tasks: {data.projectHealth.blockedTasks}</li>
@@ -547,11 +687,11 @@ export default function AnalyticsPage() {
               </li>
             </ul>
           </div>
-          <div className="shell">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
               Lead conversion
             </p>
-            <ul className="space-y-1 text-sm text-slate-200">
+            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
               <li>Leads this month: {data.leadConversion.leadsThisMonth}</li>
               <li>Deals won: {data.leadConversion.dealsWon}</li>
               <li>Deals lost: {data.leadConversion.dealsLost}</li>
@@ -568,7 +708,7 @@ export default function AnalyticsPage() {
         </div>
       )}
       {!data && (
-        <div className="shell text-sm text-slate-400">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-[10px] text-slate-400 sm:text-sm">
           Loading analytics…
         </div>
       )}

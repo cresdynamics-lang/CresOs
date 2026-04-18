@@ -3,12 +3,14 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ROLE_KEYS } from "./auth-middleware";
 import { generateUserReminderEmail } from "./ai-reminders";
+import { generateDirectorBriefingGroq } from "./director-ai-automation";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp, notifyDirectors } from "./director-notifications";
 
 const TZ = process.env.DAILY_OPS_TZ?.trim() || "Africa/Nairobi";
 const REMINDER_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_REMINDER_HOUR ?? 18)));
-const AI_REPORT_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 20)));
+/** Default 19:00 Africa/Nairobi — Director end-of-day briefing window. */
+const AI_REPORT_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 19)));
 const ENABLED = process.env.DAILY_OPS_ENABLED !== "false";
 
 function assertDateKey(s: string): string {
@@ -253,10 +255,11 @@ async function generateAiReportBody(prisma: PrismaClient, orgId: string, dateKey
 }
 
 async function run8pmAiReportForOrg(prisma: PrismaClient, orgId: string, orgName: string, dateKey: string, range: { start: Date; end: Date }): Promise<void> {
-  const subject = `AI daily summary: ${orgName} (${dateKey})`;
+  const subject = `Director briefing: ${orgName} (${dateKey})`;
 
   try {
-    const body = await generateAiReportBody(prisma, orgId, dateKey, range);
+    const groqBody = await generateDirectorBriefingGroq(prisma, orgId, dateKey, range);
+    const body = groqBody ?? generateAiReportBody(prisma, orgId, dateKey, range);
     const created = await prisma.adminAiReport.create({
       data: {
         orgId,

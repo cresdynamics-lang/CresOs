@@ -335,26 +335,26 @@ export default function ApprovalsPage() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="shell border-l-4 border-emerald-500/70 bg-slate-900/40">
+      <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] md:snap-none md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:pb-0">
+        <div className="shell w-[min(88vw,280px)] shrink-0 snap-start border-l-4 border-emerald-500/70 bg-slate-900/40 md:w-auto md:min-w-0 md:shrink">
           <h4 className="text-sm font-semibold text-emerald-200">To approve</h4>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
             Review amount, purpose, and supporting note. If aligned — approve. The transaction is released to Finance for execution and logged with a timestamp.
           </p>
         </div>
-        <div className="shell border-l-4 border-rose-500/70 bg-slate-900/40">
+        <div className="shell w-[min(88vw,280px)] shrink-0 snap-start border-l-4 border-rose-500/70 bg-slate-900/40 md:w-auto md:min-w-0 md:shrink">
           <h4 className="text-sm font-semibold text-rose-200">To decline</h4>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
             A written reason is mandatory. The system blocks a decline with no note. The note should state what is missing, what rule is violated, or what must change. Finance is notified.
           </p>
         </div>
-        <div className="shell border-l-4 border-sky-500/70 bg-slate-900/40">
+        <div className="shell w-[min(88vw,280px)] shrink-0 snap-start border-l-4 border-sky-500/70 bg-slate-900/40 md:w-auto md:min-w-0 md:shrink">
           <h4 className="text-sm font-semibold text-sky-200">To request clarification</h4>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
             Return the request to Finance with questions (workflow may use status or notes). Pauses the request — it is not declined. Follow up if Finance is slow to respond.
           </p>
         </div>
-        <div className="shell border-l-4 border-amber-500/70 bg-slate-900/40">
+        <div className="shell w-[min(88vw,280px)] shrink-0 snap-start border-l-4 border-amber-500/70 bg-slate-900/40 md:w-auto md:min-w-0 md:shrink">
           <h4 className="text-sm font-semibold text-amber-200">24h escalation rule</h4>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
             Requests pending more than 24 hours trigger in-app alerts to Admins (and can surface on the Admin Oversight view). Resolve or clarify promptly to clear the queue.

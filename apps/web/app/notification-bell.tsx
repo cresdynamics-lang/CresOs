@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth-context";
 import { subscribeDataRefresh } from "./data-refresh";
 
@@ -16,6 +16,7 @@ type Notification = {
 
 export function NotificationBell() {
   const { apiFetch } = useAuth();
+  const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
@@ -50,6 +51,26 @@ export function NotificationBell() {
       setLoading(false);
     }
   }, [apiFetch]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      const el = rootRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("touchstart", onPointer, { passive: true });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("touchstart", onPointer);
+    };
+  }, [open]);
 
   useEffect(() => {
     void loadCount();
@@ -110,7 +131,7 @@ export function NotificationBell() {
   const hasUnseen = unseenCount > 0;
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => void toggleOpen()}
@@ -138,7 +159,13 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-sm shadow-lg backdrop-blur">
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden"
+            aria-hidden
+            onClick={() => setOpen(false)}
+          />
+          <div className="fixed left-2 right-2 top-[3.25rem] z-50 flex max-h-[min(75dvh,32rem)] flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-sm shadow-xl backdrop-blur lg:absolute lg:inset-auto lg:right-0 lg:top-full lg:mt-2 lg:w-80 lg:max-h-[min(75vh,32rem)]">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               {showHistory ? "Notification history" : "Notifications"}
@@ -211,6 +238,7 @@ export function NotificationBell() {
             </>
           )}
         </div>
+        </>
       )}
     </div>
   );

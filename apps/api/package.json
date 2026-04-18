@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:director-ai-e2e": "DIRECTOR_AI_E2E_DELAY_MS=0 vitest run tests/director-ai-developer-report.e2e.test.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

@@ -6,6 +6,7 @@ import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { PageHeader } from "../page-header";
+import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 
 type Invoice = {
   id: string;
@@ -748,34 +749,42 @@ export default function FinancePage() {
       />
 
       {canSeeReport && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="shell">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Revenue (period)</p>
-            <p className="mt-1 text-xl font-semibold text-emerald-400">
-              {report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
-            </p>
-          </div>
-          <div className="shell">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
-            <p className="mt-1 text-xl font-semibold text-amber-300">
-              {report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
-            </p>
-          </div>
-          <div className="shell">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Net flow</p>
-            <p
-              className={`mt-1 text-xl font-semibold ${
-                !report ? "text-slate-500" : report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"
-              }`}
-            >
-              {report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
-            </p>
-          </div>
-          <div className="shell">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
-            <p className="mt-1 text-xl font-semibold text-slate-100">{pendingFinanceApprovalCount}</p>
-          </div>
-        </div>
+        <DashboardCardRow lgCols={4} layout="scroll">
+          <DashboardScrollCard>
+            <div className="shell">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Revenue (period)</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-400">
+                {report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
+              </p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
+              <p className="mt-1 text-xl font-semibold text-amber-300">
+                {report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
+              </p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Net flow</p>
+              <p
+                className={`mt-1 text-xl font-semibold ${
+                  !report ? "text-slate-500" : report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
+              </p>
+            </div>
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="shell">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
+              <p className="mt-1 text-xl font-semibold text-slate-100">{pendingFinanceApprovalCount}</p>
+            </div>
+          </DashboardScrollCard>
+        </DashboardCardRow>
       )}
 
       {isAdmin && (

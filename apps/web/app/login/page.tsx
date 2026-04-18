@@ -25,8 +25,13 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password })
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Login failed");
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          hint?: string;
+          message?: string;
+        };
+        const parts = [body.error ?? body.message, body.hint].filter(Boolean);
+        setError(parts.length ? parts.join(" — ") : "Login failed");
         setLoading(false);
         return;
       }
@@ -115,7 +120,11 @@ export default function LoginPage() {
             </form>
           </div>
           <p className="mt-4 text-center text-xs text-cres-muted">
-            Don&apos;t have access?{" "}
+            New database?{" "}
+            <Link href="/register" className="text-cres-accent hover:underline">
+              Create a workspace
+            </Link>
+            {" · "}
             <a
               href="https://cresdynamics.com/contact"
               target="_blank"

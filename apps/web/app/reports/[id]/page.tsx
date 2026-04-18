@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
@@ -13,6 +13,8 @@ type Comment = {
   authorId: string;
   author: { id: string; name: string | null; email: string };
   parentId: string | null;
+  /** When "ai_auto", CresOS added this thread reply after submit (same style as a director note). */
+  source?: string | null;
   replies?: Comment[];
 };
 
@@ -49,9 +51,24 @@ export default function ReportDetailPage() {
   const [newKind, setNewKind] = useState<"comment" | "question">("comment");
   const [responseByParent, setResponseByParent] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [remarks, setRemarks] = useState("");
+  /** Appended to report remarks (does not remove existing text unless “Replace entire remarks” is checked). */
+  const [directorNoteAppend, setDirectorNoteAppend] = useState("");
+  const [replaceEntireRemarks, setReplaceEntireRemarks] = useState(false);
 
-  const isDirector = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
+  const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const remarkReplacePrefilledRef = useRef(false);
+
+  useEffect(() => {
+    if (!replaceEntireRemarks) {
+      remarkReplacePrefilledRef.current = false;
+      return;
+    }
+    if (!report) return;
+    if (!remarkReplacePrefilledRef.current) {
+      setDirectorNoteAppend(report.remarks ?? "");
+      remarkReplacePrefilledRef.current = true;
+    }
+  }, [replaceEntireRemarks, report]);
   const isAuthor = report?.submittedBy?.id === auth.userId;
 
   useEffect(() => {
@@ -61,7 +78,8 @@ export default function ReportDetailPage() {
         if (res.ok) {
           const data = (await res.json()) as Report;
           setReport(data);
-          setRemarks(data.remarks ?? "");
+          setDirectorNoteAppend("");
+          setReplaceEntireRemarks(false);
         } else if (res.status === 404) {
           router.replace("/reports");
         }
@@ -127,21 +145,40 @@ export default function ReportDetailPage() {
 
   const setReview = async (reviewStatus: "viewed" | "checked") => {
     if (!report) return;
-    const note = remarks.trim();
-    if (reviewStatus === "checked" && auth.roleKeys.includes("director_admin") && !note) {
-      alert("Director remarks are required to mark a report as checked.");
+    const append = !replaceEntireRemarks;
+    const payloadRemarks = append ? directorNoteAppend.trim() : (directorNoteAppend || report.remarks || "").trim();
+    if (reviewStatus === "checked" && append && !payloadRemarks && !(report.remarks?.trim())) {
+      const hasLeadershipThread = report.comments.some(
+        (c) =>
+          !c.parentId &&
+          c.kind !== "response" &&
+          (c.source === "ai_auto" || c.content.includes("Marked reviewed"))
+      );
+      if (!hasLeadershipThread) {
+        alert("Add a director note on the report, append remarks, or ensure there is a leadership comment on this submission before marking checked.");
+        return;
+      }
+    }
+    if (reviewStatus === "checked" && !append && !payloadRemarks) {
+      alert("Remarks are required when replacing the entire remarks field to mark checked.");
       return;
     }
     setLoading(true);
     try {
       const res = await apiFetch(`/reports/${id}/review`, {
         method: "PATCH",
-        body: JSON.stringify({ reviewStatus, remarks: note || undefined })
+        body: JSON.stringify({
+          reviewStatus,
+          remarks: payloadRemarks || undefined,
+          appendRemarks: append && Boolean(directorNoteAppend.trim())
+        })
       });
       if (res.ok) {
         const updated = (await res.json()) as Report;
         setReport(updated);
-        setRemarks(updated.remarks ?? "");
+        setDirectorNoteAppend("");
+        setReplaceEntireRemarks(false);
+        remarkReplacePrefilledRef.current = false;
       } else {
         const data = await res.json().catch(() => ({}));
         alert((data as { error?: string }).error ?? "Failed to update review status");
@@ -154,14 +191,14 @@ export default function ReportDetailPage() {
   };
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell flex flex-wrap items-start justify-between gap-4 border-cres-border bg-cres-surface/70">
+    <section className="flex flex-col gap-4 max-sm:gap-3">
+      <div className="shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4">
         <div>
-          <Link href="/reports" className="text-sm text-cres-accent hover:underline">
+          <Link href="/reports" className="text-xs text-cres-accent hover:underline sm:text-sm">
             ← Back to reports
           </Link>
-          <h2 className="mt-2 text-lg font-semibold text-cres-text">{report.title}</h2>
-          <p className="mt-1 text-xs text-cres-muted">
+          <h2 className="mt-2 text-base font-semibold text-cres-text sm:text-lg">{report.title}</h2>
+          <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
             By {report.submittedBy.name ?? report.submittedBy.email}
             {report.submittedAt && (
               <> · Submitted {new Date(report.submittedAt).toLocaleString()}</>
@@ -171,8 +208,8 @@ export default function ReportDetailPage() {
         <span
           className={
             report.status === "submitted"
-              ? "rounded bg-cres-accent/20 px-3 py-1 text-sm text-cres-accent"
-              : "rounded bg-cres-border px-3 py-1 text-sm text-cres-text-muted"
+              ? "rounded bg-cres-accent/20 px-2 py-0.5 text-xs text-cres-accent sm:px-3 sm:py-1 sm:text-sm"
+              : "rounded bg-cres-border px-2 py-0.5 text-xs text-cres-text-muted sm:px-3 sm:py-1 sm:text-sm"
           }
         >
           {report.status}
@@ -180,7 +217,9 @@ export default function ReportDetailPage() {
       </div>
 
       <div className="shell border-cres-border bg-cres-card/80">
-        <p className="whitespace-pre-wrap text-sm text-cres-text">{report.body}</p>
+        <p className="whitespace-pre-wrap text-xs leading-relaxed text-cres-text sm:text-sm sm:leading-normal">
+          {report.body}
+        </p>
       </div>
 
       {report.status === "submitted" && (
@@ -189,17 +228,15 @@ export default function ReportDetailPage() {
             <div className="shell border-cres-border bg-cres-card/80">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-cres-muted">Review status</p>
-                  <p className="mt-1 text-sm text-cres-text">
-                    {report.reviewStatus ?? "pending"}
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">Review status</p>
+                  <p className="mt-1 text-xs text-cres-text sm:text-sm">{report.reviewStatus ?? "pending"}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     disabled={loading}
                     onClick={() => void setReview("viewed")}
-                    className="rounded border border-cres-border px-3 py-2 text-sm text-cres-text hover:bg-cres-surface disabled:opacity-60"
+                    className="rounded border border-cres-border px-2.5 py-1.5 text-xs text-cres-text hover:bg-cres-surface disabled:opacity-60 sm:px-3 sm:py-2 sm:text-sm"
                   >
                     Mark viewed
                   </button>
@@ -207,23 +244,48 @@ export default function ReportDetailPage() {
                     type="button"
                     disabled={loading}
                     onClick={() => void setReview("checked")}
-                    className="rounded bg-cres-accent px-3 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                    className="rounded bg-cres-accent px-2.5 py-1.5 text-xs font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60 sm:px-3 sm:py-2 sm:text-sm"
                   >
                     Mark checked
                   </button>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">Saved remarks (on report)</p>
+                  <p className="mt-1 whitespace-pre-wrap rounded-lg border border-cres-border/60 bg-cres-surface/40 px-2 py-2 text-xs text-cres-text sm:text-sm">
+                    {report.remarks?.trim() ? report.remarks.trim() : "— None yet —"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
+                    Automated leadership replies appear in <strong>Comments</strong> below. Add a note here to append to
+                    saved remarks without removing prior text, unless you choose replace.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-cres-text sm:text-sm">
+                  <input
+                    type="checkbox"
+                    checked={replaceEntireRemarks}
+                    onChange={(e) => setReplaceEntireRemarks(e.target.checked)}
+                    className="rounded border-cres-border"
+                  />
+                  Replace entire remarks (overwrites saved remarks; use when correcting the full note)
+                </label>
                 <label className="block">
-                  <span className="mb-1 block text-sm text-cres-text-muted">
-                    Remarks {auth.roleKeys.includes("director_admin") ? "(required to mark checked)" : "(optional)"}
+                  <span className="mb-1 block text-xs text-cres-text-muted sm:text-sm">
+                    {replaceEntireRemarks
+                      ? "Full remarks (saved on report)"
+                      : "Add director / admin note (appended to saved remarks)"}
                   </span>
                   <textarea
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text"
-                    placeholder="Director/admin remarks…"
+                    value={directorNoteAppend}
+                    onChange={(e) => setDirectorNoteAppend(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-2 py-1.5 text-xs text-cres-text sm:px-3 sm:py-2 sm:text-sm"
+                    placeholder={
+                      replaceEntireRemarks
+                        ? "Edit the complete remarks text…"
+                        : "Type an additional note for the sales submitter…"
+                    }
                   />
                 </label>
               </div>
@@ -254,8 +316,8 @@ export default function ReportDetailPage() {
                 </span>
               </div>
               <div className="mt-3">
-                <p className="text-sm text-cres-text-muted">Remarks</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-cres-text">
+                <p className="text-xs text-cres-text-muted sm:text-sm">Remarks</p>
+                <p className="mt-1 whitespace-pre-wrap text-xs text-cres-text sm:text-sm">
                   {report.remarks?.trim() ? report.remarks.trim() : "—"}
                 </p>
               </div>
@@ -263,13 +325,13 @@ export default function ReportDetailPage() {
           )}
 
           <div className="shell border-cres-border bg-cres-card/80">
-            <h3 className="mb-3 text-sm font-semibold text-cres-text">Comments & questions</h3>
+            <h3 className="mb-3 text-xs font-semibold text-cres-text sm:text-sm">Comments & questions</h3>
 
             {topLevel.length === 0 && !isDirector && (
-              <p className="text-sm text-cres-muted">No comments yet from director.</p>
+              <p className="text-xs text-cres-muted sm:text-sm">No comments yet from director.</p>
             )}
             {topLevel.length === 0 && isDirector && (
-              <p className="text-sm text-cres-muted">No comments yet. Add a comment or question below.</p>
+              <p className="text-xs text-cres-muted sm:text-sm">No comments yet. Add a comment or question below.</p>
             )}
 
             <ul className="space-y-4">
@@ -288,6 +350,11 @@ export default function ReportDetailPage() {
                       <span className="font-medium text-cres-text-muted">
                         {c.author.name ?? c.author.email}
                       </span>
+                      {c.source === "ai_auto" ? (
+                        <span className="rounded bg-slate-600/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-100">
+                          Auto
+                        </span>
+                      ) : null}
                       <span>{c.kind === "question" ? "asked" : "commented"}</span>
                       <span>{new Date(c.createdAt).toLocaleString()}</span>
                       {deadline && (
@@ -298,7 +365,7 @@ export default function ReportDetailPage() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-cres-text">{c.content}</p>
+                    <p className="mt-1 text-xs text-cres-text sm:text-sm">{c.content}</p>
 
                     {replies.map((r) => (
                       <div
@@ -309,7 +376,7 @@ export default function ReportDetailPage() {
                           {r.author.name ?? r.author.email} answered{" "}
                           {new Date(r.createdAt).toLocaleString()}
                         </p>
-                        <p className="mt-1 text-sm text-cres-text">{r.content}</p>
+                        <p className="mt-1 text-xs text-cres-text sm:text-sm">{r.content}</p>
                       </div>
                     ))}
 

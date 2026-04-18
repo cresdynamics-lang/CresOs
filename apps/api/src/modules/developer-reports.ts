@@ -4,6 +4,17 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { notifyDirectors } from "./director-notifications";
+import { queueAutoDirectorReplyForDeveloperReport } from "./director-ai-automation";
+
+const LEADERSHIP_APPEND_SEP =
+  "\n\n────────────────────────\nDirector / Admin note\n────────────────────────\n\n";
+
+function mergeAppendedRemarks(prev: string | null | undefined, addition: string): string {
+  const p = (prev ?? "").trim();
+  const a = addition.trim();
+  if (!a) return p;
+  return p ? `${p}${LEADERSHIP_APPEND_SEP}${a}` : a;
+}
 
 function totalDeveloperReportContent(body: {
   whatWorked?: string;
@@ -117,6 +128,7 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         `${devName} filed a daily report for ${dayKey}.\n\nRecorded at (server, UTC): ${recordedAt}\nReport ID: ${report.id}\n\nDirector and admin can open Developer reports in the app; this timestamp is stored even if you were offline when it was filed.`,
         { type: "developer_report.submitted" }
       );
+      queueAutoDirectorReplyForDeveloperReport(prisma, report.id);
       res.status(201).json(report);
     }
   );
@@ -151,7 +163,11 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const { id } = req.params;
-      const { reviewStatus, remarks } = req.body as { reviewStatus?: string; remarks?: string };
+      const { reviewStatus, remarks, appendRemarks } = req.body as {
+        reviewStatus?: string;
+        remarks?: string;
+        appendRemarks?: boolean;
+      };
 
       if (!reviewStatus || !["pending", "viewed", "checked"].includes(reviewStatus)) {
         res.status(400).json({ error: "reviewStatus must be one of: pending, viewed, checked" });
@@ -166,9 +182,21 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      const note = (remarks ?? "").trim();
-      if (reviewStatus === "checked" && note.length === 0) {
-        res.status(400).json({ error: "Remarks are required to mark a report as checked." });
+      const append = appendRemarks === true;
+      let nextRemarks: string | null | undefined;
+      if (append) {
+        const inc = (remarks ?? "").trim();
+        if (inc) nextRemarks = mergeAppendedRemarks(existing.remarks, inc);
+      } else if (remarks !== undefined) {
+        nextRemarks = (remarks ?? "").trim() || null;
+      }
+
+      const effectiveRemarks = ((nextRemarks !== undefined ? nextRemarks : existing.remarks) ?? "").trim();
+      if (reviewStatus === "checked" && effectiveRemarks.length === 0) {
+        res.status(400).json({
+          error:
+            "Remarks are required to mark a report as checked (add a director note, or append to existing remarks)."
+        });
         return;
       }
 
@@ -178,7 +206,7 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
           reviewStatus,
           reviewedAt: new Date(),
           reviewedById: userId,
-          ...(remarks !== undefined && { remarks: note || null })
+          ...(nextRemarks !== undefined && { remarks: nextRemarks })
         },
         include: { submittedBy: { select: { id: true, name: true, email: true } } }
       });
