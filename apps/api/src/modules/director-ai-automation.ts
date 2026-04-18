@@ -9,6 +9,8 @@ import {
 } from "../prompts/director-ai-prompts";
 import { ROLE_KEYS } from "./auth-middleware";
 import { getAdminUsers, getDirectorAndAdminUserIds, getDirectorUsers } from "./director-notifications";
+import { DEFAULT_ORG_DAY_TZ } from "./org-zoned-day";
+import { listPlatformActionsForZonedDay } from "./director-platform-summary";
 
 const AUTO_REPLY_ENABLED = process.env.DIRECTOR_AI_AUTO_REPLY !== "false";
 const BRIEFING_GROQ_ENABLED = process.env.DIRECTOR_AI_BRIEFING_GROQ !== "false";
@@ -268,6 +270,21 @@ export async function generateDirectorBriefingGroq(
   const salesSubmittedIds = new Set(salesReports.map((r) => r.submittedById));
   const devSubmittedIds = new Set(devReports.map((r) => r.submittedById));
 
+  const platformActionsRaw = await listPlatformActionsForZonedDay(prisma, orgId, dateKey, DEFAULT_ORG_DAY_TZ, {
+    order: "asc",
+    activityLimit: 200,
+    eventLimit: 120,
+    maxRows: 200
+  });
+  const platform_actions = platformActionsRaw.slice(0, 100).map((r) => ({
+    at: r.createdAt,
+    source: r.source,
+    type: r.type,
+    summary: r.summary.slice(0, 280),
+    actor: r.actorLabel,
+    detail: r.detail ? String(r.detail).slice(0, 220) : undefined
+  }));
+
   const payload = {
     dateKey,
     orgId,
@@ -302,7 +319,8 @@ export async function generateDirectorBriefingGroq(
       id: u.id,
       name: u.name || u.email,
       submitted: devSubmittedIds.has(u.id)
-    }))
+    })),
+    platform_actions
   };
 
   const user = buildDirectorBriefingUser(JSON.stringify(payload, null, 2));

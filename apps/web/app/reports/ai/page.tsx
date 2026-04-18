@@ -74,20 +74,41 @@ export default function AiReportsPage() {
           {reports.length === 0 ? (
             <p className="text-sm text-cres-text-muted">No AI reports yet. The first one will appear after 8pm EAT.</p>
           ) : (
-            <ul className="space-y-3">
-              {reports.map((r) => (
-                <li key={r.id} className="rounded-xl border border-cres-border bg-cres-surface/40 p-4">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-cres-text">{r.subject}</p>
-                      <p className="text-xs text-cres-text-muted">Date: {r.dateKey}</p>
-                    </div>
-                    <p className="text-xs text-cres-text-muted">{new Date(r.createdAt).toLocaleString()}</p>
-                  </div>
-                  <pre className="mt-3 whitespace-pre-wrap text-sm text-cres-text">{r.body}</pre>
-                </li>
-              ))}
-            </ul>
+            <div className="-mx-1 overflow-x-auto sm:mx-0">
+              <table className="min-w-[40rem] w-full text-left text-sm sm:min-w-full">
+                <caption className="sr-only">AI reports by date</caption>
+                <thead>
+                  <tr className="border-b border-cres-border text-xs font-medium uppercase tracking-wide text-cres-text-muted">
+                    <th className="px-2 py-2 sm:px-3">Date</th>
+                    <th className="px-2 py-2 sm:px-3">Subject</th>
+                    <th className="px-2 py-2 sm:px-3">Generated</th>
+                    <th className="min-w-[12rem] px-2 py-2 sm:px-3">Body</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reports.map((r) => {
+                    const dateLabel = (() => {
+                      const d = new Date(`${r.dateKey}T12:00:00`);
+                      return Number.isNaN(d.getTime()) ? r.dateKey : d.toLocaleDateString();
+                    })();
+                    return (
+                      <tr key={r.id} className="border-b border-cres-border align-top text-cres-text">
+                        <td className="whitespace-nowrap px-2 py-3 text-cres-text-muted sm:px-3">{dateLabel}</td>
+                        <td className="min-w-0 px-2 py-3 font-medium sm:px-3">{r.subject}</td>
+                        <td className="whitespace-nowrap px-2 py-3 text-xs text-cres-text-muted sm:px-3">
+                          {new Date(r.createdAt).toLocaleString()}
+                        </td>
+                        <td className="min-w-0 px-2 py-3 sm:px-3">
+                          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-cres-text">
+                            {r.body}
+                          </pre>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

@@ -63,6 +63,51 @@ type DirectorDashboard = {
   riskSummary: { financial: unknown[]; operational: unknown[]; sales: unknown[] };
 };
 
+/** Snippet rows from `GET /reports/ai?snippet=true` (daily director briefing). */
+type DirectorAiBriefingSnippet = {
+  id: string;
+  dateKey: string;
+  subject: string;
+  createdAt: string;
+  bodyPreview: string;
+};
+
+/** `GET /director/summary-actions` — platform activity for the org day + AI digest pointer. */
+type DirectorSummaryActionRow = {
+  id: string;
+  source: "activity" | "event";
+  createdAt: string;
+  type: string;
+  summary: string;
+  detail: string | null;
+  actorLabel: string | null;
+};
+
+type DirectorSummaryFeed = {
+  dateKey: string;
+  tz: string;
+  aiReportHourLocal: number;
+  actions: DirectorSummaryActionRow[];
+  aiDailyBrief: { id: string; subject: string; createdAt: string } | null;
+};
+
+function formatBriefingDateLabel(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? dateKey : d.toLocaleDateString();
+}
+
+function formatSummaryActionTime(iso: string, tz: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+}
+
 type DashboardKpis = {
   finance: {
     revenueThisMonth: number;
@@ -179,6 +224,10 @@ export default function DashboardPage() {
     return until ? Date.now() < parseInt(until, 10) : false;
   });
   const [directorDashboard, setDirectorDashboard] = useState<DirectorDashboard | null>(null);
+  /** `null` until first fetch completes for directors/admin. */
+  const [directorAiBriefings, setDirectorAiBriefings] = useState<DirectorAiBriefingSnippet[] | null>(null);
+  const [directorSummaryFeed, setDirectorSummaryFeed] = useState<DirectorSummaryFeed | null>(null);
+  const [directorSummaryFeedFailed, setDirectorSummaryFeedFailed] = useState(false);
   const [projects, setProjects] = useState<ProjectListRow[]>([]);
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [kpisError, setKpisError] = useState(false);
@@ -263,6 +312,41 @@ export default function DashboardPage() {
     }
   }, [isDirectorOrAdmin, apiFetch, hydrated, auth.accessToken]);
 
+  const loadDirectorAiBriefings = useCallback(async () => {
+    if (!isDirectorOrAdmin) return;
+    if (!hydrated || !auth.accessToken) return;
+    try {
+      const res = await apiFetch("/reports/ai?limit=14&snippet=true");
+      if (res.ok) {
+        const data = (await res.json()) as DirectorAiBriefingSnippet[];
+        setDirectorAiBriefings(Array.isArray(data) ? data : []);
+      } else {
+        setDirectorAiBriefings([]);
+      }
+    } catch {
+      setDirectorAiBriefings([]);
+    }
+  }, [isDirectorOrAdmin, apiFetch, hydrated, auth.accessToken]);
+
+  const loadDirectorSummaryFeed = useCallback(async () => {
+    if (!isDirectorOrAdmin) return;
+    if (!hydrated || !auth.accessToken) return;
+    setDirectorSummaryFeedFailed(false);
+    try {
+      const res = await apiFetch("/director/summary-actions");
+      if (res.ok) {
+        const data = (await res.json()) as DirectorSummaryFeed;
+        setDirectorSummaryFeed(data);
+      } else {
+        setDirectorSummaryFeed(null);
+        setDirectorSummaryFeedFailed(true);
+      }
+    } catch {
+      setDirectorSummaryFeed(null);
+      setDirectorSummaryFeedFailed(true);
+    }
+  }, [isDirectorOrAdmin, apiFetch, hydrated, auth.accessToken]);
+
   const loadProjects = useCallback(async () => {
     if (!hydrated || !auth.accessToken) return;
     try {
@@ -313,6 +397,14 @@ export default function DashboardPage() {
   }, [loadDirectorDashboard]);
 
   useEffect(() => {
+    void loadDirectorAiBriefings();
+  }, [loadDirectorAiBriefings]);
+
+  useEffect(() => {
+    void loadDirectorSummaryFeed();
+  }, [loadDirectorSummaryFeed]);
+
+  useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
 
@@ -325,6 +417,8 @@ export default function DashboardPage() {
       if (document.visibilityState === "visible") {
         void loadSummaryAndAttention();
         void loadDirectorDashboard();
+        void loadDirectorAiBriefings();
+        void loadDirectorSummaryFeed();
         void loadProjects();
         void loadKpis();
       }
@@ -333,6 +427,8 @@ export default function DashboardPage() {
     const unsub = subscribeDataRefresh(() => {
       void loadSummaryAndAttention();
       void loadDirectorDashboard();
+      void loadDirectorAiBriefings();
+      void loadDirectorSummaryFeed();
       void loadProjects();
       void loadKpis();
     });
@@ -340,7 +436,14 @@ export default function DashboardPage() {
       document.removeEventListener("visibilitychange", onVis);
       unsub();
     };
-  }, [loadSummaryAndAttention, loadDirectorDashboard, loadProjects, loadKpis]);
+  }, [
+    loadSummaryAndAttention,
+    loadDirectorDashboard,
+    loadDirectorAiBriefings,
+    loadDirectorSummaryFeed,
+    loadProjects,
+    loadKpis
+  ]);
 
   const quickLinks = Array.from(
     new Map(
@@ -1442,106 +1545,223 @@ export default function DashboardPage() {
 
       {isDirectorOrAdmin && directorDashboard && (
         <div className="shell min-w-0 border-sky-800/50 bg-sky-950/30">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Director overview — aligned view</h3>
-          <p className="mb-4 text-xs text-slate-400">
-            {isDirectorOnly
-              ? "Sales, delivery, and operational signals in one place. Invoice and billing detail live under Finance for Admin."
-              : "Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES)."}
-          </p>
-          <DashboardCardRow layout="scroll" lgCols={isDirectorOnly ? 3 : 4}>
-            {!isDirectorOnly && (
-              <DashboardScrollCard width="wide">
-                <div className="shell flex min-h-[168px] min-w-0 flex-col">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Financial health</p>
-                  <p className="mt-2 break-words text-sm text-slate-200">
-                    Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
-                  </p>
-                  <p className="break-words text-sm text-slate-200">
-                    Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
-                  </p>
-                  <p className="break-words text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
-                  <p className="mt-auto text-xs text-slate-400">
-                    Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}
-                  </p>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
+            <div className="min-w-0 flex-1">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Director overview — aligned view</h3>
+              <p className="mb-4 text-xs text-slate-400">
+                {isDirectorOnly
+                  ? "Sales, delivery, and operational signals in one place. Invoice and billing detail live under Finance for Admin."
+                  : "Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES)."}
+              </p>
+              <DashboardCardRow layout="scroll" lgCols={isDirectorOnly ? 3 : 4}>
+                {!isDirectorOnly && (
+                  <DashboardScrollCard width="wide">
+                    <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Financial health</p>
+                      <p className="mt-2 break-words text-sm text-slate-200">
+                        Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
+                      </p>
+                      <p className="break-words text-sm text-slate-200">
+                        Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
+                      </p>
+                      <p className="break-words text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
+                      <p className="mt-auto text-xs text-slate-400">
+                        Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}
+                      </p>
+                    </div>
+                  </DashboardScrollCard>
+                )}
+                <DashboardScrollCard width="wide">
+                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sales health</p>
+                    <p className="mt-2 break-words text-sm text-slate-200">
+                      Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
+                    </p>
+                    <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
+                    <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
+                  </div>
+                </DashboardScrollCard>
+                <DashboardScrollCard width="wide">
+                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operational health</p>
+                    <p className="mt-2 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
+                    <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
+                    <p className="text-sm text-slate-200">
+                      Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}
+                    </p>
+                  </div>
+                </DashboardScrollCard>
+                <DashboardScrollCard width="wide">
+                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Approval queue</p>
+                    <p className="mt-2 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
+                    <Link href="/approvals" className="mt-auto inline-block text-sm text-sky-400 hover:underline">
+                      View approvals →
+                    </Link>
+                  </div>
+                </DashboardScrollCard>
+              </DashboardCardRow>
+              <div className="mt-6 min-w-0">
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Team — current project focus</h4>
+                <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
+                  <table className="min-w-[44rem] text-left text-sm sm:min-w-full">
+                    <caption className="sr-only">Team current focus</caption>
+                    <thead>
+                      <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                        <th className="px-2 py-2 font-medium sm:px-3">Person</th>
+                        <th className="px-2 py-2 font-medium sm:px-3">Roles</th>
+                        <th className="px-2 py-2 font-medium sm:px-3">Project</th>
+                        <th className="px-2 py-2 font-medium sm:px-3">Note</th>
+                        <th className="px-2 py-2 font-medium sm:px-3">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(directorDashboard.teamCurrentFocus ?? []).map((row) => (
+                        <tr key={row.userId} className="border-b border-slate-800/80 text-slate-200">
+                          <td className="min-w-0 px-2 py-2 sm:px-3">
+                            <span className="font-medium break-words text-slate-100">{row.name?.trim() || row.email}</span>
+                          </td>
+                          <td className="min-w-0 px-2 py-2 text-xs break-words text-slate-400 sm:px-3">
+                            {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}
+                          </td>
+                          <td className="min-w-0 px-2 py-2 sm:px-3">
+                            {row.project ? (
+                              <Link
+                                href={`/projects/${row.project.id}`}
+                                className="break-words text-sky-400 hover:underline"
+                              >
+                                {row.project.name}
+                              </Link>
+                            ) : (
+                              <span className="text-slate-500">—</span>
+                            )}
+                          </td>
+                          <td className="min-w-0 max-w-[12rem] px-2 py-2 break-words text-slate-400 sm:max-w-[14rem] sm:px-3">
+                            {row.note?.trim() || "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-xs text-slate-500 sm:px-3">
+                            {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </DashboardScrollCard>
-            )}
-            <DashboardScrollCard width="wide">
-              <div className="shell flex min-h-[168px] min-w-0 flex-col">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sales health</p>
-                <p className="mt-2 break-words text-sm text-slate-200">
-                  Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
-                </p>
-                <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
-                <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
               </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard width="wide">
-              <div className="shell flex min-h-[168px] min-w-0 flex-col">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operational health</p>
-                <p className="mt-2 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
-                <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
-                <p className="text-sm text-slate-200">
-                  Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}
+            </div>
+
+            <aside className="flex min-h-0 w-full shrink-0 flex-col gap-6 border-t border-slate-700/80 pt-6 lg:max-w-[26rem] lg:border-t-0 lg:border-l lg:pl-6 lg:pt-0">
+              <div className="flex min-h-0 min-w-0 flex-col">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Summary</h4>
+                </div>
+                <p className="mb-2 text-xs text-slate-500">
+                  Org-day action log (admin activity + audit events, excluding routine logins). Refreshes as things
+                  happen. The written AI digest for this calendar day is generated at{" "}
+                  {directorSummaryFeed?.aiReportHourLocal ?? 19}:00{" "}
+                  {directorSummaryFeed?.tz?.replace(/_/g, " ") ?? "org timezone"} — see Daily AI summaries below.
                 </p>
+                {directorSummaryFeed === null && !directorSummaryFeedFailed ? (
+                  <p className="text-sm text-slate-400">Loading Summary…</p>
+                ) : directorSummaryFeedFailed || !directorSummaryFeed ? (
+                  <p className="text-sm text-rose-300/90">Could not load Summary. Try refreshing.</p>
+                ) : (
+                  <>
+                    <p className="mb-2 text-[0.65rem] text-slate-500">
+                      <span className="text-slate-400">Day:</span> {formatBriefingDateLabel(directorSummaryFeed.dateKey)}
+                      {directorSummaryFeed.aiDailyBrief ? (
+                        <span className="ml-2 text-emerald-400/90">· Today&apos;s AI digest: ready</span>
+                      ) : (
+                        <span className="ml-2 text-amber-400/90">
+                          · AI digest for this day: pending until the scheduled run
+                        </span>
+                      )}
+                    </p>
+                    {directorSummaryFeed.actions.length === 0 ? (
+                      <p className="text-sm text-slate-400">No logged actions for this org day yet.</p>
+                    ) : (
+                      <div className="max-h-[min(20rem,42vh)] min-w-0 overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/80">
+                        <table className="w-full min-w-[16rem] text-left text-[0.7rem]">
+                          <caption className="sr-only">Platform actions for director summary</caption>
+                          <thead>
+                            <tr className="sticky top-0 z-[1] border-b border-slate-700 bg-slate-900/95 uppercase tracking-wide text-slate-400">
+                              <th className="px-2 py-1.5 font-medium whitespace-nowrap">Time</th>
+                              <th className="px-2 py-1.5 font-medium">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {directorSummaryFeed.actions.map((a) => (
+                              <tr key={a.id} className="border-b border-slate-800/80 align-top text-slate-200">
+                                <td className="whitespace-nowrap px-2 py-1.5 text-slate-400">
+                                  {formatSummaryActionTime(a.createdAt, directorSummaryFeed.tz)}
+                                </td>
+                                <td className="min-w-0 px-2 py-1.5">
+                                  <span className="text-slate-500">[{a.source}]</span>{" "}
+                                  <span className="text-slate-400">{a.type}</span>
+                                  <p className="mt-0.5 break-words text-slate-200">{a.summary}</p>
+                                  {a.actorLabel ? (
+                                    <p className="mt-0.5 text-slate-500">Actor: {a.actorLabel}</p>
+                                  ) : null}
+                                  {a.detail ? (
+                                    <p className="mt-0.5 line-clamp-2 break-words text-slate-500">{a.detail}</p>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard width="wide">
-              <div className="shell flex min-h-[168px] min-w-0 flex-col">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Approval queue</p>
-                <p className="mt-2 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
-                <Link href="/approvals" className="mt-auto inline-block text-sm text-sky-400 hover:underline">
-                  View approvals →
+
+              <div className="min-h-0 min-w-0 flex flex-col border-t border-slate-700/80 pt-6">
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily AI summaries</h4>
+                <Link href="/reports/ai" className="shrink-0 text-xs text-sky-400 hover:underline">
+                  All reports →
                 </Link>
               </div>
-            </DashboardScrollCard>
-          </DashboardCardRow>
-          <div className="mt-6 min-w-0">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Team — current project focus</h4>
-            <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
-              <table className="min-w-[44rem] text-left text-sm sm:min-w-full">
-                <caption className="sr-only">Team current focus</caption>
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-2 py-2 font-medium sm:px-3">Person</th>
-                    <th className="px-2 py-2 font-medium sm:px-3">Roles</th>
-                    <th className="px-2 py-2 font-medium sm:px-3">Project</th>
-                    <th className="px-2 py-2 font-medium sm:px-3">Note</th>
-                    <th className="px-2 py-2 font-medium sm:px-3">Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(directorDashboard.teamCurrentFocus ?? []).map((row) => (
-                    <tr key={row.userId} className="border-b border-slate-800/80 text-slate-200">
-                      <td className="min-w-0 px-2 py-2 sm:px-3">
-                        <span className="font-medium break-words text-slate-100">{row.name?.trim() || row.email}</span>
-                      </td>
-                      <td className="min-w-0 px-2 py-2 text-xs break-words text-slate-400 sm:px-3">
-                        {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}
-                      </td>
-                      <td className="min-w-0 px-2 py-2 sm:px-3">
-                        {row.project ? (
-                          <Link
-                            href={`/projects/${row.project.id}`}
-                            className="break-words text-sky-400 hover:underline"
-                          >
-                            {row.project.name}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </td>
-                      <td className="min-w-0 max-w-[12rem] px-2 py-2 break-words text-slate-400 sm:max-w-[14rem] sm:px-3">
-                        {row.note?.trim() || "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-xs text-slate-500 sm:px-3">
-                        {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              <p className="mb-3 text-xs text-slate-500">
+                One row per day (Groq when configured; otherwise counts). Refreshes after the scheduled run.
+              </p>
+              {directorAiBriefings === null ? (
+                <p className="text-sm text-slate-400">Loading summaries…</p>
+              ) : directorAiBriefings.length === 0 ? (
+                <p className="text-sm text-slate-400">No summaries yet. They appear after the first daily job.</p>
+              ) : (
+                <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/80 lg:max-h-[min(32rem,55vh)]">
+                  <table className="w-full min-w-[18rem] text-left text-xs">
+                    <caption className="sr-only">Daily AI director summaries by date</caption>
+                    <thead>
+                      <tr className="sticky top-0 z-[1] border-b border-slate-700 bg-slate-900/95 text-[0.65rem] uppercase tracking-wide text-slate-400">
+                        <th className="px-2 py-2 font-medium whitespace-nowrap">Date</th>
+                        <th className="px-2 py-2 font-medium">Summary</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {directorAiBriefings.map((r) => (
+                        <tr key={r.id} className="border-b border-slate-800/80 align-top text-slate-200">
+                          <td className="whitespace-nowrap px-2 py-2 text-slate-300">{formatBriefingDateLabel(r.dateKey)}</td>
+                          <td className="min-w-0 px-2 py-2">
+                            <p className="font-medium text-slate-100">{r.subject}</p>
+                            <p className="mt-1 line-clamp-4 break-words text-slate-400">{r.bodyPreview}</p>
+                            <Link
+                              href="/reports/ai"
+                              className="mt-1 inline-block text-sky-400 hover:underline"
+                            >
+                              Open full report →
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              </div>
+            </aside>
           </div>
         </div>
       )}

@@ -21,17 +21,39 @@ function mergeAppendedRemarks(prev: string | null | undefined, addition: string)
 export default function reportsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
-  // Admin AI reports (directors/admin only)
+  // Admin AI reports (directors/admin only) — daily Groq briefing or fallback counts; optional limit + snippet for dashboards
   router.get(
     "/ai",
     requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
+      const limitRaw = req.query.limit;
+      const parsed = parseInt(String(limitRaw ?? "60"), 10);
+      const take = Number.isFinite(parsed) ? Math.min(120, Math.max(1, parsed)) : 60;
+      const snippet =
+        req.query.snippet === "1" || String(req.query.snippet ?? "").toLowerCase() === "true";
+
       const list = await prisma.adminAiReport.findMany({
         where: { orgId },
-        orderBy: { dateKey: "desc" }
+        orderBy: { dateKey: "desc" },
+        take,
+        select: { id: true, dateKey: true, subject: true, body: true, createdAt: true }
       });
-      res.json(list);
+
+      if (!snippet) {
+        res.json(list);
+        return;
+      }
+
+      res.json(
+        list.map((r) => ({
+          id: r.id,
+          dateKey: r.dateKey,
+          subject: r.subject,
+          createdAt: r.createdAt,
+          bodyPreview: r.body.length > 500 ? `${r.body.slice(0, 500)}…` : r.body
+        }))
+      );
     }
   );
 

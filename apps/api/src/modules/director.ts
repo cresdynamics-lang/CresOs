@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts } from "./conflict-engine";
 import { notifyAdminsInApp } from "./director-notifications";
+import { DEFAULT_ORG_DAY_TZ, getZonedDateKey } from "./org-zoned-day";
+import { listPlatformActionsForZonedDay } from "./director-platform-summary";
 
 export default function directorRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -368,6 +370,46 @@ export default function directorRouter(prisma: PrismaClient): Router {
         // eslint-disable-next-line no-console
         console.error(err);
         res.status(500).json({ error: "Failed to load director dashboard" });
+      }
+    }
+  );
+
+  /** Today's (org-timezone) platform action log for the director panel + nightly AI briefing source. */
+  router.get(
+    "/summary-actions",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const tz = DEFAULT_ORG_DAY_TZ;
+      const rawKey = typeof req.query.dateKey === "string" ? req.query.dateKey.trim() : "";
+      const dateKey =
+        rawKey && /^\d{4}-\d{2}-\d{2}$/.test(rawKey) ? rawKey : getZonedDateKey(new Date(), tz);
+
+      try {
+        const [actions, aiDailyBrief] = await Promise.all([
+          listPlatformActionsForZonedDay(prisma, orgId, dateKey, tz, {
+            order: "desc",
+            activityLimit: 250,
+            eventLimit: 150,
+            maxRows: 300
+          }),
+          prisma.adminAiReport.findUnique({
+            where: { orgId_dateKey: { orgId, dateKey } },
+            select: { id: true, subject: true, createdAt: true }
+          })
+        ]);
+
+        res.json({
+          dateKey,
+          tz,
+          aiReportHourLocal: Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 19))),
+          actions,
+          aiDailyBrief
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[director] summary-actions failed", e);
+        res.status(500).json({ error: "Failed to load summary actions" });
       }
     }
   );

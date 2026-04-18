@@ -6,36 +6,18 @@ import { generateUserReminderEmail } from "./ai-reminders";
 import { generateDirectorBriefingGroq } from "./director-ai-automation";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp, notifyDirectors } from "./director-notifications";
+import { assertZonedTz, getUtcRangeForZonedDate, getZonedDateKey } from "./org-zoned-day";
+import { listPlatformActionsForZonedDay } from "./director-platform-summary";
 
 const TZ = process.env.DAILY_OPS_TZ?.trim() || "Africa/Nairobi";
 const REMINDER_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_REMINDER_HOUR ?? 18)));
-/** Default 19:00 Africa/Nairobi — Director end-of-day briefing window. */
+/** Default 19:00 (7pm) org timezone — Director end-of-day briefing + AI digest. */
 const AI_REPORT_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 19)));
 const ENABLED = process.env.DAILY_OPS_ENABLED !== "false";
 
-function assertDateKey(s: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error("Invalid dateKey");
-  return s;
-}
-
-function assertTz(s: string): string {
-  if (!/^[A-Za-z0-9/_+-]+$/.test(s)) throw new Error("Invalid timezone");
-  return s;
-}
-
-function getZonedDateKey(d: Date, tz: string): string {
-  const f = new Intl.DateTimeFormat("en-CA", {
-    timeZone: assertTz(tz),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
-  return assertDateKey(f.format(d));
-}
-
 function getZonedHourMinute(d: Date, tz: string): { hour: number; minute: number } {
   const f = new Intl.DateTimeFormat("en-GB", {
-    timeZone: assertTz(tz),
+    timeZone: assertZonedTz(tz),
     hour: "numeric",
     minute: "numeric",
     hour12: false
@@ -44,28 +26,6 @@ function getZonedHourMinute(d: Date, tz: string): { hour: number; minute: number
   const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
   const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
   return { hour, minute };
-}
-
-function addCalendarDay(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  return assertDateKey(dt.toISOString().slice(0, 10));
-}
-
-async function getUtcRangeForZonedDate(
-  prisma: PrismaClient,
-  dateKey: string,
-  tz: string
-): Promise<{ start: Date; end: Date }> {
-  const dk = assertDateKey(dateKey);
-  const t = assertTz(tz);
-  const next = addCalendarDay(dk);
-  const rows = await prisma.$queryRawUnsafe<Array<{ start: Date; end: Date }>>(
-    `SELECT (timestamp '${dk} 00:00:00' AT TIME ZONE '${t}') AS start, (timestamp '${next} 00:00:00' AT TIME ZONE '${t}') AS end`
-  );
-  if (!rows?.[0]) throw new Error("day range query failed");
-  return { start: rows[0].start, end: rows[0].end };
 }
 
 async function ensureUserReminder(
@@ -250,6 +210,26 @@ async function generateAiReportBody(prisma: PrismaClient, orgId: string, dateKey
   lines.push("Notes:");
   lines.push("- This summary is generated automatically from CresOS records.");
   lines.push("- If counts look low, it may indicate missing updates or offline work not yet logged.");
+  lines.push("");
+  lines.push("Platform actions (admin activity + event log, newest first):");
+  try {
+    const actions = await listPlatformActionsForZonedDay(prisma, orgId, dateKey, TZ, {
+      order: "desc",
+      activityLimit: 80,
+      eventLimit: 60,
+      maxRows: 40
+    });
+    if (actions.length === 0) {
+      lines.push("- (none in this day window)");
+    } else {
+      for (const a of actions) {
+        const who = a.actorLabel ? ` — ${a.actorLabel}` : "";
+        lines.push(`- ${a.source} / ${a.type}: ${a.summary}${who}`);
+      }
+    }
+  } catch {
+    lines.push("- (action log unavailable)");
+  }
 
   return lines.join("\n");
 }

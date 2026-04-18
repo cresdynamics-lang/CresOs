@@ -35,6 +35,11 @@ TODAY AT A GLANCE
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+PLATFORM ACTIONS (FROM SYSTEM LOGS)
+[Use only entries in JSON key "platform_actions" (if missing or empty, say: "No supplementary platform log lines for this window." Otherwise: chronological bullets — local time from "at" ISO + source + type + one-line summary; merge duplicates mentally; skip noise like empty strings. If detail/actor help, weave briefly. Do not invent actions not in the array.]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 WHAT WAS SHIPPED TODAY
 [Bulleted lines: • Project or initiative — what completed — name]
 
