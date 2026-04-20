@@ -14,6 +14,7 @@ interface Message {
   type: "text" | "system" | string;
   status: "sent" | "delivered" | "read" | string;
   metadata?: Record<string, unknown> | null;
+  flags?: { starred?: boolean; saved?: boolean } | null;
   editedAt?: string | null;
   revokedAt?: string | null;
 }
@@ -154,6 +155,12 @@ function avatarUrl(pathOrUrl: string | null | undefined): string | null {
   return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
+function renderMessageTicks(status: string): { glyph: string; className: string } {
+  if (status === "read") return { glyph: "✓✓", className: "text-[#53BDEB] font-bold" };
+  if (status === "delivered") return { glyph: "✓✓", className: "text-[#AEBAC1] font-bold" };
+  return { glyph: "✓", className: "text-[#AEBAC1] font-bold" };
+}
+
 function ChatMessageBody({ message }: { message: Message }) {
   const md = message.metadata;
   const fileUrl = md && typeof md.url === "string" ? avatarUrl(md.url) : null;
@@ -263,6 +270,10 @@ export default function CommunityPage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
+  const [messageInfo, setMessageInfo] = useState<{
+    messageId: string;
+    data: { status: string; createdAt: string; editedAt: string | null; revokedAt: string | null; readBy: unknown };
+  } | null>(null);
 
   const [callState, setCallState] = useState<CallState>({
     isInCall: false,
@@ -1146,6 +1157,7 @@ export default function CommunityPage() {
       type: raw.type === "system" ? "system" : String(raw.type ?? "text"),
       status: raw.status === "delivered" ? "delivered" : "sent",
       metadata: (raw.metadata as Record<string, unknown>) ?? null,
+      flags: (raw.flags as { starred?: boolean; saved?: boolean }) ?? { starred: false, saved: false },
       editedAt: raw.editedAt ? String(raw.editedAt) : null,
       revokedAt: raw.revokedAt ? String(raw.revokedAt) : null
     };
@@ -1161,12 +1173,13 @@ export default function CommunityPage() {
     setAttachMenuOpen(false);
   }, []);
 
-  const uploadChatFile = useCallback(
-    async (file: File) => {
+  const uploadChatFiles = useCallback(
+    async (files: File[]) => {
       if (!selectedConversation?.id || !auth.accessToken) return;
+      if (files.length === 0) return;
       setChatError(null);
       const fd = new FormData();
-      fd.append("file", file);
+      for (const f of files) fd.append("files", f);
       const cap = newMessage.trim();
       if (cap) fd.append("caption", cap);
       const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
@@ -1178,10 +1191,12 @@ export default function CommunityPage() {
         setChatError(err.error ?? err.message ?? "Upload failed");
         return;
       }
-      const data = (await response.json()) as { data?: { message?: Record<string, unknown> } };
-      const raw = data.data?.message;
-      if (raw) {
-        appendMessageFromApi(raw);
+      const data = (await response.json()) as {
+        data?: { message?: Record<string, unknown>; messages?: Record<string, unknown>[] };
+      };
+      const list = data.data?.messages ?? (data.data?.message ? [data.data.message] : []);
+      if (list.length > 0) {
+        for (const raw of list) appendMessageFromApi(raw);
         if (cap) setNewMessage("");
         void loadConversations();
       }
@@ -1218,7 +1233,7 @@ export default function CommunityPage() {
         const blob = new Blob(chunks, { type: mt });
         const ext = mt.includes("mp4") ? "m4a" : "webm";
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mt });
-        void uploadChatFile(file);
+        void uploadChatFiles([file]);
         setVoiceRecordingDuration(0);
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -1273,6 +1288,48 @@ export default function CommunityPage() {
       void loadConversations();
     },
     [selectedConversation, apiFetch, loadConversations]
+  );
+
+  const updateMessageFlags = useCallback(
+    async (messageId: string, patch: { starred?: boolean; saved?: boolean }) => {
+      if (!selectedConversation?.id) return;
+      setMessageMenuId(null);
+      const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages/${messageId}/flags`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setChatError(err.error ?? "Could not update message");
+        return;
+      }
+      const data = (await res.json()) as {
+        data?: { flags?: { messageId: string; starred: boolean; saved: boolean } };
+      };
+      const flags = data.data?.flags;
+      if (!flags) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === flags.messageId ? { ...m, flags: { starred: flags.starred, saved: flags.saved } } : m))
+      );
+    },
+    [selectedConversation, apiFetch]
+  );
+
+  const loadMessageInfo = useCallback(
+    async (messageId: string) => {
+      if (!selectedConversation?.id) return;
+      setMessageMenuId(null);
+      const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages/${messageId}/info`);
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setChatError(err.error ?? "Could not load message info");
+        return;
+      }
+      const payload = (await res.json()) as { data?: any };
+      if (payload.data) setMessageInfo({ messageId, data: payload.data });
+    },
+    [selectedConversation, apiFetch]
   );
 
   const saveEditMessage = useCallback(async () => {
@@ -1767,6 +1824,27 @@ export default function CommunityPage() {
                               <button
                                 type="button"
                                 className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => void updateMessageFlags(message.id, { starred: !(message.flags?.starred === true) })}
+                              >
+                                {message.flags?.starred ? "Unstar" : "Star"}
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => void updateMessageFlags(message.id, { saved: !(message.flags?.saved === true) })}
+                              >
+                                {message.flags?.saved ? "Unsave" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => void loadMessageInfo(message.id)}
+                              >
+                                Info
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
                                 onClick={() => void deleteMessageApi(message.id, "self")}
                               >
                                 Delete for me
@@ -1798,11 +1876,14 @@ export default function CommunityPage() {
                             <span>{formatMessageTime(message.timestamp)}</span>
                             {mine && (
                               <span className="inline-flex" title={message.status}>
-                                {message.status === "read" ? (
-                                  <span className="text-[#53BDEB]">✓✓</span>
-                                ) : (
-                                  <span>✓✓</span>
-                                )}
+                                {(() => {
+                                  const t = renderMessageTicks(message.status);
+                                  return (
+                                    <span className={`${t.className} tracking-tight`} aria-label={message.status}>
+                                      {t.glyph}
+                                    </span>
+                                  );
+                                })()}
                               </span>
                             )}
                           </div>
@@ -1814,6 +1895,38 @@ export default function CommunityPage() {
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {messageInfo &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
+                  <div className="w-full max-w-md rounded-xl border border-[#2A3942] bg-[#111B21] p-4 text-sm text-[#E9EDEF] shadow-xl">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-[#AEBAC1]">Message info</div>
+                        <div className="mt-0.5 text-xs text-[#8696A0]">Status: {messageInfo.data.status}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                        onClick={() => setMessageInfo(null)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="space-y-1 text-xs text-[#AEBAC1]">
+                      <div>Sent: {new Date(messageInfo.data.createdAt).toLocaleString()}</div>
+                      {messageInfo.data.editedAt ? <div>Edited: {new Date(messageInfo.data.editedAt).toLocaleString()}</div> : null}
+                      {messageInfo.data.revokedAt ? <div>Deleted: {new Date(messageInfo.data.revokedAt).toLocaleString()}</div> : null}
+                      <div>
+                        Read by:{" "}
+                        {Array.isArray(messageInfo.data.readBy) ? (messageInfo.data.readBy as unknown[]).length : 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
 
             {editingMessageId && (
               <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#2A3942] bg-[#111B21] px-3 py-2 text-xs text-[#AEBAC1]">
@@ -1837,12 +1950,13 @@ export default function CommunityPage() {
                 type="file"
                 className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void uploadChatFile(file);
+                  const list = e.target.files ? Array.from(e.target.files) : [];
+                  if (list.length > 0) void uploadChatFiles(list);
                   e.target.value = "";
                   e.target.removeAttribute("accept");
                   setAttachMenuOpen(false);
                 }}
+                multiple
               />
               <div className="flex items-end gap-2">
                 <button

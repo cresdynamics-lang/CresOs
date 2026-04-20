@@ -24,7 +24,10 @@ import { saveChatUpload, messageTypeFromMime } from "../lib/chat-uploads";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024
+    fileSize: Math.min(
+      1024 * 1024 * 1024,
+      Math.max(5 * 1024 * 1024, Number(process.env.CHAT_UPLOAD_MAX_FILE_BYTES ?? 0) || 250 * 1024 * 1024)
+    )
   },
   fileFilter: (_req, file, cb) => {
     const n = (file.originalname || "").toLowerCase();
@@ -661,6 +664,12 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           })
         ]);
 
+        const flags = await prisma.messageUserFlag.findMany({
+          where: { userId, messageId: { in: rows.map((m) => m.id) } },
+          select: { messageId: true, starred: true, saved: true }
+        });
+        const flagsByMessageId = new Map(flags.map((f) => [f.messageId, f]));
+
         const senderIds = [...new Set(rows.map((m) => m.senderId))];
         const senders = await prisma.user.findMany({
           where: { id: { in: senderIds } },
@@ -681,6 +690,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const messages = rows.map((m) => {
           const s = senderById.get(m.senderId);
           const revoked = Boolean(m.revokedAt);
+          const f = flagsByMessageId.get(m.id) ?? null;
           return {
             id: m.id,
             conversationId: m.conversationId,
@@ -692,6 +702,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             timestamp: m.createdAt.toISOString(),
             readBy: m.readBy,
             metadata: m.metadata,
+            flags: f ? { starred: Boolean(f.starred), saved: Boolean(f.saved) } : { starred: false, saved: false },
             editedAt: m.editedAt?.toISOString() ?? null,
             revokedAt: m.revokedAt?.toISOString() ?? null
           };
@@ -713,6 +724,119 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         console.error("Error getting conversation messages:", error);
         res.status(500).json({
           error: "Failed to get conversation messages",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  // Flag message (star / save)
+  router.post(
+    "/conversations/:conversationId/messages/:messageId/flags",
+    requireRoles(ALL_APP_ROLE_KEYS),
+    async (req, res) => {
+      try {
+        const conversationId = Array.isArray(req.params.conversationId)
+          ? req.params.conversationId[0]
+          : req.params.conversationId;
+        const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
+        if (!conversationId || !messageId) {
+          return res.status(400).json({ error: "Missing conversation or message id" });
+        }
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const { starred, saved } = req.body as { starred?: boolean; saved?: boolean };
+
+        const msg = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId,
+            deletedAt: null,
+            conversation: { orgId, participants: { has: userId } }
+          },
+          select: { id: true }
+        });
+        if (!msg) return res.status(404).json({ error: "Message not found" });
+
+        const updated = await prisma.messageUserFlag.upsert({
+          where: { messageId_userId: { messageId, userId } },
+          create: {
+            messageId,
+            userId,
+            starred: Boolean(starred),
+            saved: Boolean(saved)
+          },
+          update: {
+            ...(typeof starred === "boolean" ? { starred } : {}),
+            ...(typeof saved === "boolean" ? { saved } : {})
+          },
+          select: { messageId: true, starred: true, saved: true, updatedAt: true }
+        });
+
+        res.json({ success: true, data: { flags: updated } });
+      } catch (error) {
+        console.error("Error updating message flags:", error);
+        res.status(500).json({
+          error: "Failed to update message flags",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  // Message info (read receipts, timestamps)
+  router.get(
+    "/conversations/:conversationId/messages/:messageId/info",
+    requireRoles(ALL_APP_ROLE_KEYS),
+    async (req, res) => {
+      try {
+        const conversationId = Array.isArray(req.params.conversationId)
+          ? req.params.conversationId[0]
+          : req.params.conversationId;
+        const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
+        if (!conversationId || !messageId) {
+          return res.status(400).json({ error: "Missing conversation or message id" });
+        }
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+
+        const msg = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId,
+            deletedAt: null,
+            conversation: { orgId, participants: { has: userId } }
+          },
+          select: {
+            id: true,
+            senderId: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            editedAt: true,
+            revokedAt: true,
+            readBy: true
+          }
+        });
+        if (!msg) return res.status(404).json({ error: "Message not found" });
+
+        res.json({
+          success: true,
+          data: {
+            id: msg.id,
+            senderId: msg.senderId,
+            status: msg.status,
+            createdAt: msg.createdAt.toISOString(),
+            updatedAt: msg.updatedAt.toISOString(),
+            editedAt: msg.editedAt?.toISOString() ?? null,
+            revokedAt: msg.revokedAt?.toISOString() ?? null,
+            readBy: msg.readBy
+          }
+        });
+      } catch (error) {
+        console.error("Error getting message info:", error);
+        res.status(500).json({
+          error: "Failed to get message info",
           message: error instanceof Error ? error.message : "Unknown error"
         });
       }
@@ -995,7 +1119,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
   router.post(
     "/conversations/:conversationId/upload",
     requireRoles(ALL_APP_ROLE_KEYS),
-    upload.single('file'),
+    upload.any(),
     async (req, res) => {
       try {
         const conversationId = Array.isArray(req.params.conversationId)
@@ -1006,10 +1130,9 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         }
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
-        const file = req.file;
-
-        if (!file) {
-          return res.status(400).json({ error: "No file uploaded" });
+        const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+        if (files.length === 0) {
+          return res.status(400).json({ error: "No files uploaded" });
         }
 
         const conv = await prisma.conversation.findFirst({
@@ -1019,35 +1142,43 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "Conversation not found" });
         }
 
-        const urlPath = saveChatUpload(orgId, conversationId, file.originalname, file.buffer);
-        const msgType = messageTypeFromMime(file.mimetype);
-        const metadata = {
-          url: urlPath,
-          fileName: file.originalname,
-          fileSize: file.size,
-          mimeType: file.mimetype
-        };
+        const baseCaption =
+          typeof req.body?.caption === "string" && req.body.caption.trim() ? req.body.caption.trim() : "";
 
-        const caption =
-          typeof req.body?.caption === "string" && req.body.caption.trim()
-            ? req.body.caption.trim()
-            : msgType === "image"
-              ? "📷 Photo"
-              : msgType === "voice"
-                ? "🎤 Voice message"
-                : `📎 ${file.originalname}`;
+        const createdMessages = [];
+        for (let i = 0; i < files.length; i += 1) {
+          const file = files[i]!;
+          const urlPath = saveChatUpload(orgId, conversationId, file.originalname, file.buffer);
+          const msgType = messageTypeFromMime(file.mimetype);
+          const metadata = {
+            url: urlPath,
+            fileName: file.originalname,
+            fileSize: file.size,
+            mimeType: file.mimetype
+          };
 
-        const created = await prisma.message.create({
-          data: {
-            conversationId,
-            senderId: userId,
-            content: caption,
-            type: msgType,
-            metadata: metadata as Prisma.InputJsonValue,
-            status: "sent",
-            readBy: [{ userId, readAt: new Date().toISOString() }]
-          }
-        });
+          const caption =
+            i === 0 && baseCaption
+              ? baseCaption
+              : msgType === "image"
+                ? "📷 Photo"
+                : msgType === "voice"
+                  ? "🎤 Voice message"
+                  : `📎 ${file.originalname}`;
+
+          const created = await prisma.message.create({
+            data: {
+              conversationId,
+              senderId: userId,
+              content: caption,
+              type: msgType,
+              metadata: metadata as Prisma.InputJsonValue,
+              status: "sent",
+              readBy: [{ userId, readAt: new Date().toISOString() }]
+            }
+          });
+          createdMessages.push(created);
+        }
 
         const sender = await prisma.user.findUnique({
           where: { id: userId },
@@ -1059,36 +1190,38 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           where: { id: conversationId },
           data: {
             lastMessage: {
-              id: created.id,
-              content: created.content,
-              senderId: created.senderId,
-              timestamp: created.createdAt.toISOString(),
-              type: created.type
+              id: createdMessages[createdMessages.length - 1]!.id,
+              content: createdMessages[createdMessages.length - 1]!.content,
+              senderId: createdMessages[createdMessages.length - 1]!.senderId,
+              timestamp: createdMessages[createdMessages.length - 1]!.createdAt.toISOString(),
+              type: createdMessages[createdMessages.length - 1]!.type
             },
             updatedAt: new Date(),
             unreadCounts: unreadNext
           }
         });
 
-        const message = {
+        const senderName = sender ? displayNameOrEmail(sender.name, "") : "User";
+        const messages = createdMessages.map((created) => ({
           id: created.id,
           conversationId: created.conversationId,
           senderId: created.senderId,
-          senderName: sender ? displayNameOrEmail(sender.name, "") : "User",
+          senderName,
           content: created.content,
           type: created.type,
           status: created.status,
           timestamp: created.createdAt.toISOString(),
           readBy: created.readBy,
           metadata: created.metadata,
+          flags: { starred: false, saved: false },
           editedAt: created.editedAt?.toISOString() ?? null,
           revokedAt: created.revokedAt?.toISOString() ?? null
-        };
+        }));
 
         res.status(201).json({
           success: true,
-          message: "File uploaded successfully",
-          data: { message }
+          message: "Files uploaded successfully",
+          data: { messages }
         });
       } catch (error) {
         console.error("Error uploading file:", error);

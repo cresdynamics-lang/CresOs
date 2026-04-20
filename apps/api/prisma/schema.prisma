@@ -199,6 +199,7 @@ model User {
   conversations     Conversation[]      @relation("ConversationCreator")
   messages          Message[]           @relation("MessageSender")
   messageHides      MessageHide[]
+  messageFlags      MessageUserFlag[]
   DailyReminderSent DailyReminderSent[]
 }
 
@@ -848,9 +849,27 @@ model Message {
   sender        User               @relation("MessageSender", fields: [senderId], references: [id])
   notifications ChatNotification[]
   hides         MessageHide[]
+  flags         MessageUserFlag[]
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+}
+
+model MessageUserFlag {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  starred   Boolean  @default(false)
+  saved     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, updatedAt])
+  @@index([messageId])
 }
 
 model MessageHide {
