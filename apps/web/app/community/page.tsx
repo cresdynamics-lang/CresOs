@@ -1286,6 +1286,7 @@ export default function CommunityPage() {
       status: raw.status === "delivered" ? "delivered" : "sent",
       metadata: (raw.metadata as Record<string, unknown>) ?? null,
       flags: (raw.flags as { starred?: boolean; saved?: boolean }) ?? { starred: false, saved: false },
+      replyTo: raw.replyTo != null && raw.replyTo !== "" ? String(raw.replyTo) : null,
       editedAt: raw.editedAt ? String(raw.editedAt) : null,
       revokedAt: raw.revokedAt ? String(raw.revokedAt) : null
     };
