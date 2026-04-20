@@ -15,6 +15,7 @@ interface Message {
   status: "sent" | "delivered" | "read" | string;
   metadata?: Record<string, unknown> | null;
   flags?: { starred?: boolean; saved?: boolean } | null;
+  replyTo?: string | null;
   editedAt?: string | null;
   revokedAt?: string | null;
 }
@@ -155,15 +156,24 @@ function avatarUrl(pathOrUrl: string | null | undefined): string | null {
   return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
+function resolveMediaUrl(pathOrUrl: string | null | undefined, apiOrigin: string): string | null {
+  if (!pathOrUrl) return null;
+  const raw = String(pathOrUrl).trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  const base = apiOrigin.replace(/\/+$/, "");
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+}
+
 function renderMessageTicks(status: string): { glyph: string; className: string } {
   if (status === "read") return { glyph: "✓✓", className: "text-[#53BDEB] font-bold" };
   if (status === "delivered") return { glyph: "✓✓", className: "text-[#AEBAC1] font-bold" };
   return { glyph: "✓", className: "text-[#AEBAC1] font-bold" };
 }
 
-function ChatMessageBody({ message }: { message: Message }) {
+function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: string }) {
   const md = message.metadata;
-  const fileUrl = md && typeof md.url === "string" ? avatarUrl(md.url) : null;
+  const fileUrl = md && typeof md.url === "string" ? resolveMediaUrl(md.url, apiOrigin) : null;
 
   if (message.type === "deleted" || message.revokedAt) {
     return <div className="italic text-[#8696A0]">This message was deleted.</div>;
@@ -196,7 +206,17 @@ function ChatMessageBody({ message }: { message: Message }) {
   if (message.type === "image" && fileUrl) {
     return (
       <div className="space-y-1">
-        <img src={fileUrl} alt="" className="max-h-64 max-w-full rounded-md object-contain" />
+        <a href={fileUrl} target="_blank" rel="noreferrer" className="block">
+          <img src={fileUrl} alt="" className="max-h-64 max-w-full rounded-md object-contain" />
+        </a>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+            Open
+          </a>
+          <a href={fileUrl} download className="text-[#53BDEB] underline">
+            Download
+          </a>
+        </div>
         {message.content?.trim() ? (
           <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
         ) : null}
@@ -208,6 +228,14 @@ function ChatMessageBody({ message }: { message: Message }) {
     return (
       <div className="space-y-1">
         <video src={fileUrl} controls className="max-h-56 max-w-full rounded-md" />
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+            Open
+          </a>
+          <a href={fileUrl} download className="text-[#53BDEB] underline">
+            Download
+          </a>
+        </div>
         {message.content?.trim() ? (
           <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
         ) : null}
@@ -219,6 +247,14 @@ function ChatMessageBody({ message }: { message: Message }) {
     return (
       <div className="space-y-1">
         <audio src={fileUrl} controls className="h-9 w-full max-w-[280px]" />
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+            Open
+          </a>
+          <a href={fileUrl} download className="text-[#53BDEB] underline">
+            Download
+          </a>
+        </div>
         {message.content?.trim() ? (
           <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
         ) : null}
@@ -228,10 +264,20 @@ function ChatMessageBody({ message }: { message: Message }) {
 
   if ((message.type === "file" || message.type === "music") && fileUrl) {
     const fn = typeof md?.fileName === "string" ? md.fileName : "Attachment";
+    const size = typeof md?.fileSize === "number" ? md.fileSize : null;
     return (
-      <a href={fileUrl} target="_blank" rel="noreferrer" className="break-all text-[#53BDEB] underline">
-        {fn}
-      </a>
+      <div className="rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-1.5 text-xs">
+        <div className="font-medium text-[#E9EDEF] break-all">{fn}</div>
+        {size != null ? <div className="mt-0.5 text-[#AEBAC1]">{Math.round(size / 1024)} KB</div> : null}
+        <div className="mt-1 flex flex-wrap gap-2">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+            Open
+          </a>
+          <a href={fileUrl} download className="text-[#53BDEB] underline">
+            Download
+          </a>
+        </div>
+      </div>
     );
   }
 
@@ -259,9 +305,12 @@ export default function CommunityPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileAttachRef = useRef<HTMLInputElement>(null);
   const attachWrapRef = useRef<HTMLDivElement>(null);
@@ -740,11 +789,67 @@ export default function CommunityPage() {
     setEditDraft("");
     setMessageMenuId(null);
     setAttachMenuOpen(false);
+    setReplyToId(null);
+    setForwardingMessage(null);
+  }, [selectedConversation?.id]);
+
+  // Draft cache per conversation
+  useEffect(() => {
+    if (!selectedConversation?.id) return;
+    try {
+      const key = `cresos.community.draft.${selectedConversation.id}`;
+      const saved = localStorage.getItem(key);
+      if (saved != null && saved !== newMessage) {
+        setNewMessage(saved);
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation?.id]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, selectedConversation?.id]);
+    if (!selectedConversation?.id) return;
+    try {
+      const key = `cresos.community.draft.${selectedConversation.id}`;
+      localStorage.setItem(key, newMessage);
+    } catch {
+      // ignore
+    }
+  }, [selectedConversation?.id, newMessage]);
+
+  // Scroll position cache per conversation
+  useEffect(() => {
+    if (!selectedConversation?.id) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      try {
+        sessionStorage.setItem(`cresos.community.scroll.${selectedConversation.id}`, String(el.scrollTop));
+      } catch {
+        // ignore
+      }
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll as any);
+  }, [selectedConversation?.id]);
+
+  useEffect(() => {
+    if (!selectedConversation?.id) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    // Restore scrollTop if we have it; otherwise go to bottom.
+    try {
+      const saved = sessionStorage.getItem(`cresos.community.scroll.${selectedConversation.id}`);
+      if (saved != null) {
+        el.scrollTop = Math.max(0, Number(saved) || 0);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    el.scrollTop = el.scrollHeight;
+  }, [selectedConversation?.id, messages.length]);
 
   useLayoutEffect(() => {
     if (!attachMenuOpen) {
@@ -840,9 +945,10 @@ export default function CommunityPage() {
 
       if (pendingFiles.length > 0) {
         const caption = newMessage.trim();
-        await uploadChatFiles(pendingFiles, caption);
+        await uploadChatFiles(pendingFiles, caption, replyToId);
         setPendingFiles([]);
         if (caption) setNewMessage("");
+        setReplyToId(null);
         return;
       }
 
@@ -854,7 +960,8 @@ export default function CommunityPage() {
         },
         body: JSON.stringify({
           content: newMessage.trim(),
-          type: "text"
+          type: "text",
+          replyTo: replyToId
         })
       });
 
@@ -876,6 +983,7 @@ export default function CommunityPage() {
         };
         setMessages((prev) => [...prev, nextMsg]);
         setNewMessage("");
+        setReplyToId(null);
 
         setConversations((prev) =>
           prev.map((conv) =>
@@ -1147,7 +1255,15 @@ export default function CommunityPage() {
   };
 
   const apiOrigin = useMemo(
-    () => (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, ""),
+    () => {
+      const env = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/+$/, "");
+      if (env && !env.includes("localhost")) return env;
+      if (typeof window !== "undefined") {
+        // Prefer same-origin in production; most deployments reverse-proxy the API.
+        return window.location.origin;
+      }
+      return (env || "http://localhost:4000").replace(/\/+$/, "");
+    },
     []
   );
 
@@ -1186,13 +1302,14 @@ export default function CommunityPage() {
   }, []);
 
   const uploadChatFiles = useCallback(
-    async (files: File[], caption: string) => {
+    async (files: File[], caption: string, replyTo: string | null) => {
       if (!selectedConversation?.id || !auth.accessToken) return;
       if (files.length === 0) return;
       setChatError(null);
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
       if (caption) fd.append("caption", caption);
+      if (replyTo) fd.append("replyTo", replyTo);
       const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
         method: "POST",
         body: fd
@@ -1243,7 +1360,7 @@ export default function CommunityPage() {
         const blob = new Blob(chunks, { type: mt });
         const ext = mt.includes("mp4") ? "m4a" : "webm";
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mt });
-        void uploadChatFiles([file], "");
+        void uploadChatFiles([file], "", null);
         setVoiceRecordingDuration(0);
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -1765,6 +1882,7 @@ export default function CommunityPage() {
                 backgroundColor: "#0B141A",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232A3942' fill-opacity='0.35'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
               }}
+              ref={messagesScrollRef}
             >
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-[200px] flex-col items-center justify-center text-center text-[#8696A0]">
@@ -1793,6 +1911,23 @@ export default function CommunityPage() {
                               ? `${wa.outgoing} pl-2 pr-6 text-[#E9EDEF]`
                               : `${wa.incoming} pl-6 pr-2 text-[#E9EDEF]`
                           }`}
+                          onTouchStart={(e) => {
+                            const t = e.touches[0];
+                            if (!t) return;
+                            (e.currentTarget as any).__swipeStartX = t.clientX;
+                          }}
+                          onTouchMove={(e) => {
+                            const t = e.touches[0];
+                            if (!t) return;
+                            const startX = (e.currentTarget as any).__swipeStartX as number | undefined;
+                            if (startX == null) return;
+                            const dx = t.clientX - startX;
+                            if (dx > 52) {
+                              (e.currentTarget as any).__swipeStartX = undefined;
+                              setReplyToId(message.id);
+                              requestAnimationFrame(() => composerRef.current?.focus());
+                            }
+                          }}
                         >
                           {message.type !== "deleted" && !message.revokedAt && (
                             <div
@@ -1831,6 +1966,27 @@ export default function CommunityPage() {
                                   Edit
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => {
+                                  setReplyToId(message.id);
+                                  setMessageMenuId(null);
+                                  requestAnimationFrame(() => composerRef.current?.focus());
+                                }}
+                              >
+                                Reply
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                                onClick={() => {
+                                  setForwardingMessage(message);
+                                  setMessageMenuId(null);
+                                }}
+                              >
+                                Forward
+                              </button>
                               <button
                                 type="button"
                                 className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
@@ -1876,7 +2032,19 @@ export default function CommunityPage() {
                               ) : null}
                             </div>
                           )}
-                          <ChatMessageBody message={message} />
+                          {message.replyTo ? (
+                            <div className="mb-1 rounded border border-[#2A3942] bg-[#111B21]/40 px-2 py-1 text-[11px] text-[#AEBAC1]">
+                              Replying to{" "}
+                              <span className="font-medium text-[#E9EDEF]">
+                                {messages.find((m2) => m2.id === message.replyTo)?.senderName ?? "message"}
+                              </span>
+                              :{" "}
+                              <span className="text-[#8696A0]">
+                                {(messages.find((m2) => m2.id === message.replyTo)?.content ?? "").slice(0, 80)}
+                              </span>
+                            </div>
+                          ) : null}
+                          <ChatMessageBody message={message} apiOrigin={apiOrigin} />
                           <div
                             className={`mt-0.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] ${
                               mine ? "text-[#A3E0D4]" : "text-[#8696A0]"
@@ -1938,6 +2106,81 @@ export default function CommunityPage() {
                 document.body
               )}
 
+            {forwardingMessage &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4">
+                  <div className="w-full max-w-lg rounded-xl border border-[#2A3942] bg-[#111B21] p-4 text-sm text-[#E9EDEF] shadow-xl">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-[#AEBAC1]">Forward message</div>
+                        <div className="mt-0.5 text-xs text-[#8696A0]">Choose a chat to forward to.</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                        onClick={() => setForwardingMessage(null)}
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="max-h-[55vh] overflow-auto rounded-lg border border-[#2A3942]">
+                      {filteredConversations.length === 0 ? (
+                        <div className="p-3 text-xs text-[#AEBAC1]">No chats found.</div>
+                      ) : (
+                        <ul className="divide-y divide-[#2A3942]">
+                          {filteredConversations.map((c) => (
+                            <li key={c.id}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#202C33]"
+                                onClick={async () => {
+                                  try {
+                                    const meta =
+                                      forwardingMessage.metadata && typeof forwardingMessage.metadata === "object"
+                                        ? { ...forwardingMessage.metadata, forwarded: true, forwardedFromMessageId: forwardingMessage.id }
+                                        : { forwarded: true, forwardedFromMessageId: forwardingMessage.id };
+                                    const res = await apiFetch(`/chat-community/conversations/${c.id}/messages`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        content: forwardingMessage.content ?? "",
+                                        type: forwardingMessage.type ?? "text",
+                                        metadata: meta,
+                                        replyTo: null
+                                      })
+                                    });
+                                    if (!res.ok) {
+                                      const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+                                      setChatError(err.error ?? err.message ?? "Forward failed");
+                                      return;
+                                    }
+                                    setForwardingMessage(null);
+                                    if (selectedConversation?.id === c.id) {
+                                      const data = (await res.json()) as { data?: { message?: any } };
+                                      const raw = data.data?.message;
+                                      if (raw) appendMessageFromApi(raw);
+                                    }
+                                    void loadConversations();
+                                  } catch {
+                                    setChatError("Forward failed (network).");
+                                  }
+                                }}
+                              >
+                                <span className="min-w-0 truncate">{c.name || c.otherUser?.name || "Chat"}</span>
+                                <span className="text-[11px] text-[#8696A0]">→</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
             {editingMessageId && (
               <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#2A3942] bg-[#111B21] px-3 py-2 text-xs text-[#AEBAC1]">
                 <span>Editing message</span>
@@ -1955,6 +2198,25 @@ export default function CommunityPage() {
             )}
 
             <div className={`flex flex-shrink-0 flex-col gap-1 px-3 py-2 ${wa.inputBar}`}>
+              {replyToId ? (
+                <div className="mb-1 flex items-start justify-between gap-2 rounded-lg border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1]">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-[#8696A0]">Replying</div>
+                    <div className="truncate text-[#E9EDEF]">
+                      {(messages.find((m) => m.id === replyToId)?.senderName ?? "Message")}
+                      {": "}
+                      {(messages.find((m) => m.id === replyToId)?.content ?? "").slice(0, 90)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                    onClick={() => setReplyToId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
               {pendingFiles.length > 0 && (
                 <div className="mb-1 rounded-lg border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1]">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

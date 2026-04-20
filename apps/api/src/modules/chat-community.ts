@@ -699,6 +699,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             content: revoked ? "This message was deleted." : m.content,
             type: revoked ? "deleted" : m.type,
             status: m.status,
+            replyTo: m.replyTo ?? null,
             timestamp: m.createdAt.toISOString(),
             readBy: m.readBy,
             metadata: m.metadata,
@@ -940,9 +941,11 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           content: created.content,
           type: created.type,
           status: created.status,
+          replyTo: created.replyTo ?? null,
           timestamp: created.createdAt.toISOString(),
           readBy: created.readBy,
           metadata: created.metadata,
+          flags: { starred: false, saved: false },
           editedAt: created.editedAt?.toISOString() ?? null,
           revokedAt: created.revokedAt?.toISOString() ?? null
         };
@@ -1155,6 +1158,8 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
 
         const baseCaption =
           typeof req.body?.caption === "string" && req.body.caption.trim() ? req.body.caption.trim() : "";
+        const replyTo =
+          typeof req.body?.replyTo === "string" && req.body.replyTo.trim() ? req.body.replyTo.trim() : null;
 
         const createdMessages = [];
         for (let i = 0; i < files.length; i += 1) {
@@ -1185,6 +1190,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
               type: msgType,
               metadata: metadata as Prisma.InputJsonValue,
               status: "sent",
+              replyTo,
               readBy: [{ userId, readAt: new Date().toISOString() }]
             }
           });
@@ -1221,6 +1227,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           content: created.content,
           type: created.type,
           status: created.status,
+          replyTo: created.replyTo ?? null,
           timestamp: created.createdAt.toISOString(),
           readBy: created.readBy,
           metadata: created.metadata,
