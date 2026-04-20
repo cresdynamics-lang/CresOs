@@ -1119,7 +1119,10 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
   router.post(
     "/conversations/:conversationId/upload",
     requireRoles(ALL_APP_ROLE_KEYS),
-    upload.any(),
+    upload.fields([
+      { name: "files" },
+      { name: "file" }
+    ]),
     async (req, res) => {
       try {
         const conversationId = Array.isArray(req.params.conversationId)
@@ -1130,7 +1133,15 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         }
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
-        const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+        const filesField = req.files as
+          | Record<string, Express.Multer.File[]>
+          | Express.Multer.File[]
+          | undefined;
+        const list = Array.isArray(filesField)
+          ? filesField
+          : [...(filesField?.files ?? []), ...(filesField?.file ?? [])];
+
+        const files = list.filter((f) => f && typeof f.originalname === "string" && f.buffer instanceof Buffer);
         if (files.length === 0) {
           return res.status(400).json({ error: "No files uploaded" });
         }

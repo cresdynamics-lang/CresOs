@@ -258,6 +258,7 @@ export default function CommunityPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -828,7 +829,7 @@ export default function CommunityPage() {
       await saveEditMessage();
       return;
     }
-    if (!newMessage.trim() || !selectedConversation || !auth.accessToken) return;
+    if (!selectedConversation || !auth.accessToken) return;
     if (!auth.userId) {
       setChatError("Session is missing your user id. Refresh the page or sign out and sign in again.");
       return;
@@ -836,6 +837,16 @@ export default function CommunityPage() {
 
     try {
       setChatError(null);
+
+      if (pendingFiles.length > 0) {
+        const caption = newMessage.trim();
+        await uploadChatFiles(pendingFiles, caption);
+        setPendingFiles([]);
+        if (caption) setNewMessage("");
+        return;
+      }
+
+      if (!newMessage.trim()) return;
       const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`, {
         method: "POST",
         headers: {
@@ -859,6 +870,7 @@ export default function CommunityPage() {
           type: raw.type === "system" ? "system" : "text",
           status: raw.status === "delivered" ? "delivered" : "sent",
           metadata: raw.metadata ?? null,
+          flags: raw.flags ?? { starred: false, saved: false },
           editedAt: raw.editedAt ?? null,
           revokedAt: raw.revokedAt ?? null
         };
@@ -1174,14 +1186,13 @@ export default function CommunityPage() {
   }, []);
 
   const uploadChatFiles = useCallback(
-    async (files: File[]) => {
+    async (files: File[], caption: string) => {
       if (!selectedConversation?.id || !auth.accessToken) return;
       if (files.length === 0) return;
       setChatError(null);
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
-      const cap = newMessage.trim();
-      if (cap) fd.append("caption", cap);
+      if (caption) fd.append("caption", caption);
       const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
         method: "POST",
         body: fd
@@ -1197,11 +1208,10 @@ export default function CommunityPage() {
       const list = data.data?.messages ?? (data.data?.message ? [data.data.message] : []);
       if (list.length > 0) {
         for (const raw of list) appendMessageFromApi(raw);
-        if (cap) setNewMessage("");
         void loadConversations();
       }
     },
-    [selectedConversation, auth.accessToken, apiFetch, newMessage, appendMessageFromApi, loadConversations]
+    [selectedConversation, auth.accessToken, apiFetch, appendMessageFromApi, loadConversations]
   );
 
   const startVoiceRecording = async () => {
@@ -1233,7 +1243,7 @@ export default function CommunityPage() {
         const blob = new Blob(chunks, { type: mt });
         const ext = mt.includes("mp4") ? "m4a" : "webm";
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mt });
-        void uploadChatFiles([file]);
+        void uploadChatFiles([file], "");
         setVoiceRecordingDuration(0);
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -1945,13 +1955,62 @@ export default function CommunityPage() {
             )}
 
             <div className={`flex flex-shrink-0 flex-col gap-1 px-3 py-2 ${wa.inputBar}`}>
+              {pendingFiles.length > 0 && (
+                <div className="mb-1 rounded-lg border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1]">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {pendingFiles.length} attachment{pendingFiles.length !== 1 ? "s" : ""} ready
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[#53BDEB] hover:underline"
+                      onClick={() => setPendingFiles([])}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex max-h-28 flex-col gap-1 overflow-auto pr-1">
+                    {pendingFiles.slice(0, 12).map((f) => (
+                      <div key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-[#E9EDEF]">{f.name}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded px-2 py-0.5 text-[#AEBAC1] hover:bg-[#2A3942]"
+                          onClick={() =>
+                            setPendingFiles((prev) =>
+                              prev.filter((x) => `${x.name}:${x.size}:${x.lastModified}` !== `${f.name}:${f.size}:${f.lastModified}`)
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    {pendingFiles.length > 12 ? <div className="text-[#8696A0]">+{pendingFiles.length - 12} more…</div> : null}
+                  </div>
+                  <div className="mt-2 text-[11px] text-[#8696A0]">Tap Send to upload and deliver.</div>
+                </div>
+              )}
               <input
                 ref={fileAttachRef}
                 type="file"
                 className="hidden"
                 onChange={(e) => {
                   const list = e.target.files ? Array.from(e.target.files) : [];
-                  if (list.length > 0) void uploadChatFiles(list);
+                  if (list.length > 0) {
+                    setPendingFiles((prev) => {
+                      const seen = new Set(prev.map((f) => `${f.name}:${f.size}:${f.lastModified}`));
+                      const next = [...prev];
+                      for (const f of list) {
+                        const k = `${f.name}:${f.size}:${f.lastModified}`;
+                        if (seen.has(k)) continue;
+                        seen.add(k);
+                        next.push(f);
+                      }
+                      return next;
+                    });
+                    requestAnimationFrame(() => composerRef.current?.focus());
+                  }
                   e.target.value = "";
                   e.target.removeAttribute("accept");
                   setAttachMenuOpen(false);
