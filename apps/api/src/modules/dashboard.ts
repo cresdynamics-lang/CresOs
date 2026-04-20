@@ -345,8 +345,13 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
               }),
               prisma.projectHandoffRequest.findMany({
                 where: { orgId, toUserId: userId, status: "pending" },
-                select: { id: true, projectId: true, fromUserId: true },
-                include: { project: { select: { name: true } }, fromUser: { select: { name: true, email: true } } }
+                select: {
+                  id: true,
+                  projectId: true,
+                  fromUserId: true,
+                  project: { select: { name: true } },
+                  fromUser: { select: { name: true, email: true } }
+                }
               })
             ])
           : [[], []];
