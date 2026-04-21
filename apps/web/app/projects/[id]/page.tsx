@@ -1149,10 +1149,17 @@ function EditProjectContactModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-semibold text-slate-50">Edit project</h3>
-        <form onSubmit={submit} className="flex flex-col gap-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[min(92dvh,880px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-slate-700 px-5 py-4">
+          <h3 className="text-lg font-semibold text-slate-50">Edit project</h3>
+          <p className="mt-1 text-xs text-slate-500">Scroll the form on small screens; actions stay pinned at the bottom.</p>
+        </div>
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Project name</span>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
@@ -1241,7 +1248,8 @@ function EditProjectContactModal({
             <span className="text-xs text-slate-400">For how long (months)</span>
             <input type="number" min={0} value={managementMonths} onChange={(e) => setManagementMonths(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="e.g. 12" />
           </label>
-          <div className="mt-2 flex gap-2">
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2 border-t border-slate-700 bg-slate-900/95 px-5 py-3">
             <button type="submit" disabled={submitting} className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
               {submitting ? "Saving…" : "Save"}
             </button>

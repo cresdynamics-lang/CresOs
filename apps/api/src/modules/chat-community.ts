@@ -19,6 +19,7 @@ import {
   getUserIdsInOrg
 } from "./chat-community-helpers";
 import { saveChatUpload, messageTypeFromMime } from "../lib/chat-uploads";
+import { composeAssistText } from "../lib/groq-compose-assist";
 
 // Configure multer for file uploads (images, docs, audio, video; block obvious executables)
 const upload = multer({
@@ -1540,6 +1541,50 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         console.error("Error updating status:", error);
         res.status(500).json({
           error: "Failed to update status",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  /** Optional grammar polish / translation for Community composer (Groq). */
+  router.post(
+    "/compose-assist",
+    requireRoles(ALL_APP_ROLE_KEYS),
+    async (req, res) => {
+      try {
+        const body = req.body as { text?: string; action?: string; targetLanguage?: string };
+        const text = typeof body.text === "string" ? body.text : "";
+        const action = body.action === "translate" ? "translate" : "proofread";
+        if (!text.trim()) {
+          return res.status(400).json({ success: false, error: "text is required" });
+        }
+        if (text.length > 4000) {
+          return res.status(400).json({ success: false, error: "text is too long (max 4000 characters)" });
+        }
+        if (action === "translate") {
+          const targetLanguage = typeof body.targetLanguage === "string" ? body.targetLanguage.trim() : "";
+          if (!targetLanguage) {
+            return res.status(400).json({ success: false, error: "targetLanguage is required for translate" });
+          }
+        }
+        const out = await composeAssistText({
+          action,
+          text,
+          targetLanguage: body.targetLanguage
+        });
+        if (!out) {
+          return res.status(503).json({
+            success: false,
+            error: "AI assist is not configured or temporarily unavailable"
+          });
+        }
+        res.json({ success: true, data: { text: out } });
+      } catch (error) {
+        console.error("Error in compose-assist:", error);
+        res.status(500).json({
+          success: false,
+          error: "Failed to run compose assist",
           message: error instanceof Error ? error.message : "Unknown error"
         });
       }

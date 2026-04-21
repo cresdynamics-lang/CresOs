@@ -304,6 +304,14 @@ export default function CommunityPage() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [literalTypingMode, setLiteralTypingMode] = useState(false);
+  const [assistPreview, setAssistPreview] = useState<{
+    kind: "polish" | "translate";
+    text: string;
+    note?: string;
+  } | null>(null);
+  const [assistBusy, setAssistBusy] = useState(false);
+  const translateSelectRef = useRef<HTMLSelectElement>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
@@ -791,7 +799,99 @@ export default function CommunityPage() {
     setAttachMenuOpen(false);
     setReplyToId(null);
     setForwardingMessage(null);
+    setAssistPreview(null);
   }, [selectedConversation?.id]);
+
+  useEffect(() => {
+    try {
+      const v = sessionStorage.getItem("cresos.community.literalTyping");
+      if (v === "1") setLiteralTypingMode(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const runTranslate = useCallback(
+    async (targetLanguage: string) => {
+      const raw = (editingMessageId ? editDraft : newMessage).trim();
+      if (!raw || literalTypingMode) return;
+      setAssistBusy(true);
+      setAssistPreview(null);
+      try {
+        const res = await apiFetch("/chat-community/compose-assist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: raw, action: "translate", targetLanguage })
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          data?: { text?: string };
+          error?: string;
+        };
+        if (!res.ok || !data.success || !data.data?.text) {
+          if (data.error) setChatError(data.error);
+          return;
+        }
+        const suggested = data.data.text.trim();
+        if (!suggested) return;
+        setAssistPreview({ kind: "translate", text: suggested, note: targetLanguage });
+      } catch {
+        setChatError("Translation request failed.");
+      } finally {
+        setAssistBusy(false);
+        if (translateSelectRef.current) translateSelectRef.current.value = "";
+      }
+    },
+    [apiFetch, editingMessageId, editDraft, newMessage, literalTypingMode]
+  );
+
+  useEffect(() => {
+    setAssistPreview(null);
+    if (!selectedConversation?.id) return;
+    if (literalTypingMode || pendingFiles.length > 0) return;
+    const raw = editingMessageId ? editDraft : newMessage;
+    const draft = raw.trim();
+    if (draft.length < 12 || draft.length > 4000) return;
+
+    const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        setAssistBusy(true);
+        try {
+          const res = await apiFetch("/chat-community/compose-assist", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: draft, action: "proofread" })
+          });
+          const data = (await res.json().catch(() => ({}))) as {
+            success?: boolean;
+            data?: { text?: string };
+          };
+          if (cancelled) return;
+          if (!res.ok || !data.success || !data.data?.text) return;
+          const suggested = data.data.text.trim();
+          if (!suggested || norm(suggested) === norm(draft)) return;
+          setAssistPreview({ kind: "polish", text: suggested });
+        } finally {
+          if (!cancelled) setAssistBusy(false);
+        }
+      })();
+    }, 1400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [
+    newMessage,
+    editDraft,
+    editingMessageId,
+    literalTypingMode,
+    pendingFiles.length,
+    selectedConversation?.id,
+    apiFetch
+  ]);
 
   // Draft cache per conversation
   useEffect(() => {
@@ -2254,6 +2354,84 @@ export default function CommunityPage() {
                   <div className="mt-2 text-[11px] text-[#8696A0]">Tap Send to upload and deliver.</div>
                 </div>
               )}
+              <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-[#8696A0]">
+                <label className="flex cursor-pointer items-center gap-1.5 text-[#AEBAC1]">
+                  <input
+                    type="checkbox"
+                    className="rounded border-[#2A3942] bg-[#111B21]"
+                    checked={literalTypingMode}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setLiteralTypingMode(on);
+                      if (on) setAssistPreview(null);
+                      try {
+                        sessionStorage.setItem("cresos.community.literalTyping", on ? "1" : "0");
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                  />
+                  <span>Literal typing (keep spelling; no AI polish)</span>
+                </label>
+                <span className="hidden sm:inline">·</span>
+                <label className="flex flex-wrap items-center gap-1">
+                  <span className="whitespace-nowrap">Translate draft</span>
+                  <select
+                    ref={translateSelectRef}
+                    defaultValue=""
+                    disabled={assistBusy || literalTypingMode}
+                    className="max-w-[11rem] rounded border border-[#2A3942] bg-[#111B21] px-2 py-1 text-[#E9EDEF] disabled:opacity-50"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v) void runTranslate(v);
+                    }}
+                  >
+                    <option value="">Choose language…</option>
+                    <option value="English">English</option>
+                    <option value="Kiswahili">Kiswahili (Swahili)</option>
+                    <option value="French">French</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="German">German</option>
+                    <option value="Arabic">Arabic</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Chinese">Chinese (Mandarin)</option>
+                  </select>
+                </label>
+              </div>
+              {assistBusy && !assistPreview ? (
+                <div className="mb-1 text-[11px] text-[#8696A0]">Working on wording…</div>
+              ) : null}
+              {assistPreview ? (
+                <div className="mb-1 rounded-lg border border-[#25D366]/35 bg-[#111B21]/90 px-2 py-2 text-xs text-[#E9EDEF]">
+                  <div className="mb-1 text-[11px] font-medium text-[#53BDEB]">
+                    {assistPreview.kind === "translate"
+                      ? `Translation preview${assistPreview.note ? ` → ${assistPreview.note}` : ""}`
+                      : "Suggested edit (grammar & spelling)"}
+                  </div>
+                  <p className="mb-2 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-[#AEBAC1]">{assistPreview.text}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded bg-[#25D366] px-2.5 py-1 text-[11px] font-medium text-[#111B21] hover:opacity-95"
+                      onClick={() => {
+                        const t = assistPreview.text;
+                        if (editingMessageId) setEditDraft(t);
+                        else setNewMessage(t);
+                        setAssistPreview(null);
+                      }}
+                    >
+                      Apply
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded px-2.5 py-1 text-[11px] text-[#8696A0] hover:bg-[#2A3942]"
+                      onClick={() => setAssistPreview(null)}
+                    >
+                      Keep what I typed
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <input
                 ref={fileAttachRef}
                 type="file"
@@ -2392,6 +2570,9 @@ export default function CommunityPage() {
                   }
                   onKeyDown={onInputKeyDown}
                   placeholder={editingMessageId ? "Edit message…" : "Type a message"}
+                  spellCheck={!literalTypingMode}
+                  autoCorrect={literalTypingMode ? "off" : "on"}
+                  autoCapitalize="sentences"
                   className="mb-0.5 max-h-[40vh] min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
                 />
                 <button
