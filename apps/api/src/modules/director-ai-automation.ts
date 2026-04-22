@@ -210,7 +210,11 @@ async function buildUserDeliveryContext(prisma: PrismaClient, orgId: string, use
   ].join("\n");
 }
 
-async function buildSalesPipelineContext(prisma: PrismaClient, orgId: string, userId: string): Promise<string> {
+async function buildSalesPipelineContext(
+  prisma: PrismaClient,
+  orgId: string,
+  userId: string
+): Promise<{ text: string; hasRiskSignals: boolean; suggestedQuestions: string[] }> {
   const now = new Date();
   const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -251,6 +255,9 @@ async function buildSalesPipelineContext(prisma: PrismaClient, orgId: string, us
 
   const fmtDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "—");
 
+  const staleDeals = deals.filter((d) => d.updatedAt < staleCutoff);
+  const staleLeads = leads.filter((l) => l.updatedAt < staleCutoff);
+
   const dealLines = deals.length
     ? deals
         .map((d) => {
@@ -278,7 +285,46 @@ async function buildSalesPipelineContext(prisma: PrismaClient, orgId: string, us
         .join("\n")
     : "No follow-ups scheduled in next 7 days.";
 
-  return [
+  const topDeal = deals[0] ?? null;
+  const secondDeal = deals[1] ?? null;
+  const topLead = leads[0] ?? null;
+  const secondLead = leads[1] ?? null;
+  const topStaleDeal = staleDeals[0] ?? null;
+  const topStaleLead = staleLeads[0] ?? null;
+
+  const suggestedQuestions: string[] = [];
+  if (topDeal?.title) {
+    suggestedQuestions.push(
+      `On "${topDeal.title}" (stage=${topDeal.stage}), what is the next action and decision timeline you’re driving this week?`
+    );
+  }
+  if (topStaleDeal?.title && topStaleDeal.title !== topDeal?.title) {
+    suggestedQuestions.push(
+      `"${topStaleDeal.title}" looks stale in CresOS (no update 7d+). What specifically is blocking movement, and what’s the fastest next step?`
+    );
+  }
+  if (topStaleLead?.title) {
+    suggestedQuestions.push(
+      `"${topStaleLead.title}" is marked stale (no update 7d+). When is the next contact scheduled, and what’s your message/offer angle?`
+    );
+  }
+  if (topLead?.title && topLead.title !== topStaleLead?.title) {
+    suggestedQuestions.push(
+      `On "${topLead.title}" (status=${topLead.status}), what’s the exact next milestone to move it forward (call/meeting/proposal) and by what date?`
+    );
+  }
+  if (suggestedQuestions.length < 2 && secondDeal?.title) {
+    suggestedQuestions.push(
+      `On "${secondDeal.title}" (stage=${secondDeal.stage}), what changed since the last update, and what do you need from leadership to unblock it?`
+    );
+  }
+  if (suggestedQuestions.length < 2 && secondLead?.title) {
+    suggestedQuestions.push(
+      `On "${secondLead.title}" (status=${secondLead.status}), what’s the next action and when will it happen?`
+    );
+  }
+
+  const text = [
     "CresOS sales pipeline context (for cross-checking this report):",
     "Owned deals (recent):",
     dealLines,
@@ -289,6 +335,10 @@ async function buildSalesPipelineContext(prisma: PrismaClient, orgId: string, us
     "Scheduled follow-ups (next 7 days):",
     followUpLines
   ].join("\n");
+
+  const hasRiskSignals = staleDeals.length > 0 || staleLeads.length > 0;
+
+  return { text, hasRiskSignals, suggestedQuestions };
 }
 
 async function groqPlainText(system: string, user: string, maxTokens: number, temperature: number): Promise<string | null> {
@@ -319,6 +369,25 @@ function ensureMarkedReviewed(text: string): string {
   return `${t}\n\n${MARKED}`;
 }
 
+function countQuestions(text: string): number {
+  return (text.match(/\?/g) ?? []).length;
+}
+
+function injectQuestionsBeforeMarked(text: string, questions: string[]): string {
+  const q = questions
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => (x.endsWith("?") ? x : `${x}?`));
+  if (q.length === 0) return text;
+
+  const idx = text.lastIndexOf(MARKED);
+  if (idx === -1) {
+    return `${text.trim()}\n\n${q.join(" ")}\n\n${MARKED}`;
+  }
+  const before = text.slice(0, idx).trimEnd();
+  const after = text.slice(idx).trimStart();
+  return `${before}\n\n${q.join(" ")}\n\n${after}`.trim();
+}
 async function pickDirectorAuthorId(prisma: PrismaClient, orgId: string): Promise<string | null> {
   const dirs = await getDirectorUsers(prisma, orgId);
   if (dirs.length) {
@@ -445,12 +514,18 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
     submittedAtIso: report.submittedAt.toISOString(),
     threadContext,
     previousReports,
-    platformContext: [deliveryContext, "", pipelineContext].filter(Boolean).join("\n")
+    platformContext: [deliveryContext, "", pipelineContext.text].filter(Boolean).join("\n")
   });
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
-  const content = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
+  const normalized = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
+  const qCount = countQuestions(normalized);
+  const minQuestions = pipelineContext.hasRiskSignals ? 3 : 2;
+  const content =
+    qCount >= minQuestions
+      ? normalized
+      : injectQuestionsBeforeMarked(normalized, pipelineContext.suggestedQuestions.slice(0, minQuestions - qCount));
 
   await prisma.$transaction([
     prisma.salesReportComment.create({
@@ -701,7 +776,47 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
-  const remarks = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
+  const normalized = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
+  const qCount = countQuestions(normalized);
+  const hasRiskSignals = overdueTasks.length > 0 || milestonesOverdue.length > 0 || countsDay.blocked > 0;
+  const minQuestions = hasRiskSignals ? 3 : 2;
+  const suggestedQuestions: string[] = [];
+  const overdue1 = overdueTasks[0] ?? null;
+  const overdue2 = overdueTasks.find((t) => t.project?.name && t.project?.name !== overdue1?.project?.name) ?? null;
+  const msOver1 = milestonesOverdue[0] ?? null;
+  const dueSoon1 = dueSoonTasks[0] ?? null;
+
+  if (overdue1?.title) {
+    suggestedQuestions.push(
+      `On "${overdue1.project?.name ?? "Project"}": "${overdue1.title}" is overdue. What is the exact plan to close it and by what date?`
+    );
+  }
+  if (msOver1?.name) {
+    suggestedQuestions.push(
+      `The milestone "${msOver1.name}" on "${msOver1.project?.name ?? "Project"}" is overdue. What’s the blocker and what do you need to get it completed?`
+    );
+  }
+  if (dueSoon1?.title) {
+    suggestedQuestions.push(
+      `For the upcoming due task "${dueSoon1.title}" on "${dueSoon1.project?.name ?? "Project"}", what is the testing + handover plan before the due date?`
+    );
+  }
+  if (overdue2?.title) {
+    suggestedQuestions.push(
+      `On "${overdue2.project?.name ?? "Project"}": "${overdue2.title}" is also overdue. What changed since last update, and what’s the next concrete step?`
+    );
+  }
+  if (suggestedQuestions.length < 2) {
+    suggestedQuestions.push("What did you test today, and what remains before you can confidently hand over?");
+  }
+  if (suggestedQuestions.length < 2) {
+    suggestedQuestions.push("Which dependency or stakeholder is currently slowing you down, and what’s the fastest way we can remove it?");
+  }
+
+  const remarks =
+    qCount >= minQuestions
+      ? normalized
+      : injectQuestionsBeforeMarked(normalized, suggestedQuestions.slice(0, minQuestions - qCount));
 
   await prisma.developerReport.update({
     where: { id: reportId },
