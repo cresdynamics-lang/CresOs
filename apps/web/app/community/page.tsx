@@ -174,6 +174,18 @@ function renderMessageTicks(status: string): { glyph: string; className: string 
 function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: string }) {
   const md = message.metadata;
   const fileUrl = md && typeof md.url === "string" ? resolveMediaUrl(md.url, apiOrigin) : null;
+  const fileName = md && typeof md.fileName === "string" ? md.fileName : null;
+
+  const prettyBytes = (n: number | null): string | null => {
+    if (n == null || !Number.isFinite(n)) return null;
+    if (n < 1024) return `${n} B`;
+    const kb = n / 1024;
+    if (kb < 1024) return `${Math.round(kb)} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(gb < 10 ? 1 : 0)} GB`;
+  };
 
   if (message.type === "deleted" || message.revokedAt) {
     return <div className="italic text-[#8696A0]">This message was deleted.</div>;
@@ -206,14 +218,17 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   if (message.type === "image" && fileUrl) {
     return (
       <div className="space-y-1">
-        <a href={fileUrl} target="_blank" rel="noreferrer" className="block">
-          <img src={fileUrl} alt="" className="max-h-64 max-w-full rounded-md object-contain" />
-        </a>
-        <div className="flex flex-wrap gap-2 text-xs">
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
-            Open
-          </a>
-          <a href={fileUrl} download className="text-[#53BDEB] underline">
+        <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
+          <img
+            src={fileUrl}
+            alt={fileName ?? ""}
+            className="max-h-64 w-full max-w-full object-contain opacity-70"
+          />
+          <a
+            href={fileUrl}
+            download
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/65 px-4 py-2 text-xs font-semibold text-white hover:bg-black/75"
+          >
             Download
           </a>
         </div>
@@ -227,12 +242,13 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   if (message.type === "video" && fileUrl) {
     return (
       <div className="space-y-1">
-        <video src={fileUrl} controls className="max-h-56 max-w-full rounded-md" />
-        <div className="flex flex-wrap gap-2 text-xs">
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
-            Open
-          </a>
-          <a href={fileUrl} download className="text-[#53BDEB] underline">
+        <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
+          <video src={fileUrl} controls className="max-h-56 w-full opacity-80" />
+          <a
+            href={fileUrl}
+            download
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/65 px-4 py-2 text-xs font-semibold text-white hover:bg-black/75"
+          >
             Download
           </a>
         </div>
@@ -265,18 +281,20 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   if ((message.type === "file" || message.type === "music") && fileUrl) {
     const fn = typeof md?.fileName === "string" ? md.fileName : "Attachment";
     const size = typeof md?.fileSize === "number" ? md.fileSize : null;
+    const sizeLabel = prettyBytes(size);
     return (
-      <div className="rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-1.5 text-xs">
-        <div className="font-medium text-[#E9EDEF] break-all">{fn}</div>
-        {size != null ? <div className="mt-0.5 text-[#AEBAC1]">{Math.round(size / 1024)} KB</div> : null}
-        <div className="mt-1 flex flex-wrap gap-2">
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
-            Open
-          </a>
-          <a href={fileUrl} download className="text-[#53BDEB] underline">
-            Download
-          </a>
+      <div className="flex items-center justify-between gap-3 rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs">
+        <div className="min-w-0">
+          <div className="font-medium text-[#E9EDEF] break-all">{fn}</div>
+          {sizeLabel ? <div className="mt-0.5 text-[#AEBAC1]">{sizeLabel}</div> : null}
         </div>
+        <a
+          href={fileUrl}
+          download
+          className="shrink-0 rounded-md bg-[#2A3942] px-3 py-1.5 text-xs font-semibold text-[#E9EDEF] hover:bg-[#324954]"
+        >
+          Download
+        </a>
       </div>
     );
   }
