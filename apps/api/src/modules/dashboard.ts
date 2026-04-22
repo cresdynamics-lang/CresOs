@@ -10,6 +10,7 @@ import { processNegligenceAlerts } from "./negligence-alerts";
 import { processDueReminders } from "./lead-reminders";
 import { processScheduleReminders } from "./schedule-reminders";
 import { processTaskDueReminders } from "./task-reminders";
+import { processQueuedEmails } from "./email-delivery";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 import { processStaleActivityAdminDigest, TWELVE_HOURS_MS } from "./stale-activity-admin-digest";
 
@@ -297,6 +298,8 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         processTaskDueReminders(prisma),
         processScheduleReminders(prisma)
       ]);
+      // Deliver queued emails (SMTP). Keep it best-effort so the dashboard stays responsive.
+      void processQueuedEmails(prisma, orgId, 25).catch(() => {});
       // AI alignment + negligence notifications (throttled); run in background so dashboard responds quickly
       void processAiAlignmentNotifications(prisma, orgId).catch(() => {});
       void processNegligenceAlerts(prisma, orgId).catch(() => {});
