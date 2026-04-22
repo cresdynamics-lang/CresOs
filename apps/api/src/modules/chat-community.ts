@@ -40,6 +40,23 @@ const upload = multer({
   }
 });
 
+function uploadChatFields(req: any, res: any, next: any) {
+  const mw = upload.fields([{ name: "files" }, { name: "file" }]);
+  mw(req, res, (err: unknown) => {
+    if (!err) return next();
+    // Multer errors happen *before* the route handler, so we must translate them here.
+    const anyErr = err as any;
+    if (anyErr && anyErr.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        error: "File too large",
+        hint: "Ask an admin to increase CHAT_UPLOAD_MAX_FILE_BYTES on the server, or upload a smaller file."
+      });
+    }
+    const msg = typeof anyErr?.message === "string" ? anyErr.message : "Upload failed";
+    return res.status(400).json({ error: msg });
+  });
+}
+
 async function refreshConversationLastMessage(prisma: PrismaClient, conversationId: string) {
   const latest = await prisma.message.findFirst({
     where: { conversationId, deletedAt: null, revokedAt: null },
@@ -1123,10 +1140,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
   router.post(
     "/conversations/:conversationId/upload",
     requireRoles(ALL_APP_ROLE_KEYS),
-    upload.fields([
-      { name: "files" },
-      { name: "file" }
-    ]),
+    uploadChatFields,
     async (req, res) => {
       try {
         const conversationId = Array.isArray(req.params.conversationId)
