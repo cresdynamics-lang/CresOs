@@ -210,6 +210,87 @@ async function buildUserDeliveryContext(prisma: PrismaClient, orgId: string, use
   ].join("\n");
 }
 
+async function buildSalesPipelineContext(prisma: PrismaClient, orgId: string, userId: string): Promise<string> {
+  const now = new Date();
+  const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [deals, leads, followUpsSoon] = await Promise.all([
+    prisma.deal.findMany({
+      where: { orgId, ownerId: userId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      take: 6,
+      select: {
+        id: true,
+        title: true,
+        stage: true,
+        value: true,
+        currency: true,
+        closeDate: true,
+        updatedAt: true,
+        lead: { select: { id: true, title: true, status: true } }
+      }
+    }),
+    prisma.lead.findMany({
+      where: { orgId, ownerId: userId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      take: 8,
+      select: { id: true, title: true, status: true, approvalStatus: true, updatedAt: true }
+    }),
+    prisma.leadFollowUp.findMany({
+      where: { orgId, assignedToId: userId, scheduledAt: { gte: now, lte: next7 } },
+      orderBy: { scheduledAt: "asc" },
+      take: 6,
+      select: {
+        type: true,
+        scheduledAt: true,
+        lead: { select: { title: true, status: true } }
+      }
+    })
+  ]);
+
+  const fmtDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "—");
+
+  const dealLines = deals.length
+    ? deals
+        .map((d) => {
+          const leadTag = d.lead?.title ? ` | Lead: ${d.lead.title} (${d.lead.status})` : "";
+          const val = d.value != null ? ` | Value: ${d.currency ?? "USD"} ${String(d.value)}` : "";
+          const close = d.closeDate ? ` | Close: ${fmtDate(d.closeDate)}` : "";
+          const stale = d.updatedAt < staleCutoff ? " | STALE (no update 7d+)" : "";
+          return `- ${d.title} (stage=${d.stage})${val}${close}${leadTag}${stale}`;
+        })
+        .join("\n")
+    : "No owned deals found.";
+
+  const leadLines = leads.length
+    ? leads
+        .map((l) => {
+          const stale = l.updatedAt < staleCutoff ? " | STALE (no update 7d+)" : "";
+          return `- ${l.title} (status=${l.status}, approval=${l.approvalStatus})${stale}`;
+        })
+        .join("\n")
+    : "No owned leads found.";
+
+  const followUpLines = followUpsSoon.length
+    ? followUpsSoon
+        .map((f) => `- ${fmtDate(f.scheduledAt)} ${f.type} — ${f.lead?.title ?? "Lead"} (${f.lead?.status ?? "—"})`)
+        .join("\n")
+    : "No follow-ups scheduled in next 7 days.";
+
+  return [
+    "CresOS sales pipeline context (for cross-checking this report):",
+    "Owned deals (recent):",
+    dealLines,
+    "",
+    "Owned leads (recent):",
+    leadLines,
+    "",
+    "Scheduled follow-ups (next 7 days):",
+    followUpLines
+  ].join("\n");
+}
+
 async function groqPlainText(system: string, user: string, maxTokens: number, temperature: number): Promise<string | null> {
   const client = getGroq();
   if (!client) return null;
@@ -325,6 +406,7 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
   const deliveryContext = await buildUserDeliveryContext(prisma, report.orgId, report.submittedById);
+  const pipelineContext = await buildSalesPipelineContext(prisma, report.orgId, report.submittedById);
   const prev = await prisma.salesReport.findMany({
     where: {
       orgId: report.orgId,
@@ -363,7 +445,7 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
     submittedAtIso: report.submittedAt.toISOString(),
     threadContext,
     previousReports,
-    platformContext: deliveryContext
+    platformContext: [deliveryContext, "", pipelineContext].filter(Boolean).join("\n")
   });
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
