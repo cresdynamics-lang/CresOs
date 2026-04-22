@@ -2398,29 +2398,6 @@ export default function CommunityPage() {
                   <span>Literal typing (keep spelling; no AI polish)</span>
                 </label>
                 <span className="hidden sm:inline">·</span>
-                <label className="flex flex-wrap items-center gap-1">
-                  <span className="whitespace-nowrap">Translate draft</span>
-                  <select
-                    ref={translateSelectRef}
-                    defaultValue=""
-                    disabled={assistBusy || literalTypingMode}
-                    className="max-w-[11rem] rounded border border-[#2A3942] bg-[#111B21] px-2 py-1 text-[#E9EDEF] disabled:opacity-50"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v) void runTranslate(v);
-                    }}
-                  >
-                    <option value="">Choose language…</option>
-                    <option value="English">English</option>
-                    <option value="Kiswahili">Kiswahili (Swahili)</option>
-                    <option value="French">French</option>
-                    <option value="Spanish">Spanish</option>
-                    <option value="German">German</option>
-                    <option value="Arabic">Arabic</option>
-                    <option value="Portuguese">Portuguese</option>
-                    <option value="Chinese">Chinese (Mandarin)</option>
-                  </select>
-                </label>
               </div>
               {assistBusy && !assistPreview ? (
                 <div className="mb-1 text-[11px] text-[#8696A0]">Working on wording…</div>
