@@ -37,8 +37,7 @@ function readSmtpConfig(): SmtpConfig | null {
   const secure =
     String(process.env.MAIL_SECURE ?? "").trim() === "true" ||
     port === 465 ||
-    encryption === "ssl" ||
-    encryption === "tls";
+    encryption === "ssl";
 
   if (!host || !port || !user || !pass || !fromAddress) return null;
   return { host, port, secure, user, pass, fromAddress, fromName, encryption };
@@ -52,7 +51,8 @@ function getTransport(cfg: SmtpConfig): nodemailer.Transporter {
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
-    auth: { user: cfg.user, pass: cfg.pass }
+    auth: { user: cfg.user, pass: cfg.pass },
+    ...(cfg.encryption === "tls" && !cfg.secure ? { requireTLS: true } : {})
   });
   cachedKey = key;
   return cachedTransport;
