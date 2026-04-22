@@ -1407,27 +1407,33 @@ export default function CommunityPage() {
       if (!selectedConversation?.id || !auth.accessToken) return;
       if (files.length === 0) return;
       setChatError(null);
-      const fd = new FormData();
-      for (const f of files) fd.append("files", f);
-      if (caption) fd.append("caption", caption);
-      if (replyTo) fd.append("replyTo", replyTo);
-      const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
-        method: "POST",
-        body: fd
-      });
-      if (!response.ok) {
-        const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-        setChatError(err.error ?? err.message ?? "Upload failed");
-        return;
+      // Upload in small batches so large multi-file sends (e.g. 34 files / 500MB) don’t fail as a single massive request.
+      // Keep caption only on the first batch (matches server behavior: first file takes caption; others get defaults).
+      const BATCH_SIZE = 4;
+      for (let start = 0; start < files.length; start += BATCH_SIZE) {
+        const chunk = files.slice(start, start + BATCH_SIZE);
+        const fd = new FormData();
+        for (const f of chunk) fd.append("files", f);
+        if (start === 0 && caption) fd.append("caption", caption);
+        if (replyTo) fd.append("replyTo", replyTo);
+        const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/upload`, {
+          method: "POST",
+          body: fd
+        });
+        if (!response.ok) {
+          const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string; hint?: string };
+          setChatError(err.hint ? `${err.error ?? "Upload failed"} — ${err.hint}` : err.error ?? err.message ?? "Upload failed");
+          return;
+        }
+        const data = (await response.json()) as {
+          data?: { message?: Record<string, unknown>; messages?: Record<string, unknown>[] };
+        };
+        const list = data.data?.messages ?? (data.data?.message ? [data.data.message] : []);
+        if (list.length > 0) {
+          for (const raw of list) appendMessageFromApi(raw);
+        }
       }
-      const data = (await response.json()) as {
-        data?: { message?: Record<string, unknown>; messages?: Record<string, unknown>[] };
-      };
-      const list = data.data?.messages ?? (data.data?.message ? [data.data.message] : []);
-      if (list.length > 0) {
-        for (const raw of list) appendMessageFromApi(raw);
-        void loadConversations();
-      }
+      void loadConversations();
     },
     [selectedConversation, auth.accessToken, apiFetch, appendMessageFromApi, loadConversations]
   );

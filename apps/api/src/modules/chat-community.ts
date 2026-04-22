@@ -11,6 +11,9 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ALL_APP_ROLE_KEYS, ROLE_KEYS } from "./auth-middleware";
 import multer from "multer";
+import os from "os";
+import path from "path";
+import fs from "fs";
 import {
   ensureChatUserAndInbox,
   createOrGetDirectConversation,
@@ -18,17 +21,39 @@ import {
   displayNameOrEmail,
   getUserIdsInOrg
 } from "./chat-community-helpers";
-import { saveChatUpload, messageTypeFromMime } from "../lib/chat-uploads";
+import { saveChatUploadFromPath, messageTypeFromMime } from "../lib/chat-uploads";
 import { composeAssistText } from "../lib/groq-compose-assist";
 
 // Configure multer for file uploads (images, docs, audio, video; block obvious executables)
+const uploadMaxBytes = Math.min(
+  1024 * 1024 * 1024,
+  Math.max(5 * 1024 * 1024, Number(process.env.CHAT_UPLOAD_MAX_FILE_BYTES ?? 0) || 550 * 1024 * 1024)
+);
+const uploadMaxFiles = Math.min(60, Math.max(1, Number(process.env.CHAT_UPLOAD_MAX_FILES ?? 0) || 34));
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      const dir = path.join(os.tmpdir(), "cresos-chat-uploads");
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {
+        // ignore
+      }
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      // Keep filename deterministic-ish, but avoid collisions.
+      const safe = (file.originalname || "file").replace(/[^\w.-]+/g, "_").slice(0, 120);
+      cb(null, `${Date.now()}-${Math.random().toString(16).slice(2)}-${safe}`);
+    }
+  }),
   limits: {
     fileSize: Math.min(
       1024 * 1024 * 1024,
-      Math.max(5 * 1024 * 1024, Number(process.env.CHAT_UPLOAD_MAX_FILE_BYTES ?? 0) || 250 * 1024 * 1024)
-    )
+      uploadMaxBytes
+    ),
+    files: uploadMaxFiles
   },
   fileFilter: (_req, file, cb) => {
     const n = (file.originalname || "").toLowerCase();
@@ -41,7 +66,10 @@ const upload = multer({
 });
 
 function uploadChatFields(req: any, res: any, next: any) {
-  const mw = upload.fields([{ name: "files" }, { name: "file" }]);
+  const mw = upload.fields([
+    { name: "files", maxCount: uploadMaxFiles },
+    { name: "file", maxCount: 1 }
+  ]);
   mw(req, res, (err: unknown) => {
     if (!err) return next();
     // Multer errors happen *before* the route handler, so we must translate them here.
@@ -49,7 +77,14 @@ function uploadChatFields(req: any, res: any, next: any) {
     if (anyErr && anyErr.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({
         error: "File too large",
-        hint: "Ask an admin to increase CHAT_UPLOAD_MAX_FILE_BYTES on the server, or upload a smaller file."
+        hint:
+          "Ask an admin to increase CHAT_UPLOAD_MAX_FILE_BYTES on the server (and proxy client_max_body_size if applicable), or upload a smaller file."
+      });
+    }
+    if (anyErr && anyErr.code === "LIMIT_FILE_COUNT") {
+      return res.status(413).json({
+        error: "Too many files",
+        hint: "Upload fewer files at once, or ask an admin to increase CHAT_UPLOAD_MAX_FILES on the server."
       });
     }
     const msg = typeof anyErr?.message === "string" ? anyErr.message : "Upload failed";
@@ -1159,7 +1194,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           ? filesField
           : [...(filesField?.files ?? []), ...(filesField?.file ?? [])];
 
-        const files = list.filter((f) => f && typeof f.originalname === "string" && f.buffer instanceof Buffer);
+        const files = list.filter((f) => f && typeof f.originalname === "string" && typeof (f as any).path === "string");
         if (files.length === 0) {
           return res.status(400).json({ error: "No files uploaded" });
         }
@@ -1179,7 +1214,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const createdMessages = [];
         for (let i = 0; i < files.length; i += 1) {
           const file = files[i]!;
-          const urlPath = saveChatUpload(orgId, conversationId, file.originalname, file.buffer);
+          const urlPath = saveChatUploadFromPath(orgId, conversationId, file.originalname, (file as any).path);
           const msgType = messageTypeFromMime(file.mimetype);
           const metadata = {
             url: urlPath,
