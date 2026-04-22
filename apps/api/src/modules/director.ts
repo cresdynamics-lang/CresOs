@@ -12,6 +12,29 @@ import { listPlatformActionsForZonedDay } from "./director-platform-summary";
 export default function directorRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
+  // Runtime AI configuration status (safe: no secrets returned)
+  router.get(
+    "/ai/status",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (_req, res) => {
+      const candidates = [
+        process.env.GROQ_API_KEY,
+        process.env.GROQ_API_KEY_SECONDARY,
+        process.env.GROQ_API_KEY_TERTIARY
+      ];
+      const groqConfigured = candidates.some((k) => typeof k === "string" && k.trim().length > 0);
+      res.json({
+        groqConfigured,
+        groqModel:
+          process.env.GROQ_DIRECTOR_MODEL?.trim() ||
+          process.env.GROQ_REMINDER_MODEL?.trim() ||
+          "llama-3.1-8b-instant",
+        directorAiAutoReplyEnabled: process.env.DIRECTOR_AI_AUTO_REPLY !== "false",
+        directorAiBriefingGroqEnabled: process.env.DIRECTOR_AI_BRIEFING_GROQ !== "false"
+      });
+    }
+  );
+
   // Strategic dashboard view for Director (and Admin for alignment)
   router.get(
     "/dashboard",

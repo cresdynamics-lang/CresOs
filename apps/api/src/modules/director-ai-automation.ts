@@ -119,10 +119,21 @@ export function queueAutoDirectorReplyForDeveloperReport(prisma: PrismaClient, r
 }
 
 async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: string): Promise<void> {
+  // If Groq is not configured, do not post a canned/templated message.
+  // We only want "ai_auto" replies when the AI provider is actually available.
+  if (!getGroq()) return;
+
   const report = await prisma.salesReport.findUnique({
     where: { id: reportId },
     include: {
-      submittedBy: { select: { name: true, email: true } }
+      submittedBy: { select: { name: true, email: true } },
+      comments: {
+        include: {
+          author: { select: { name: true, email: true } },
+          replies: { include: { author: { select: { name: true, email: true } } }, orderBy: { createdAt: "asc" } }
+        },
+        orderBy: { createdAt: "asc" }
+      }
     }
   });
   if (!report || report.status !== "submitted" || !report.submittedAt) return;
@@ -143,17 +154,29 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
   if (!authorId) return;
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
+  const threadContext = (report.comments ?? [])
+    .filter((c) => !c.parentId)
+    .map((c) => {
+      const who = c.author?.name?.trim() || c.author?.email || c.authorId;
+      const head = `[${c.createdAt.toISOString()}] ${who} (${c.kind}${c.source ? `, source=${c.source}` : ""}): ${c.content}`;
+      const replies = (c.replies ?? []).map((r) => {
+        const rWho = r.author?.name?.trim() || r.author?.email || r.authorId;
+        return `  ↳ [${r.createdAt.toISOString()}] ${rWho} (${r.kind}${r.source ? `, source=${r.source}` : ""}): ${r.content}`;
+      });
+      return [head, ...replies].join("\n");
+    })
+    .join("\n\n");
   const userMsg = buildDirectorReplyUserSales({
     teamMemberName,
     reportTitle: report.title,
     reportBody: report.body,
-    submittedAtIso: report.submittedAt.toISOString()
+    submittedAtIso: report.submittedAt.toISOString(),
+    threadContext
   });
 
-  const raw = getGroq() ? await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32) : null;
-  const fallback =
-    "Thank you for submitting this report. Leadership has received it and will read what you shared; reply here or in comments if anything needs clarification.\n\nMarked reviewed. ✓";
-  const content = ensureMarkedReviewed((raw ?? fallback).trim()).slice(0, 8000);
+  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32);
+  if (!raw) return;
+  const content = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
 
   await prisma.$transaction([
     prisma.salesReportComment.create({
@@ -177,6 +200,10 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
 }
 
 async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportId: string): Promise<void> {
+  // If Groq is not configured, do not write canned remarks.
+  // Only generate remarks when the AI provider is actually available.
+  if (!getGroq()) return;
+
   const report = await prisma.developerReport.findUnique({
     where: { id: reportId },
     include: { submittedBy: { select: { name: true, email: true } } }
@@ -193,6 +220,163 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
   const reportDateIso = report.reportDate.toISOString().slice(0, 10);
+  const dayStart = new Date(report.reportDate);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const weekStart = new Date(dayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  // Pull minimal “speed / deadlines” context from CresOS tasks & milestones.
+  const devId = report.submittedById;
+  const [tasksDay, tasksWeekDone, dueSoonTasks, overdueTasks, milestonesDueSoon, milestonesOverdue] =
+    await Promise.all([
+      prisma.task.findMany({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          assigneeId: devId,
+          updatedAt: { gte: dayStart, lt: dayEnd }
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          dueDate: true,
+          updatedAt: true,
+          project: { select: { id: true, name: true, status: true } }
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 30
+      }),
+      prisma.task.count({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          assigneeId: devId,
+          status: "done",
+          updatedAt: { gte: weekStart, lt: dayEnd }
+        }
+      }),
+      prisma.task.findMany({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          assigneeId: devId,
+          status: { not: "done" },
+          dueDate: { gte: now, lte: next7 }
+        },
+        select: {
+          title: true,
+          status: true,
+          dueDate: true,
+          project: { select: { name: true } }
+        },
+        orderBy: { dueDate: "asc" },
+        take: 12
+      }),
+      prisma.task.findMany({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          assigneeId: devId,
+          status: { not: "done" },
+          dueDate: { lt: now }
+        },
+        select: {
+          title: true,
+          status: true,
+          dueDate: true,
+          project: { select: { name: true } }
+        },
+        orderBy: { dueDate: "asc" },
+        take: 12
+      }),
+      prisma.milestone.findMany({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          status: { not: "completed" },
+          dueDate: { gte: now, lte: next7 },
+          project: {
+            OR: [
+              { assignedDeveloperId: devId },
+              { developerAssignments: { some: { userId: devId, status: "accepted" } } }
+            ]
+          }
+        },
+        select: { name: true, status: true, dueDate: true, project: { select: { name: true } } },
+        orderBy: { dueDate: "asc" },
+        take: 12
+      }),
+      prisma.milestone.findMany({
+        where: {
+          orgId: report.orgId,
+          deletedAt: null,
+          status: { not: "completed" },
+          dueDate: { lt: now },
+          project: {
+            OR: [
+              { assignedDeveloperId: devId },
+              { developerAssignments: { some: { userId: devId, status: "accepted" } } }
+            ]
+          }
+        },
+        select: { name: true, status: true, dueDate: true, project: { select: { name: true } } },
+        orderBy: { dueDate: "asc" },
+        take: 12
+      })
+    ]);
+
+  const countsDay = tasksDay.reduce(
+    (acc, t) => {
+      const s = String(t.status || "").toLowerCase();
+      if (s === "done") acc.done += 1;
+      else if (s === "in_progress") acc.in_progress += 1;
+      else if (s === "blocked") acc.blocked += 1;
+      else acc.todo += 1;
+      return acc;
+    },
+    { todo: 0, in_progress: 0, blocked: 0, done: 0 }
+  );
+  const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "—");
+
+  const platformContext = [
+    `Task activity on report day (by task.updatedAt, assignee=${devId}): ${countsDay.done} done, ${countsDay.in_progress} in progress, ${countsDay.blocked} blocked, ${countsDay.todo} todo (showing up to 30 recent).`,
+    tasksDay.length
+      ? tasksDay
+          .slice(0, 12)
+          .map((t) => `- [${fmtDate(t.updatedAt)}] ${t.project?.name ?? "Project"} — ${t.title} (${t.status})${t.dueDate ? ` due ${fmtDate(t.dueDate)}` : ""}`)
+          .join("\n")
+      : "No task updates recorded for this developer on that day.",
+    "",
+    `Throughput (approx): tasks marked done in last 7 days (by updatedAt): ${tasksWeekDone}.`,
+    "",
+    overdueTasks.length
+      ? `Overdue tasks (not done):\n${overdueTasks
+          .map((t) => `- ${t.project?.name ?? "Project"} — ${t.title} (${t.status}) due ${fmtDate(t.dueDate ?? null)}`)
+          .join("\n")}`
+      : "Overdue tasks (not done): none found.",
+    "",
+    dueSoonTasks.length
+      ? `Due in next 7 days (tasks, not done):\n${dueSoonTasks
+          .map((t) => `- ${t.project?.name ?? "Project"} — ${t.title} (${t.status}) due ${fmtDate(t.dueDate ?? null)}`)
+          .join("\n")}`
+      : "Due in next 7 days (tasks, not done): none found.",
+    "",
+    milestonesOverdue.length
+      ? `Overdue milestones (not completed):\n${milestonesOverdue
+          .map((m) => `- ${m.project?.name ?? "Project"} — ${m.name} (${m.status}) due ${fmtDate(m.dueDate ?? null)}`)
+          .join("\n")}`
+      : "Overdue milestones (not completed): none found.",
+    "",
+    milestonesDueSoon.length
+      ? `Milestones due in next 7 days (not completed):\n${milestonesDueSoon
+          .map((m) => `- ${m.project?.name ?? "Project"} — ${m.name} (${m.status}) due ${fmtDate(m.dueDate ?? null)}`)
+          .join("\n")}`
+      : "Milestones due in next 7 days (not completed): none found."
+  ].join("\n");
+
   const userMsg = buildDirectorReplyUserDeveloper({
     teamMemberName,
     reportDateIso,
@@ -201,13 +385,13 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
     needsAttention: report.needsAttention,
     implemented: report.implemented,
     pending: report.pending,
-    nextPlan: report.nextPlan
+    nextPlan: report.nextPlan,
+    platformContext
   });
 
-  const raw = getGroq() ? await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32) : null;
-  const fallback =
-    "Thank you for the daily report. Leadership has noted it; follow up here if you need a decision on blockers or priorities.\n\nMarked reviewed. ✓";
-  const remarks = ensureMarkedReviewed((raw ?? fallback).trim()).slice(0, 8000);
+  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32);
+  if (!raw) return;
+  const remarks = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
 
   await prisma.developerReport.update({
     where: { id: reportId },
