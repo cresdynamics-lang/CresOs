@@ -30,6 +30,45 @@ type Report = {
   comments: Comment[];
 };
 
+function normalizeReport(next: Partial<Report> | null | undefined, prev?: Report | null): Report | null {
+  if (!next && !prev) return null;
+  const submittedBy =
+    next?.submittedBy ??
+    prev?.submittedBy ?? {
+      id: "",
+      name: null,
+      email: ""
+    };
+  const commentsInput = Array.isArray(next?.comments)
+    ? next?.comments
+    : Array.isArray(prev?.comments)
+      ? prev?.comments
+      : [];
+  const comments: Comment[] = commentsInput.map((c) => ({
+    id: c?.id ?? "",
+    kind: c?.kind ?? "comment",
+    content: c?.content ?? "",
+    createdAt: c?.createdAt ?? new Date(0).toISOString(),
+    authorId: c?.authorId ?? "",
+    author: c?.author ?? { id: "", name: null, email: "" },
+    parentId: c?.parentId ?? null,
+    source: c?.source ?? null,
+    replies: Array.isArray(c?.replies) ? c.replies : []
+  }));
+  const base = next ?? prev!;
+  return {
+    id: base.id ?? prev?.id ?? "",
+    title: base.title ?? prev?.title ?? "",
+    body: base.body ?? prev?.body ?? "",
+    status: base.status ?? prev?.status ?? "draft",
+    reviewStatus: base.reviewStatus ?? prev?.reviewStatus,
+    remarks: base.remarks ?? prev?.remarks ?? null,
+    submittedAt: base.submittedAt ?? prev?.submittedAt ?? null,
+    submittedBy,
+    comments
+  };
+}
+
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 function isOverdue(askedAt: string): boolean {
@@ -76,8 +115,8 @@ export default function ReportDetailPage() {
       try {
         const res = await apiFetch(`/reports/${id}`);
         if (res.ok) {
-          const data = (await res.json()) as Report;
-          setReport(data);
+          const data = (await res.json()) as Partial<Report>;
+          setReport(normalizeReport(data));
           setDirectorNoteAppend("");
           setReplaceEntireRemarks(false);
         } else if (res.status === 404) {
@@ -102,8 +141,8 @@ export default function ReportDetailPage() {
         setNewComment("");
         const resReport = await apiFetch(`/reports/${id}`);
         if (resReport.ok) {
-          const data = (await resReport.json()) as Report;
-          setReport(data);
+          const data = (await resReport.json()) as Partial<Report>;
+          setReport((prev) => normalizeReport(data, prev));
         }
       }
     } finally {
@@ -124,8 +163,8 @@ export default function ReportDetailPage() {
         setResponseByParent((prev) => ({ ...prev, [parentId]: "" }));
         const resReport = await apiFetch(`/reports/${id}`);
         if (resReport.ok) {
-          const data = (await resReport.json()) as Report;
-          setReport(data);
+          const data = (await resReport.json()) as Partial<Report>;
+          setReport((prev) => normalizeReport(data, prev));
         }
       }
     } finally {
@@ -141,14 +180,15 @@ export default function ReportDetailPage() {
     );
   }
 
-  const topLevel = report.comments.filter((c) => !c.parentId);
+  const comments = report.comments ?? [];
+  const topLevel = comments.filter((c) => !c.parentId);
 
   const setReview = async (reviewStatus: "viewed" | "checked") => {
     if (!report) return;
     const append = !replaceEntireRemarks;
     const payloadRemarks = append ? directorNoteAppend.trim() : (directorNoteAppend || report.remarks || "").trim();
     if (reviewStatus === "checked" && append && !payloadRemarks && !(report.remarks?.trim())) {
-      const hasLeadershipThread = report.comments.some(
+      const hasLeadershipThread = comments.some(
         (c) =>
           !c.parentId &&
           c.kind !== "response" &&
@@ -174,8 +214,8 @@ export default function ReportDetailPage() {
         })
       });
       if (res.ok) {
-        const updated = (await res.json()) as Report;
-        setReport(updated);
+        const updated = (await res.json()) as Partial<Report>;
+        setReport((prev) => normalizeReport(updated, prev));
         setDirectorNoteAppend("");
         setReplaceEntireRemarks(false);
         remarkReplacePrefilledRef.current = false;
@@ -199,7 +239,7 @@ export default function ReportDetailPage() {
           </Link>
           <h2 className="mt-2 text-base font-semibold text-cres-text sm:text-lg">{report.title}</h2>
           <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-            By {report.submittedBy.name ?? report.submittedBy.email}
+            By {report.submittedBy?.name ?? report.submittedBy?.email ?? "Unknown"}
             {report.submittedAt && (
               <> · Submitted {new Date(report.submittedAt).toLocaleString()}</>
             )}
@@ -336,7 +376,7 @@ export default function ReportDetailPage() {
 
             <ul className="space-y-4">
               {topLevel.map((c) => {
-                const replies = report.comments.filter((r) => r.parentId === c.id);
+                const replies = comments.filter((r) => r.parentId === c.id);
                 const questionOverdue = c.kind === "question" && replies.length === 0 && isOverdue(c.createdAt);
                 const deadline = c.kind === "question" ? deadlineFor(c.createdAt) : null;
                 return (
@@ -348,7 +388,7 @@ export default function ReportDetailPage() {
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs text-cres-muted">
                       <span className="font-medium text-cres-text-muted">
-                        {c.author.name ?? c.author.email}
+                        {c.author?.name ?? c.author?.email ?? "User"}
                       </span>
                       {c.source === "ai_auto" ? (
                         <span className="rounded bg-slate-600/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-100">
@@ -373,7 +413,7 @@ export default function ReportDetailPage() {
                         className="ml-4 mt-2 rounded border border-cres-border bg-cres-surface/60 px-3 py-2"
                       >
                         <p className="text-xs text-cres-muted">
-                          {r.author.name ?? r.author.email} answered{" "}
+                          {r.author?.name ?? r.author?.email ?? "User"} answered{" "}
                           {new Date(r.createdAt).toLocaleString()}
                         </p>
                         <p className="mt-1 text-xs text-cres-text sm:text-sm">{r.content}</p>
@@ -454,7 +494,10 @@ export default function ReportDetailPage() {
                 const res = await apiFetch(`/reports/${id}/submit`, { method: "POST" });
                 if (res.ok) {
                   const resReport = await apiFetch(`/reports/${id}`);
-                  if (resReport.ok) setReport((await resReport.json()) as Report);
+                  if (resReport.ok) {
+                    const data = (await resReport.json()) as Partial<Report>;
+                    setReport((prev) => normalizeReport(data, prev));
+                  }
                 }
               } finally {
                 setLoading(false);

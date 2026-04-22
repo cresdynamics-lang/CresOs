@@ -711,19 +711,20 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           prisma.message.count({ where: whereMessages }),
           prisma.message.findMany({
             where: whereMessages,
-            orderBy: { createdAt: "asc" },
+            orderBy: { createdAt: "desc" },
             skip,
             take: limit
           })
         ]);
+        const rowsChronological = [...rows].reverse();
 
         const flags = await prisma.messageUserFlag.findMany({
-          where: { userId, messageId: { in: rows.map((m) => m.id) } },
+          where: { userId, messageId: { in: rowsChronological.map((m) => m.id) } },
           select: { messageId: true, starred: true, saved: true }
         });
         const flagsByMessageId = new Map(flags.map((f) => [f.messageId, f]));
 
-        const senderIds = [...new Set(rows.map((m) => m.senderId))];
+        const senderIds = [...new Set(rowsChronological.map((m) => m.senderId))];
         const senders = await prisma.user.findMany({
           where: { id: { in: senderIds } },
           select: { id: true, name: true }
@@ -740,7 +741,7 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           });
         }
 
-        const messages = rows.map((m) => {
+        const messages = rowsChronological.map((m) => {
           const s = senderById.get(m.senderId);
           const revoked = Boolean(m.revokedAt);
           const f = flagsByMessageId.get(m.id) ?? null;

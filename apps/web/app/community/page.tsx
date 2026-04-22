@@ -321,6 +321,9 @@ export default function CommunityPage() {
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [messagesPages, setMessagesPages] = useState(1);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [literalTypingMode, setLiteralTypingMode] = useState(false);
   const [assistPreview, setAssistPreview] = useState<{
@@ -768,19 +771,30 @@ export default function CommunityPage() {
     return () => clearInterval(interval);
   }, [auth.accessToken, apiFetch]);
 
-  useEffect(() => {
-    if (!selectedConversation || !auth.accessToken) return;
-
-    const fetchMessages = async () => {
+  const loadConversationMessages = useCallback(
+    async (page: number, mode: "replace" | "prepend" = "replace") => {
+      if (!selectedConversation) return;
       try {
-        const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`);
+        const response = await apiFetch(
+          `/chat-community/conversations/${selectedConversation.id}/messages?page=${page}&limit=50`
+        );
         if (response.ok) {
           const data = await response.json();
           const nextMessages = (data.data.messages || []) as Message[];
-          setMessages(nextMessages);
+          const pagination = data.data.pagination as { page?: number; pages?: number } | undefined;
+          setMessagesPage(pagination?.page ?? page);
+          setMessagesPages(pagination?.pages ?? 1);
+          setMessages((prev) => {
+            if (mode === "prepend") {
+              const seen = new Set(prev.map((m) => m.id));
+              const older = nextMessages.filter((m) => !seen.has(m.id));
+              return [...older, ...prev];
+            }
+            return nextMessages;
+          });
           setChatError(null);
 
-          if (auth.userId) {
+          if (mode === "replace" && auth.userId) {
             const unread = nextMessages.filter(
               (m) => m.senderId !== auth.userId && m.status !== "read"
             );
@@ -799,16 +813,34 @@ export default function CommunityPage() {
           const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
           setChatError(err.error ?? err.message ?? `Could not load messages (${response.status})`);
           setMessages([]);
+          setMessagesPage(1);
+          setMessagesPages(1);
         }
       } catch (error) {
         console.error("Failed to fetch messages:", error);
         setChatError("Could not load messages.");
         setMessages([]);
+        setMessagesPage(1);
+        setMessagesPages(1);
       }
-    };
+    },
+    [selectedConversation, apiFetch, auth.userId, loadConversations]
+  );
 
-    fetchMessages();
-  }, [selectedConversation, auth.accessToken, auth.userId, apiFetch, loadConversations]);
+  useEffect(() => {
+    if (!selectedConversation || !auth.accessToken) return;
+    void loadConversationMessages(1, "replace");
+  }, [selectedConversation, auth.accessToken, loadConversationMessages]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedConversation || loadingOlderMessages || messagesPage >= messagesPages) return;
+    setLoadingOlderMessages(true);
+    try {
+      await loadConversationMessages(messagesPage + 1, "prepend");
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [selectedConversation, loadingOlderMessages, messagesPage, messagesPages, loadConversationMessages]);
 
   useEffect(() => {
     setEditingMessageId(null);
@@ -2009,6 +2041,18 @@ export default function CommunityPage() {
               }}
               ref={messagesScrollRef}
             >
+              {messagesPages > 1 && messagesPage < messagesPages ? (
+                <div className="mb-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void loadOlderMessages()}
+                    disabled={loadingOlderMessages}
+                    className="rounded-full border border-[#2A3942] bg-[#111B21]/80 px-3 py-1 text-xs text-[#AEBAC1] hover:bg-[#1B2A33] disabled:opacity-60"
+                  >
+                    {loadingOlderMessages ? "Loading older..." : "Load older messages"}
+                  </button>
+                </div>
+              ) : null}
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-[200px] flex-col items-center justify-center text-center text-[#8696A0]">
                   <p className="mb-1 text-sm">No messages yet</p>
