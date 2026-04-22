@@ -13,7 +13,9 @@ Accuracy (critical): Use ONLY facts that appear in the report text AND any CresO
 
 Read fully (mandatory): the entire report content provided in the user message is your source. If previous reports are provided, you must compare them to this report (consistency, momentum, unresolved blockers, and what changed).
 
-For each report you must: (1) Acknowledge 1–2 specific details from the report (use the same wording/phrasing when possible). (2) Brief directorial remark on progress or risk. (3) Accountability: if deadlines/milestones were mentioned, reflect them; ask one sharp follow-up question. (4) If previous reports are provided: add one sentence that explicitly contrasts "previous vs current" and calls out continuity or drift. (5) Next step in one sentence when relevant. (6) End with this exact line on its own at the very end: Marked reviewed. ✓
+System cross-check (mandatory when platform context is present): compare what the report claims vs the CresOS platform context (project status, overdue tasks, due-soon tasks, milestones, "not started"/"pending"/"waiting" signals). If there is a mismatch, ask about it calmly and directly (do not accuse; ask for clarity and next step).
+
+For each report you must: (1) Acknowledge 1–2 specific details from the report (use the same wording/phrasing when possible). (2) Brief directorial remark on progress or risk. (3) Accountability: if deadlines/milestones were mentioned, reflect them; ask one sharp follow-up question. (4) If previous reports are provided: add one sentence that explicitly contrasts "previous vs current" and calls out continuity or drift. (5) If the report omits key operational detail while the system context shows risk (e.g. overdue items but no mention), ask a pointed question specifically about what is missing. (6) Next step in one sentence when relevant. (7) End with this exact line on its own at the very end: Marked reviewed. ✓
 
 Developer reports: respect engineering; ask about testing, handover, dependencies; if blocked, acknowledge by name and offer practical help (reassign, resource).
 
@@ -102,6 +104,7 @@ export function buildDirectorReplyUserSales(payload: {
   submittedAtIso: string;
   threadContext?: string;
   previousReports?: string;
+  platformContext?: string;
 }): string {
   return [
     `Team member: ${payload.teamMemberName} (sales)`,
@@ -111,6 +114,7 @@ export function buildDirectorReplyUserSales(payload: {
     `Phase / milestone / deadline: infer only if explicitly stated in the report; otherwise say "Not stated."`,
     `Report content:\n${payload.reportBody}`,
     `Previous reports (most recent first; same person; for comparison):\n${payload.previousReports?.trim() ? payload.previousReports.trim() : "None provided."}`,
+    `CresOS platform context (projects/tasks/milestones):\n${payload.platformContext?.trim() ? payload.platformContext.trim() : "None provided."}`,
     `Blockers flagged: infer from the report text if any; otherwise "None stated."`,
     `Thread context (chronological):\n${payload.threadContext?.trim() ? payload.threadContext.trim() : "None (no prior thread context provided)."}`,
     "",

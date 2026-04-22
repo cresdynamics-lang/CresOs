@@ -40,6 +40,176 @@ function getGroq(): Groq | null {
   return groqClient;
 }
 
+async function buildUserDeliveryContext(prisma: PrismaClient, orgId: string, userId: string): Promise<string> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, orgId, deletedAt: null },
+    select: {
+      currentFocusProjectId: true,
+      currentFocusNote: true,
+      currentFocusUpdatedAt: true,
+      currentFocusProject: {
+        select: { id: true, name: true, status: true, approvalStatus: true, assignedDeveloperId: true }
+      }
+    }
+  });
+
+  const focusId = user?.currentFocusProjectId ?? null;
+  const focusLine = (() => {
+    if (!focusId || !user?.currentFocusProject) return "Current focus project: Not set.";
+    const p = user.currentFocusProject;
+    const note = user.currentFocusNote?.trim() ? ` | Note: ${user.currentFocusNote.trim()}` : "";
+    const at = user.currentFocusUpdatedAt ? ` | Updated: ${user.currentFocusUpdatedAt.toISOString()}` : "";
+    return `Current focus project: ${p.name} (status=${p.status}, approval=${p.approvalStatus})${note}${at}`;
+  })();
+
+  const projects = await prisma.project.findMany({
+    where: {
+      orgId,
+      deletedAt: null,
+      OR: [
+        { assignedDeveloperId: userId },
+        { createdByUserId: userId },
+        { ownerUserId: userId },
+        { developerAssignments: { some: { userId, status: "accepted" } } },
+        ...(focusId ? [{ id: focusId }] : [])
+      ]
+    },
+    select: { id: true, name: true, status: true, approvalStatus: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+    take: 8
+  });
+
+  const projectIds = projects.map((p) => p.id);
+  const now = new Date();
+  const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [taskCounts, overdueTasks, dueSoonTasks, overdueMilestones, dueSoonMilestones] = await Promise.all([
+    projectIds.length
+      ? prisma.task.groupBy({
+          by: ["status"],
+          where: { orgId, deletedAt: null, projectId: { in: projectIds }, assigneeId: userId },
+          _count: { _all: true }
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? prisma.task.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            projectId: { in: projectIds },
+            assigneeId: userId,
+            status: { not: "done" },
+            dueDate: { lt: now }
+          },
+          select: { title: true, status: true, dueDate: true, project: { select: { name: true } } },
+          orderBy: { dueDate: "asc" },
+          take: 8
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? prisma.task.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            projectId: { in: projectIds },
+            assigneeId: userId,
+            status: { not: "done" },
+            dueDate: { gte: now, lte: next7 }
+          },
+          select: { title: true, status: true, dueDate: true, project: { select: { name: true } } },
+          orderBy: { dueDate: "asc" },
+          take: 8
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? prisma.milestone.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            projectId: { in: projectIds },
+            status: { not: "completed" },
+            dueDate: { lt: now }
+          },
+          select: { name: true, status: true, dueDate: true, project: { select: { name: true } } },
+          orderBy: { dueDate: "asc" },
+          take: 6
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? prisma.milestone.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            projectId: { in: projectIds },
+            status: { not: "completed" },
+            dueDate: { gte: now, lte: next7 }
+          },
+          select: { name: true, status: true, dueDate: true, project: { select: { name: true } } },
+          orderBy: { dueDate: "asc" },
+          take: 6
+        })
+      : Promise.resolve([])
+  ]);
+
+  const counts = taskCounts.reduce(
+    (acc, row) => {
+      const s = String((row as any).status ?? "").toLowerCase();
+      const n = (row as any)._count?._all ?? 0;
+      acc[s] = (acc[s] ?? 0) + n;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+  const fmtDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "—");
+
+  const projectLines = projects.length
+    ? projects.map((p) => `- ${p.name} (status=${p.status}, approval=${p.approvalStatus})`).join("\n")
+    : "No linked projects found for this user (by assignment/ownership/creation/current focus).";
+
+  const overdueLines = overdueTasks.length
+    ? overdueTasks
+        .map((t) => `- ${t.project?.name ?? "Project"} — ${t.title} (${t.status}) due ${fmtDate(t.dueDate)}`)
+        .join("\n")
+    : "None found.";
+  const dueSoonLines = dueSoonTasks.length
+    ? dueSoonTasks
+        .map((t) => `- ${t.project?.name ?? "Project"} — ${t.title} (${t.status}) due ${fmtDate(t.dueDate)}`)
+        .join("\n")
+    : "None found.";
+  const msOverdueLines = overdueMilestones.length
+    ? overdueMilestones
+        .map((m) => `- ${m.project?.name ?? "Project"} — ${m.name} (${m.status}) due ${fmtDate(m.dueDate)}`)
+        .join("\n")
+    : "None found.";
+  const msDueSoonLines = dueSoonMilestones.length
+    ? dueSoonMilestones
+        .map((m) => `- ${m.project?.name ?? "Project"} — ${m.name} (${m.status}) due ${fmtDate(m.dueDate)}`)
+        .join("\n")
+    : "None found.";
+
+  return [
+    "CresOS system context (for cross-checking this report):",
+    focusLine,
+    "",
+    "Linked projects (recent):",
+    projectLines,
+    "",
+    `Tasks (assigned to this user, linked projects): todo=${counts.todo ?? 0}, in_progress=${counts.in_progress ?? 0}, blocked=${counts.blocked ?? 0}, done=${counts.done ?? 0}`,
+    "",
+    "Overdue tasks (not done):",
+    overdueLines,
+    "",
+    "Due in next 7 days (tasks, not done):",
+    dueSoonLines,
+    "",
+    "Overdue milestones (not completed):",
+    msOverdueLines,
+    "",
+    "Milestones due in next 7 days (not completed):",
+    msDueSoonLines
+  ].join("\n");
+}
+
 async function groqPlainText(system: string, user: string, maxTokens: number, temperature: number): Promise<string | null> {
   const client = getGroq();
   if (!client) return null;
@@ -154,6 +324,7 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
   if (!authorId) return;
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
+  const deliveryContext = await buildUserDeliveryContext(prisma, report.orgId, report.submittedById);
   const prev = await prisma.salesReport.findMany({
     where: {
       orgId: report.orgId,
@@ -191,7 +362,8 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
     reportBody: report.body,
     submittedAtIso: report.submittedAt.toISOString(),
     threadContext,
-    previousReports
+    previousReports,
+    platformContext: deliveryContext
   });
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
@@ -430,6 +602,7 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
           .join("\n")}`
       : "Milestones due in next 7 days (not completed): none found."
   ].join("\n");
+  const deliveryContext = await buildUserDeliveryContext(prisma, report.orgId, devId);
 
   const userMsg = buildDirectorReplyUserDeveloper({
     teamMemberName,
@@ -440,7 +613,7 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
     implemented: report.implemented,
     pending: report.pending,
     nextPlan: report.nextPlan,
-    platformContext,
+    platformContext: [platformContext, "", deliveryContext].filter(Boolean).join("\n"),
     previousReports
   });
 
