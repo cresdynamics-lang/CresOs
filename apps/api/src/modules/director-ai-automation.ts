@@ -154,6 +154,25 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
   if (!authorId) return;
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
+  const prev = await prisma.salesReport.findMany({
+    where: {
+      orgId: report.orgId,
+      submittedById: report.submittedById,
+      status: "submitted",
+      submittedAt: { lt: report.submittedAt }
+    },
+    orderBy: { submittedAt: "desc" },
+    take: 4,
+    select: { id: true, title: true, body: true, submittedAt: true }
+  });
+  const previousReports = prev
+    .map((r, idx) => {
+      const when = r.submittedAt ? r.submittedAt.toISOString() : "unknown time";
+      const flat = (r.body ?? "").replace(/\s+/g, " ").trim();
+      const excerpt = flat.length > 1400 ? `${flat.slice(0, 1400)}…` : flat;
+      return `#${idx + 1} [${when}] ${r.title}\n${excerpt}`;
+    })
+    .join("\n\n");
   const threadContext = (report.comments ?? [])
     .filter((c) => !c.parentId)
     .map((c) => {
@@ -171,10 +190,11 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
     reportTitle: report.title,
     reportBody: report.body,
     submittedAtIso: report.submittedAt.toISOString(),
-    threadContext
+    threadContext,
+    previousReports
   });
 
-  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32);
+  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
   const content = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
 
@@ -229,6 +249,40 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
 
   // Pull minimal “speed / deadlines” context from CresOS tasks & milestones.
   const devId = report.submittedById;
+  const prevReports = await prisma.developerReport.findMany({
+    where: {
+      orgId: report.orgId,
+      submittedById: devId,
+      reportDate: { lt: dayStart }
+    },
+    orderBy: { reportDate: "desc" },
+    take: 5,
+    select: {
+      id: true,
+      reportDate: true,
+      blockers: true,
+      needsAttention: true,
+      implemented: true,
+      pending: true,
+      nextPlan: true
+    }
+  });
+  const previousReports = prevReports
+    .map((r, idx) => {
+      const dateKey = r.reportDate.toISOString().slice(0, 10);
+      const compact = [
+        r.implemented ? `Implemented: ${String(r.implemented).trim()}` : null,
+        r.pending ? `Pending: ${String(r.pending).trim()}` : null,
+        r.blockers ? `Blockers: ${String(r.blockers).trim()}` : null,
+        r.needsAttention ? `Needs attention: ${String(r.needsAttention).trim()}` : null,
+        r.nextPlan ? `Next plan: ${String(r.nextPlan).trim()}` : null
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      const clipped = compact.length > 1200 ? `${compact.slice(0, 1200)}…` : compact || "No detail captured.";
+      return `#${idx + 1} [${dateKey}] ${clipped}`;
+    })
+    .join("\n");
   const [tasksDay, tasksWeekDone, dueSoonTasks, overdueTasks, milestonesDueSoon, milestonesOverdue] =
     await Promise.all([
       prisma.task.findMany({
@@ -386,10 +440,11 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
     implemented: report.implemented,
     pending: report.pending,
     nextPlan: report.nextPlan,
-    platformContext
+    platformContext,
+    previousReports
   });
 
-  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 900, 0.32);
+  const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
   const remarks = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
 

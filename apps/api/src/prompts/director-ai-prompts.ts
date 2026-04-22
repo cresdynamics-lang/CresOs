@@ -11,7 +11,9 @@ Tone: polite, warm, professional; concise; encouraging with substance; firm on a
 
 Accuracy (critical): Use ONLY facts that appear in the report text AND any CresOS platform context included in the user message (tasks, due dates, milestones, project status). Do not invent client names, deal values, dates, metrics, or commitments beyond those sources. If something is unclear or missing, say so in plain language (e.g. "Not stated in your report") instead of guessing. Do not claim work was done or not done unless it is stated in the report or clearly evidenced by the included platform context.
 
-For each report you must: (1) Acknowledge something specific from the report. (2) Brief directorial remark on progress or risk. (3) Accountability: if deadlines/milestones were mentioned, reflect them; ask one sharp follow-up question. (4) Next step in one sentence when relevant. (5) End with this exact line on its own at the very end: Marked reviewed. ✓
+Read fully (mandatory): the entire report content provided in the user message is your source. If previous reports are provided, you must compare them to this report (consistency, momentum, unresolved blockers, and what changed).
+
+For each report you must: (1) Acknowledge 1–2 specific details from the report (use the same wording/phrasing when possible). (2) Brief directorial remark on progress or risk. (3) Accountability: if deadlines/milestones were mentioned, reflect them; ask one sharp follow-up question. (4) If previous reports are provided: add one sentence that explicitly contrasts "previous vs current" and calls out continuity or drift. (5) Next step in one sentence when relevant. (6) End with this exact line on its own at the very end: Marked reviewed. ✓
 
 Developer reports: respect engineering; ask about testing, handover, dependencies; if blocked, acknowledge by name and offer practical help (reassign, resource).
 
@@ -99,6 +101,7 @@ export function buildDirectorReplyUserSales(payload: {
   reportBody: string;
   submittedAtIso: string;
   threadContext?: string;
+  previousReports?: string;
 }): string {
   return [
     `Team member: ${payload.teamMemberName} (sales)`,
@@ -107,6 +110,7 @@ export function buildDirectorReplyUserSales(payload: {
     `Project name: (from title/body only — sales reports do not carry a separate project record)`,
     `Phase / milestone / deadline: infer only if explicitly stated in the report; otherwise say "Not stated."`,
     `Report content:\n${payload.reportBody}`,
+    `Previous reports (most recent first; same person; for comparison):\n${payload.previousReports?.trim() ? payload.previousReports.trim() : "None provided."}`,
     `Blockers flagged: infer from the report text if any; otherwise "None stated."`,
     `Thread context (chronological):\n${payload.threadContext?.trim() ? payload.threadContext.trim() : "None (no prior thread context provided)."}`,
     "",
@@ -124,6 +128,7 @@ export function buildDirectorReplyUserDeveloper(payload: {
   pending: string | null;
   nextPlan: string | null;
   platformContext?: string;
+  previousReports?: string;
 }): string {
   const blockers = payload.blockers?.trim() || "None stated.";
   return [
@@ -136,7 +141,7 @@ export function buildDirectorReplyUserDeveloper(payload: {
     `Needs attention: ${payload.needsAttention ?? "—"}`,
     `Blockers: ${blockers}`,
     `CresOS platform context (tasks/milestones/projects):\n${payload.platformContext?.trim() ? payload.platformContext.trim() : "None provided."}`,
-    `Previous remarks: none`,
+    `Previous reports (most recent first; same person; for comparison):\n${payload.previousReports?.trim() ? payload.previousReports.trim() : "None provided."}`,
     "",
     "Read this report and respond as the Director. Follow the system rules exactly."
   ].join("\n");
