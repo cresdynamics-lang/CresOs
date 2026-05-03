@@ -128,8 +128,13 @@ rm -f /etc/nginx/sites-enabled/default || true
 nginx -t
 systemctl reload nginx
 
-echo "[cresos] obtaining TLS certificate (requires DNS already pointing here)…"
-certbot --nginx -d "$CRESOS_DOMAIN" --non-interactive --agree-tos -m "$CRESOS_CERT_EMAIL" --redirect
+echo "[cresos] obtaining TLS certificate (requires DNS A/AAAA for ${CRESOS_DOMAIN} → this host)…"
+if certbot --nginx -d "$CRESOS_DOMAIN" --non-interactive --agree-tos -m "$CRESOS_CERT_EMAIL" --redirect; then
+  echo "[cresos] TLS certificate installed."
+else
+  echo "[cresos] certbot failed (usually DNS not pointed yet). HTTP reverse proxy is still active; re-run:"
+  echo "        certbot --nginx -d \"$CRESOS_DOMAIN\" --non-interactive --agree-tos -m \"$CRESOS_CERT_EMAIL\" --redirect"
+fi
 
 echo "[cresos] done. Checks:"
 curl -fsS "http://127.0.0.1:4000/health" && echo
