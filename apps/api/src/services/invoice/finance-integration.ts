@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PDFGenerator } from './pdf-generator';
 import { DocxTemplateParser } from './docx-parser';
-import { allocateNextInvoiceNumber } from './invoice-number';
+import { allocateInvoiceNumberForCreate } from './invoice-number';
 import { InvoiceSchema } from './schema';
 
 /**
@@ -64,7 +64,7 @@ export class FinanceInvoiceService {
         project = await this.getProjectData(invoiceData.projectId, orgId);
       }
 
-      // 3. Create invoice in database (number = next org-wide sequence by creation order)
+      // 3. Create invoice in database (PPP/II/YY when project-linked; else org-wide CD-INV)
       const invoice = await this.createInvoiceInDatabase(orgId, invoiceData, createdBy);
 
       // 5. Map to invoice schema for PDF generation
@@ -249,7 +249,12 @@ export class FinanceInvoiceService {
         return sum + value;
       }, 0);
 
-      const invoiceNumber = await allocateNextInvoiceNumber(tx, orgId, referenceDate);
+      const invoiceNumber = await allocateInvoiceNumberForCreate(
+        tx,
+        orgId,
+        invoiceData.projectId,
+        referenceDate
+      );
 
       // Create invoice
       const invoice = await tx.invoice.create({

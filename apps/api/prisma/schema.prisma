@@ -458,6 +458,12 @@ model Project {
   assignedDeveloperId     String?
   timeline                Json? // optional [{ date, title, ... }]
   developerReviewedAt     DateTime? // set when assigned dev reviews and adds tasks
+  /// Org-wide monotonic project index for finance references (001 in 001/01/26).
+  financeProjectSeq       Int?
+  /// Calendar year when the project was registered for finance (YY in 001/01/26).
+  financeRefYear          Int?
+  /// Next invoice slot for this project (1 → …/01/…, then incremented).
+  nextInvoiceOrdinal      Int       @default(1)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   deletedAt               DateTime?

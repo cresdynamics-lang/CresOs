@@ -197,34 +197,68 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         (body.assignedDeveloperId && String(body.assignedDeveloperId).trim()) ||
         (developerIds.length > 0 ? developerIds[0] : null);
 
-      const project = await prisma.project.create({
-        data: {
-          orgId,
-          name: body.name.trim(),
-          status: body.status?.trim() || "planned",
-          clientId: body.clientId,
-          dealId: body.dealId,
-          ownerUserId: userId,
-          createdByUserId: userId,
-          startDate: body.startDate ? new Date(body.startDate) : new Date(),
-          endDate: body.endDate ? new Date(body.endDate) : undefined,
-          type: isSalesCreate ? body.type : null,
-          clientOrOwnerName: body.clientOrOwnerName?.trim() || null,
-          phone: body.phone?.trim() || null,
-          email: body.email?.trim() || null,
-          price: price ?? null,
-          projectDetails: body.projectDetails?.trim() || null,
-          approvalStatus,
-          approvedById,
-          approvedAt,
-          assignedDeveloperId: primaryDev || null,
-          timeline: body.timeline ?? null
-        },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true } },
-          assignedDeveloper: { select: { id: true, name: true, email: true } }
+      const financeRefYear = new Date().getFullYear();
+      const projectData = {
+        orgId,
+        name: body.name.trim(),
+        status: body.status?.trim() || "planned",
+        clientId: body.clientId,
+        dealId: body.dealId,
+        ownerUserId: userId,
+        createdByUserId: userId,
+        startDate: body.startDate ? new Date(body.startDate) : new Date(),
+        endDate: body.endDate ? new Date(body.endDate) : undefined,
+        type: isSalesCreate ? body.type : null,
+        clientOrOwnerName: body.clientOrOwnerName?.trim() || null,
+        phone: body.phone?.trim() || null,
+        email: body.email?.trim() || null,
+        price: price ?? null,
+        projectDetails: body.projectDetails?.trim() || null,
+        approvalStatus,
+        approvedById,
+        approvedAt,
+        assignedDeveloperId: primaryDev || null,
+        timeline: body.timeline ?? null
+      };
+
+      let project;
+      let createAttempts = 0;
+      while (true) {
+        try {
+          project = await prisma.$transaction(
+            async (tx) => {
+              const m = await tx.project.aggregate({
+                where: { orgId },
+                _max: { financeProjectSeq: true }
+              });
+              const financeProjectSeq = (m._max.financeProjectSeq ?? 0) + 1;
+              return tx.project.create({
+                data: {
+                  ...projectData,
+                  financeProjectSeq,
+                  financeRefYear,
+                  nextInvoiceOrdinal: 1
+                },
+                include: {
+                  createdBy: { select: { id: true, name: true, email: true } },
+                  assignedDeveloper: { select: { id: true, name: true, email: true } }
+                }
+              });
+            },
+            {
+              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+              maxWait: 5000,
+              timeout: 10000
+            }
+          );
+          break;
+        } catch (e: unknown) {
+          const code = (e as { code?: string })?.code;
+          createAttempts += 1;
+          if (code === "P2034" && createAttempts < 4) continue;
+          throw e;
         }
-      });
+      }
 
       if (developerIds.length > 0 && isDirectorLike) {
         const developerRole = await prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.developer } });

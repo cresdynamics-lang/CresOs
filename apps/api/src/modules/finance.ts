@@ -7,7 +7,7 @@ import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
-import { allocateNextInvoiceNumber } from "../services/invoice/invoice-number";
+import { allocateNextProjectInvoiceNumber } from "../services/invoice/invoice-number";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 
@@ -688,7 +688,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
             throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
           }
 
-          const number = await allocateNextInvoiceNumber(tx, orgId, issue);
+          const number = await allocateNextProjectInvoiceNumber(tx, orgId, projectId, issue);
 
           const invoice = await tx.invoice.create({
             data: {
