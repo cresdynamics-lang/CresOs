@@ -85,21 +85,18 @@ docker compose up --build -d
 NGINX_SITE="/etc/nginx/sites-available/cresos.conf"
 echo "[cresos] writing nginx site → $NGINX_SITE"
 cat >"$NGINX_SITE" <<EOF
-map \$http_upgrade \$connection_upgrade {
-  default upgrade;
-  ''      close;
-}
-
 server {
   listen 80;
   listen [::]:80;
   server_name ${CRESOS_DOMAIN};
 
+  client_max_body_size 600m;
+
   location /.well-known/acme-challenge/ {
     root /var/www/html;
   }
 
-  # API + WebSocket (client uses https://domain/api/... and wss://domain/api/...)
+  # API + WebSocket (NEXT_PUBLIC_API_URL must be https://<domain>/api)
   location /api/ {
     proxy_pass http://127.0.0.1:4000/;
     proxy_http_version 1.1;
@@ -108,7 +105,7 @@ server {
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection \$connection_upgrade;
+    proxy_set_header Connection "upgrade";
     proxy_read_timeout 86400;
   }
 
