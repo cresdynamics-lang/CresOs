@@ -578,19 +578,33 @@ export default function AnalyticsPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
                         Projects with no update in 72h+
                       </p>
-                      <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
-                        {adminExtended.riskAnalytics.projectsNoUpdate72h.slice(0, 12).map((p) => (
-                          <li key={p.id} className="flex flex-col gap-0.5 rounded-md bg-slate-900/50 px-1.5 py-1 sm:flex-row sm:justify-between sm:gap-2 sm:px-2">
-                            <span className="truncate text-slate-300">{p.name}</span>
-                            <span className="shrink-0 text-[9px] text-slate-500 sm:text-xs">
-                              {new Date(p.updatedAt).toLocaleString()}
-                            </span>
-                          </li>
-                        ))}
-                        {adminExtended.riskAnalytics.projectsNoUpdate72h.length === 0 && (
-                          <li className="text-slate-500">None</li>
-                        )}
-                      </ul>
+                      <div className="mt-2 max-h-52 overflow-x-auto overflow-y-auto sm:max-h-none">
+                        <table className="w-full min-w-[16rem] text-left text-[10px] text-slate-200 sm:text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wide text-slate-500 sm:text-[10px]">
+                              <th className="py-1.5 pr-2 font-medium">Project</th>
+                              <th className="py-1.5 pl-2 text-right font-medium whitespace-nowrap">Last update</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminExtended.riskAnalytics.projectsNoUpdate72h.slice(0, 12).map((p) => (
+                              <tr key={p.id} className="border-b border-slate-800/80">
+                                <td className="max-w-[12rem] py-1.5 pr-2 break-words text-slate-300">{p.name}</td>
+                                <td className="whitespace-nowrap py-1.5 pl-2 text-right text-[9px] text-slate-500 sm:text-xs">
+                                  {new Date(p.updatedAt).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                            {adminExtended.riskAnalytics.projectsNoUpdate72h.length === 0 && (
+                              <tr>
+                                <td colSpan={2} className="py-3 text-slate-500">
+                                  None
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:gap-3">
                       <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
@@ -620,17 +634,31 @@ export default function AnalyticsPage() {
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
                           Repeat swap patterns (90d)
                         </p>
-                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                          {adminExtended.riskAnalytics.repeatSwapPatterns.slice(0, 12).map((r) => (
-                            <li key={r.projectId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                              <span className="truncate text-slate-300">{r.projectName}</span>
-                              <span className="shrink-0 text-slate-100">{r.count90d}</span>
-                            </li>
-                          ))}
-                          {adminExtended.riskAnalytics.repeatSwapPatterns.length === 0 && (
-                            <li className="text-slate-500">None</li>
-                          )}
-                        </ul>
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="w-full min-w-[12rem] text-left text-[10px] text-slate-200 sm:text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wide text-slate-500 sm:text-[10px]">
+                                <th className="py-1.5 pr-2 font-medium">Project</th>
+                                <th className="py-1.5 pl-2 text-right font-medium whitespace-nowrap">90d swaps</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {adminExtended.riskAnalytics.repeatSwapPatterns.slice(0, 12).map((r) => (
+                                <tr key={r.projectId} className="border-b border-slate-800/80">
+                                  <td className="max-w-[14rem] py-1.5 pr-2 break-words text-slate-300">{r.projectName}</td>
+                                  <td className="whitespace-nowrap py-1.5 pl-2 text-right text-slate-100">{r.count90d}</td>
+                                </tr>
+                              ))}
+                              {adminExtended.riskAnalytics.repeatSwapPatterns.length === 0 && (
+                                <tr>
+                                  <td colSpan={2} className="py-3 text-slate-500">
+                                    None
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -30,6 +30,8 @@ type Project = {
   clientLink?: string | null;
   timeline?: { date?: string; title?: string }[] | null;
   taskSummary?: TaskSummary;
+  financeProjectSeq?: number | null;
+  financeRefYear?: number | null;
 };
 
 type ClientMessageResult = { message: string; link?: string };
@@ -240,108 +242,127 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Card grid: 3 per row desktop, 1 mobile */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredProjects.map((project) => (
-          <div
-            key={project.id}
-            className="flex flex-col rounded-xl border border-slate-700 bg-slate-900/60 p-4 shadow-sm"
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              {isDeveloperOnly ? (
-                <h3 className="min-w-0 flex-1 truncate font-medium text-slate-100">{project.name}</h3>
-              ) : (
-                <Link href={`/projects/${project.id}`} className="min-w-0 flex-1">
-                  <h3 className="truncate font-medium text-slate-100">{project.name}</h3>
-                </Link>
-              )}
-              <span className="shrink-0 rounded bg-slate-700 px-2 py-0.5 text-xs capitalize text-slate-300">
-                {project.status}
-              </span>
-            </div>
-            {project.type && (
-              <p className="mb-1 text-xs text-slate-400">
-                {project.type === "demo" ? "Demo" : "Project"}
-              </p>
-            )}
-            {project.clientOrOwnerName != null && (
-              <p className="truncate text-xs text-slate-400">Client: {project.clientOrOwnerName}</p>
-            )}
-            {project.price != null && project.price > 0 && (
-              <p className="text-xs text-emerald-400">
-                {typeof project.price === "number" ? formatMoney(project.price) : project.price}
-              </p>
-            )}
-            {project.assignedDeveloper && (
-              <p className="mt-1 text-xs text-slate-500">
-                Dev: {project.assignedDeveloper.name || project.assignedDeveloper.email}
-              </p>
-            )}
-            {project.approvalStatus === "approved" && project.taskSummary && (
-              <p className="mt-2 text-xs text-slate-400">
-                Delivery:{" "}
-                <span className="text-emerald-400/90">Done {project.taskSummary.done}</span>
-                {" · "}
-                <span className="text-sky-300/90">In progress {project.taskSummary.in_progress}</span>
-                {" · "}
-                <span className="text-violet-300/90">Waiting {project.taskSummary.waiting_response}</span>
-                {" · "}
-                <span className="text-amber-300/90">Blocked {project.taskSummary.blocked}</span>
-                {" · "}
-                <span className="text-slate-500">Not started {project.taskSummary.not_started ?? (project.taskSummary as any).todo ?? 0}</span>
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap items-center gap-1">
-              {project.approvalStatus === "pending_approval" && (
-                <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-200">
-                  Pending approval
-                </span>
-              )}
-              {project.approvalStatus === "approved" && (
-                <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300">
-                  Approved
-                </span>
-              )}
-              {canApproveProject && project.approvalStatus === "pending_approval" && (
-                <button
-                  type="button"
-                  onClick={() => handleApprove(project.id)}
-                  disabled={approvingId === project.id}
-                  className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  {approvingId === project.id ? "Approving…" : "Approve"}
-                </button>
-              )}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                href={`/projects/${project.id}`}
-                className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-              >
-                {isDeveloperOnly ? "View details" : "View"}
-              </Link>
-              {!isDeveloperOnly && canGenerateMessage && (
-                <>
-                  <input
-                    type="url"
-                    placeholder="Link"
-                    value={linkInput[project.id] ?? ""}
-                    onChange={(e) => setLinkInput((prev) => ({ ...prev, [project.id]: e.target.value }))}
-                    className="w-24 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleGenerateClientMessage(project)}
-                    disabled={generatingId === project.id}
-                    className="rounded bg-sky-600 px-2 py-1 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
-                  >
-                    {generatingId === project.id ? "…" : "Client msg"}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+      <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
+        <table className="min-w-[64rem] w-full text-left text-sm text-slate-200">
+          <thead>
+            <tr className="border-b border-slate-700 bg-slate-900/90 text-xs uppercase tracking-wide text-slate-400">
+              <th className="px-3 py-2.5 font-medium">Project</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Finance ref</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Type</th>
+              <th className="px-3 py-2.5 font-medium">Client</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap text-right">Price</th>
+              <th className="px-3 py-2.5 font-medium">Developer</th>
+              <th className="px-3 py-2.5 font-medium">Delivery</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Approval</th>
+              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Status</th>
+              <th className="px-3 py-2.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProjects.map((project) => {
+              const ts = project.taskSummary;
+              const financeRef =
+                project.financeProjectSeq != null && project.financeRefYear != null
+                  ? `${String(project.financeProjectSeq).padStart(3, "0")}/${String(project.financeRefYear % 100).padStart(2, "0")}`
+                  : "—";
+              const deliveryShort =
+                project.approvalStatus === "approved" && ts
+                  ? `Done ${ts.done} · IP ${ts.in_progress} · Wait ${ts.waiting_response} · Blk ${ts.blocked} · NS ${ts.not_started ?? (ts as { todo?: number }).todo ?? 0}`
+                  : "—";
+              return (
+                <tr key={project.id} className="border-b border-slate-800/90 align-top hover:bg-slate-900/40">
+                  <td className="max-w-[14rem] px-3 py-2.5 font-medium text-slate-100">
+                    {isDeveloperOnly ? (
+                      <span className="line-clamp-2">{project.name}</span>
+                    ) : (
+                      <Link href={`/projects/${project.id}`} className="text-sky-300 hover:underline line-clamp-2">
+                        {project.name}
+                      </Link>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-400">{financeRef}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-400">
+                    {project.type === "demo" ? "Demo" : project.type === "project" ? "Project" : "—"}
+                  </td>
+                  <td className="max-w-[10rem] px-3 py-2.5 text-slate-400">
+                    <span className="line-clamp-2">{project.clientOrOwnerName ?? "—"}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-emerald-400/90">
+                    {project.price != null && project.price > 0
+                      ? typeof project.price === "number"
+                        ? formatMoney(project.price)
+                        : project.price
+                      : "—"}
+                  </td>
+                  <td className="max-w-[9rem] px-3 py-2.5 text-xs text-slate-500">
+                    {project.assignedDeveloper
+                      ? project.assignedDeveloper.name || project.assignedDeveloper.email
+                      : "—"}
+                  </td>
+                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-slate-500">
+                    <span className="line-clamp-2" title={deliveryShort}>
+                      {deliveryShort}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    {project.approvalStatus === "pending_approval" && (
+                      <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-200">Pending</span>
+                    )}
+                    {project.approvalStatus === "approved" && (
+                      <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300">Approved</span>
+                    )}
+                    {project.approvalStatus && !["pending_approval", "approved"].includes(project.approvalStatus) && (
+                      <span className="text-xs capitalize text-slate-400">{project.approvalStatus}</span>
+                    )}
+                    {!project.approvalStatus && <span className="text-slate-500">—</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 capitalize text-slate-300">{project.status}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          {isDeveloperOnly ? "Details" : "View"}
+                        </Link>
+                        {canApproveProject && project.approvalStatus === "pending_approval" && (
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(project.id)}
+                            disabled={approvingId === project.id}
+                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                          >
+                            {approvingId === project.id ? "…" : "Approve"}
+                          </button>
+                        )}
+                      </div>
+                      {!isDeveloperOnly && canGenerateMessage && (
+                        <div className="flex max-w-[14rem] flex-wrap justify-end gap-1">
+                          <input
+                            type="url"
+                            placeholder="Link"
+                            value={linkInput[project.id] ?? ""}
+                            onChange={(e) => setLinkInput((prev) => ({ ...prev, [project.id]: e.target.value }))}
+                            className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateClientMessage(project)}
+                            disabled={generatingId === project.id}
+                            className="shrink-0 rounded bg-sky-600 px-2 py-1 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
+                          >
+                            {generatingId === project.id ? "…" : "Client msg"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       {filteredProjects.length === 0 && (
         <div className="shell text-center text-sm text-slate-400">

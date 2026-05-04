@@ -1215,10 +1215,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isAdmin && (
+      {isDirectorOrAdmin && (
         <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">Projects (all)</h3>
+            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
+              {isAdmin ? "Projects (all)" : "Projects"}
+            </h3>
             <Link
               href="/projects"
               className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
@@ -1273,21 +1275,34 @@ export default function DashboardPage() {
       )}
 
       {projectsNeedingReview.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-sky-600/50 bg-sky-950/40 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-4">
-          <p className="min-w-0 text-sm leading-snug text-sky-200">
+        <div className="rounded-xl border border-sky-600/50 bg-sky-950/40 px-3 py-3 sm:px-4">
+          <p className="mb-2 text-sm leading-snug text-sky-200">
             Review and add tasks for {projectsNeedingReview.length} project(s) assigned to you.
           </p>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {projectsNeedingReview.map((p) => (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}`}
-                className="max-w-full truncate rounded-lg bg-sky-600 px-3 py-1.5 text-center text-sm font-medium text-white hover:bg-sky-500 sm:max-w-[14rem]"
-                title={p.name}
-              >
-                {p.name}
-              </Link>
-            ))}
+          <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-sky-800/40 bg-slate-950/30 sm:mx-0">
+            <table className="min-w-full text-left text-sm text-slate-200">
+              <thead>
+                <tr className="border-b border-sky-900/60 text-xs uppercase tracking-wide text-sky-300/80">
+                  <th className="px-3 py-2 font-medium">Project</th>
+                  <th className="px-3 py-2 text-right font-medium">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectsNeedingReview.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-800/80 last:border-0">
+                    <td className="max-w-[min(28rem,85vw)] px-3 py-2 font-medium text-slate-100 break-words">{p.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="rounded border border-sky-500/60 bg-sky-600/90 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500"
+                      >
+                        Review
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

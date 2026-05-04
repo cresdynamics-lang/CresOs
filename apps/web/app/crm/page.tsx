@@ -342,95 +342,178 @@ export default function CrmPage() {
       {loadedOnce && (
         <>
           {tab === "leads_deals" && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="shell">
+            <div className="flex flex-col gap-6">
+              <div className="shell min-w-0">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Leads</p>
-                <ul className="space-y-2 text-sm">
-                  {leads.map((lead) => (
-                    <li key={lead.id}>
-                      <Link
-                        href={`/leads/${lead.id}`}
-                        className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-600"
-                      >
-                        <span className="text-slate-100">{lead.title}</span>
-                        <span className="text-xs text-slate-400">{lead.status}</span>
-                      </Link>
-                    </li>
-                  ))}
-                  {leads.length === 0 && <li className="text-sm text-slate-400">No leads yet.</li>}
-                </ul>
-              </div>
-              <div className="shell">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Deals</p>
-                <ul className="space-y-2 text-sm">
-                  {deals.map((deal) => (
-                    <li
-                      key={deal.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-                    >
-                      <div>
-                        <p className="text-slate-100">{deal.title}</p>
-                        <p className="text-xs text-slate-400">{deal.stage}</p>
-                      </div>
-                      {deal.value !== undefined && (
-                        <span className="text-emerald-400">{formatMoney(deal.value)}</span>
+                <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+                  <table className="min-w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                        <th className="px-3 py-2 font-medium">Title</th>
+                        <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
+                        <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leads.map((lead) => (
+                        <tr key={lead.id} className="border-b border-slate-800/80 text-slate-200 last:border-0">
+                          <td className="max-w-[20rem] px-3 py-2 font-medium text-slate-100 break-words">{lead.title}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-400">{lead.status}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right">
+                            <Link
+                              href={`/leads/${lead.id}`}
+                              className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                      {leads.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                            No leads yet.
+                          </td>
+                        </tr>
                       )}
-                    </li>
-                  ))}
-                  {deals.length === 0 && <li className="text-sm text-slate-400">No deals yet.</li>}
-                </ul>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="shell min-w-0">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Deals</p>
+                <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+                  <table className="min-w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                        <th className="px-3 py-2 font-medium">Title</th>
+                        <th className="px-3 py-2 font-medium">Stage</th>
+                        <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deals.map((deal) => (
+                        <tr key={deal.id} className="border-b border-slate-800/80 text-slate-200 last:border-0">
+                          <td className="max-w-[20rem] px-3 py-2 font-medium text-slate-100 break-words">{deal.title}</td>
+                          <td className="px-3 py-2 text-slate-400">{deal.stage}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right text-emerald-400">
+                            {deal.value !== undefined ? formatMoney(deal.value) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                      {deals.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                            No deals yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
           {tab === "clients" && (
-            <div className="shell">
+            <div className="shell min-w-0">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                 Clients ({clientSummary?.total ?? 0})
               </p>
-              <p className="mb-2 text-sm text-slate-400">
-                All project owners/clients are listed here automatically. Use this list to contact clients and track project status.
+              <p className="mb-3 text-sm text-slate-400">
+                All project owners/clients are listed here automatically. One row per project; contact columns repeat for the same client.
               </p>
-              <ul className="space-y-2 text-sm">
-                {(clientSummary?.clients ?? []).slice(0, 30).map((c) => (
-                  <li key={c.key} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-100">{c.name}</p>
-                        <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                          {c.email && (
-                            <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
-                              {c.email}
-                            </a>
-                          )}
-                          {c.phone && (
-                            <a className="text-slate-300 hover:underline" href={`tel:${c.phone}`}>
-                              {c.phone}
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-xs text-slate-500">
-                        {c.projects.length} project{c.projects.length === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-col gap-1">
-                      {c.projects.slice(0, 5).map((p) => (
-                        <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center justify-between text-xs hover:underline">
-                          <span className="truncate text-slate-300">{p.name}</span>
-                          <span className="ml-2 shrink-0 text-slate-500">
-                            {p.status} · {p.approvalStatus}
-                          </span>
-                        </Link>
-                      ))}
-                      {c.projects.length > 5 && <span className="text-xs text-slate-500">+{c.projects.length - 5} more</span>}
-                    </div>
-                  </li>
-                ))}
-                {(clientSummary?.clients?.length ?? 0) === 0 && (
-                  <li className="text-sm text-slate-400">No clients yet. Add a project with client details to populate.</li>
-                )}
-              </ul>
+              <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+                <table className="min-w-[42rem] w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                      <th className="px-3 py-2 font-medium">Client</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
+                      <th className="px-3 py-2 font-medium">Phone</th>
+                      <th className="px-3 py-2 font-medium">Project</th>
+                      <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
+                      <th className="whitespace-nowrap px-3 py-2 font-medium">Approval</th>
+                      <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(clientSummary?.clients ?? []).slice(0, 30).flatMap((c) =>
+                      c.projects.length === 0
+                        ? [
+                            <tr key={c.key} className="border-b border-slate-800/80 text-slate-200">
+                              <td className="max-w-[12rem] px-3 py-2 font-medium text-slate-100 break-words">{c.name}</td>
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-400">
+                                {c.email ? (
+                                  <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
+                                    {c.email}
+                                  </a>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-slate-400">
+                                {c.phone ? (
+                                  <a className="hover:underline" href={`tel:${c.phone}`}>
+                                    {c.phone}
+                                  </a>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td colSpan={4} className="px-3 py-2 text-slate-500">
+                                No linked projects
+                              </td>
+                            </tr>
+                          ]
+                        : c.projects.map((p) => (
+                            <tr key={`${c.key}-${p.id}`} className="border-b border-slate-800/80 text-slate-200">
+                              <td className="max-w-[12rem] px-3 py-2 font-medium text-slate-100 break-words">{c.name}</td>
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-400">
+                                {c.email ? (
+                                  <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
+                                    {c.email}
+                                  </a>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-slate-400">
+                                {c.phone ? (
+                                  <a className="hover:underline" href={`tel:${c.phone}`}>
+                                    {c.phone}
+                                  </a>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-200">
+                                <Link href={`/projects/${p.id}`} className="text-sky-300 hover:underline">
+                                  {p.name}
+                                </Link>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 capitalize text-slate-400">{p.status}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{p.approvalStatus}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-right">
+                                <Link
+                                  href={`/projects/${p.id}`}
+                                  className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                                >
+                                  View
+                                </Link>
+                              </td>
+                            </tr>
+                          ))
+                    )}
+                    {(clientSummary?.clients?.length ?? 0) === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                          No clients yet. Add a project with client details to populate.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
