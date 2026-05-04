@@ -1565,40 +1565,59 @@ export default function adminRouter(prisma: PrismaClient): Router {
       if (data.name !== undefined || data.phone !== undefined || data.notificationEmail !== undefined) {
         data.profileCompletedAt = new Date();
       }
-      const updated = await prisma.user.update({
-        where: { id },
-        data,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          phone: true,
-          notificationEmail: true,
-          profileCompletedAt: true,
-          status: true
-        }
-      });
+      if (Object.keys(data).length === 0) {
+        res.status(400).json({ error: "No profile fields to update (send name, phone, and/or notificationEmail)." });
+        return;
+      }
 
-      await prisma.eventLog.create({
-        data: {
-          orgId,
-          actorId: adminId,
-          type: "admin.user.updated",
-          entityType: "user",
-          entityId: id,
-          metadata: {
-            fields: Object.keys(data)
+      let updated;
+      try {
+        updated = await prisma.user.update({
+          where: { id },
+          data,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            notificationEmail: true,
+            profileCompletedAt: true,
+            status: true
           }
-        }
-      });
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Update failed";
+        // eslint-disable-next-line no-console
+        console.error("admin PATCH /users/:id failed", e);
+        res.status(500).json({ error: msg });
+        return;
+      }
 
-      await notifyAdminsInApp(
-        prisma,
-        orgId,
-        "[Visibility] User updated",
-        `An admin updated a user's profile details: ${updated.email}`,
-        { type: "admin.user.updated", tier: "structural", excludeUserIds: [adminId] }
-      );
+      try {
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            actorId: adminId,
+            type: "admin.user.updated",
+            entityType: "user",
+            entityId: id,
+            metadata: {
+              fields: Object.keys(data)
+            }
+          }
+        });
+
+        await notifyAdminsInApp(
+          prisma,
+          orgId,
+          "[Visibility] User updated",
+          `An admin updated a user's profile details: ${updated.email}`,
+          { type: "admin.user.updated", tier: "structural", excludeUserIds: [adminId] }
+        );
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("admin user update post-actions failed", e);
+      }
 
       // Send a confirmation email when profile/contact details are updated by admin
       const toEmail = updated.notificationEmail?.trim() || updated.email;

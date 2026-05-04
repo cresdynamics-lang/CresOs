@@ -65,6 +65,7 @@ export function AdminConsole() {
   const [editPhone, setEditPhone] = useState("");
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [createUserBusy, setCreateUserBusy] = useState(false);
@@ -147,6 +148,7 @@ export function AdminConsole() {
 
   function openEdit(u: UserRow) {
     setEditing(u);
+    setEditError(null);
     setEditName(u.name ?? "");
     setEditPhone(u.phone ?? "");
     setEditNotificationEmail(u.notificationEmail ?? u.email ?? "");
@@ -155,6 +157,7 @@ export function AdminConsole() {
   async function saveEdit() {
     if (!editing) return;
     setSaving(true);
+    setEditError(null);
     try {
       const res = await apiFetch(`/admin/users/${editing.id}`, {
         method: "PATCH",
@@ -168,7 +171,12 @@ export function AdminConsole() {
       if (res.ok) {
         setEditing(null);
         await loadUsersWithRoles();
+      } else {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        setEditError(errBody.error ?? `Save failed (${res.status}).`);
       }
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Network error while saving.");
     } finally {
       setSaving(false);
     }
@@ -528,6 +536,11 @@ export function AdminConsole() {
             <div className="shell mx-auto w-full max-w-full border-brand/30 sm:max-w-md">
               <h3 className="mb-2 text-xs font-semibold text-slate-200 sm:mb-3 sm:text-sm">Edit user</h3>
               <p className="mb-2 break-all text-[11px] text-slate-400 sm:mb-3 sm:text-xs">{editing.email}</p>
+              {editError && (
+                <p className="mb-2 rounded border border-rose-600/40 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200 sm:text-xs" role="alert">
+                  {editError}
+                </p>
+              )}
               <div className="flex flex-col gap-3">
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Name</span>
