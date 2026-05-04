@@ -7,7 +7,7 @@ import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
-import { allocateNextProjectInvoiceNumber } from "../services/invoice/invoice-number";
+import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 
@@ -650,7 +650,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }))
         .filter((it) => it.description && it.unitPrice && !Number.isNaN(Number(it.unitPrice)));
 
-      if (!clientId || !projectId || !issueDate || normalizedItems.length === 0) {
+      if (!clientId || !issueDate || normalizedItems.length === 0) {
         res.status(400).json({ error: "Missing fields" });
         return;
       }
@@ -680,15 +680,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
             return sum + value;
           }, 0);
 
-          const project = await tx.project.findFirst({
-            where: { id: projectId, orgId, deletedAt: null },
-            select: { id: true }
-          });
-          if (!project) {
-            throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
+          if (projectId) {
+            const project = await tx.project.findFirst({
+              where: { id: projectId, orgId, deletedAt: null },
+              select: { id: true }
+            });
+            if (!project) {
+              throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
+            }
           }
 
-          const number = await allocateNextProjectInvoiceNumber(tx, orgId, projectId, issue);
+          const number = await allocateInvoiceNumberForCreate(tx, orgId, projectId, issue);
 
           const invoice = await tx.invoice.create({
             data: {
