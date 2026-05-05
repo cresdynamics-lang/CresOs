@@ -10,6 +10,7 @@ import { sendWelcomeEmail } from "../lib/resend";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
+import { deleteOrgUserHard } from "../lib/delete-org-user";
 
 const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
 
@@ -696,7 +697,10 @@ export default function adminRouter(prisma: PrismaClient): Router {
         return;
       }
       try {
-        const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+        const emailNorm = email.trim().toLowerCase();
+        const existing = await prisma.user.findFirst({
+          where: { email: emailNorm, deletedAt: null }
+        });
         if (existing) {
           res.status(400).json({ error: "Email already in use" });
           return;
@@ -707,7 +711,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
         const passwordHash = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
           data: {
-            email: email.trim().toLowerCase(),
+            email: emailNorm,
             name: name?.trim() || null,
             passwordHash,
             orgId,
@@ -1687,12 +1691,16 @@ export default function adminRouter(prisma: PrismaClient): Router {
         }
       }
 
-      await prisma.user.update({
-        where: { id },
-        data: {
-          deletedAt: new Date()
-        }
-      });
+      try {
+        await deleteOrgUserHard(prisma, { userId: id, orgId, reassignToUserId: adminId });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("admin DELETE /users/:id hard delete failed", e);
+        res.status(500).json({
+          error: "Could not delete user. The account may still be linked to data. Check server logs."
+        });
+        return;
+      }
 
       await prisma.eventLog.create({
         data: {

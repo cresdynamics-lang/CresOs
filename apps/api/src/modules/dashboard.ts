@@ -13,6 +13,7 @@ import { processTaskDueReminders } from "./task-reminders";
 import { processQueuedEmails } from "./email-delivery";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 import { processStaleActivityAdminDigest, TWELVE_HOURS_MS } from "./stale-activity-admin-digest";
+import { generateDashboardFocusCoachGroq } from "./director-ai-automation";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const REPORT_REMINDER_THROTTLE_MS = TWELVE_HOURS_MS;
@@ -109,6 +110,237 @@ async function reportSubmissionStreak(prisma: PrismaClient, userId: string): Pro
   return streak;
 }
 
+async function countOverdueSalesReportQuestions(
+  prisma: PrismaClient,
+  orgId: string,
+  userId: string
+): Promise<number> {
+  const reports = await prisma.salesReport.findMany({
+    where: { orgId, submittedById: userId, status: "submitted" },
+    select: { id: true }
+  });
+  const reportIds = reports.map((r) => r.id);
+  if (reportIds.length === 0) return 0;
+  const questions = await prisma.salesReportComment.findMany({
+    where: { reportId: { in: reportIds }, kind: "question", parentId: null }
+  });
+  const deadlineMs = 24 * 60 * 60 * 1000;
+  let n = 0;
+  for (const q of questions) {
+    const reply = await prisma.salesReportComment.findFirst({
+      where: { parentId: q.id }
+    });
+    if (!reply && Date.now() > q.createdAt.getTime() + deadlineMs) {
+      n++;
+    }
+  }
+  return n;
+}
+
+async function buildFocusCoachPayload(
+  prisma: PrismaClient,
+  orgId: string,
+  userId: string,
+  roleKeys: string[]
+): Promise<{
+  checks: Record<string, unknown>;
+  deterministicTips: string[];
+  contextForAi: Record<string, unknown>;
+}> {
+  const now = new Date();
+  const uy = now.getUTCFullYear();
+  const um = now.getUTCMonth();
+  const ud = now.getUTCDate();
+  const utcDayStart = new Date(Date.UTC(uy, um, ud, 0, 0, 0, 0));
+  const utcDayEnd = new Date(Date.UTC(uy, um, ud, 23, 59, 59, 999));
+
+  const isSales = roleKeys.includes(ROLE_KEYS.sales);
+  const isDev = roleKeys.includes(ROLE_KEYS.developer);
+  const isReviewer = roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+  const canApprove = roleKeys.some((k) =>
+    [ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.finance].includes(k)
+  );
+
+  const [userRow, unreadInApp, activeProjectsCount] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true }
+    }),
+    prisma.notification.count({
+      where: { orgId, channel: "in_app", to: userId, readAt: null }
+    }),
+    prisma.project.count({
+      where: {
+        orgId,
+        deletedAt: null,
+        status: { in: ["planned", "active", "paused"] },
+        OR: [
+          { assignedDeveloperId: userId },
+          { createdByUserId: userId },
+          { ownerUserId: userId },
+          { developerAssignments: { some: { userId, status: "accepted" } } }
+        ]
+      }
+    })
+  ]);
+
+  const firstName =
+    userRow?.name?.trim().split(/\s+/)[0] ||
+    userRow?.email?.split("@")[0]?.split(".")[0] ||
+    "there";
+
+  const tips: string[] = [];
+  const checks: Record<string, unknown> = {
+    unreadInAppNotifications: unreadInApp,
+    activeProjectsYouTouch: activeProjectsCount
+  };
+
+  if (unreadInApp > 0) {
+    tips.push(
+      `Clear ${unreadInApp} unread in-app notification${unreadInApp === 1 ? "" : "s"} (bell / Community) so messages don’t pile up.`
+    );
+  }
+
+  if (activeProjectsCount > 0) {
+    tips.push(
+      `You’re linked to ${activeProjectsCount} active or in-flight project${activeProjectsCount === 1 ? "" : "s"} — confirm status and blockers on Projects.`
+    );
+  }
+
+  if (isSales) {
+    const [latestSales, salesToday, overdueQs] = await Promise.all([
+      prisma.salesReport.findFirst({
+        where: { orgId, submittedById: userId, status: "submitted" },
+        orderBy: { submittedAt: "desc" },
+        select: { id: true, reviewStatus: true, submittedAt: true }
+      }),
+      prisma.salesReport.findFirst({
+        where: {
+          orgId,
+          submittedById: userId,
+          status: "submitted",
+          submittedAt: { gte: utcDayStart, lte: utcDayEnd }
+        },
+        select: { id: true }
+      }),
+      countOverdueSalesReportQuestions(prisma, orgId, userId)
+    ]);
+    checks.salesSubmittedTodayUtc = !!salesToday;
+    checks.salesLatestReviewStatus = latestSales?.reviewStatus ?? null;
+    checks.salesReportThreadsNeedingReplyOverdue24h = overdueQs;
+
+    if (!salesToday) {
+      tips.push(
+        `Submit today’s sales report (Reports) so leadership stays aligned on pipeline activity.`
+      );
+    }
+    if (latestSales?.reviewStatus === "pending") {
+      tips.push(
+        `Your latest submitted sales report is awaiting formal review — watch for director questions.`
+      );
+    }
+    if (overdueQs > 0) {
+      tips.push(
+        `${overdueQs} question${overdueQs === 1 ? "" : "s"} on your reports need a reply (open Reports / threads).`
+      );
+    }
+  }
+
+  if (isDev) {
+    const [latestDev, devToday, myTasksOverdue] = await Promise.all([
+      prisma.developerReport.findFirst({
+        where: { orgId, submittedById: userId },
+        orderBy: { reportDate: "desc" },
+        select: {
+          reviewStatus: true,
+          reportDate: true,
+          needsAttention: true
+        }
+      }),
+      prisma.developerReport.findFirst({
+        where: {
+          orgId,
+          submittedById: userId,
+          reportDate: { gte: utcDayStart, lte: utcDayEnd }
+        },
+        select: { id: true }
+      }),
+      prisma.task.count({
+        where: {
+          orgId,
+          assigneeId: userId,
+          deletedAt: null,
+          status: { not: "done" },
+          dueDate: { lt: now }
+        }
+      })
+    ]);
+    checks.developerSubmittedTodayUtc = !!devToday;
+    checks.developerLatestReviewStatus = latestDev?.reviewStatus ?? null;
+    checks.developerLatestNeedsAttentionSnippet = latestDev?.needsAttention?.trim()
+      ? String(latestDev.needsAttention).slice(0, 200)
+      : null;
+    checks.developerOverdueTasks = myTasksOverdue;
+
+    if (!devToday) {
+      tips.push(`Submit today’s developer report so delivery and risks stay visible to the team.`);
+    }
+    if (latestDev?.reviewStatus === "pending") {
+      tips.push(`Your latest developer report is awaiting review — respond quickly to feedback.`);
+    }
+    if (latestDev?.needsAttention?.trim()) {
+      tips.push(
+        `Your last developer report flagged needs-attention items — close the loop on Projects or with your lead.`
+      );
+    }
+    if (myTasksOverdue > 0) {
+      tips.push(
+        `${myTasksOverdue} overdue task${myTasksOverdue === 1 ? "" : "s"} assigned to you — clear the oldest blocker first.`
+      );
+    }
+  }
+
+  if (isReviewer) {
+    const [salesPending, devPending] = await Promise.all([
+      prisma.salesReport.count({
+        where: { orgId, status: "submitted", reviewStatus: "pending" }
+      }),
+      prisma.developerReport.count({
+        where: { orgId, reviewStatus: "pending" }
+      })
+    ]);
+    checks.salesReportsAwaitingLeadershipReview = salesPending;
+    checks.developerReportsAwaitingLeadershipReview = devPending;
+    const totalRep = salesPending + devPending;
+    if (totalRep > 0) {
+      tips.push(
+        `${totalRep} submitted report${totalRep === 1 ? "" : "s"} await your review (sales + developer).`
+      );
+    }
+  }
+
+  if (canApprove) {
+    const pendingApprovals = await prisma.approval.count({
+      where: { orgId, status: "pending" }
+    });
+    checks.pendingApprovalRecords = pendingApprovals;
+    if (pendingApprovals > 0) {
+      tips.push(`${pendingApprovals} approval record(s) need a decision — open Approvals.`);
+    }
+  }
+
+  const deterministicTips = tips.slice(0, 7);
+
+  const contextForAi: Record<string, unknown> = {
+    firstName,
+    roleKeys,
+    ...checks,
+    coachingBullets: deterministicTips
+  };
+
+  return { checks, deterministicTips, contextForAi };
+}
+
 export default function dashboardRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
@@ -119,14 +351,28 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
 
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const y = now.getUTCFullYear();
+      const m = now.getUTCMonth();
+      const startOfMonthUtc = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+      const startOfNextMonthUtc = new Date(Date.UTC(y, m + 1, 1, 0, 0, 0, 0));
+
+      const canSeeFinanceStats =
+        req.auth!.roleKeys.includes(ROLE_KEYS.finance) ||
+        req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+
+      const emptyFinance = {
+        revenueThisMonth: 0,
+        outstandingInvoicesAmount: 0,
+        overdueInvoicesCount: 0,
+        expensesThisMonth: 0,
+        payoutsPaidThisMonth: 0,
+        cashOutflowsThisMonth: 0,
+        projectContractTotal: 0,
+        projectAmountReceivedTotal: 0,
+        projectPendingTotal: 0
+      };
 
       const [
-        revenueThisMonthAgg,
-        expensesThisMonthAgg,
-        outstandingInvoicesAgg,
-        overdueInvoicesCount,
         activeProjectsCount,
         overdueTasksCount,
         blockedTasksCount,
@@ -137,45 +383,6 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         dealsLost,
         closedDeals
       ] = await Promise.all([
-        prisma.payment.aggregate({
-          where: {
-            orgId,
-            deletedAt: null,
-            status: "confirmed",
-            receivedAt: { gte: startOfMonth, lt: startOfNextMonth }
-          },
-          _sum: { amount: true }
-        }),
-        prisma.expense.aggregate({
-          where: {
-            orgId,
-            deletedAt: null,
-            status: { in: ["approved", "paid"] },
-            spentAt: { gte: startOfMonth, lt: startOfNextMonth }
-          },
-          _sum: { amount: true }
-        }),
-        prisma.invoice.aggregate({
-          where: {
-            orgId,
-            deletedAt: null,
-            status: { in: ["sent", "partial", "overdue"] }
-          },
-          _sum: { totalAmount: true }
-        }),
-        prisma.invoice.count({
-          where: {
-            orgId,
-            deletedAt: null,
-            OR: [
-              { status: "overdue" },
-              {
-                status: { in: ["sent", "partial"] },
-                dueDate: { not: null, lt: now }
-              }
-            ]
-          }
-        }),
         prisma.project.count({
           where: { orgId, deletedAt: null, status: "active" }
         }),
@@ -203,7 +410,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
               orgId,
               deletedAt: null,
               projectId: { not: null },
-              createdAt: { gte: startOfMonth, lt: startOfNextMonth }
+              createdAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
             }
           })
           .then((rows) => rows.filter((r) => r.projectId != null).length),
@@ -212,7 +419,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
             orgId,
             deletedAt: null,
             stage: "won",
-            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+            updatedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
           }
         }),
         prisma.deal.count({
@@ -220,7 +427,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
             orgId,
             deletedAt: null,
             stage: "lost",
-            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+            updatedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
           }
         }),
         prisma.deal.findMany({
@@ -228,11 +435,98 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
             orgId,
             deletedAt: null,
             stage: { in: ["won", "lost"] },
-            updatedAt: { gte: startOfMonth, lt: startOfNextMonth }
+            updatedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
           },
           select: { createdAt: true, updatedAt: true }
         })
       ]);
+
+      let finance = emptyFinance;
+
+      if (canSeeFinanceStats) {
+        const approvedProjectsMoney = await prisma.project.findMany({
+          where: { orgId, deletedAt: null, approvalStatus: "approved" },
+          select: { price: true, amountReceived: true }
+        });
+        let projectContractTotal = 0;
+        let projectReceivedTotal = 0;
+        let projectPendingTotal = 0;
+        for (const p of approvedProjectsMoney) {
+          const priceNum = p.price != null ? Number(p.price) : null;
+          const recNum = p.amountReceived != null ? Number(p.amountReceived) : 0;
+          if (priceNum != null) {
+            projectContractTotal += priceNum;
+            projectPendingTotal += Math.max(0, priceNum - recNum);
+          }
+          projectReceivedTotal += recNum;
+        }
+
+        const [revenueThisMonthAgg, expensesThisMonthAgg, payoutsPaidMonthAgg, outstandingInvoicesAgg, overdueInvoicesCount] =
+          await Promise.all([
+            prisma.payment.aggregate({
+              where: {
+                orgId,
+                deletedAt: null,
+                status: "confirmed",
+                receivedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
+              },
+              _sum: { amount: true }
+            }),
+            prisma.expense.aggregate({
+              where: {
+                orgId,
+                deletedAt: null,
+                status: { in: ["approved", "paid"] },
+                spentAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
+              },
+              _sum: { amount: true }
+            }),
+            prisma.payout.aggregate({
+              where: {
+                orgId,
+                deletedAt: null,
+                paidAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
+              },
+              _sum: { amount: true }
+            }),
+            prisma.invoice.aggregate({
+              where: {
+                orgId,
+                deletedAt: null,
+                status: { in: ["sent", "partial", "overdue"] }
+              },
+              _sum: { totalAmount: true }
+            }),
+            prisma.invoice.count({
+              where: {
+                orgId,
+                deletedAt: null,
+                OR: [
+                  { status: "overdue" },
+                  {
+                    status: { in: ["sent", "partial"] },
+                    dueDate: { not: null, lt: now }
+                  }
+                ]
+              }
+            })
+          ]);
+
+        const expPart = Number(expensesThisMonthAgg._sum.amount ?? 0);
+        const payoutPart = Number(payoutsPaidMonthAgg._sum.amount ?? 0);
+
+        finance = {
+          revenueThisMonth: Number(revenueThisMonthAgg._sum.amount ?? 0),
+          outstandingInvoicesAmount: Number(outstandingInvoicesAgg._sum.totalAmount ?? 0),
+          overdueInvoicesCount,
+          expensesThisMonth: expPart,
+          payoutsPaidThisMonth: payoutPart,
+          cashOutflowsThisMonth: expPart + payoutPart,
+          projectContractTotal,
+          projectAmountReceivedTotal: projectReceivedTotal,
+          projectPendingTotal
+        };
+      }
 
       const won = dealsWon;
       const lost = dealsLost;
@@ -249,15 +543,10 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
 
       res.json({
         period: {
-          startOfMonth: startOfMonth.toISOString(),
-          endExclusive: startOfNextMonth.toISOString()
+          startOfMonth: startOfMonthUtc.toISOString(),
+          endExclusive: startOfNextMonthUtc.toISOString()
         },
-        finance: {
-          revenueThisMonth: Number(revenueThisMonthAgg._sum.amount ?? 0),
-          outstandingInvoicesAmount: Number(outstandingInvoicesAgg._sum.totalAmount ?? 0),
-          overdueInvoicesCount,
-          expensesThisMonth: Number(expensesThisMonthAgg._sum.amount ?? 0)
-        },
+        finance,
         projectHealth: {
           activeProjects: activeProjectsCount,
           overdueTasks: overdueTasksCount,
@@ -280,11 +569,21 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
   // What needs your attention + stats (notifications, messages, due, work progress, report streak)
   router.get(
     "/attention",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.developer, ROLE_KEYS.admin, ROLE_KEYS.analyst]),
+    requireRoles([
+      ROLE_KEYS.sales,
+      ROLE_KEYS.director,
+      ROLE_KEYS.developer,
+      ROLE_KEYS.admin,
+      ROLE_KEYS.analyst,
+      ROLE_KEYS.finance
+    ]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+      const canSeeOrgApprovalQueue = req.auth!.roleKeys.some((k) =>
+        [ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.finance].includes(k)
+      );
       const isSales = req.auth!.roleKeys.includes(ROLE_KEYS.sales);
       const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
 
@@ -390,7 +689,7 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
               include: { owner: { select: { id: true, name: true, email: true } } }
             })
           : [],
-        isDirector
+        canSeeOrgApprovalQueue
           ? prisma.approval.findMany({
               where: { orgId, status: "pending" },
               orderBy: { createdAt: "desc" },
@@ -535,6 +834,43 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         overdueTasks: isDeveloper ? overdueTasks : undefined,
         latestDeveloperReportNeedsAttention: isDeveloper ? latestDeveloperReportNeedsAttention : undefined
       });
+    }
+  );
+
+  /** Facts-only coaching bullets + optional Groq alignment hint (uses same roles as /attention). */
+  router.get(
+    "/focus-coach",
+    requireRoles([
+      ROLE_KEYS.sales,
+      ROLE_KEYS.director,
+      ROLE_KEYS.developer,
+      ROLE_KEYS.admin,
+      ROLE_KEYS.analyst,
+      ROLE_KEYS.finance
+    ]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const keys = req.auth!.roleKeys;
+        const payload = await buildFocusCoachPayload(prisma, orgId, userId, keys);
+        let aiHint = null;
+        try {
+          aiHint = await generateDashboardFocusCoachGroq(payload.contextForAi);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("[dashboard] focus-coach AI:", e);
+        }
+        res.json({
+          checks: payload.checks,
+          deterministicTips: payload.deterministicTips,
+          aiHint
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[dashboard] focus-coach:", e);
+        res.status(500).json({ error: "Failed to load focus coach" });
+      }
     }
   );
 

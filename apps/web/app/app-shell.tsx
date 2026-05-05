@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
+import { AppSiteFooter } from "../components/app-site-footer";
 import { ALL_APP_ROLE_KEYS } from "../lib/app-roles";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
@@ -48,7 +49,12 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Delivery",
     items: [
-      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] }
+      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
+      {
+        href: "/projects/management",
+        label: "Projects on management",
+        roles: ["admin", "director_admin", "finance"]
+      }
     ]
   },
   {
@@ -122,7 +128,13 @@ function SidebarNavContent({
     <>
       <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="h-9 w-9 shrink-0 rounded-xl bg-brand/20 ring-2 ring-brand/60" />
+          <img
+            src="/cresos-logo.svg"
+            width={36}
+            height={36}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-xl ring-2 ring-brand/50"
+          />
           {!isSidebarCollapsed && (
             <div className="min-w-0">
               <p className="text-sm font-semibold tracking-wide text-brand">CresOS</p>
@@ -719,6 +731,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+            <img src="/cresos-logo.svg" width={28} height={28} alt="" className="hidden h-7 w-7 shrink-0 rounded-lg sm:block" />
             <div className="min-w-0 text-xs font-medium uppercase tracking-wide text-slate-500">
               <span className="truncate text-slate-400">{auth.orgName?.trim() || "Workspace"}</span>
             </div>
@@ -745,15 +758,26 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <div
-          className={`min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden ${
+          className={`flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden ${
             isFullscreenPage
               ? hideTopHeader
-                ? "mx-0 flex flex-col overflow-hidden px-0 py-0"
-                : "mx-0 flex max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] flex-col overflow-hidden px-0 py-0 lg:pt-0"
-              : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
+                ? "mx-0 overflow-hidden px-0 py-0"
+                : "mx-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] overflow-hidden px-0 py-0 lg:pt-0"
+              : ""
           }`}
         >
-          {children}
+          <div
+            className={`min-h-0 flex-1 overflow-x-hidden ${
+              isFullscreenPage
+                ? hideTopHeader
+                  ? "flex flex-col overflow-hidden"
+                  : "flex max-lg:pt-0 flex-col overflow-hidden lg:pt-0"
+                : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
+            }`}
+          >
+            {children}
+          </div>
+          {!(isFullscreenPage && hideTopHeader) && <AppSiteFooter />}
         </div>
       </main>
     </div>

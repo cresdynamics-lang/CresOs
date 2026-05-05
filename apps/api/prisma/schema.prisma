@@ -75,6 +75,8 @@ model Org {
   dailyReminderSents DailyReminderSent[]
   adminAiReports     AdminAiReport[]
 
+  projectManagementMonths ProjectManagementMonth[]
+
   @@index([slug])
 }
 
@@ -119,7 +121,8 @@ model CrmContact {
 
 model User {
   id                      String    @id @default(cuid())
-  email                   String    @unique
+  /// Unique among active users (`deletedAt IS NULL`) — enforced via partial index in migrations.
+  email                   String
   name                    String?
   passwordHash            String
   phone                   String?
@@ -193,6 +196,10 @@ model User {
 
   developerDailyDigestsSent DeveloperDailyDigestSent[]
 
+  expensesAsBeneficiary Expense[] @relation("ExpenseBeneficiary")
+  expensesDevAcked      Expense[] @relation("ExpenseDevAck")
+  managementMonthsMarked ProjectManagementMonth[]
+
   // Chat System Relations
   chatUser          ChatUser?
   inbox             Inbox?              @relation("UserInbox")
@@ -201,6 +208,8 @@ model User {
   messageHides      MessageHide[]
   messageFlags      MessageUserFlag[]
   DailyReminderSent DailyReminderSent[]
+
+  @@index([email])
 }
 
 model OrgMember {
@@ -451,6 +460,9 @@ model Project {
   // When project is on management: expected per month and duration (for finance / upgrade visibility)
   managementMonthlyAmount Decimal?  @db.Decimal(14, 2) // expected KES per month while on management
   managementMonths        Int? // for how long (months) — e.g. 12 for one year
+  managementActive        Boolean   @default(false)
+  managementStartedAt     DateTime? // first billable month derived from this date (UTC)
+  managementProgressPercent Int? // 0–100, director-reported delivery progress
   projectDetails          String?   @db.Text
   approvalStatus          String    @default("pending_approval") // pending_approval, approved, rejected
   approvedById            String?
@@ -483,6 +495,31 @@ model Project {
   developerAssignments  ProjectDeveloperAssignment[]
   leads                 Lead[]
   usersWithCurrentFocus User[]                       @relation("UserCurrentFocus")
+  managementMonthRows   ProjectManagementMonth[]
+}
+
+/// One row per calendar month for management fee tracking (paid checkbox + optional invoice link).
+model ProjectManagementMonth {
+  id               String    @id @default(cuid())
+  orgId            String
+  projectId        String
+  year             Int
+  month            Int
+  paid             Boolean   @default(false)
+  paidAt           DateTime?
+  markedByUserId   String?
+  invoiceId        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org      Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoice  Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  markedBy User?    @relation(fields: [markedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, year, month])
+  @@index([orgId])
+  @@index([projectId])
 }
 
 model ProjectHandoffRequest {
@@ -653,6 +690,7 @@ model Invoice {
   project  Project?      @relation(fields: [projectId], references: [id])
   items    InvoiceItem[]
   payments Payment[]
+  managementMonthRows ProjectManagementMonth[]
 
   @@unique([orgId, number])
 }
@@ -694,7 +732,7 @@ model Payment {
 model Expense {
   id              String    @id @default(cuid())
   orgId           String
-  category        String // salaries, apis, hostings, domains, renewals, apis_per_project, other
+  category        String // salaries, apis, transport, tools, developer_payment, hostings, domains, renewals, apis_per_project, other
   description     String?
   notes           String? // internal note/comment for this transaction
   source          String? // where from (vendor/supplier name)
@@ -708,7 +746,24 @@ model Expense {
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
 
+  /// Who used transport / receives a developer payment — links to org user.
+  beneficiaryUserId String?
+  beneficiary       User?     @relation("ExpenseBeneficiary", fields: [beneficiaryUserId], references: [id])
+  /// Optional refinement: transport | tools | developer_payment | general
+  expenseSubtype            String?
+  /// meeting_client | internal_team | developer_work | sales_visit | other
+  purposeCode               String?
+  purposeDetail             String?   @db.Text
+  toolOrServiceName         String?
+  subscriptionValidUntil    DateTime?
+  developerAcknowledgedAt   DateTime?
+  developerAcknowledgedById String?
+  developerAcknowledger     User?     @relation("ExpenseDevAck", fields: [developerAcknowledgedById], references: [id])
+
   org Org @relation(fields: [orgId], references: [id])
+
+  @@index([beneficiaryUserId])
+  @@index([orgId, category])
 }
 
 model Payout {

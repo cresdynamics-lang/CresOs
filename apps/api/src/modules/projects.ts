@@ -9,6 +9,11 @@ import { getDirectorUsers, notifyDirectors } from "./director-notifications";
 import { notifyProjectExecutionStakeholders } from "./project-stakeholder-notifications";
 import { syncLeadAndClientFromProject } from "./project-lead-sync";
 import { getProjectDeveloperAccess, getAcceptedDeveloperIds } from "../lib/project-access";
+import {
+  billableMonthsUtc,
+  DEFAULT_MANAGEMENT_MONTHLY_KES,
+  ymKey
+} from "../lib/management-billing";
 
 export default function projectsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
@@ -118,6 +123,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           amountReceived: p.amountReceived != null ? Number(p.amountReceived) : 0,
           managementMonthlyAmount: p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : null,
           managementMonths: p.managementMonths,
+          managementActive: p.managementActive,
+          managementStartedAt: p.managementStartedAt,
+          managementProgressPercent: p.managementProgressPercent,
           taskSummary: taskSummaryByProject[p.id] ?? { ...emptySummary }
         };
         if (stripSensitive) {
@@ -126,10 +134,82 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           delete (row as any).price;
           delete (row as any).clientOrOwnerName;
           delete (row as any).amountReceived;
+          delete (row as any).managementMonthlyAmount;
+          delete (row as any).managementMonths;
+          delete (row as any).managementActive;
+          delete (row as any).managementStartedAt;
+          delete (row as any).managementProgressPercent;
         }
         return row;
       });
       res.json(out);
+    }
+  );
+
+  /** Approved projects on management — director, admin, finance (calculated pending fees per month). */
+  router.get(
+    "/management",
+    requireRoles([ROLE_KEYS.director, ROLE_KEYS.admin, ROLE_KEYS.finance]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      try {
+        const projects = await prisma.project.findMany({
+          where: { orgId, deletedAt: null, approvalStatus: "approved", managementActive: true },
+          orderBy: { name: "asc" },
+          include: {
+            client: { select: { id: true, name: true } },
+            managementMonthRows: true
+          }
+        });
+        const now = new Date();
+        const payload = projects.map((p) => {
+          const monthly =
+            p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : DEFAULT_MANAGEMENT_MONTHLY_KES;
+          const started = p.managementStartedAt;
+          const months =
+            started && !Number.isNaN(started.getTime())
+              ? billableMonthsUtc(started, p.managementMonths, now)
+              : [];
+          const rowByKey = new Map(
+            p.managementMonthRows.map((r) => [ymKey(r.year, r.month), r])
+          );
+          const monthDetails = months.map(({ year, month }) => {
+            const key = ymKey(year, month);
+            const row = rowByKey.get(key);
+            return {
+              year,
+              month,
+              key,
+              paid: row?.paid ?? false,
+              paidAt: row?.paidAt?.toISOString() ?? null,
+              invoiceId: row?.invoiceId ?? null
+            };
+          });
+          const unpaidCount = monthDetails.filter((m) => !m.paid).length;
+          const pendingAmount = unpaidCount * monthly;
+          const paidMonthsCount = monthDetails.filter((m) => m.paid).length;
+          return {
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            client: p.client,
+            clientId: p.clientId,
+            managementMonthlyAmount: monthly,
+            managementMonths: p.managementMonths,
+            managementStartedAt: started?.toISOString() ?? null,
+            managementProgressPercent: p.managementProgressPercent,
+            monthDetails,
+            pendingAmount,
+            paidMonthsCount,
+            totalBillableMonths: monthDetails.length
+          };
+        });
+        res.json({ projects: payload, defaultMonthlyKes: DEFAULT_MANAGEMENT_MONTHLY_KES, generatedAt: now.toISOString() });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[projects] /management", e);
+        res.status(500).json({ error: "Failed to load management projects" });
+      }
     }
   );
 
@@ -393,6 +473,214 @@ export default function projectsRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Director: enroll project in management billing (default 2,000 KES / month unless overridden)
+  router.post(
+    "/:projectId/management/enroll",
+    requireRoles([ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const body = (req.body || {}) as {
+        managementMonthlyAmount?: string | number | null;
+        managementStartedAt?: string | null;
+        managementMonths?: string | number | null;
+      };
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, approvalStatus: "approved" }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Approved project not found" });
+        return;
+      }
+      if (project.managementActive) {
+        res.status(400).json({ error: "Project is already on management" });
+        return;
+      }
+      const amtRaw =
+        body.managementMonthlyAmount != null && body.managementMonthlyAmount !== ""
+          ? Number(body.managementMonthlyAmount)
+          : DEFAULT_MANAGEMENT_MONTHLY_KES;
+      if (Number.isNaN(amtRaw) || amtRaw <= 0) {
+        res.status(400).json({ error: "managementMonthlyAmount must be a positive number" });
+        return;
+      }
+      let started: Date;
+      if (body.managementStartedAt && String(body.managementStartedAt).trim()) {
+        started = new Date(String(body.managementStartedAt).trim());
+        if (Number.isNaN(started.getTime())) {
+          res.status(400).json({ error: "Invalid managementStartedAt" });
+          return;
+        }
+      } else {
+        const d = new Date();
+        started = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0));
+      }
+      let months: number | null = null;
+      if (body.managementMonths != null && body.managementMonths !== "") {
+        const n = Math.floor(Number(body.managementMonths));
+        if (Number.isNaN(n) || n < 1) {
+          res.status(400).json({ error: "managementMonths must be a positive integer or omitted" });
+          return;
+        }
+        months = n;
+      }
+      const updated = await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          managementActive: true,
+          managementMonthlyAmount: new Prisma.Decimal(amtRaw.toFixed(2)),
+          managementStartedAt: started,
+          managementMonths: months
+        },
+        include: { client: { select: { id: true, name: true } } }
+      });
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "project.management.enrolled",
+          entityType: "project",
+          entityId: projectId,
+          metadata: { monthly: amtRaw, startedAt: started.toISOString(), months }
+        }
+      });
+      res.status(201).json(updated);
+    }
+  );
+
+  router.patch(
+    "/:projectId/management",
+    requireRoles([ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const body = (req.body || {}) as {
+        managementStartedAt?: string | null;
+        managementProgressPercent?: string | number | null;
+        managementMonthlyAmount?: string | number | null;
+        managementMonths?: string | number | null;
+      };
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, managementActive: true }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Active management project not found" });
+        return;
+      }
+      const data: Record<string, unknown> = {};
+      if (body.managementStartedAt !== undefined) {
+        if (body.managementStartedAt == null || body.managementStartedAt === "") {
+          data.managementStartedAt = null;
+        } else {
+          const d = new Date(String(body.managementStartedAt));
+          if (Number.isNaN(d.getTime())) {
+            res.status(400).json({ error: "Invalid managementStartedAt" });
+            return;
+          }
+          data.managementStartedAt = d;
+        }
+      }
+      if (body.managementProgressPercent !== undefined) {
+        if (body.managementProgressPercent == null || body.managementProgressPercent === "") {
+          data.managementProgressPercent = null;
+        } else {
+          const p = Math.min(100, Math.max(0, Math.floor(Number(body.managementProgressPercent))));
+          if (Number.isNaN(p)) {
+            res.status(400).json({ error: "Invalid managementProgressPercent" });
+            return;
+          }
+          data.managementProgressPercent = p;
+        }
+      }
+      if (body.managementMonthlyAmount !== undefined) {
+        if (body.managementMonthlyAmount == null || body.managementMonthlyAmount === "") {
+          res.status(400).json({ error: "Use remove endpoint to clear management" });
+          return;
+        }
+        const a = Number(body.managementMonthlyAmount);
+        if (Number.isNaN(a) || a <= 0) {
+          res.status(400).json({ error: "managementMonthlyAmount must be positive" });
+          return;
+        }
+        data.managementMonthlyAmount = new Prisma.Decimal(a.toFixed(2));
+      }
+      if (body.managementMonths !== undefined) {
+        if (body.managementMonths == null || body.managementMonths === "") {
+          data.managementMonths = null;
+        } else {
+          const n = Math.floor(Number(body.managementMonths));
+          if (Number.isNaN(n) || n < 1) {
+            res.status(400).json({ error: "managementMonths must be a positive integer or null" });
+            return;
+          }
+          data.managementMonths = n;
+        }
+      }
+      if (Object.keys(data).length === 0) {
+        res.status(400).json({ error: "No fields to update" });
+        return;
+      }
+      const updated = await prisma.project.update({
+        where: { id: projectId },
+        data,
+        include: { client: { select: { id: true, name: true } } }
+      });
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "project.management.updated",
+          entityType: "project",
+          entityId: projectId,
+          metadata: { fields: Object.keys(data) }
+        }
+      });
+      res.json(updated);
+    }
+  );
+
+  router.delete(
+    "/:projectId/management",
+    requireRoles([ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, managementActive: true }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Active management project not found" });
+        return;
+      }
+      await prisma.$transaction([
+        prisma.projectManagementMonth.deleteMany({ where: { projectId } }),
+        prisma.project.update({
+          where: { id: projectId },
+          data: {
+            managementActive: false,
+            managementStartedAt: null,
+            managementProgressPercent: null,
+            managementMonthlyAmount: null,
+            managementMonths: null
+          }
+        })
+      ]);
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "project.management.removed",
+          entityType: "project",
+          entityId: projectId
+        }
+      });
+      res.json({ ok: true });
+    }
+  );
+
   // Update project: sales (pending only), finance (contact/price), anyone (clientLink)
   router.patch(
     "/:projectId",
@@ -640,7 +928,10 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         price: project.price != null ? Number(project.price) : null,
         amountReceived: project.amountReceived != null ? Number(project.amountReceived) : 0,
         managementMonthlyAmount: project.managementMonthlyAmount != null ? Number(project.managementMonthlyAmount) : null,
-        managementMonths: project.managementMonths
+        managementMonths: project.managementMonths,
+        managementActive: project.managementActive,
+        managementStartedAt: project.managementStartedAt,
+        managementProgressPercent: project.managementProgressPercent
       };
       if (stripSensitive) {
         delete out.phone;
@@ -650,6 +941,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         delete out.amountReceived;
         delete out.managementMonthlyAmount;
         delete out.managementMonths;
+        delete out.managementActive;
+        delete out.managementStartedAt;
+        delete out.managementProgressPercent;
       }
       const mentionIds = new Set<string>();
       if (project.createdByUserId) mentionIds.add(project.createdByUserId);

@@ -85,7 +85,10 @@ export default function RegisterPage() {
           <Link href="/login" className="text-sm text-cres-text-muted hover:text-cres-text transition-colors">
             ← Sign in
           </Link>
-          <span className="text-sm font-semibold text-cres-text">CresOS</span>
+          <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-cres-text">
+            <img src="/cresos-logo.svg" width={32} height={32} alt="" className="h-8 w-8 rounded-lg" />
+            CresOS
+          </Link>
         </div>
       </header>
 
@@ -154,6 +157,17 @@ export default function RegisterPage() {
               </button>
             </form>
           </div>
+          <p className="mt-6 text-center text-[11px] text-cres-muted">
+            Built by{" "}
+            <a
+              href="https://cresdynamics.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-cres-accent underline-offset-2 hover:underline"
+            >
+              Cres Dynamics
+            </a>
+          </p>
         </section>
       </main>
     </div>

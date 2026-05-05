@@ -29,6 +29,15 @@ type Expense = {
   amount: number;
   spentAt: string;
   status: string;
+  beneficiaryUserId?: string | null;
+  beneficiary?: { id: string; name: string | null; email: string } | null;
+  expenseSubtype?: string | null;
+  purposeCode?: string | null;
+  purposeDetail?: string | null;
+  toolOrServiceName?: string | null;
+  subscriptionValidUntil?: string | null;
+  developerAcknowledgedAt?: string | null;
+  developerAcknowledgedById?: string | null;
 };
 
 type Payment = {
@@ -58,12 +67,23 @@ type ClientDue = {
 
 const EXPENSE_CATEGORIES = [
   "salaries",
+  "transport",
+  "tools",
+  "developer_payment",
   "apis",
   "hostings",
   "domains",
   "renewals",
   "apis_per_project",
   "other"
+] as const;
+
+const PURPOSE_CODES = [
+  { value: "meeting_client", label: "Client meeting" },
+  { value: "internal_team", label: "Internal / team" },
+  { value: "developer_work", label: "Developer / delivery work" },
+  { value: "sales_visit", label: "Sales visit" },
+  { value: "other", label: "Other" }
 ] as const;
 
 type ProjectFinancial = {
@@ -79,20 +99,51 @@ type ProjectFinancial = {
 
 type FinancialReport = {
   generatedAt: string;
-  period: { startOfMonth: string; endOfMonth: string };
+  period: { startOfMonth: string; endOfMonth: string; monthEndExclusive?: string };
   revenue: { thisMonth: number; allTime: number };
   invoices: {
     outstandingAmount: number;
+    /** Unpaid balance on open invoices (sent / partial / overdue), net of confirmed payments. */
+    openInvoiceRemaining?: number;
     overdueCount: number;
     byStatus: { status: string; count: number }[];
   };
+  projects?: {
+    approvedCount: number;
+    totalContractValue: number;
+    totalReceived: number;
+    totalRemaining: number;
+  };
   expenses: { thisMonth: number; allTime: number };
-  payouts: { pendingAmount: number };
+  payouts: { pendingAmount: number; paidThisMonth?: number; paidAllTime?: number };
   cashFlow: {
     revenueThisMonth: number;
     expensesThisMonth: number;
+    payoutsThisMonth?: number;
+    totalOutflowsThisMonth?: number;
     netThisMonth: number;
   };
+  derived?: {
+    netCashMovementThisMonth: number;
+    netCashMovementAllTime: number;
+  };
+  pending?: {
+    approvalQueue: number;
+    paymentsPending: number;
+    total: number;
+  };
+};
+
+type LedgerRow = {
+  kind: string;
+  id: string;
+  at: string;
+  amount: number;
+  currency: string;
+  direction: "in" | "out";
+  status: string;
+  label: string;
+  detail: string | null;
 };
 
 const FINANCE_ALIGNMENT_RULES = [
@@ -126,7 +177,9 @@ const FINANCE_ALIGNMENT_RULES = [
 export default function FinancePage() {
   const router = useRouter();
   const { apiFetch, auth, hydrated } = useAuth();
-  const canAccessFinance = auth.roleKeys.some((r) => ["admin", "finance", "analyst"].includes(r));
+  const canAccessFinance = auth.roleKeys.some((r) =>
+    ["admin", "finance", "analyst", "director_admin"].includes(r)
+  );
 
   const downloadWithAuth = useCallback(
     async (path: string, fallbackFilename: string) => {
@@ -167,6 +220,14 @@ export default function FinancePage() {
   const [report, setReport] = useState<FinancialReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [projectFinancials, setProjectFinancials] = useState<ProjectFinancial[]>([]);
+  const [expenseOrgUsers, setExpenseOrgUsers] = useState<{ id: string; name: string | null; email: string }[]>([]);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectMoneyDraft, setProjectMoneyDraft] = useState<{
+    allocated: string;
+    received: string;
+    managementMonthlyAmount: string;
+    managementMonths: string;
+  }>({ allocated: "", received: "", managementMonthlyAmount: "", managementMonths: "" });
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
   const [expenseForm, setExpenseForm] = useState<{
     category: string;
@@ -178,6 +239,12 @@ export default function FinancePage() {
     transactionCode: string;
     account: string;
     paymentMethod: string;
+    beneficiaryUserId: string;
+    expenseSubtype: string;
+    purposeCode: string;
+    purposeDetail: string;
+    toolOrServiceName: string;
+    subscriptionValidUntil: string;
   }>({
     category: "other",
     description: "",
@@ -187,7 +254,13 @@ export default function FinancePage() {
     source: "",
     transactionCode: "",
     account: "",
-    paymentMethod: "bank"
+    paymentMethod: "bank",
+    beneficiaryUserId: "",
+    expenseSubtype: "",
+    purposeCode: "",
+    purposeDetail: "",
+    toolOrServiceName: "",
+    subscriptionValidUntil: ""
   });
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editExpenseForm, setEditExpenseForm] = useState<{
@@ -200,6 +273,12 @@ export default function FinancePage() {
     transactionCode: string;
     account: string;
     paymentMethod: string;
+    beneficiaryUserId: string;
+    expenseSubtype: string;
+    purposeCode: string;
+    purposeDetail: string;
+    toolOrServiceName: string;
+    subscriptionValidUntil: string;
   } | null>(null);
   const [paymentForm, setPaymentForm] = useState<{
     projectId: string;
@@ -238,6 +317,9 @@ export default function FinancePage() {
   const [pendingApprovalIds, setPendingApprovalIds] = useState<Set<string>>(new Set());
   /** Count of pending expense/payout approval rows — matches DB & header. */
   const [pendingFinanceApprovalCount, setPendingFinanceApprovalCount] = useState(0);
+  const [ledgerRows, setLedgerRows] = useState<LedgerRow[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   type InvoiceLineForm = { id: string; description: string; quantity: string; unitPrice: string };
@@ -266,18 +348,20 @@ export default function FinancePage() {
   });
   const [invoiceSubmitError, setInvoiceSubmitError] = useState<string | null>(null);
 
-  const canSeeReport = auth.roleKeys.some((r) =>
-    ["finance", "director_admin", "admin"].includes(r)
-  );
+  /** Aggregate money KPIs & reports — Finance and Admin only (not Director). */
+  const canSeeMoneyStats = auth.roleKeys.some((r) => ["finance", "admin"].includes(r));
   // Only Finance role can perform actions; Director/Admin see read-only
   const isFinance = auth.roleKeys.includes("finance");
   const isAdmin = auth.roleKeys.includes("admin");
+  const canRecordPayments = isFinance || isAdmin;
+  const isDirector = auth.roleKeys.includes("director_admin");
   const canCreateInvoice = isFinance || isAdmin;
+  const canEditProjectMoney = isFinance || isAdmin || isDirector;
   const [adminFinanceTab, setAdminFinanceTab] = useState<
-    "expenses" | "financial_report" | "project_status" | "project_analysis" | "invoices"
+    "expenses" | "financial_report" | "project_status" | "project_analysis" | "invoices" | "payments" | "ledger"
   >("financial_report");
   const [financeTab, setFinanceTab] = useState<
-    "financial_report" | "project_status" | "invoices" | "payments" | "expenses" | "clients_due"
+    "financial_report" | "project_status" | "invoices" | "payments" | "expenses" | "clients_due" | "ledger"
   >("financial_report");
 
   const projectFinanceAnalysis = useMemo(() => {
@@ -298,7 +382,7 @@ export default function FinancePage() {
   }, [projectFinancials]);
 
   const fetchReport = useCallback(async () => {
-    if (!canAccessFinance || !canSeeReport) return;
+    if (!canAccessFinance || !canSeeMoneyStats) return;
     setReportLoading(true);
     try {
       const res = await apiFetch("/finance/report");
@@ -311,7 +395,23 @@ export default function FinancePage() {
     } finally {
       setReportLoading(false);
     }
-  }, [canSeeReport, apiFetch, canAccessFinance]);
+  }, [canSeeMoneyStats, apiFetch, canAccessFinance]);
+
+  const loadLedger = useCallback(async () => {
+    if (!canAccessFinance || !canSeeMoneyStats) return;
+    setLedgerLoading(true);
+    try {
+      const res = await apiFetch("/finance/ledger?limit=250");
+      if (res.ok) {
+        const data = (await res.json()) as { rows?: LedgerRow[] };
+        setLedgerRows(Array.isArray(data.rows) ? data.rows : []);
+      }
+    } catch {
+      setLedgerRows([]);
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, [canAccessFinance, canSeeMoneyStats, apiFetch]);
 
   const loadData = useCallback(async () => {
     if (!canAccessFinance) return;
@@ -320,7 +420,7 @@ export default function FinancePage() {
         apiFetch("/finance/invoices"),
         apiFetch("/finance/payments"),
         apiFetch("/finance/expenses"),
-        canSeeReport ? apiFetch("/finance/clients/due") : Promise.resolve(null)
+        canSeeMoneyStats ? apiFetch("/finance/clients/due") : Promise.resolve(null)
       ]);
       if (invRes.ok) {
         const data = (await invRes.json()) as any[];
@@ -368,20 +468,34 @@ export default function FinancePage() {
             paymentMethod: exp.paymentMethod ?? null,
             amount: Number(exp.amount),
             spentAt: exp.spentAt,
-            status: exp.status ?? "pending"
+            status: exp.status ?? "pending",
+            beneficiaryUserId: exp.beneficiaryUserId ?? null,
+            beneficiary: exp.beneficiary ?? null,
+            expenseSubtype: exp.expenseSubtype ?? null,
+            purposeCode: exp.purposeCode ?? null,
+            purposeDetail: exp.purposeDetail ?? null,
+            toolOrServiceName: exp.toolOrServiceName ?? null,
+            subscriptionValidUntil: exp.subscriptionValidUntil ?? null,
+            developerAcknowledgedAt: exp.developerAcknowledgedAt ?? null,
+            developerAcknowledgedById: exp.developerAcknowledgedById ?? null
           }))
         );
+      }
+      if (isFinance || isAdmin || isDirector) {
+        const ctxRes = await apiFetch("/finance/expense-context");
+        if (ctxRes.ok) {
+          const ctx = (await ctxRes.json()) as { users?: { id: string; name: string | null; email: string }[] };
+          setExpenseOrgUsers(ctx.users ?? []);
+        }
       }
       if (dueRes?.ok) {
         const data = (await dueRes.json()) as ClientDue[];
         setClientsDue(data);
       }
-      if (canSeeReport) {
-        const projRes = await apiFetch("/finance/projects");
-        if (projRes.ok) {
-          const projData = (await projRes.json()) as ProjectFinancial[];
-          setProjectFinancials(projData);
-        }
+      const projRes = await apiFetch("/finance/projects");
+      if (projRes.ok) {
+        const projData = (await projRes.json()) as ProjectFinancial[];
+        setProjectFinancials(projData);
       }
       const appRes = await apiFetch("/finance/approvals");
       if (appRes.ok) {
@@ -409,34 +523,56 @@ export default function FinancePage() {
     } catch {
       // ignore
     }
-  }, [apiFetch, canSeeReport, canCreateInvoice, canAccessFinance]);
+  }, [apiFetch, canSeeMoneyStats, canCreateInvoice, canAccessFinance, isFinance, isAdmin, isDirector]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   useEffect(() => {
-    if (!canSeeReport) return;
+    if (!canSeeMoneyStats) return;
     void fetchReport();
-  }, [canSeeReport, fetchReport]);
+  }, [canSeeMoneyStats, fetchReport]);
+
+  useEffect(() => {
+    const onLedger =
+      (isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger");
+    if (!onLedger || !canSeeMoneyStats) return;
+    void loadLedger();
+  }, [isFinance, isAdmin, financeTab, adminFinanceTab, canSeeMoneyStats, loadLedger]);
 
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
         void loadData();
-        if (canSeeReport) void fetchReport();
+        if (canSeeMoneyStats) void fetchReport();
       }
     };
     document.addEventListener("visibilitychange", onVis);
     const unsub = subscribeDataRefresh(() => {
       void loadData();
-      if (canSeeReport) void fetchReport();
+      if (canSeeMoneyStats) void fetchReport();
+      if (
+        canSeeMoneyStats &&
+        ((isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger"))
+      ) {
+        void loadLedger();
+      }
     });
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       unsub();
     };
-  }, [loadData, fetchReport, canSeeReport]);
+  }, [
+    loadData,
+    fetchReport,
+    canSeeMoneyStats,
+    loadLedger,
+    isFinance,
+    isAdmin,
+    financeTab,
+    adminFinanceTab
+  ]);
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -453,11 +589,31 @@ export default function FinancePage() {
           source: expenseForm.source || undefined,
           transactionCode: expenseForm.transactionCode || undefined,
           account: expenseForm.account || undefined,
-          paymentMethod: expenseForm.paymentMethod || undefined
+          paymentMethod: expenseForm.paymentMethod || undefined,
+          beneficiaryUserId: expenseForm.beneficiaryUserId || undefined,
+          expenseSubtype: expenseForm.expenseSubtype || undefined,
+          purposeCode: expenseForm.purposeCode || undefined,
+          purposeDetail: expenseForm.purposeDetail || undefined,
+          toolOrServiceName: expenseForm.toolOrServiceName || undefined,
+          subscriptionValidUntil: expenseForm.subscriptionValidUntil || undefined
         })
       });
       if (res.ok) {
-        setExpenseForm((f) => ({ ...f, description: "", notes: "", amount: "", source: "", transactionCode: "", account: "" }));
+        setExpenseForm((f) => ({
+          ...f,
+          description: "",
+          notes: "",
+          amount: "",
+          source: "",
+          transactionCode: "",
+          account: "",
+          beneficiaryUserId: "",
+          expenseSubtype: "",
+          purposeCode: "",
+          purposeDetail: "",
+          toolOrServiceName: "",
+          subscriptionValidUntil: ""
+        }));
         loadData();
       }
     } catch {
@@ -476,7 +632,15 @@ export default function FinancePage() {
       source: exp.source ?? "",
       transactionCode: exp.transactionCode ?? "",
       account: exp.account ?? "",
-      paymentMethod: exp.paymentMethod ?? "bank"
+      paymentMethod: exp.paymentMethod ?? "bank",
+      beneficiaryUserId: exp.beneficiaryUserId ?? "",
+      expenseSubtype: exp.expenseSubtype ?? "",
+      purposeCode: exp.purposeCode ?? "",
+      purposeDetail: exp.purposeDetail ?? "",
+      toolOrServiceName: exp.toolOrServiceName ?? "",
+      subscriptionValidUntil: exp.subscriptionValidUntil
+        ? String(exp.subscriptionValidUntil).slice(0, 10)
+        : ""
     });
   };
 
@@ -500,13 +664,19 @@ export default function FinancePage() {
           transactionCode: editExpenseForm.transactionCode || undefined,
           account: editExpenseForm.account || undefined,
           paymentMethod: editExpenseForm.paymentMethod || undefined,
-          currency: "KES"
+          currency: "KES",
+          beneficiaryUserId: editExpenseForm.beneficiaryUserId || null,
+          expenseSubtype: editExpenseForm.expenseSubtype || undefined,
+          purposeCode: editExpenseForm.purposeCode || undefined,
+          purposeDetail: editExpenseForm.purposeDetail || undefined,
+          toolOrServiceName: editExpenseForm.toolOrServiceName || undefined,
+          subscriptionValidUntil: editExpenseForm.subscriptionValidUntil || undefined
         })
       });
       if (res.ok) {
         cancelEditExpense();
         await loadData();
-        if (canSeeReport) await fetchReport();
+        if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
       }
     } catch {
@@ -520,7 +690,59 @@ export default function FinancePage() {
       const res = await apiFetch(`/finance/expenses/${id}`, { method: "DELETE" });
       if (res.ok) {
         await loadData();
-        if (canSeeReport) await fetchReport();
+        if (canSeeMoneyStats) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const startEditProjectMoney = (p: ProjectFinancial) => {
+    setEditingProjectId(p.id);
+    setProjectMoneyDraft({
+      allocated: p.allocated != null ? String(p.allocated) : "",
+      received: String(p.received ?? ""),
+      managementMonthlyAmount: p.managementMonthlyAmount != null ? String(p.managementMonthlyAmount) : "",
+      managementMonths: p.managementMonths != null ? String(p.managementMonths) : ""
+    });
+  };
+
+  const cancelEditProjectMoney = () => {
+    setEditingProjectId(null);
+  };
+
+  const saveProjectMoney = async () => {
+    if (!editingProjectId) return;
+    try {
+      const body: Record<string, string | number | null> = {};
+      if (projectMoneyDraft.allocated.trim() !== "") {
+        body.price = Number(projectMoneyDraft.allocated);
+      } else {
+        body.price = null;
+      }
+      if (projectMoneyDraft.received.trim() !== "") {
+        body.amountReceived = Number(projectMoneyDraft.received);
+      }
+      if (projectMoneyDraft.managementMonthlyAmount.trim() !== "") {
+        body.managementMonthlyAmount = Number(projectMoneyDraft.managementMonthlyAmount);
+      } else {
+        body.managementMonthlyAmount = null;
+      }
+      if (projectMoneyDraft.managementMonths.trim() !== "") {
+        body.managementMonths = Number(projectMoneyDraft.managementMonths);
+      } else {
+        body.managementMonths = null;
+      }
+      const res = await apiFetch(`/finance/projects/${editingProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        cancelEditProjectMoney();
+        await loadData();
+        if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
       }
     } catch {
@@ -554,50 +776,81 @@ export default function FinancePage() {
 
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPaymentSubmitError(null);
     if (!paymentForm.amount || !paymentForm.receivedAt) return;
-    if (paymentForm.confirmNow) {
-      if (!paymentForm.source.trim() || !paymentForm.account.trim() || !paymentForm.reference.trim()) return;
-    }
+    const hasConfirmFields =
+      Boolean(paymentForm.source.trim() && paymentForm.account.trim() && paymentForm.reference.trim());
+    if (paymentForm.confirmNow && !hasConfirmFields) return;
     try {
       const res = await apiFetch("/finance/payments", {
         method: "POST",
         body: JSON.stringify({
           method: paymentForm.method,
           amount: paymentForm.amount,
+          currency: "KES",
           receivedAt: paymentForm.receivedAt,
           notes: paymentForm.notes || undefined,
           source: paymentForm.source || undefined,
-          invoiceId: paymentForm.invoiceId || undefined
+          account: paymentForm.account.trim() || undefined,
+          howToProceed: paymentForm.howToProceed.trim() || undefined,
+          invoiceId: paymentForm.invoiceId || undefined,
+          reference: paymentForm.reference.trim() || undefined,
+          mpesaRef:
+            paymentForm.method === "mpesa" && paymentForm.reference.trim()
+              ? paymentForm.reference.trim()
+              : undefined
         })
       });
-      if (res.ok) {
-        const created = (await res.json().catch(() => null)) as { id?: string } | null;
-        if (paymentForm.confirmNow && created?.id) {
-          await apiFetch(`/finance/payments/${created.id}/confirm`, {
-            method: "POST",
-            body: JSON.stringify({
-              source: paymentForm.source.trim(),
-              account: paymentForm.account.trim(),
-              reference: paymentForm.reference.trim(),
-              howToProceed: paymentForm.howToProceed.trim() || undefined
-            })
-          }).catch(() => {});
-        }
-        setPaymentForm((f) => ({
-          ...f,
-          amount: "",
-          notes: "",
-          source: "",
-          account: "",
-          reference: "",
-          howToProceed: "",
-          invoiceId: "",
-          projectId: ""
-        }));
-        loadData();
+      const raw = (await res.json().catch(() => null)) as {
+        id?: string;
+        status?: string;
+        error?: string;
+        message?: string;
+      } | null;
+      if (!res.ok) {
+        setPaymentSubmitError(raw?.message || raw?.error || `Could not save payment (${res.status}).`);
+        return;
       }
+      const createdId = raw && typeof raw === "object" && "id" in raw ? String(raw.id) : undefined;
+      const alreadyConfirmed = raw?.status === "confirmed";
+      if (paymentForm.confirmNow && createdId && !alreadyConfirmed && hasConfirmFields) {
+        const confRes = await apiFetch(`/finance/payments/${createdId}/confirm`, {
+          method: "POST",
+          body: JSON.stringify({
+            source: paymentForm.source.trim(),
+            account: paymentForm.account.trim(),
+            reference: paymentForm.reference.trim(),
+            howToProceed: paymentForm.howToProceed.trim() || undefined
+          })
+        });
+        const confBody = (await confRes.json().catch(() => null)) as { error?: string } | null;
+        if (!confRes.ok) {
+          setPaymentSubmitError(
+            confBody?.error ||
+              "Payment was saved as pending but confirmation failed. Open the payment and confirm, or fix the issue."
+          );
+          await loadData();
+          if (canSeeMoneyStats) await fetchReport();
+          emitDataRefresh();
+          return;
+        }
+      }
+      setPaymentForm((f) => ({
+        ...f,
+        amount: "",
+        notes: "",
+        source: "",
+        account: "",
+        reference: "",
+        howToProceed: "",
+        invoiceId: "",
+        projectId: ""
+      }));
+      await loadData();
+      if (canSeeMoneyStats) await fetchReport();
+      emitDataRefresh();
     } catch {
-      // ignore
+      setPaymentSubmitError("Network error — payment may not have been saved.");
     }
   };
 
@@ -617,7 +870,7 @@ export default function FinancePage() {
       const res = await apiFetch(`/finance/invoices/${id}`, { method: "DELETE" });
       if (res.ok) {
         await loadData();
-        if (canSeeReport) await fetchReport();
+        if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
       }
     } catch {
@@ -631,7 +884,7 @@ export default function FinancePage() {
       const res = await apiFetch(`/finance/payments/${id}`, { method: "DELETE" });
       if (res.ok) {
         await loadData();
-        if (canSeeReport) await fetchReport();
+        if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
       }
     } catch {
@@ -652,7 +905,9 @@ export default function FinancePage() {
       if (res.ok) {
         setConfirmPaymentId(null);
         setConfirmForm({ source: "", account: "", reference: "", howToProceed: "" });
-        loadData();
+        await loadData();
+        if (canSeeMoneyStats) await fetchReport();
+        emitDataRefresh();
       }
     } catch {
       // ignore
@@ -724,7 +979,7 @@ export default function FinancePage() {
       });
       if (res.ok) {
         await loadData();
-        if (canSeeReport) await fetchReport();
+        if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
       }
     } catch {
@@ -740,21 +995,40 @@ export default function FinancePage() {
       ? expenses
       : expenses.filter((e) => e.category === expenseCategoryFilter);
   const expensesTotal = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const expensesApprovedInFilter = useMemo(
+    () =>
+      filteredExpenses
+        .filter((e) => e.status === "approved" || e.status === "paid")
+        .reduce((s, e) => s + e.amount, 0),
+    [filteredExpenses]
+  );
 
   return (
     <section className="flex flex-col gap-4">
       <PageHeader
         title="Finance overview"
-        description="Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES). Numbers load from your workspace database via the API; expense lines count in period totals after Admin approval."
+        description="Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES). Numbers load from your workspace database; approved expenses and paid payouts count in net cash flow; recording a payment with source, account, and transaction reference confirms automatically."
       />
 
-      {canSeeReport && (
+      {!canSeeMoneyStats && (
+        <div className="shell border border-slate-600/80 bg-slate-900/50 text-sm text-slate-400">
+          Dashboard revenue, outstanding, and net-flow summaries are visible to{" "}
+          <span className="font-medium text-slate-200">Finance</span> and{" "}
+          <span className="font-medium text-slate-200">Admin</span> only. Other finance workspace features below still apply
+          based on your role.
+        </div>
+      )}
+
+      {canSeeMoneyStats && (
         <DashboardCardRow lgCols={4} layout="scroll">
           <DashboardScrollCard>
             <div className="shell">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Revenue (period)</p>
               <p className="mt-1 text-xl font-semibold text-emerald-400">
                 {report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
+              </p>
+              <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                Confirmed payments received this calendar month (UTC), from the database.
               </p>
             </div>
           </DashboardScrollCard>
@@ -763,6 +1037,10 @@ export default function FinancePage() {
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
               <p className="mt-1 text-xl font-semibold text-amber-300">
                 {report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
+              </p>
+              <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                Remaining on approved projects (price − received). If projects are not priced, shows unpaid
+                invoice balance instead.
               </p>
             </div>
           </DashboardScrollCard>
@@ -776,12 +1054,24 @@ export default function FinancePage() {
               >
                 {report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
               </p>
+              <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                Confirmed inflows minus approved expenses and paid payouts (UTC month).
+              </p>
             </div>
           </DashboardScrollCard>
           <DashboardScrollCard>
             <div className="shell">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
-              <p className="mt-1 text-xl font-semibold text-slate-100">{pendingFinanceApprovalCount}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-100">
+                {reportLoading
+                  ? "…"
+                  : report?.pending?.total ?? pendingFinanceApprovalCount}
+              </p>
+              <p className="mt-1 text-[10px] text-slate-500">
+                {report?.pending != null
+                  ? `${report.pending.approvalQueue} approvals · ${report.pending.paymentsPending} payments`
+                  : "Expense / payout queue"}
+              </p>
             </div>
           </DashboardScrollCard>
         </DashboardCardRow>
@@ -794,15 +1084,15 @@ export default function FinancePage() {
             <div className="rounded-lg border border-emerald-800/40 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400/90">Can see</p>
               <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Approved and declined transaction history · Pending request amounts and stated purposes · Cash flow summary ·
-                Outstanding invoice totals against active projects
+                Approved and declined transaction history · Pending request amounts · Cash flow summary (including paid payouts) ·
+                All-transactions ledger · Outstanding invoice totals against active projects
               </p>
             </div>
             <div className="rounded-lg border-l-4 border-rose-500/70 bg-slate-950/40 p-3 pl-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Cannot do</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Limited</p>
               <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Admin cannot initiate, edit, or execute a transaction. Admin cannot see raw client pricing or invoice line items — only
-                aggregate totals visible here. That detail lives in Finance and Sales.
+                Admin can record and confirm bank payments (with source, account, and transaction reference) and view the unified
+                ledger. Admin cannot create or edit expenses, invoices, or invoice line items — that stays with Finance and Sales.
               </p>
             </div>
             <div className="rounded-lg border border-sky-800/40 bg-slate-950/40 p-3">
@@ -828,7 +1118,9 @@ export default function FinancePage() {
                 { key: "financial_report" as const, label: "Financial report" },
                 { key: "project_status" as const, label: "Projects finance status" },
                 { key: "project_analysis" as const, label: "Project finance analysis" },
-                { key: "invoices" as const, label: "Invoices" }
+                { key: "invoices" as const, label: "Invoices" },
+                { key: "payments" as const, label: "Payments" },
+                { key: "ledger" as const, label: "All transactions" }
               ].map((b) => (
                 <button
                   key={b.key}
@@ -864,7 +1156,8 @@ export default function FinancePage() {
                 { key: "invoices" as const, label: "Invoices" },
                 { key: "payments" as const, label: "Payments" },
                 { key: "expenses" as const, label: "Expenses" },
-                { key: "clients_due" as const, label: "Clients due" }
+                { key: "clients_due" as const, label: "Clients due" },
+                { key: "ledger" as const, label: "All transactions" }
               ].map((b) => (
                 <button
                   key={b.key}
@@ -887,7 +1180,71 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeReport && (!isAdmin || adminFinanceTab === "financial_report") && (!isFinance || isAdmin || financeTab === "financial_report") && (
+      {canSeeMoneyStats &&
+        ((isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger")) && (
+          <div className="shell border-slate-700/70 bg-slate-950/40">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+                All transactions (ledger)
+              </h3>
+              <button
+                type="button"
+                onClick={() => void loadLedger()}
+                disabled={ledgerLoading}
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              >
+                {ledgerLoading ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">
+              Newest first — payments (in), expenses and payouts (out). Pending payments and unapproved expenses appear with their
+              current status.
+            </p>
+            <div className="max-h-[480px] overflow-auto rounded border border-slate-800">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-900/95 text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-2 py-2">Date</th>
+                    <th className="px-2 py-2">Type</th>
+                    <th className="px-2 py-2">Direction</th>
+                    <th className="px-2 py-2 text-right">Amount</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerRows.map((row) => (
+                    <tr key={`${row.kind}-${row.id}`} className="border-t border-slate-800/80">
+                      <td className="whitespace-nowrap px-2 py-1.5 text-slate-400">
+                        {new Date(row.at).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 text-slate-200">{row.label}</td>
+                      <td
+                        className={
+                          row.direction === "in" ? "px-2 py-1.5 text-emerald-400" : "px-2 py-1.5 text-amber-300"
+                        }
+                      >
+                        {row.direction === "in" ? "In" : "Out"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-100">
+                        {formatMoney(row.amount)}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-slate-400">{row.status}</td>
+                      <td className="max-w-[240px] truncate px-2 py-1.5 text-xs text-slate-500" title={row.detail ?? ""}>
+                        {row.detail ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!ledgerLoading && ledgerRows.length === 0 && (
+                <p className="p-4 text-sm text-slate-500">No rows yet.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+      {canSeeMoneyStats && (!isAdmin || adminFinanceTab === "financial_report") && (!isFinance || isAdmin || financeTab === "financial_report") && (
         <div className="shell border-emerald-800/40 bg-slate-900/60">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
@@ -910,9 +1267,23 @@ export default function FinancePage() {
                 <p className="text-xs text-slate-400">All time: {formatMoney(report.revenue.allTime)}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400">Invoices</p>
-                <p className="text-amber-400">Outstanding: {formatMoney(report.invoices.outstandingAmount)}</p>
-                <p className="text-xs text-slate-400">Overdue: {report.invoices.overdueCount}</p>
+                <p className="text-xs text-slate-400">Projects & AR</p>
+                <p className="text-amber-400">
+                  Remaining on approved projects: {formatMoney(report.invoices.outstandingAmount)}
+                </p>
+                {report.invoices.openInvoiceRemaining != null && (
+                  <p className="text-xs text-slate-300">
+                    Open invoice balance (unpaid): {formatMoney(report.invoices.openInvoiceRemaining)}
+                  </p>
+                )}
+                {report.projects != null && (
+                  <p className="text-xs text-slate-400">
+                    {report.projects.approvedCount} approved · contract total{" "}
+                    {formatMoney(report.projects.totalContractValue)} · collected{" "}
+                    {formatMoney(report.projects.totalReceived)}
+                  </p>
+                )}
+                <p className="text-xs text-slate-400">Overdue invoices: {report.invoices.overdueCount}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Expenses</p>
@@ -922,28 +1293,50 @@ export default function FinancePage() {
               <div>
                 <p className="text-xs text-slate-400">Cash flow (month)</p>
                 <p className="text-slate-200">In: {formatMoney(report.cashFlow.revenueThisMonth)}</p>
-                <p className="text-slate-200">Out: {formatMoney(report.cashFlow.expensesThisMonth)}</p>
+                <p className="text-slate-200">
+                  Out (expenses): {formatMoney(report.cashFlow.expensesThisMonth)}
+                  {report.cashFlow.payoutsThisMonth != null && report.cashFlow.payoutsThisMonth > 0 && (
+                    <span className="text-slate-400">
+                      {" "}
+                      · payouts paid: {formatMoney(report.cashFlow.payoutsThisMonth)}
+                    </span>
+                  )}
+                </p>
+                {report.cashFlow.totalOutflowsThisMonth != null && (
+                  <p className="text-xs text-slate-400">
+                    Total out: {formatMoney(report.cashFlow.totalOutflowsThisMonth)}
+                  </p>
+                )}
                 <p className={report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"}>
                   Net: {formatMoney(report.cashFlow.netThisMonth)}
                 </p>
+                {report.derived != null && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    All-time movement: {formatMoney(report.derived.netCashMovementAllTime)} (confirmed in − approved expenses − paid
+                    payouts)
+                  </p>
+                )}
               </div>
             </div>
           )}
           {report && (
             <p className="mt-3 text-xs text-slate-500">
-              Generated {new Date(report.generatedAt).toLocaleString()} · Pending payouts: {formatMoney(report.payouts.pendingAmount)}
+              Generated {new Date(report.generatedAt).toLocaleString()} · Pending payouts:{" "}
+              {formatMoney(report.payouts.pendingAmount)}
+              {report.payouts.paidThisMonth != null ? ` · Paid this month: ${formatMoney(report.payouts.paidThisMonth)}` : ""}
             </p>
           )}
         </div>
       )}
 
-      {canSeeReport && (!isAdmin || adminFinanceTab === "project_status") && (!isFinance || isAdmin || financeTab === "project_status") && projectFinancials.length > 0 && (
+      {canSeeMoneyStats && (!isAdmin || adminFinanceTab === "project_status") && (!isFinance || isAdmin || financeTab === "project_status") && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Projects finance status
           </h3>
           <p className="mb-3 text-xs text-slate-400">
-            Allocated vs received per project; when on management: expected per month and for how long (to plan upgrades).
+            Allocated (contract) vs received (paid so far) and pending (remaining). Finance, Director, and Admin can update
+            amounts to match bank reality; confirmed invoice payments also roll into received automatically.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -953,8 +1346,9 @@ export default function FinancePage() {
                   <th className="pb-2 pr-2">Status</th>
                   <th className="pb-2 pr-2 text-right">Allocated</th>
                   <th className="pb-2 pr-2 text-right">Received</th>
-                  <th className="pb-2 pr-2 text-right">Remaining</th>
+                  <th className="pb-2 pr-2 text-right">Pending</th>
                   <th className="pb-2 pr-2">Management</th>
+                  {canEditProjectMoney && <th className="pb-2 pr-2">Edit</th>}
                 </tr>
               </thead>
               <tbody>
@@ -967,16 +1361,67 @@ export default function FinancePage() {
                     </td>
                     <td className="py-2 pr-2 capitalize text-slate-300">{p.status}</td>
                     <td className="py-2 pr-2 text-right text-slate-200">
-                      {p.allocated != null ? formatMoney(p.allocated) : "—"}
+                      {editingProjectId === p.id ? (
+                        <input
+                          type="number"
+                          className="w-28 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-right text-slate-100"
+                          value={projectMoneyDraft.allocated}
+                          onChange={(e) =>
+                            setProjectMoneyDraft((d) => ({ ...d, allocated: e.target.value }))
+                          }
+                        />
+                      ) : p.allocated != null ? (
+                        formatMoney(p.allocated)
+                      ) : (
+                        "—"
+                      )}
                     </td>
-                    <td className="py-2 pr-2 text-right text-emerald-400">{formatMoney(p.received)}</td>
+                    <td className="py-2 pr-2 text-right text-emerald-400">
+                      {editingProjectId === p.id ? (
+                        <input
+                          type="number"
+                          className="w-28 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-right text-emerald-200"
+                          value={projectMoneyDraft.received}
+                          onChange={(e) =>
+                            setProjectMoneyDraft((d) => ({ ...d, received: e.target.value }))
+                          }
+                        />
+                      ) : (
+                        formatMoney(p.received)
+                      )}
+                    </td>
                     <td className="py-2 pr-2 text-right text-amber-400">
                       {p.remaining != null ? formatMoney(p.remaining) : "—"}
                     </td>
                     <td className="py-2 pr-2 text-slate-300">
-                      {p.managementMonthlyAmount != null && p.managementMonths != null ? (
+                      {editingProjectId === p.id ? (
+                        <div className="flex flex-col gap-1">
+                          <input
+                            type="number"
+                            placeholder="/ month"
+                            className="w-32 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-100"
+                            value={projectMoneyDraft.managementMonthlyAmount}
+                            onChange={(e) =>
+                              setProjectMoneyDraft((d) => ({
+                                ...d,
+                                managementMonthlyAmount: e.target.value
+                              }))
+                            }
+                          />
+                          <input
+                            type="number"
+                            placeholder="months"
+                            className="w-24 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-100"
+                            value={projectMoneyDraft.managementMonths}
+                            onChange={(e) =>
+                              setProjectMoneyDraft((d) => ({ ...d, managementMonths: e.target.value }))
+                            }
+                          />
+                        </div>
+                      ) : p.managementMonthlyAmount != null && p.managementMonths != null ? (
                         <span>
-                          {formatMoney(p.managementMonthlyAmount)}/month for {p.managementMonths} month{p.managementMonths !== 1 ? "s" : ""}
+                          {formatMoney(p.managementMonthlyAmount)}/month for {p.managementMonths} month
+                          {p.managementMonths !== 1 ? "s" : ""}
                           {p.managementMonths > 0 && (
                             <span className="ml-1 text-xs text-slate-500">
                               (total {formatMoney(p.managementMonthlyAmount * p.managementMonths)})
@@ -987,6 +1432,36 @@ export default function FinancePage() {
                         "—"
                       )}
                     </td>
+                    {canEditProjectMoney && (
+                      <td className="py-2 pr-2 whitespace-nowrap">
+                        {editingProjectId === p.id ? (
+                          <div className="flex flex-wrap gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void saveProjectMoney()}
+                              className="rounded bg-emerald-700 px-2 py-0.5 text-xs text-white hover:bg-emerald-600"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditProjectMoney}
+                              className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditProjectMoney(p)}
+                            className="rounded border border-sky-600 px-2 py-0.5 text-xs text-sky-300 hover:bg-sky-950/60"
+                          >
+                            Update money
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -995,7 +1470,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeReport && isAdmin && adminFinanceTab === "project_analysis" && (
+      {canSeeMoneyStats && isAdmin && adminFinanceTab === "project_analysis" && (
         <div className="shell border border-slate-700/70 bg-slate-900/50">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Project finance analysis
@@ -1027,7 +1502,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeReport && (!isFinance || isAdmin || financeTab === "clients_due") && clientsDue.length > 0 && (
+      {canSeeMoneyStats && (!isFinance || isAdmin || financeTab === "clients_due") && clientsDue.length > 0 && (
         <div className="shell border-amber-800/40">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Amount due per client
@@ -1287,9 +1762,9 @@ export default function FinancePage() {
             </form>
           )}
         </div>
-        <div className={`${(isAdmin && adminFinanceTab !== "invoices") || (isFinance && !isAdmin && financeTab !== "payments") ? "hidden" : "shell"}`}>
+        <div className={`${(isAdmin && adminFinanceTab !== "payments") || (isFinance && !isAdmin && financeTab !== "payments") ? "hidden" : "shell"}`}>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Payments received — confirm with: where from, transaction code, which account, how to proceed
+            Payments received — fill source, transaction code, and account to confirm in one step, or save pending and confirm later
           </p>
           <ul className="space-y-2 text-sm">
             {payments.map((p) => (
@@ -1321,7 +1796,7 @@ export default function FinancePage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-emerald-400">{formatMoney(p.amount)}</span>
-                  {p.status === "pending" && isFinance && (
+                  {p.status === "pending" && canRecordPayments && (
                     <button
                       type="button"
                       onClick={() => void deletePayment(p.id)}
@@ -1330,7 +1805,7 @@ export default function FinancePage() {
                       Delete
                     </button>
                   )}
-                  {p.status === "pending" && isFinance && (
+                  {p.status === "pending" && canRecordPayments && (
                     confirmPaymentId === p.id ? (
                       <form onSubmit={submitConfirmPayment} className="mt-2 flex flex-col gap-1 rounded border border-slate-600 bg-slate-800/80 p-2">
                         <input
@@ -1386,8 +1861,13 @@ export default function FinancePage() {
               <li className="text-sm text-slate-400">No payments yet.</li>
             )}
           </ul>
-          {isFinance && (
+          {canRecordPayments && (
             <form onSubmit={submitPayment} className="mt-3 flex flex-col gap-2 border-t border-slate-700 pt-3">
+              {paymentSubmitError && (
+                <p className="rounded border border-rose-700/80 bg-rose-950/40 px-2 py-1 text-xs text-rose-200">
+                  {paymentSubmitError}
+                </p>
+              )}
               <p className="text-xs text-slate-400">Record payment — choose project, then invoice (deducts from project)</p>
               <select
                 value={paymentForm.projectId}
@@ -1480,8 +1960,11 @@ export default function FinancePage() {
                   checked={paymentForm.confirmNow}
                   onChange={(e) => setPaymentForm((f) => ({ ...f, confirmNow: e.target.checked }))}
                 />
-                Mark as confirmed immediately (requires source, tx code, account)
+                Also confirm via second step if not auto-confirmed (same fields required)
               </label>
+              <p className="text-[11px] text-slate-500">
+                If source, account, and transaction reference are all filled, the server confirms immediately — no extra step.
+              </p>
               <button
                 type="submit"
                 className="rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500"
@@ -1516,7 +1999,11 @@ export default function FinancePage() {
             </select>
           </div>
           <p className="mb-2 text-xs text-slate-500">
-            Total {expenseCategoryFilter === "all" ? "" : `(${expenseCategoryFilter}) `}: {formatMoney(expensesTotal)}
+            Total {expenseCategoryFilter === "all" ? "" : `(${expenseCategoryFilter}) `} (all statuses):{" "}
+            {formatMoney(expensesTotal)}
+            <span className="block text-slate-400">
+              In period-style totals (approved/paid only): {formatMoney(expensesApprovedInFilter)}
+            </span>
           </p>
           <ul className="space-y-2 text-sm">
             {filteredExpenses.map((exp) => (
@@ -1535,6 +2022,34 @@ export default function FinancePage() {
                   {exp.paymentMethod && <p className="text-xs text-slate-300">Paid via: {exp.paymentMethod}</p>}
                   {exp.notes && (
                     <p className="text-xs text-slate-500">Note: {exp.notes}</p>
+                  )}
+                  {exp.beneficiary && (
+                    <p className="text-xs text-sky-300">
+                      Attributed to: {(exp.beneficiary.name || exp.beneficiary.email).trim()}
+                    </p>
+                  )}
+                  {exp.purposeCode && (
+                    <p className="text-xs text-slate-400">
+                      Purpose:{" "}
+                      {PURPOSE_CODES.find((x) => x.value === exp.purposeCode)?.label ?? exp.purposeCode}
+                      {exp.purposeDetail ? ` — ${exp.purposeDetail}` : ""}
+                    </p>
+                  )}
+                  {exp.toolOrServiceName && (
+                    <p className="text-xs text-slate-400">
+                      Tool/service: {exp.toolOrServiceName}
+                      {exp.subscriptionValidUntil
+                        ? ` · valid until ${new Date(exp.subscriptionValidUntil).toLocaleDateString()}`
+                        : ""}
+                    </p>
+                  )}
+                  {exp.category === "developer_payment" && (
+                    <p className="text-xs text-amber-300">
+                      Developer acknowledgment:{" "}
+                      {exp.developerAcknowledgedAt
+                        ? `Confirmed ${new Date(exp.developerAcknowledgedAt).toLocaleDateString()}`
+                        : "Awaiting developer confirmation"}
+                    </p>
                   )}
                   <p className="text-xs text-slate-500">
                     {new Date(exp.spentAt).toLocaleDateString()} · {exp.status}
@@ -1657,6 +2172,60 @@ export default function FinancePage() {
                 onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))}
                 className="min-h-[48px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
               />
+              <p className="text-[11px] text-slate-500">
+                Transport / tools / paying a developer: attribute who, purpose, and tools subscription where relevant.
+              </p>
+              <select
+                value={expenseForm.beneficiaryUserId}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, beneficiaryUserId: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">Who used / who is paid (optional)</option>
+                {expenseOrgUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {(u.name || u.email).trim()}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={expenseForm.purposeCode}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, purposeCode: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">Purpose / context</option>
+                {PURPOSE_CODES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Detail (e.g. client name, meeting notes)"
+                value={expenseForm.purposeDetail}
+                onChange={(e) => setExpenseForm((f) => ({ ...f, purposeDetail: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+              {(expenseForm.category === "tools" || expenseForm.category === "apis") && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Tool or service name"
+                    value={expenseForm.toolOrServiceName}
+                    onChange={(e) => setExpenseForm((f) => ({ ...f, toolOrServiceName: e.target.value }))}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <input
+                    type="date"
+                    title="Subscription valid until"
+                    value={expenseForm.subscriptionValidUntil}
+                    onChange={(e) =>
+                      setExpenseForm((f) => ({ ...f, subscriptionValidUntil: e.target.value }))
+                    }
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  />
+                </>
+              )}
               <input
                 type="number"
                 placeholder="Amount (KES)"
@@ -1751,6 +2320,43 @@ export default function FinancePage() {
                     value={editExpenseForm.notes}
                     onChange={(e) => setEditExpenseForm((f) => ({ ...f!, notes: e.target.value }))}
                     className="min-h-[48px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                  />
+                  <select
+                    value={editExpenseForm.beneficiaryUserId}
+                    onChange={(e) =>
+                      setEditExpenseForm((f) => ({ ...f!, beneficiaryUserId: e.target.value }))
+                    }
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  >
+                    <option value="">Who used / who is paid</option>
+                    {expenseOrgUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {(u.name || u.email).trim()}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={editExpenseForm.purposeCode}
+                    onChange={(e) =>
+                      setEditExpenseForm((f) => ({ ...f!, purposeCode: e.target.value }))
+                    }
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                  >
+                    <option value="">Purpose</option>
+                    {PURPOSE_CODES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Purpose detail"
+                    value={editExpenseForm.purposeDetail}
+                    onChange={(e) =>
+                      setEditExpenseForm((f) => ({ ...f!, purposeDetail: e.target.value }))
+                    }
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
                   />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">

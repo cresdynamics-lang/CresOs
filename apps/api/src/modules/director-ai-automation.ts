@@ -363,6 +363,18 @@ async function groqPlainText(system: string, user: string, maxTokens: number, te
   }
 }
 
+/** Short dashboard nudge from Groq when `GROQ_API_KEY` is set; disable with `DASHBOARD_FOCUS_AI=false`. */
+export async function generateDashboardFocusCoachGroq(context: Record<string, unknown>): Promise<string | null> {
+  if (process.env.DASHBOARD_FOCUS_AI === "false") return null;
+  if (!getGroq()) return null;
+  const system =
+    "You are a concise workplace coach for CresOS. Output exactly 2 sentences (under 65 words total). " +
+    "Use ONLY facts from the JSON. Give one clearest next action so the user stays aligned with their team. " +
+    "Do not invent people, meetings, or numbers. Plain text, no markdown, no bullet symbols.";
+  const user = `Worker snapshot:\n${JSON.stringify(context, null, 2)}`;
+  return groqPlainText(system, user, 240, 0.35);
+}
+
 function ensureMarkedReviewed(text: string): string {
   const t = text.trim();
   if (t.includes(MARKED)) return t;

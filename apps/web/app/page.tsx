@@ -67,9 +67,10 @@ export default function LandingPage() {
       {/* Top bar */}
       <header className="border-b border-cres-border bg-cres-surface/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <span className="font-display text-lg font-semibold tracking-tight text-cres-text">
+          <Link href="/" className="flex items-center gap-3 font-display text-lg font-semibold tracking-tight text-cres-text">
+            <img src="/cresos-logo.svg" width={40} height={40} alt="" className="h-10 w-10 rounded-xl" />
             CresOS
-          </span>
+          </Link>
           <Link
             href="/login"
             className="rounded-lg bg-cres-accent px-4 py-2 font-label text-sm font-medium text-cres-bg hover:bg-cres-accent-hover transition-colors"
@@ -204,9 +205,20 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-cres-border py-8">
-        <div className="mx-auto max-w-6xl px-4 text-center font-label text-xs text-cres-muted sm:px-6">
-          CresOS – Operating System for Growth · Built on Cres Core Engine
+      <footer className="border-t border-cres-border bg-cres-surface/60 py-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 text-center font-label text-xs text-cres-muted sm:flex-row sm:px-6 sm:text-left">
+          <p>CresOS – Operating System for Growth</p>
+          <p>
+            Built by{" "}
+            <a
+              href="https://cresdynamics.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-cres-accent underline-offset-2 hover:underline"
+            >
+              Cres Dynamics
+            </a>
+          </p>
         </div>
       </footer>
     </div>

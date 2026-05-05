@@ -7,24 +7,32 @@ import { PageHeader } from "../../page-header";
 import { SalesWorkspaceNav } from "../sales-workspace-nav";
 import { DashboardCardRow, DashboardScrollCard } from "../../../components/dashboard-card-row";
 
+type InvoiceStatus =
+  | "draft"
+  | "sent"
+  | "partial"
+  | "paid"
+  | "overdue"
+  | "cancelled"
+  | string;
+
 interface Invoice {
   id: string;
+  number?: string;
   invoiceNumber: string;
-  clientId: string;
+  clientId?: string;
   projectId?: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: InvoiceStatus;
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
   currency: string;
+  issueDate?: string;
   dueDate?: string;
   notes?: string;
   createdAt: string;
-  approvedAt?: string;
-  approvedBy?: { displayName: string };
-  rejectionReason?: string;
-  client: { name: string; email: string };
-  project?: { name: string };
+  client: { name: string; email: string | null };
+  project?: { name: string } | null;
   items: InvoiceItem[];
 }
 
@@ -39,16 +47,18 @@ interface InvoiceItem {
 interface Client {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   phone?: string;
-  billingAddress?: string;
 }
 
 interface Project {
   id: string;
   name: string;
-  clientId: string;
+  clientId: string | null;
   status: string;
+  approvalStatus?: string;
+  price?: number | null;
+  amountReceived?: number | null;
   client: { name: string };
 }
 
@@ -56,6 +66,7 @@ export default function SalesInvoicesPage() {
   const router = useRouter();
   const { auth, apiFetch, hydrated } = useAuth();
   const canAccessSalesInvoices = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
+  const isAdmin = auth.roleKeys.includes("admin");
   const [activeTab, setActiveTab] = useState<"dashboard" | "create" | "invoices">("dashboard");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -63,21 +74,22 @@ export default function SalesInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0
+    outstanding: 0,
+    paid: 0,
+    cancelled: 0
   });
 
   // Form state for creating invoices
   const [formData, setFormData] = useState({
     clientId: "",
     projectId: "",
+    issueDate: new Date().toISOString().slice(0, 10),
     dueDate: "",
     notes: "",
     subtotal: 0,
     taxAmount: 0,
     totalAmount: 0,
-    currency: "USD"
+    currency: "KES"
   });
   const [items, setItems] = useState([{
     description: "",
@@ -117,7 +129,13 @@ export default function SalesInvoicesPage() {
       const response = await apiFetch("/sales/dashboard");
       if (response.ok) {
         const data = await response.json();
-        setStats(data.data.stats);
+        const s = data.data.stats;
+        setStats({
+          total: s.total ?? 0,
+          outstanding: s.outstanding ?? s.pending ?? 0,
+          paid: s.paid ?? s.approved ?? 0,
+          cancelled: s.cancelled ?? s.rejected ?? 0
+        });
         setInvoices(data.data.recentInvoices);
       }
     } catch (error) {
@@ -210,25 +228,33 @@ export default function SalesInvoicesPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...formData,
+          clientId: formData.clientId,
+          projectId: formData.projectId || undefined,
+          issueDate: formData.issueDate,
+          dueDate: formData.dueDate || undefined,
+          currency: formData.currency,
+          notes: formData.notes || undefined,
           items: items.filter(item => item.description && item.quantity > 0 && item.unitPrice > 0)
         })
       });
 
       if (response.ok) {
-        const data = await response.json();
-        alert("Invoice created successfully and sent for finance approval!");
+        await response.json();
+        alert(
+          "Invoice created and saved. Finance records payments against this invoice; when a payment is confirmed, the linked project’s received amount updates automatically."
+        );
         
         // Reset form
         setFormData({
           clientId: "",
           projectId: "",
+          issueDate: new Date().toISOString().slice(0, 10),
           dueDate: "",
           notes: "",
           subtotal: 0,
           taxAmount: 0,
           totalAmount: 0,
-          currency: "USD"
+          currency: "KES"
         });
         setItems([{
           description: "",
@@ -246,7 +272,7 @@ export default function SalesInvoicesPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = "USD") => {
+  const formatCurrency = (amount: number, currency: string = "KES") => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency
@@ -259,18 +285,36 @@ export default function SalesInvoicesPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "PENDING": return "text-yellow-400 bg-yellow-900/20";
-      case "APPROVED": return "text-green-400 bg-green-900/20";
-      case "REJECTED": return "text-red-400 bg-red-900/20";
-      default: return "text-slate-400 bg-slate-900/20";
+      case "draft":
+        return "text-yellow-400 bg-yellow-900/20";
+      case "sent":
+      case "partial":
+      case "overdue":
+        return "text-sky-400 bg-sky-900/20";
+      case "paid":
+        return "text-green-400 bg-green-900/20";
+      case "cancelled":
+        return "text-red-400 bg-red-900/20";
+      default:
+        return "text-slate-400 bg-slate-900/20";
     }
   };
+
+  const projectsForClient = formData.clientId
+    ? projects.filter((p) => !p.clientId || p.clientId === formData.clientId)
+    : projects;
+
+  const projectNeedsSelection = !isAdmin;
+  const canSubmitInvoice =
+    !!formData.clientId &&
+    (!projectNeedsSelection || !!formData.projectId) &&
+    items.some((item) => item.description && item.quantity > 0 && item.unitPrice > 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10">
       <PageHeader
         title="Sales invoices"
-        description="Create and manage invoices. All invoices require finance approval before generation."
+        description="Create invoices tied to projects—lists load from the database. Finance records payments on each invoice; confirming payment increases the project’s amount received when the invoice has a project."
       />
       <div className="mb-6">
         <SalesWorkspaceNav />
@@ -329,20 +373,20 @@ export default function SalesInvoicesPage() {
             </DashboardScrollCard>
             <DashboardScrollCard>
               <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
-                <div className="text-sm text-slate-400">Pending Approval</div>
+                <div className="text-2xl font-bold text-yellow-400">{stats.outstanding}</div>
+                <div className="text-sm text-slate-400">Outstanding (not fully paid)</div>
               </div>
             </DashboardScrollCard>
             <DashboardScrollCard>
               <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-green-400">{stats.approved}</div>
-                <div className="text-sm text-slate-400">Approved</div>
+                <div className="text-2xl font-bold text-green-400">{stats.paid}</div>
+                <div className="text-sm text-slate-400">Paid</div>
               </div>
             </DashboardScrollCard>
             <DashboardScrollCard>
               <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
-                <div className="text-sm text-slate-400">Rejected</div>
+                <div className="text-2xl font-bold text-red-400">{stats.cancelled}</div>
+                <div className="text-sm text-slate-400">Cancelled</div>
               </div>
             </DashboardScrollCard>
           </DashboardCardRow>
@@ -361,7 +405,9 @@ export default function SalesInvoicesPage() {
                   <div key={invoice.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        <div className="font-medium text-slate-200">{invoice.invoiceNumber}</div>
+                        <div className="font-medium text-slate-200">
+                          {invoice.invoiceNumber || invoice.number}
+                        </div>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {invoice.status}
                         </span>
@@ -371,9 +417,6 @@ export default function SalesInvoicesPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-medium text-slate-200">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
-                      {invoice.approvedBy && (
-                        <div className="text-xs text-slate-500">Approved by {invoice.approvedBy.displayName}</div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -397,7 +440,9 @@ export default function SalesInvoicesPage() {
                 </label>
                 <select
                   value={formData.clientId}
-                  onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, clientId: e.target.value, projectId: "" })
+                  }
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
                   required
                 >
@@ -412,25 +457,52 @@ export default function SalesInvoicesPage() {
               
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Project (Optional)
+                  Project {projectNeedsSelection ? "*" : "(optional)"}
                 </label>
                 <select
                   value={formData.projectId}
                   onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                  required={projectNeedsSelection}
                 >
-                  <option value="">Select a project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
+                  <option value="">
+                    {formData.clientId ? "Select a project" : "Select a client first"}
+                  </option>
+                  {projectsForClient.map((project) => {
+                    const received = project.amountReceived ?? 0;
+                    const price = project.price ?? null;
+                    const remaining =
+                      price != null ? Math.max(0, price - received) : null;
+                    const suffix =
+                      remaining != null
+                        ? ` — ${formatCurrency(remaining, formData.currency)} remaining`
+                        : "";
+                    return (
+                      <option key={project.id} value={project.id}>
+                        {project.name} ({project.client.name}){suffix}
+                      </option>
+                    );
+                  })}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Required for sales users so payments can update the correct project balance.
+                </p>
               </div>
             </div>
 
             {/* Due Date and Notes */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Issue date *
+                </label>
+                <input
+                  type="date"
+                  value={formData.issueDate}
+                  onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Due Date
@@ -544,10 +616,10 @@ export default function SalesInvoicesPage() {
             <div className="flex justify-end">
               <button
                 onClick={createInvoice}
-                disabled={!formData.clientId || items.filter(item => item.description && item.quantity > 0 && item.unitPrice > 0).length === 0}
+                disabled={!canSubmitInvoice}
                 className="px-6 py-3 bg-brand text-white rounded-lg hover:bg-brand/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Create Invoice (Requires Finance Approval)
+                Create invoice
               </button>
             </div>
           </div>
@@ -571,7 +643,9 @@ export default function SalesInvoicesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="font-medium text-slate-200">{invoice.invoiceNumber}</div>
+                        <div className="font-medium text-slate-200">
+                          {invoice.invoiceNumber || invoice.number}
+                        </div>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {invoice.status}
                         </span>
@@ -581,22 +655,13 @@ export default function SalesInvoicesPage() {
                         {invoice.project && ` • Project: ${invoice.project.name}`}
                       </div>
                       <div className="text-xs text-slate-500">
+                        {invoice.issueDate && `Issued: ${formatDate(invoice.issueDate)} • `}
                         Created: {formatDate(invoice.createdAt)}
                         {invoice.dueDate && ` • Due: ${formatDate(invoice.dueDate)}`}
                       </div>
-                      {invoice.rejectionReason && (
-                        <div className="mt-2 p-2 bg-red-900/20 border border-red-800 rounded text-sm text-red-400">
-                          <strong>Rejection Reason:</strong> {invoice.rejectionReason}
-                        </div>
-                      )}
                     </div>
                     <div className="text-right">
                       <div className="font-medium text-slate-200 mb-1">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
-                      {invoice.approvedBy && (
-                        <div className="text-xs text-slate-500">
-                          Approved by {invoice.approvedBy.displayName}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

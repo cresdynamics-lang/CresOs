@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
 import { Syne, DM_Sans, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "./auth-context";
 import { AuthGuard } from "./auth-guard";
@@ -20,10 +21,15 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap"
 });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "CresOS – Operating System for Growth",
   description:
-    "CresOS connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow."
+    "CresOS connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    shortcut: "/favicon.svg",
+    apple: [{ url: "/cresos-logo.svg", type: "image/svg+xml" }]
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

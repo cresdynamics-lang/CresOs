@@ -94,9 +94,11 @@ export async function enforcePaymentConfirmationConflicts(
     orgId: string;
     userId: string;
     paymentId: string;
+    /** Skip creator vs confirmer check (e.g. org admin recording and clearing the same payment). */
+    bypassCreatorCheck?: boolean;
   }
 ): Promise<void> {
-  const { orgId, userId, paymentId } = params;
+  const { orgId, userId, paymentId, bypassCreatorCheck } = params;
 
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId }
@@ -106,7 +108,7 @@ export async function enforcePaymentConfirmationConflicts(
     throw new Error("Payment not found");
   }
 
-  if (payment.createdByUserId && payment.createdByUserId === userId) {
+  if (!bypassCreatorCheck && payment.createdByUserId && payment.createdByUserId === userId) {
     await logConflict(prisma, {
       orgId,
       userId,

@@ -48,6 +48,9 @@ type ProjectDetail = {
   amountReceived?: number;
   managementMonthlyAmount?: number | null;
   managementMonths?: number | null;
+  managementActive?: boolean;
+  managementStartedAt?: string | null;
+  managementProgressPercent?: number | null;
   projectDetails?: string | null;
   approvalStatus?: string;
   assignedDeveloper?: { id: string; name: string | null; email: string } | null;
@@ -127,6 +130,9 @@ export default function ProjectDetailPage() {
           amountReceived: data.amountReceived ?? 0,
           managementMonthlyAmount: data.managementMonthlyAmount,
           managementMonths: data.managementMonths,
+          managementActive: data.managementActive,
+          managementStartedAt: data.managementStartedAt ?? null,
+          managementProgressPercent: data.managementProgressPercent,
           projectDetails: data.projectDetails,
           approvalStatus: data.approvalStatus,
           assignedDeveloper: data.assignedDeveloper,
@@ -608,11 +614,33 @@ export default function ProjectDetailPage() {
                 {remaining != null && <li>Remaining: {formatMoney(remaining)}</li>}
               </>
             )}
-            {(project.managementMonthlyAmount != null && project.managementMonths != null) && (
-              <li className="mt-1 text-sky-300">
-                On management: {formatMoney(project.managementMonthlyAmount)}/month for {project.managementMonths} month{project.managementMonths !== 1 ? "s" : ""}
-                {project.managementMonths > 0 && (
-                  <span className="text-slate-400"> (total {formatMoney(project.managementMonthlyAmount * project.managementMonths)} to upgrade)</span>
+            {project.managementActive && project.managementMonthlyAmount != null && (
+              <li className="mt-2 text-sky-300">
+                <span className="font-medium text-sky-200">On management billing</span>
+                {": "}
+                {formatMoney(project.managementMonthlyAmount)}/month
+                {project.managementStartedAt && (
+                  <span className="text-slate-400">
+                    {" "}
+                    · started {new Date(project.managementStartedAt).toLocaleDateString()}
+                  </span>
+                )}
+                {project.managementMonths != null && (
+                  <span className="text-slate-400">
+                    {" "}
+                    · planned {project.managementMonths} month{project.managementMonths !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {project.managementProgressPercent != null && (
+                  <span className="text-slate-400"> · progress {project.managementProgressPercent}%</span>
+                )}
+                {(isDirector || isFinance || auth.roleKeys.includes("admin")) && (
+                  <Link
+                    href="/projects/management"
+                    className="ml-2 text-xs text-sky-400 underline hover:text-sky-300"
+                  >
+                    Open management workspace
+                  </Link>
                 )}
               </li>
             )}

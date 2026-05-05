@@ -63,7 +63,7 @@ export function createAuthMiddleware(prisma: PrismaClient) {
             where: { id: session.userId }
           });
 
-          if (!user || user.status !== "active") {
+          if (!user || user.status !== "active" || user.deletedAt) {
             res.status(401).json({ error: "User is not active" });
             return;
           }

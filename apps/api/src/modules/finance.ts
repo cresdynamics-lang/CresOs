@@ -5,9 +5,10 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
-import { enforceApprovalConflicts, enforcePaymentConfirmationConflicts } from "./conflict-engine";
+import { enforceApprovalConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
+import { billableMonthsUtc, ymKey } from "../lib/management-billing";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 
@@ -16,6 +17,96 @@ function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
   if (raw == null || String(raw).trim() === "") return null;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function normalizePaymentAmount(raw: unknown): string | null {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/,/g, "");
+  if (s === "") return null;
+  const n = Number(s);
+  if (Number.isNaN(n) || n <= 0) return null;
+  return n.toFixed(2);
+}
+
+/** Avoid noon UTC for date-only inputs so payments fall in the intended calendar day across zones. */
+function parsePaymentReceivedAt(raw: unknown): Date | null {
+  const t = String(raw ?? "").trim();
+  if (!t) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    return new Date(`${t}T12:00:00.000Z`);
+  }
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Confirm a pending payment and roll invoice/project side effects (run inside `prisma.$transaction`). */
+async function confirmPaymentCore(
+  tx: Prisma.TransactionClient,
+  payment: {
+    id: string;
+    invoiceId: string | null;
+    howToProceed: string | null;
+    amount: Prisma.Decimal;
+  },
+  fields: { source: string; account: string; reference: string; howToProceed?: string | null }
+): Promise<void> {
+  const sourceVal = fields.source.trim();
+  const accountVal = fields.account.trim();
+  const referenceVal = fields.reference.trim();
+  const howToProceedVal =
+    fields.howToProceed !== undefined ? fields.howToProceed : payment.howToProceed;
+  const amountNum = Number(payment.amount);
+
+  await tx.payment.update({
+    where: { id: payment.id },
+    data: {
+      source: sourceVal,
+      account: accountVal,
+      reference: referenceVal,
+      howToProceed: howToProceedVal ?? null,
+      status: "confirmed"
+    }
+  });
+
+  if (!payment.invoiceId) return;
+
+  const inv = await tx.invoice.findUnique({
+    where: { id: payment.invoiceId },
+    select: { projectId: true, totalAmount: true }
+  });
+  if (!inv) return;
+
+  if (inv.projectId) {
+    const project = await tx.project.findUnique({
+      where: { id: inv.projectId },
+      select: { amountReceived: true }
+    });
+    const current = project?.amountReceived != null ? Number(project.amountReceived) : 0;
+    await tx.project.update({
+      where: { id: inv.projectId },
+      data: { amountReceived: new Prisma.Decimal(current + amountNum) }
+    });
+  }
+
+  const paidOnInvoice = await tx.payment.aggregate({
+    where: {
+      invoiceId: payment.invoiceId,
+      status: "confirmed",
+      deletedAt: null
+    },
+    _sum: { amount: true }
+  });
+  const invoiceTotal = Number(inv.totalAmount);
+  const paidTotal = Number(paidOnInvoice._sum.amount ?? 0);
+  let nextStatus = "sent";
+  if (invoiceTotal > 0 && paidTotal >= invoiceTotal) nextStatus = "paid";
+  else if (paidTotal > 0) nextStatus = "partial";
+
+  await tx.invoice.update({
+    where: { id: payment.invoiceId },
+    data: { status: nextStatus }
+  });
 }
 
 function buildInvoicePdfNotes(savedNotes: string | null | undefined): string {
@@ -412,25 +503,34 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Real-time financial report (on request) — admin, director, finance
+  // Real-time financial report — finance & admin only (aggregate money stats)
   router.get(
     "/report",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      /** Calendar month boundaries in UTC so period revenue/expenses match stored timestamps reliably. */
+      const y = now.getUTCFullYear();
+      const m = now.getUTCMonth();
+      const startOfMonthUtc = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+      const startOfNextMonthUtc = new Date(Date.UTC(y, m + 1, 1, 0, 0, 0, 0));
 
       try {
         const [
           revenueThisMonth,
           revenueAllTime,
-          outstandingInvoices,
           overdueInvoicesCount,
           expensesThisMonth,
           expensesAllTime,
           pendingPayoutsSum,
-          invoiceCountByStatus
+          payoutsPaidThisMonth,
+          payoutsPaidAllTime,
+          invoiceCountByStatus,
+          approvedProjects,
+          openInvoicesForAr,
+          pendingApprovalQueue,
+          pendingPaymentsCount
         ] = await Promise.all([
           prisma.payment.aggregate({
             _sum: { amount: true },
@@ -438,20 +538,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
               orgId,
               deletedAt: null,
               status: "confirmed",
-              receivedAt: { gte: startOfMonth }
+              receivedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
             }
           }),
           prisma.payment.aggregate({
             _sum: { amount: true },
             where: { orgId, deletedAt: null, status: "confirmed" }
-          }),
-          prisma.invoice.aggregate({
-            _sum: { totalAmount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              OR: [{ status: "sent" }, { status: "partial" }, { status: "overdue" }]
-            }
           }),
           prisma.invoice.count({
             where: { orgId, deletedAt: null, status: "overdue" }
@@ -462,7 +554,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
               orgId,
               deletedAt: null,
               status: { in: ["approved", "paid"] },
-              spentAt: { gte: startOfMonth }
+              spentAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
             }
           }),
           prisma.expense.aggregate({
@@ -481,41 +573,276 @@ export default function financeRouter(prisma: PrismaClient): Router {
               paidAt: null
             }
           }),
+          prisma.payout.aggregate({
+            _sum: { amount: true },
+            where: {
+              orgId,
+              deletedAt: null,
+              paidAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
+            }
+          }),
+          prisma.payout.aggregate({
+            _sum: { amount: true },
+            where: {
+              orgId,
+              deletedAt: null,
+              paidAt: { not: null }
+            }
+          }),
           prisma.invoice.groupBy({
             by: ["status"],
             _count: { id: true },
             where: { orgId, deletedAt: null }
+          }),
+          prisma.project.findMany({
+            where: { orgId, deletedAt: null, approvalStatus: "approved" },
+            select: { price: true, amountReceived: true }
+          }),
+          prisma.invoice.findMany({
+            where: {
+              orgId,
+              deletedAt: null,
+              status: { in: ["sent", "partial", "overdue"] }
+            },
+            select: {
+              totalAmount: true,
+              payments: {
+                where: { deletedAt: null, status: "confirmed" },
+                select: { amount: true }
+              }
+            }
+          }),
+          prisma.approval.count({
+            where: {
+              orgId,
+              status: "pending",
+              entityType: { in: ["expense", "payout"] }
+            }
+          }),
+          prisma.payment.count({
+            where: { orgId, deletedAt: null, status: "pending" }
           })
         ]);
 
         const revMonth = revenueThisMonth._sum.amount?.toNumber() ?? 0;
         const revAll = revenueAllTime._sum.amount?.toNumber() ?? 0;
-        const outVal = outstandingInvoices._sum.totalAmount?.toNumber() ?? 0;
         const expMonth = expensesThisMonth._sum.amount?.toNumber() ?? 0;
         const expAll = expensesAllTime._sum.amount?.toNumber() ?? 0;
         const pendingPayouts = pendingPayoutsSum._sum.amount?.toNumber() ?? 0;
+        const payoutPaidMonth = payoutsPaidThisMonth._sum.amount?.toNumber() ?? 0;
+        const payoutPaidAll = payoutsPaidAllTime._sum.amount?.toNumber() ?? 0;
+        const totalOutMonth = expMonth + payoutPaidMonth;
+        const totalOutAll = expAll + payoutPaidAll;
+
+        let projectsTotalContract = 0;
+        let projectsTotalReceived = 0;
+        let projectsRemaining = 0;
+        for (const p of approvedProjects) {
+          if (p.price != null) {
+            const price = Number(p.price);
+            const rec = p.amountReceived != null ? Number(p.amountReceived) : 0;
+            projectsTotalContract += price;
+            projectsTotalReceived += rec;
+            projectsRemaining += Math.max(0, price - rec);
+          } else if (p.amountReceived != null) {
+            projectsTotalReceived += Number(p.amountReceived);
+          }
+        }
+
+        let openInvoiceRemaining = 0;
+        for (const inv of openInvoicesForAr) {
+          const total = Number(inv.totalAmount);
+          const paid = inv.payments.reduce((s, pay) => s + Number(pay.amount), 0);
+          openInvoiceRemaining += Math.max(0, total - paid);
+        }
+
+        /** Prefer remaining contract value on approved projects; if none priced, use open invoice AR. */
+        const outstandingAmount =
+          projectsRemaining > 0 ? projectsRemaining : openInvoiceRemaining;
+        const pendingTotal = pendingApprovalQueue + pendingPaymentsCount;
 
         res.json({
           generatedAt: now.toISOString(),
-          period: { startOfMonth: startOfMonth.toISOString(), endOfMonth: now.toISOString() },
+          period: {
+            startOfMonth: startOfMonthUtc.toISOString(),
+            endOfMonth: now.toISOString(),
+            /** Exclusive upper bound for month filters (UTC). */
+            monthEndExclusive: startOfNextMonthUtc.toISOString()
+          },
           revenue: { thisMonth: revMonth, allTime: revAll },
           invoices: {
-            outstandingAmount: outVal,
+            outstandingAmount,
+            openInvoiceRemaining,
             overdueCount: overdueInvoicesCount,
             byStatus: invoiceCountByStatus.map((g) => ({ status: g.status, count: g._count.id }))
           },
+          projects: {
+            approvedCount: approvedProjects.length,
+            totalContractValue: projectsTotalContract,
+            totalReceived: projectsTotalReceived,
+            totalRemaining: projectsRemaining
+          },
           expenses: { thisMonth: expMonth, allTime: expAll },
-          payouts: { pendingAmount: pendingPayouts },
+          payouts: {
+            pendingAmount: pendingPayouts,
+            paidThisMonth: payoutPaidMonth,
+            paidAllTime: payoutPaidAll
+          },
           cashFlow: {
             revenueThisMonth: revMonth,
             expensesThisMonth: expMonth,
-            netThisMonth: revMonth - expMonth
+            payoutsThisMonth: payoutPaidMonth,
+            totalOutflowsThisMonth: totalOutMonth,
+            netThisMonth: revMonth - totalOutMonth
+          },
+          derived: {
+            /** Confirmed cash in minus approved expenses and paid payouts (UTC calendar month). */
+            netCashMovementThisMonth: revMonth - totalOutMonth,
+            netCashMovementAllTime: revAll - totalOutAll
+          },
+          pending: {
+            approvalQueue: pendingApprovalQueue,
+            paymentsPending: pendingPaymentsCount,
+            total: pendingTotal
           }
         });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(err);
         res.status(500).json({ error: "Failed to generate financial report" });
+      }
+    }
+  );
+
+  /** Unified money-in / money-out feed (finance & admin). */
+  router.get(
+    "/ledger",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const rawLimit = parseInt(String(req.query.limit ?? "200"), 10);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 200;
+
+      try {
+        const [payments, expenses, payouts] = await Promise.all([
+          prisma.payment.findMany({
+            where: { orgId, deletedAt: null },
+            orderBy: { receivedAt: "desc" },
+            take: limit,
+            select: {
+              id: true,
+              receivedAt: true,
+              amount: true,
+              currency: true,
+              status: true,
+              method: true,
+              source: true,
+              reference: true,
+              account: true,
+              notes: true,
+              invoiceId: true
+            }
+          }),
+          prisma.expense.findMany({
+            where: { orgId, deletedAt: null },
+            orderBy: { spentAt: "desc" },
+            take: limit,
+            select: {
+              id: true,
+              spentAt: true,
+              amount: true,
+              currency: true,
+              status: true,
+              category: true,
+              description: true,
+              notes: true
+            }
+          }),
+          prisma.payout.findMany({
+            where: { orgId, deletedAt: null },
+            orderBy: [{ paidAt: "desc" }, { scheduledAt: "desc" }, { createdAt: "desc" }],
+            take: limit,
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              description: true,
+              notes: true,
+              paidAt: true,
+              scheduledAt: true,
+              createdAt: true
+            }
+          })
+        ]);
+
+        type Row = {
+          kind: string;
+          id: string;
+          at: string;
+          amount: number;
+          currency: string;
+          direction: "in" | "out";
+          status: string;
+          label: string;
+          detail: string | null;
+        };
+
+        const rows: Row[] = [];
+
+        for (const p of payments) {
+          rows.push({
+            kind: "payment",
+            id: p.id,
+            at: p.receivedAt.toISOString(),
+            amount: Number(p.amount),
+            currency: p.currency,
+            direction: "in",
+            status: p.status,
+            label: p.status === "confirmed" ? "Payment in (confirmed)" : "Payment in (pending)",
+            detail:
+              [p.method, p.source, p.reference, p.account, p.notes?.slice(0, 120)]
+                .filter(Boolean)
+                .join(" · ") || null
+          });
+        }
+
+        for (const e of expenses) {
+          rows.push({
+            kind: "expense",
+            id: e.id,
+            at: e.spentAt.toISOString(),
+            amount: Number(e.amount),
+            currency: e.currency,
+            direction: "out",
+            status: e.status,
+            label: `Expense · ${e.category}`,
+            detail: e.description ?? e.notes ?? null
+          });
+        }
+
+        for (const po of payouts) {
+          const at = po.paidAt ?? po.scheduledAt ?? po.createdAt;
+          const paid = po.paidAt != null;
+          rows.push({
+            kind: "payout",
+            id: po.id,
+            at: at.toISOString(),
+            amount: Number(po.amount),
+            currency: po.currency,
+            direction: "out",
+            status: paid ? "paid" : "pending",
+            label: paid ? "Payout (paid)" : "Payout (scheduled)",
+            detail: po.description ?? po.notes ?? null
+          });
+        }
+
+        rows.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+        res.json({ rows: rows.slice(0, limit), generatedAt: new Date().toISOString() });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to load ledger" });
       }
     }
   );
@@ -834,7 +1161,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Payments
   router.get(
     "/payments",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
     async (req, res) => {
     const orgId = req.auth!.orgId;
     const payments = await prisma.payment.findMany({
@@ -850,9 +1177,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/payments",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
       const {
         invoiceId,
         amount,
@@ -862,7 +1190,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
         mpesaRef,
         receivedAt,
         notes,
-        source
+        source,
+        account,
+        howToProceed
       } = req.body as {
         invoiceId?: string;
         amount: string;
@@ -873,10 +1203,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
         receivedAt: string;
         notes?: string;
         source?: string;
+        account?: string;
+        howToProceed?: string;
       };
 
-      if (!amount || !rawMethod || !receivedAt) {
-        res.status(400).json({ error: "Missing fields" });
+      const normalizedAmount = normalizePaymentAmount(amount);
+      const receivedAtDate = parsePaymentReceivedAt(receivedAt);
+      if (!normalizedAmount || !rawMethod || !receivedAtDate) {
+        res.status(400).json({
+          error: "Missing or invalid fields",
+          message: "Provide a positive amount, valid received date, and method."
+        });
         return;
       }
       const method = rawMethod === "bank_transfer" ? "bank" : rawMethod.toLowerCase();
@@ -885,22 +1222,88 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      const userId = req.auth!.userId;
-      const payment = await prisma.payment.create({
+      if (invoiceId) {
+        const inv = await prisma.invoice.findFirst({
+          where: { id: invoiceId, orgId, deletedAt: null },
+          select: { id: true }
+        });
+        if (!inv) {
+          res.status(400).json({ error: "Invoice not found", message: "Invoice must belong to your organization." });
+          return;
+        }
+      }
+
+      const refForConfirm = (reference?.trim() || mpesaRef?.trim() || "").trim();
+      const sourceTrim = (source ?? "").trim();
+      const accountTrim = (account ?? "").trim();
+      const autoConfirm = Boolean(sourceTrim && accountTrim && refForConfirm);
+
+      let payment = await prisma.payment.create({
         data: {
           orgId,
-          invoiceId,
+          invoiceId: invoiceId || null,
           createdByUserId: userId,
-          amount: new Prisma.Decimal(amount),
+          amount: new Prisma.Decimal(normalizedAmount),
           currency: currency ?? "KES",
           method,
-          reference,
-          mpesaRef,
+          reference: reference?.trim() ? reference.trim() : null,
+          mpesaRef: mpesaRef?.trim() ? mpesaRef.trim() : null,
           notes: notes ?? null,
-          source: source ?? null,
-          receivedAt: new Date(receivedAt)
+          source: sourceTrim || null,
+          account: accountTrim || null,
+          howToProceed: howToProceed?.trim() ? howToProceed.trim() : null,
+          receivedAt: receivedAtDate
         }
       });
+
+      if (autoConfirm) {
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            type: "payment.received",
+            entityType: "payment",
+            entityId: payment.id,
+            metadata: { invoiceId: payment.invoiceId, method: payment.method }
+          }
+        });
+
+        await prisma.$transaction(async (tx) => {
+          await confirmPaymentCore(
+            tx,
+            {
+              id: payment.id,
+              invoiceId: payment.invoiceId,
+              howToProceed: payment.howToProceed,
+              amount: payment.amount
+            },
+            {
+              source: sourceTrim,
+              account: accountTrim,
+              reference: refForConfirm,
+              howToProceed: howToProceed?.trim() || null
+            }
+          );
+        });
+
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            type: "payment.confirmed",
+            entityType: "payment",
+            entityId: payment.id,
+            metadata: { source: sourceTrim, account: accountTrim, reference: refForConfirm, auto: true }
+          }
+        });
+
+        payment =
+          (await prisma.payment.findUnique({
+            where: { id: payment.id },
+            include: { invoice: { include: { project: { select: { id: true, name: true } } } } }
+          })) ?? payment;
+
+        res.status(201).json(payment);
+        return;
+      }
 
       await prisma.eventLog.create({
         data: {
@@ -919,7 +1322,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Update payment confirmation details (before confirming)
   router.patch(
     "/payments/:id",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
@@ -960,7 +1363,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Delete payment (pending only)
   router.delete(
     "/payments/:id",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
@@ -984,10 +1387,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
   // Confirm payment: require where from, transaction code, which account, how to proceed
   router.post(
     "/payments/:id/confirm",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const userId = req.auth!.userId;
       const { id } = req.params;
       const { source, account, reference, howToProceed } = req.body as {
         source?: string;
@@ -995,17 +1397,6 @@ export default function financeRouter(prisma: PrismaClient): Router {
         reference?: string;
         howToProceed?: string;
       };
-
-      try {
-        await enforcePaymentConfirmationConflicts(prisma, {
-          orgId,
-          userId,
-          paymentId: id
-        });
-      } catch {
-        res.status(403).json({ error: "Payment confirmation blocked due to conflict of interest" });
-        return;
-      }
 
       const payment = await prisma.payment.findFirst({
         where: { id, orgId, deletedAt: null }
@@ -1029,37 +1420,22 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      const amountNum = Number(payment.amount);
-
       await prisma.$transaction(async (tx) => {
-        await tx.payment.update({
-          where: { id },
-          data: {
+        await confirmPaymentCore(
+          tx,
+          {
+            id: payment.id,
+            invoiceId: payment.invoiceId,
+            howToProceed: payment.howToProceed,
+            amount: payment.amount
+          },
+          {
             source: sourceVal,
             account: accountVal,
             reference: referenceVal,
-            howToProceed: (howToProceed ?? payment.howToProceed) ?? null,
-            status: "confirmed"
+            howToProceed: (howToProceed ?? payment.howToProceed) ?? null
           }
-        });
-
-        if (payment.invoiceId) {
-          const inv = await tx.invoice.findUnique({
-            where: { id: payment.invoiceId },
-            select: { projectId: true }
-          });
-          if (inv?.projectId) {
-            const project = await tx.project.findUnique({
-              where: { id: inv.projectId },
-              select: { amountReceived: true }
-            });
-            const current = project?.amountReceived != null ? Number(project.amountReceived) : 0;
-            await tx.project.update({
-              where: { id: inv.projectId },
-              data: { amountReceived: new Prisma.Decimal(current + amountNum) }
-            });
-          }
-        }
+        );
       });
 
       const updated = await prisma.payment.findUnique({
@@ -1089,9 +1465,33 @@ export default function financeRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const expenses = await prisma.expense.findMany({
       where: { orgId, deletedAt: null },
-      orderBy: { spentAt: "desc" }
+      orderBy: { spentAt: "desc" },
+      include: {
+        beneficiary: { select: { id: true, name: true, email: true } },
+        developerAcknowledger: { select: { id: true, name: true, email: true } }
+      }
     });
     res.json(expenses);
+    }
+  );
+
+  router.get(
+    "/expenses/pending-my-acknowledgment",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const list = await prisma.expense.findMany({
+        where: {
+          orgId,
+          deletedAt: null,
+          category: "developer_payment",
+          beneficiaryUserId: userId,
+          developerAcknowledgedAt: null
+        },
+        orderBy: { spentAt: "desc" }
+      });
+      res.json(list);
     }
   );
 
@@ -1100,6 +1500,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
       const {
         category,
         description,
@@ -1110,7 +1511,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
         source,
         transactionCode,
         account,
-        paymentMethod
+        paymentMethod,
+        beneficiaryUserId,
+        expenseSubtype,
+        purposeCode,
+        purposeDetail,
+        toolOrServiceName,
+        subscriptionValidUntil
       } = req.body as {
         category: string;
         description?: string;
@@ -1122,11 +1529,26 @@ export default function financeRouter(prisma: PrismaClient): Router {
         transactionCode?: string;
         account?: string;
         paymentMethod?: string;
+        beneficiaryUserId?: string | null;
+        expenseSubtype?: string | null;
+        purposeCode?: string | null;
+        purposeDetail?: string | null;
+        toolOrServiceName?: string | null;
+        subscriptionValidUntil?: string | null;
       };
 
       if (!category || !amount || !spentAt) {
         res.status(400).json({ error: "Missing fields" });
         return;
+      }
+
+      let benefId: string | null = null;
+      if (beneficiaryUserId && String(beneficiaryUserId).trim()) {
+        const u = await prisma.user.findFirst({
+          where: { id: String(beneficiaryUserId).trim(), orgId, deletedAt: null },
+          select: { id: true }
+        });
+        benefId = u?.id ?? null;
       }
 
       const expense = await prisma.expense.create({
@@ -1142,7 +1564,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
           amount: new Prisma.Decimal(amount),
           currency: currency ?? "KES",
           spentAt: new Date(spentAt),
-          status: "pending" // expenses need admin approval
+          status: "pending", // expenses need admin approval
+          beneficiaryUserId: benefId,
+          expenseSubtype: expenseSubtype?.trim() || null,
+          purposeCode: purposeCode?.trim() || null,
+          purposeDetail: purposeDetail?.trim() || null,
+          toolOrServiceName: toolOrServiceName?.trim() || null,
+          subscriptionValidUntil: subscriptionValidUntil
+            ? new Date(subscriptionValidUntil)
+            : null
         }
       });
 
@@ -1154,6 +1584,36 @@ export default function financeRouter(prisma: PrismaClient): Router {
           entityId: expense.id
         }
       });
+
+      const existingApproval = await prisma.approval.findFirst({
+        where: {
+          orgId,
+          entityType: "expense",
+          entityId: expense.id,
+          status: "pending"
+        }
+      });
+      if (!existingApproval) {
+        const approval = await prisma.approval.create({
+          data: {
+            orgId,
+            requesterId: userId,
+            entityType: "expense",
+            entityId: expense.id,
+            status: "pending",
+            reason: "Expense recorded — pending admin approval"
+          }
+        });
+        await prisma.eventLog.create({
+          data: {
+            orgId,
+            type: "approval.requested",
+            entityType: "expense",
+            entityId: expense.id,
+            metadata: { approvalId: approval.id, auto: true }
+          }
+        });
+      }
 
       res.status(201).json(expense);
     }
@@ -1175,7 +1635,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
         source,
         transactionCode,
         account,
-        paymentMethod
+        paymentMethod,
+        beneficiaryUserId,
+        expenseSubtype,
+        purposeCode,
+        purposeDetail,
+        toolOrServiceName,
+        subscriptionValidUntil
       } = req.body as {
         category?: string;
         description?: string;
@@ -1187,6 +1653,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
         transactionCode?: string;
         account?: string;
         paymentMethod?: string;
+        beneficiaryUserId?: string | null;
+        expenseSubtype?: string | null;
+        purposeCode?: string | null;
+        purposeDetail?: string | null;
+        toolOrServiceName?: string | null;
+        subscriptionValidUntil?: string | null;
       };
 
       const existing = await prisma.expense.findFirst({
@@ -1201,6 +1673,19 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      let benefUpdate: { beneficiaryUserId: string | null } | undefined;
+      if (beneficiaryUserId !== undefined) {
+        if (beneficiaryUserId === null || beneficiaryUserId === "") {
+          benefUpdate = { beneficiaryUserId: null };
+        } else {
+          const u = await prisma.user.findFirst({
+            where: { id: String(beneficiaryUserId).trim(), orgId, deletedAt: null },
+            select: { id: true }
+          });
+          benefUpdate = { beneficiaryUserId: u?.id ?? null };
+        }
+      }
+
       const updated = await prisma.expense.update({
         where: { id },
         data: {
@@ -1213,7 +1698,20 @@ export default function financeRouter(prisma: PrismaClient): Router {
           paymentMethod: paymentMethod ?? undefined,
           currency: currency ?? undefined,
           amount: amount != null ? new Prisma.Decimal(amount) : undefined,
-          spentAt: spentAt != null ? new Date(spentAt) : undefined
+          spentAt: spentAt != null ? new Date(spentAt) : undefined,
+          ...(benefUpdate ?? {}),
+          expenseSubtype:
+            expenseSubtype !== undefined ? expenseSubtype?.trim() || null : undefined,
+          purposeCode: purposeCode !== undefined ? purposeCode?.trim() || null : undefined,
+          purposeDetail: purposeDetail !== undefined ? purposeDetail?.trim() || null : undefined,
+          toolOrServiceName:
+            toolOrServiceName !== undefined ? toolOrServiceName?.trim() || null : undefined,
+          subscriptionValidUntil:
+            subscriptionValidUntil !== undefined
+              ? subscriptionValidUntil
+                ? new Date(subscriptionValidUntil)
+                : null
+              : undefined
         }
       });
 
@@ -1264,6 +1762,66 @@ export default function financeRouter(prisma: PrismaClient): Router {
       });
 
       res.json({ ok: true });
+    }
+  );
+
+  // Developer (payee) confirms a developer_payment expense was received / aligned with finance
+  router.post(
+    "/expenses/:id/developer-acknowledge",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const roleKeys = req.auth!.roleKeys;
+      const { id } = req.params;
+      const exp = await prisma.expense.findFirst({
+        where: { id, orgId, deletedAt: null }
+      });
+      if (!exp) {
+        res.status(404).json({ error: "Expense not found" });
+        return;
+      }
+      const isDevPayment = exp.category === "developer_payment";
+      if (!isDevPayment) {
+        res.status(400).json({ error: "Only developer_payment category uses this acknowledgment" });
+        return;
+      }
+      const isBeneficiary = exp.beneficiaryUserId === userId;
+      const isAdminLike = roleKeys.some((k) =>
+        [ROLE_KEYS.admin, ROLE_KEYS.director].includes(k)
+      );
+      if (!isBeneficiary && !isAdminLike) {
+        res
+          .status(403)
+          .json({ error: "Only the payee developer or an admin/director can acknowledge." });
+        return;
+      }
+      if (exp.developerAcknowledgedAt) {
+        res.status(400).json({ error: "Already acknowledged" });
+        return;
+      }
+      const updated = await prisma.expense.update({
+        where: { id },
+        data: {
+          developerAcknowledgedAt: new Date(),
+          developerAcknowledgedById: userId
+        },
+        include: {
+          beneficiary: { select: { id: true, name: true, email: true } },
+          developerAcknowledger: { select: { id: true, name: true, email: true } }
+        }
+      });
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: "expense.developer_acknowledged",
+          entityType: "expense",
+          entityId: id,
+          metadata: {}
+        }
+      });
+      res.json(updated);
     }
   );
 
@@ -1492,7 +2050,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
           price: true,
           amountReceived: true,
           managementMonthlyAmount: true,
-          managementMonths: true
+          managementMonths: true,
+          managementActive: true,
+          managementStartedAt: true,
+          managementProgressPercent: true
         }
       });
       const list = projects.map((p) => ({
@@ -1503,9 +2064,331 @@ export default function financeRouter(prisma: PrismaClient): Router {
         received: p.amountReceived != null ? Number(p.amountReceived) : 0,
         remaining: p.price != null ? Math.max(0, Number(p.price) - (p.amountReceived != null ? Number(p.amountReceived) : 0)) : null,
         managementMonthlyAmount: p.managementMonthlyAmount != null ? Number(p.managementMonthlyAmount) : null,
-        managementMonths: p.managementMonths
+        managementMonths: p.managementMonths,
+        managementActive: p.managementActive,
+        managementStartedAt: p.managementStartedAt?.toISOString() ?? null,
+        managementProgressPercent: p.managementProgressPercent
       }));
       res.json(list);
+    }
+  );
+
+  // Update contract value, amount received, management fields (finance / director / admin)
+  router.patch(
+    "/projects/:projectId",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const actorId = req.auth!.userId;
+      const { projectId } = req.params;
+      const body = req.body as {
+        price?: string | number | null;
+        amountReceived?: string | number | null;
+        managementMonthlyAmount?: string | number | null;
+        managementMonths?: string | number | null;
+      };
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, approvalStatus: "approved" }
+      });
+      if (!project) {
+        res.status(404).json({ error: "Approved project not found" });
+        return;
+      }
+      const data: Record<string, unknown> = {};
+      if (body.price !== undefined) {
+        data.price =
+          body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : null;
+      }
+      if (body.amountReceived !== undefined) {
+        data.amountReceived =
+          body.amountReceived != null && body.amountReceived !== ""
+            ? new Prisma.Decimal(Number(body.amountReceived))
+            : new Prisma.Decimal(0);
+      }
+      if (body.managementMonthlyAmount !== undefined) {
+        data.managementMonthlyAmount =
+          body.managementMonthlyAmount != null && body.managementMonthlyAmount !== ""
+            ? new Prisma.Decimal(Number(body.managementMonthlyAmount))
+            : null;
+      }
+      if (body.managementMonths !== undefined) {
+        data.managementMonths =
+          body.managementMonths != null && body.managementMonths !== ""
+            ? Math.max(0, Math.floor(Number(body.managementMonths)))
+            : null;
+      }
+      if (Object.keys(data).length === 0) {
+        res.status(400).json({ error: "No fields to update (send price, amountReceived, management fields)." });
+        return;
+      }
+      const updated = await prisma.project.update({
+        where: { id: projectId },
+        data,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          price: true,
+          amountReceived: true,
+          managementMonthlyAmount: true,
+          managementMonths: true
+        }
+      });
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId,
+          type: "finance.project.financials_updated",
+          entityType: "project",
+          entityId: projectId,
+          metadata: { fields: Object.keys(data) }
+        }
+      });
+      const allocated = updated.price != null ? Number(updated.price) : null;
+      const received = updated.amountReceived != null ? Number(updated.amountReceived) : 0;
+      res.json({
+        id: updated.id,
+        name: updated.name,
+        status: updated.status,
+        allocated,
+        received,
+        remaining: allocated != null ? Math.max(0, allocated - received) : null,
+        managementMonthlyAmount:
+          updated.managementMonthlyAmount != null ? Number(updated.managementMonthlyAmount) : null,
+        managementMonths: updated.managementMonths
+      });
+    }
+  );
+
+  // Mark a management billing month paid (finance / admin)
+  router.patch(
+    "/projects/:projectId/management-month",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { projectId } = req.params;
+      const { year, month, paid } = req.body as { year?: number; month?: number; paid?: boolean };
+      const y = Math.floor(Number(year));
+      const mo = Math.floor(Number(month));
+      if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) {
+        res.status(400).json({ error: "year and month (1–12) are required" });
+        return;
+      }
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, approvalStatus: "approved", managementActive: true }
+      });
+      if (!project || !project.managementStartedAt) {
+        res.status(404).json({ error: "Management project not found" });
+        return;
+      }
+      const billable = billableMonthsUtc(project.managementStartedAt, project.managementMonths, new Date());
+      const ok = billable.some((b) => b.year === y && b.month === mo);
+      if (!ok) {
+        res.status(400).json({ error: "Month is outside the current management billing window" });
+        return;
+      }
+      const isPaid = paid === true;
+      const row = await prisma.projectManagementMonth.upsert({
+        where: {
+          projectId_year_month: { projectId, year: y, month: mo }
+        },
+        create: {
+          orgId,
+          projectId,
+          year: y,
+          month: mo,
+          paid: isPaid,
+          paidAt: isPaid ? new Date() : null,
+          markedByUserId: isPaid ? userId : null
+        },
+        update: {
+          paid: isPaid,
+          paidAt: isPaid ? new Date() : null,
+          markedByUserId: isPaid ? userId : null
+        }
+      });
+      res.json({
+        id: row.id,
+        projectId: row.projectId,
+        year: row.year,
+        month: row.month,
+        key: ymKey(row.year, row.month),
+        paid: row.paid,
+        paidAt: row.paidAt?.toISOString() ?? null,
+        invoiceId: row.invoiceId
+      });
+    }
+  );
+
+  // Invoice for one management fee month (links row to invoice)
+  router.post(
+    "/invoices/management-fee",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { projectId, year, month, issueDate, dueDate, notes } = req.body as {
+        projectId?: string;
+        year?: number;
+        month?: number;
+        issueDate?: string;
+        dueDate?: string;
+        notes?: string | null;
+      };
+      const y = Math.floor(Number(year));
+      const mo = Math.floor(Number(month));
+      if (!projectId || !Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) {
+        res.status(400).json({ error: "projectId, year, and month (1–12) are required" });
+        return;
+      }
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null, approvalStatus: "approved", managementActive: true },
+        include: { client: { select: { id: true, name: true, email: true } } }
+      });
+      if (!project?.clientId || !project.managementStartedAt) {
+        res.status(400).json({
+          error: "Project must have a linked client and an active management start date"
+        });
+        return;
+      }
+      const billable = billableMonthsUtc(project.managementStartedAt, project.managementMonths, new Date());
+      if (!billable.some((b) => b.year === y && b.month === mo)) {
+        res.status(400).json({ error: "Month is outside the management billing window" });
+        return;
+      }
+      const existing = await prisma.projectManagementMonth.findUnique({
+        where: { projectId_year_month: { projectId, year: y, month: mo } }
+      });
+      if (existing?.paid) {
+        res.status(400).json({ error: "This month is already marked paid" });
+        return;
+      }
+      if (existing?.invoiceId) {
+        res.status(400).json({ error: "An invoice is already linked to this month", invoiceId: existing.invoiceId });
+        return;
+      }
+      const monthly = project.managementMonthlyAmount != null ? Number(project.managementMonthlyAmount) : 0;
+      if (!(monthly > 0)) {
+        res.status(400).json({ error: "managementMonthlyAmount must be set on the project" });
+        return;
+      }
+      const label = `${y}-${String(mo).padStart(2, "0")}`;
+      const issue = issueDate ? new Date(issueDate) : new Date();
+      if (Number.isNaN(issue.getTime())) {
+        res.status(400).json({ error: "Invalid issueDate" });
+        return;
+      }
+      const client = project.client;
+      const clientEmail = client?.email?.trim() || "";
+
+      try {
+        const result = await prisma.$transaction(
+          async (tx) => {
+            const number = await allocateInvoiceNumberForCreate(tx, orgId, projectId, issue);
+            const desc = `Management fee ${label} — ${project.name}`;
+            const totalAmount = monthly;
+            const invoice = await tx.invoice.create({
+              data: {
+                orgId,
+                clientId: project.clientId!,
+                projectId,
+                number,
+                status: "sent",
+                issueDate: issue,
+                dueDate: parseInvoiceDueDate(dueDate),
+                currency: "KES",
+                totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
+                notes: notes?.trim() ? notes.trim() : `Management retainer for ${label}.`
+              }
+            });
+            await tx.invoiceItem.create({
+              data: {
+                invoiceId: invoice.id,
+                description: desc,
+                quantity: 1,
+                unitPrice: new Prisma.Decimal(monthly.toFixed(2))
+              }
+            });
+            await tx.projectManagementMonth.upsert({
+              where: { projectId_year_month: { projectId, year: y, month: mo } },
+              create: {
+                orgId,
+                projectId,
+                year: y,
+                month: mo,
+                paid: false,
+                invoiceId: invoice.id
+              },
+              update: { invoiceId: invoice.id }
+            });
+            await tx.eventLog.create({
+              data: {
+                orgId,
+                type: "invoice.management_fee",
+                entityType: "invoice",
+                entityId: invoice.id,
+                metadata: { projectId, year: y, month: mo, number: invoice.number }
+              }
+            });
+            if (clientEmail) {
+              const greeting = client?.name ? `Hello ${client.name},` : "Hello,";
+              const body = `${greeting}\n\nInvoice ${invoice.number} for management fee (${label}) has been issued.\nTotal: KES ${totalAmount.toFixed(2)}.\n\nThank you.`;
+              await tx.notification.create({
+                data: {
+                  orgId,
+                  channel: "email",
+                  to: clientEmail,
+                  subject: `Invoice ${invoice.number}`,
+                  body,
+                  status: "queued",
+                  type: "invoice.sent",
+                  tier: "financial"
+                }
+              });
+            }
+            return invoice;
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 5000,
+            timeout: 10000
+          }
+        );
+
+        res.status(201).json({
+          success: true,
+          data: {
+            invoice: {
+              id: result.id,
+              number: result.number,
+              totalAmount: Number(result.totalAmount),
+              projectId: result.projectId,
+              clientId: result.clientId
+            },
+            downloadUrl: `/finance/invoices/${result.id}/pdf`
+          }
+        });
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        // eslint-disable-next-line no-console
+        console.error("POST /finance/invoices/management-fee", e);
+        res.status(500).json({ error: err.message ?? "Failed to create management invoice" });
+      }
+    }
+  );
+
+  // Users in org (for expense beneficiary / transport attribution)
+  router.get(
+    "/expense-context",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const users = await prisma.user.findMany({
+        where: { orgId, deletedAt: null },
+        select: { id: true, name: true, email: true },
+        orderBy: { email: "asc" }
+      });
+      res.json({ users });
     }
   );
 
@@ -1549,10 +2432,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Amount due per client (outstanding invoices) and reminder config
+  // Amount due per client (outstanding invoices) and reminder config — finance & admin only
   router.get(
     "/clients/due",
-    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const clients = await prisma.client.findMany({

@@ -63,6 +63,7 @@ export default function ProjectsPage() {
   const isFinance = auth.roleKeys.includes("finance");
   const canGenerateMessage = auth.roleKeys.some((r) => ["director_admin", "sales", "analyst"].includes(r));
   const canFilterByApproval = auth.roleKeys.some((r) => ["admin", "director_admin"].includes(r));
+  const canSeeManagement = auth.roleKeys.some((r) => ["admin", "director_admin", "finance"].includes(r));
 
   const loadProjects = useCallback(async () => {
     try {
@@ -238,6 +239,14 @@ export default function ProjectsPage() {
             >
               New project
             </button>
+          )}
+          {canSeeManagement && (
+            <Link
+              href="/projects/management"
+              className="shrink-0 rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
+            >
+              Projects on management
+            </Link>
           )}
         </div>
       </div>

@@ -58,7 +58,10 @@ export default function authRouter(prisma: PrismaClient): Router {
 
     try {
     const existing = await prisma.user.findFirst({
-      where: { email: { equals: emailNorm, mode: "insensitive" } }
+      where: {
+        email: { equals: emailNorm, mode: "insensitive" },
+        deletedAt: null
+      }
     });
     if (existing) {
       res.status(400).json({ error: "Email already in use" });
@@ -185,7 +188,10 @@ export default function authRouter(prisma: PrismaClient): Router {
 
     try {
       const user = await prisma.user.findFirst({
-        where: { email: { equals: emailNorm, mode: "insensitive" } },
+        where: {
+          email: { equals: emailNorm, mode: "insensitive" },
+          deletedAt: null
+        },
         include: {
           memberships: { include: { org: true, role: true } },
           roles: { include: { role: true } }
@@ -344,7 +350,7 @@ export default function authRouter(prisma: PrismaClient): Router {
           roles: { include: { role: true } }
         }
       });
-      if (!user || user.status !== "active") {
+      if (!user || user.status !== "active" || user.deletedAt) {
         res.status(401).json({ error: "User is not active" });
         return;
       }

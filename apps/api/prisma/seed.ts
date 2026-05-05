@@ -69,7 +69,9 @@ async function main() {
   const roleByKey = Object.fromEntries(roles.map((r) => [r.key, r]));
 
   for (const u of USERS) {
-    const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    const existing = await prisma.user.findFirst({
+      where: { email: u.email, deletedAt: null }
+    });
     const passwordHash =
       u.email === "director@cresdynamics.com" ? directorPasswordHash : defaultPasswordHash;
 

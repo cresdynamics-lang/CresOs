@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { PageHeader } from "../page-header";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { DashboardWelcomeBanner, WelcomeBullet } from "../../components/dashboard-welcome-banner";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
@@ -114,6 +115,16 @@ type DashboardKpis = {
     outstandingInvoicesAmount: number;
     overdueInvoicesCount: number;
     expensesThisMonth: number;
+    /** Paid payouts in the UTC month (money out). */
+    payoutsPaidThisMonth?: number;
+    /** Approved expenses + paid payouts in the UTC month. */
+    cashOutflowsThisMonth?: number;
+    /** Sum of contract prices on approved projects */
+    projectContractTotal?: number;
+    /** Sum of amount received across approved projects */
+    projectAmountReceivedTotal?: number;
+    /** Sum of remaining (pending) per project */
+    projectPendingTotal?: number;
   };
   projectHealth: {
     activeProjects: number;
@@ -163,6 +174,13 @@ type Attention = {
   handoffRequestsReceived?: { id: string; projectId: string; project: { name: string }; fromUser: { name: string | null; email: string } }[];
   overdueTasks?: { id: string; title: string; projectId: string; dueDate: string }[];
   latestDeveloperReportNeedsAttention?: string | null;
+};
+
+/** `GET /dashboard/focus-coach` — deterministic bullets + optional Groq alignment hint. */
+type FocusCoachResponse = {
+  checks: Record<string, unknown>;
+  deterministicTips: string[];
+  aiHint: string | null;
 };
 
 type ProjectListRow = {
@@ -231,6 +249,13 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<ProjectListRow[]>([]);
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [kpisError, setKpisError] = useState(false);
+  const [communityUnread, setCommunityUnread] = useState(0);
+  const [focusCoach, setFocusCoach] = useState<FocusCoachResponse | null>(null);
+  const [focusCoachReady, setFocusCoachReady] = useState(false);
+  const [focusProjectName, setFocusProjectName] = useState<string | null>(null);
+  const [pendingDevPaymentAck, setPendingDevPaymentAck] = useState<
+    { id: string; amount: string | number; spentAt: string; description: string | null; currency?: string }[]
+  >([]);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const { apiFetch, auth, hydrated } = useAuth();
   const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
@@ -297,6 +322,22 @@ export default function DashboardPage() {
       }
     }
   }, [apiFetch, canViewOrgAnalyticsSummary, hydrated, auth.accessToken, auth.roleKeys]);
+
+  const loadFocusCoach = useCallback(async () => {
+    if (!hydrated || !auth.accessToken) return;
+    try {
+      const res = await apiFetch("/dashboard/focus-coach");
+      setFocusCoachReady(true);
+      if (res.ok) {
+        setFocusCoach((await res.json()) as FocusCoachResponse);
+      } else {
+        setFocusCoach(null);
+      }
+    } catch {
+      setFocusCoachReady(true);
+      setFocusCoach(null);
+    }
+  }, [apiFetch, hydrated, auth.accessToken]);
 
   const loadDirectorDashboard = useCallback(async () => {
     if (!isDirectorOrAdmin) return;
@@ -372,6 +413,11 @@ export default function DashboardPage() {
     [auth.roleKeys]
   );
 
+  const canViewFinanceKpis = useMemo(
+    () => auth.roleKeys.some((r) => ["admin", "finance"].includes(r)),
+    [auth.roleKeys]
+  );
+
   const loadKpis = useCallback(async () => {
     if (!canViewKpis) return;
     if (!hydrated || !auth.accessToken) return;
@@ -393,6 +439,10 @@ export default function DashboardPage() {
   }, [loadSummaryAndAttention]);
 
   useEffect(() => {
+    void loadFocusCoach();
+  }, [loadFocusCoach]);
+
+  useEffect(() => {
     void loadDirectorDashboard();
   }, [loadDirectorDashboard]);
 
@@ -409,28 +459,116 @@ export default function DashboardPage() {
   }, [loadProjects]);
 
   useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const convRes = await apiFetch("/chat-community/conversations");
+        if (!cancelled && convRes.ok) {
+          const j = (await convRes.json()) as { data?: { conversations?: { unreadCount?: number }[] } };
+          const arr = j.data?.conversations ?? [];
+          setCommunityUnread(
+            arr.reduce((s, c) => s + (typeof c.unreadCount === "number" ? c.unreadCount : 0), 0)
+          );
+        } else if (!cancelled) {
+          setCommunityUnread(0);
+        }
+        if (auth.roleKeys.some((r) => ["developer", "sales"].includes(r))) {
+          const focusRes = await apiFetch("/user/current-focus");
+          if (cancelled) return;
+          if (focusRes.ok) {
+            const j = (await focusRes.json()) as { data?: { project?: { name?: string } | null } };
+            setFocusProjectName(j.data?.project?.name?.trim() || null);
+          } else {
+            setFocusProjectName(null);
+          }
+        } else if (!cancelled) {
+          setFocusProjectName(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setCommunityUnread(0);
+          setFocusProjectName(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, auth.accessToken, auth.roleKeys, apiFetch]);
+
+  useEffect(() => {
     void loadKpis();
   }, [loadKpis]);
+
+  const loadPendingDevPaymentAck = useCallback(async () => {
+    if (!auth.accessToken || !auth.roleKeys.includes("developer")) {
+      setPendingDevPaymentAck([]);
+      return;
+    }
+    try {
+      const res = await apiFetch("/finance/expenses/pending-my-acknowledgment");
+      if (!res.ok) {
+        setPendingDevPaymentAck([]);
+        return;
+      }
+      const data = (await res.json()) as {
+        id: string;
+        amount: string | number;
+        spentAt: string;
+        description: string | null;
+        currency?: string;
+      }[];
+      setPendingDevPaymentAck(Array.isArray(data) ? data : []);
+    } catch {
+      setPendingDevPaymentAck([]);
+    }
+  }, [apiFetch, auth.accessToken, auth.roleKeys]);
+
+  useEffect(() => {
+    void loadPendingDevPaymentAck();
+  }, [loadPendingDevPaymentAck]);
+
+  const acknowledgeDevPayment = useCallback(
+    async (id: string) => {
+      try {
+        const res = await apiFetch(`/finance/expenses/${id}/developer-acknowledge`, {
+          method: "POST"
+        });
+        if (res.ok) {
+          setPendingDevPaymentAck((rows) => rows.filter((r) => r.id !== id));
+          emitDataRefresh();
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [apiFetch]
+  );
 
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
         void loadSummaryAndAttention();
+        void loadFocusCoach();
         void loadDirectorDashboard();
         void loadDirectorAiBriefings();
         void loadDirectorSummaryFeed();
         void loadProjects();
         void loadKpis();
+        void loadPendingDevPaymentAck();
       }
     };
     document.addEventListener("visibilitychange", onVis);
     const unsub = subscribeDataRefresh(() => {
       void loadSummaryAndAttention();
+      void loadFocusCoach();
       void loadDirectorDashboard();
       void loadDirectorAiBriefings();
       void loadDirectorSummaryFeed();
       void loadProjects();
       void loadKpis();
+      void loadPendingDevPaymentAck();
     });
     return () => {
       document.removeEventListener("visibilitychange", onVis);
@@ -438,11 +576,13 @@ export default function DashboardPage() {
     };
   }, [
     loadSummaryAndAttention,
+    loadFocusCoach,
     loadDirectorDashboard,
     loadDirectorAiBriefings,
     loadDirectorSummaryFeed,
     loadProjects,
-    loadKpis
+    loadKpis,
+    loadPendingDevPaymentAck
   ]);
 
   const quickLinks = Array.from(
@@ -452,6 +592,17 @@ export default function DashboardPage() {
   );
   const hasMetrics = canViewOrgAnalyticsSummary && summary != null && !summaryError;
   const primaryRoleLabel = auth.roleKeys.map((r) => ROLE_LABELS[r]).filter(Boolean)[0] ?? "User";
+
+  const firstName = useMemo(() => {
+    const n = auth.userName?.trim();
+    if (n) {
+      const part = n.split(/\s+/)[0] ?? n;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    }
+    const em = auth.userEmail?.split("@")[0];
+    if (em) return em.charAt(0).toUpperCase() + em.slice(1).toLowerCase();
+    return "there";
+  }, [auth.userName, auth.userEmail]);
   const unreadCount = attention?.stats?.notificationsCount ?? attention?.notifications?.filter((n) => !n.readAt).length ?? 0;
   const messagesCount = attention?.stats?.messagesCount ?? attention?.messages?.length ?? 0;
   const dueCount = attention?.stats?.dueCount ?? attention?.dueToday?.length ?? 0;
@@ -688,10 +839,173 @@ export default function DashboardPage() {
   const hasAttentionSignalRow =
     attentionSignalSummary.message + attentionSignalSummary.project + attentionSignalSummary.inquiry > 0;
 
+  const welcomeItems = useMemo((): ReactElement[] => {
+    const items: ReactElement[] = [];
+    const canFinanceApprovals = auth.roleKeys.some((r) =>
+      ["admin", "director_admin", "finance"].includes(r)
+    );
+    const approvalQueueCount = attention?.approvalsPending?.length ?? 0;
+
+    if (communityUnread > 0) {
+      items.push(
+        <WelcomeBullet key="cu">
+          You have{" "}
+          <Link href="/community">
+            {communityUnread} unread message{communityUnread === 1 ? "" : "s"}
+          </Link>{" "}
+          in Community.
+        </WelcomeBullet>
+      );
+    }
+
+    if (messagesCount > 0) {
+      const href =
+        auth.roleKeys.includes("sales") && messagesCount > 0 ? "/developer-reports" : "/community";
+      items.push(
+        <WelcomeBullet key="mq">
+          <Link href={href}>
+            {messagesCount} thread{messagesCount === 1 ? "" : "s"}
+          </Link>{" "}
+          may need your reply (reports / questions).
+        </WelcomeBullet>
+      );
+    }
+
+    if (dueCount > 0) {
+      items.push(
+        <WelcomeBullet key="due">
+          <Link href="/schedule">{dueCount}</Link> calendar item{dueCount === 1 ? "" : "s"} due today.
+        </WelcomeBullet>
+      );
+    }
+
+    if (attentionSignalSummary.project > 0) {
+      items.push(
+        <WelcomeBullet key="proj">
+          <Link href="/projects">{attentionSignalSummary.project}</Link> active project signal
+          {attentionSignalSummary.project === 1 ? "" : "s"} (tasks, assignments, handoffs).
+        </WelcomeBullet>
+      );
+    }
+
+    if (attentionSignalSummary.inquiry > 0) {
+      items.push(
+        <WelcomeBullet key="lead">
+          <Link href="/leads">{attentionSignalSummary.inquiry}</Link> lead / inquiry item
+          {attentionSignalSummary.inquiry === 1 ? "" : "s"} in the queue.
+        </WelcomeBullet>
+      );
+    }
+
+    if (isDeveloper && projectsNeedingReview.length + handoffRequests.length > 0) {
+      const n = projectsNeedingReview.length + handoffRequests.length;
+      items.push(
+        <WelcomeBullet key="drev">
+          <Link href="/projects">{n === 1 ? "One project needs" : `${n} projects need`}</Link> your review — add tasks on
+          each so delivery can proceed.
+        </WelcomeBullet>
+      );
+    }
+
+    if (isDeveloper && overdueTasks.length > 0) {
+      items.push(
+        <WelcomeBullet key="ov">
+          <Link href="/schedule">{overdueTasks.length}</Link> overdue task{overdueTasks.length === 1 ? "" : "s"} assigned to
+          you.
+        </WelcomeBullet>
+      );
+    }
+
+    if ((auth.roleKeys.includes("developer") || auth.roleKeys.includes("sales")) && focusProjectName) {
+      items.push(
+        <WelcomeBullet key="focus">
+          Focus project: <span className="font-medium text-slate-100">{focusProjectName}</span>. Update progress under{" "}
+          <Link href="/projects">Projects</Link> so delivery stays unblocked.
+        </WelcomeBullet>
+      );
+    }
+
+    if (reportReminderDue) {
+      items.push(
+        <WelcomeBullet key="sr">
+          <Link href="/reports/new">Submit your sales report</Link> — it&apos;s been 12+ hours since your last one.
+        </WelcomeBullet>
+      );
+    }
+
+    if (canFinanceApprovals && approvalQueueCount > 0) {
+      items.push(
+        <WelcomeBullet key="ap">
+          <Link href="/approvals">{approvalQueueCount}</Link> finance approval request
+          {approvalQueueCount === 1 ? "" : "s"} pending.
+        </WelcomeBullet>
+      );
+    }
+
+    return items;
+  }, [
+    communityUnread,
+    messagesCount,
+    dueCount,
+    attentionSignalSummary.project,
+    attentionSignalSummary.inquiry,
+    auth.roleKeys,
+    isDeveloper,
+    projectsNeedingReview.length,
+    handoffRequests.length,
+    overdueTasks.length,
+    focusProjectName,
+    reportReminderDue,
+    attention?.approvalsPending?.length
+  ]);
+
   return (
     <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4">
+      <DashboardWelcomeBanner firstName={firstName} roleLabel={primaryRoleLabel}>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Today&apos;s priorities (your queue)
+        </p>
+        {welcomeItems.length > 0 ? (
+          <ul className="ml-1 list-disc space-y-1.5 pl-4">{welcomeItems}</ul>
+        ) : (
+          <p className="text-sm text-slate-500">
+            You&apos;re caught up on the automatic priority queue. Use the sections below for full detail.
+          </p>
+        )}
+      </DashboardWelcomeBanner>
+
+      {focusCoachReady && focusCoach && (
+        <div className="shell min-w-0 border-violet-500/25 bg-violet-950/20">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300/90">
+            Stay focused &amp; aligned
+          </p>
+          <p className="mb-3 text-[11px] leading-snug text-slate-500">
+            Grounded in this dashboard: unread notifications, your active projects, sales/developer report submission and
+            review state, and approvals — plus a short AI nudge when enabled (facts only; does not replace your queue
+            above).
+          </p>
+          {(focusCoach.deterministicTips?.length ?? 0) > 0 ? (
+            <ul className="mb-3 ml-1 list-disc space-y-1.5 pl-4 text-sm text-slate-200">
+              {focusCoach.deterministicTips.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-3 text-sm text-slate-400">
+              Nothing flagged by the automated scan — use Today’s priorities and the tiles below as the source of truth.
+            </p>
+          )}
+          {focusCoach.aiHint ? (
+            <p className="border-t border-slate-800/80 pt-3 text-sm italic leading-relaxed text-slate-300">
+              {focusCoach.aiHint}
+            </p>
+          ) : null}
+        </div>
+      )}
+
       <PageHeader
-        title={`${primaryRoleLabel} dashboard`}
+        title="Dashboard"
+        showWorkspaceProfile={false}
         description={
           canViewOrgAnalyticsSummary
             ? "Operating System for Growth — one place for approvals, delivery signals, and finance health."
@@ -852,6 +1166,39 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
+
+          {pendingDevPaymentAck.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/25 px-3 py-3 text-sm text-amber-50">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+                Confirm developer payments (finance)
+              </p>
+              <p className="mt-1 text-xs text-amber-100/90">
+                Finance recorded a payment to you — confirm so the ledger stays aligned.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {pendingDevPaymentAck.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-800/60 bg-slate-950/40 px-2 py-2"
+                  >
+                    <span className="text-slate-100">
+                      {formatMoney(Number(row.amount))}
+                      {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
+                      {row.description?.trim() || "Developer payment"} ·{" "}
+                      {new Date(row.spentAt).toLocaleDateString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void acknowledgeDevPayment(row.id)}
+                      className="rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-500"
+                    >
+                      Confirm receipt
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <DashboardCardRow lgCols={4}>
             <DashboardScrollCard>
@@ -1057,6 +1404,7 @@ export default function DashboardPage() {
 
           {kpis && (
             <DashboardCardRow lgCols={3}>
+              {canViewFinanceKpis && (
               <DashboardScrollCard width="wide">
                 <div className="shell min-h-[180px]">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1066,10 +1414,49 @@ export default function DashboardPage() {
                     <li>Revenue this month: <span className="text-emerald-400">{formatMoney(kpis.finance.revenueThisMonth)}</span></li>
                     <li>Outstanding invoices: <span className="text-amber-300">{formatMoney(kpis.finance.outstandingInvoicesAmount)}</span></li>
                     <li>Overdue invoices: <span className="text-rose-300">{kpis.finance.overdueInvoicesCount}</span></li>
-                    <li>Expenses this month: <span className="text-amber-300">{formatMoney(kpis.finance.expensesThisMonth)}</span></li>
+                    <li>
+                      Cash out this month:{" "}
+                      <span className="text-amber-300">
+                        {formatMoney(kpis.finance.cashOutflowsThisMonth ?? kpis.finance.expensesThisMonth)}
+                      </span>
+                    </li>
+                    <li className="text-[11px] text-slate-500">
+                      — of which approved expenses{" "}
+                      {formatMoney(kpis.finance.expensesThisMonth)}
+                      {kpis.finance.payoutsPaidThisMonth != null && kpis.finance.payoutsPaidThisMonth > 0
+                        ? ` · paid payouts ${formatMoney(kpis.finance.payoutsPaidThisMonth)}`
+                        : ""}
+                    </li>
+                    <li className="border-t border-slate-700/80 pt-2 mt-2">
+                      Project contracts (approved):{" "}
+                      <span className="text-slate-100">{formatMoney(kpis.finance.projectContractTotal ?? 0)}</span>
+                    </li>
+                    <li>
+                      Collected on projects:{" "}
+                      <span className="text-emerald-400">{formatMoney(kpis.finance.projectAmountReceivedTotal ?? 0)}</span>
+                    </li>
+                    <li>
+                      Pending on projects:{" "}
+                      <span className="text-amber-300">{formatMoney(kpis.finance.projectPendingTotal ?? 0)}</span>
+                    </li>
                   </ul>
                 </div>
               </DashboardScrollCard>
+              )}
+              {!canViewFinanceKpis && auth.roleKeys.includes("director_admin") && (
+                <DashboardScrollCard width="wide">
+                  <div className="shell min-h-[120px]">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Finance
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      Aggregate money totals are visible to <span className="text-slate-200">Finance</span> and{" "}
+                      <span className="text-slate-200">Admin</span> only. Use Approvals and operational cards below;
+                      detailed cash position lives under Finance for those roles.
+                    </p>
+                  </div>
+                </DashboardScrollCard>
+              )}
 
               <DashboardScrollCard width="wide">
                 <div className="shell min-h-[180px]">
