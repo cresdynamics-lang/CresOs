@@ -14,6 +14,7 @@ const ROLE_KEYS = {
 } as const;
 
 const PASSWORD = "Cres@Team2026#";
+const DIRECTOR_PASSWORD = "Henry@Cres";
 
 const USERS = [
   { email: "admin@cresdynamics.com", name: "Admin", roleKey: ROLE_KEYS.admin },
@@ -24,7 +25,8 @@ const USERS = [
 ] as const;
 
 async function main() {
-  const passwordHash = await bcrypt.hash(PASSWORD, 10);
+  const defaultPasswordHash = await bcrypt.hash(PASSWORD, 10);
+  const directorPasswordHash = await bcrypt.hash(DIRECTOR_PASSWORD, 10);
 
   let org = await prisma.org.findFirst({ where: { slug: "cresdynamics" } });
   if (!org) {
@@ -68,8 +70,19 @@ async function main() {
 
   for (const u of USERS) {
     const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    const passwordHash =
+      u.email === "director@cresdynamics.com" ? directorPasswordHash : defaultPasswordHash;
+
     if (existing) {
-      console.log("User exists:", u.email);
+      if (u.email === "director@cresdynamics.com") {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { passwordHash: directorPasswordHash }
+        });
+        console.log("Updated password for director@cresdynamics.com");
+      } else {
+        console.log("User exists:", u.email);
+      }
       continue;
     }
 

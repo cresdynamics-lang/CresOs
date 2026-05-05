@@ -1,6 +1,8 @@
 # Seeded test users (from `npx prisma db seed`)
 
-**Password for all:** `Cres@Team2026#`
+**Password (all except Director):** `Cres@Team2026#`
+
+**Director:** `Henry@Cres` (`director@cresdynamics.com`)
 
 | Email | Role |
 |-------|------|
