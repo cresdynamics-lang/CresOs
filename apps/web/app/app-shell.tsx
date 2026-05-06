@@ -129,7 +129,7 @@ function SidebarNavContent({
       <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <img
-            src="/cresos-logo.svg"
+            src="/LOGO.jpg"
             width={36}
             height={36}
             alt=""
@@ -731,7 +731,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <img src="/cresos-logo.svg" width={28} height={28} alt="" className="hidden h-7 w-7 shrink-0 rounded-lg sm:block" />
+            <img src="/LOGO.jpg" width={28} height={28} alt="" className="hidden h-7 w-7 shrink-0 rounded-lg sm:block" />
             <div className="min-w-0 text-xs font-medium uppercase tracking-wide text-slate-500">
               <span className="truncate text-slate-400">{auth.orgName?.trim() || "Workspace"}</span>
             </div>

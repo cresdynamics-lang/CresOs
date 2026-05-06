@@ -68,7 +68,7 @@ export default function LandingPage() {
       <header className="border-b border-cres-border bg-cres-surface/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 font-display text-lg font-semibold tracking-tight text-cres-text">
-            <img src="/cresos-logo.svg" width={40} height={40} alt="" className="h-10 w-10 rounded-xl" />
+            <img src="/LOGO.jpg" width={40} height={40} alt="" className="h-10 w-10 rounded-xl" />
             CresOS
           </Link>
           <Link

@@ -26,9 +26,9 @@ export const metadata: Metadata = {
   description:
     "CresOS connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow.",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    shortcut: "/favicon.svg",
-    apple: [{ url: "/cresos-logo.svg", type: "image/svg+xml" }]
+    icon: [{ url: "/LOGO.jpg", type: "image/jpeg" }],
+    shortcut: "/LOGO.jpg",
+    apple: [{ url: "/LOGO.jpg", type: "image/jpeg" }]
   }
 };
 

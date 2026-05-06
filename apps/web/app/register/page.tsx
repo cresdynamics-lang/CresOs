@@ -86,7 +86,7 @@ export default function RegisterPage() {
             ← Sign in
           </Link>
           <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-cres-text">
-            <img src="/cresos-logo.svg" width={32} height={32} alt="" className="h-8 w-8 rounded-lg" />
+            <img src="/LOGO.jpg" width={32} height={32} alt="" className="h-8 w-8 rounded-lg" />
             CresOS
           </Link>
         </div>
