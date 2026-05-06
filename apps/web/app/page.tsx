@@ -86,20 +86,21 @@ export default function LandingPage() {
           className="mb-4 font-label text-sm font-medium uppercase tracking-wider text-cres-accent opacity-0 animate-fade-in"
           style={{ animationDelay: "0ms", animationFillMode: "forwards" }}
         >
-          Business Operating System
+          Cres Dynamics - Business Operating System & CRM
         </p>
         <h1
           className="font-display mb-8 max-w-3xl text-4xl font-bold tracking-tight text-cres-text opacity-0 animate-slide-in-bottom sm:text-5xl lg:text-6xl"
           style={{ animationDelay: "80ms", animationFillMode: "forwards" }}
         >
-          One platform. Identity, operations, finance, clients, analytics.
+          CresOS - The Complete Business Operating System with Integrated CRM
         </h1>
         <p
           className="mb-12 max-w-2xl text-lg leading-relaxed text-cres-text-muted opacity-0 animate-slide-in-bottom"
           style={{ animationDelay: "160ms", animationFillMode: "forwards" }}
         >
-          CresOS is the infrastructure that lets your business run without you in every decision.
-          Modular, role-based, built on the Cres Core Engine. When you&apos;ve outgrown WhatsApp and Excel, this is what comes next.
+          CresOS by Cres Dynamics is the all-in-one Business Operating System that connects your CRM,
+          project management, finance, and analytics. Kenya&apos;s leading business management software
+          for growing companies. When you&apos;ve outgrown WhatsApp and Excel, this is what comes next.
         </p>
         <div
           className="flex flex-wrap gap-4 opacity-0 animate-slide-in-bottom"
@@ -126,10 +127,10 @@ export default function LandingPage() {
       <section className="border-t border-cres-border bg-cres-surface">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
           <p className="font-label mb-3 text-sm font-medium uppercase tracking-wider text-cres-accent">
-            What CresOS does
+            What CresOS by Cres Dynamics Does
           </p>
           <p className="font-display mb-16 max-w-2xl text-2xl font-semibold leading-snug text-cres-text sm:text-3xl">
-            Connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow.
+            The Cres CRM connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow.
           </p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURE_CARDS.map((card, i) => {

@@ -22,9 +22,31 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "CresOS – Operating System for Growth",
+  title: "Cres Dynamics | CresOS - Business Operating System & CRM Platform",
   description:
-    "CresOS connects visibility → leads → deals → delivery → invoices → revenue → analytics in one workflow.",
+    "Cres Dynamics presents CresOS - the complete Business Operating System with integrated CRM, project management, finance tracking, and analytics. Streamline leads, deals, delivery, invoices, and revenue in one powerful platform.",
+  keywords: [
+    "Cres Dynamics",
+    "CresOS",
+    "Cres CRM",
+    "Business Operating System",
+    "CRM Kenya",
+    "Business Management Software",
+    "Project Management",
+    "Finance Management",
+    "Lead Management",
+    "Revenue Analytics"
+  ],
+  authors: [{ name: "Cres Dynamics" }],
+  creator: "Cres Dynamics",
+  publisher: "Cres Dynamics",
+  robots: "index, follow",
+  openGraph: {
+    title: "Cres Dynamics | CresOS - Business Operating System & CRM",
+    description: "The complete Business Operating System with integrated CRM, project management, and finance tracking.",
+    type: "website",
+    siteName: "Cres Dynamics - CresOS"
+  },
   icons: {
     icon: [{ url: "/LOGO.jpg", type: "image/jpeg" }],
     shortcut: "/LOGO.jpg",
