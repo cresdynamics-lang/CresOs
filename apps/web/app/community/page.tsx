@@ -27,15 +27,50 @@ interface OrgRoleRef {
 
 interface Conversation {
   id: string;
-  type: "project" | "direct" | "group";
+  type: "channel" | "project" | "direct" | "group";
   name: string;
   description: string;
   participants: string[];
   otherUser?: OnlineUser;
+  projectId?: string | null;
+  projectStatus?: string | null;
+  projectApprovalStatus?: string | null;
+  channelTopics?: string | null;
+  linkedProjectName?: string | null;
+  participantCount?: number;
   lastMessage: Message;
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ChannelDraft {
+  id: string;
+  name: string;
+  status: string;
+  approvalStatus: string;
+  updatedAt: string;
+  teamMemberCount: number;
+}
+
+function isChannelConversation(c: Conversation): boolean {
+  return c.type === "channel" || c.type === "project";
+}
+
+function CommunityChannelBadge({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#25D366]/35 bg-[#111B21] p-0.5 ${className}`}
+    >
+      <img src="/LOGO.jpg" width={40} height={40} alt="" className="h-full w-full rounded-full object-cover" />
+    </div>
+  );
+}
+
+function canManageChannels(roleKeys: string[] | undefined): boolean {
+  return Boolean(
+    roleKeys?.includes("admin") || roleKeys?.includes("director_admin")
+  );
 }
 
 interface OnlineUser {
@@ -63,7 +98,7 @@ interface CallState {
   peerConnection: RTCPeerConnection | null;
 }
 
-/** WhatsApp-inspired dark palette (Web-style) */
+/** Sidebar + shared chrome (WhatsApp-inspired) */
 const wa = {
   sidebarHeader: "bg-[#202C33]",
   sidebarBg: "bg-[#111B21]",
@@ -77,6 +112,44 @@ const wa = {
   accent: "#25D366",
   border: "border-[#2A3942]"
 };
+
+const directChatUi = {
+  wallpaper: "chat-wallpaper-wa",
+  header: wa.chatHeader,
+  inputBar: wa.inputBar,
+  accent: wa.accent,
+  sendBtn: "bg-[#25D366] text-[#111B21] hover:bg-[#20BD5A]",
+  outgoing: "bg-[#005C4B] text-[#E9EDEF]",
+  incoming: "bg-[#202C33] text-[#E9EDEF]",
+  outgoingShape: "rounded-lg rounded-br-[3px]",
+  incomingShape: "rounded-lg rounded-bl-[3px]",
+  timeMine: "text-[#A3E0D4]",
+  timeTheir: "text-[#8696A0]",
+  replyBorder: "border-l-4 border-[#25D366]",
+  selectedRing: "ring-2 ring-[#25D366]/70 ring-offset-2 ring-offset-[#0B141A]",
+  sheetBg: "bg-[#1f2c34]",
+  composerFocus: "focus:ring-[#25D366]/40"
+} as const;
+
+const channelChatUi = {
+  wallpaper: "",
+  header: wa.chatHeader,
+  inputBar: wa.inputBar,
+  accent: "#8696A0",
+  sendBtn: "bg-[#2A3942] text-[#E9EDEF] hover:bg-[#3B4A54]",
+  replyBorder: "border-l-2 border-[#8696A0]",
+  selectedRing: "ring-1 ring-[#8696A0]/50",
+  sheetBg: "bg-[#202C33]",
+  composerFocus: "focus:ring-[#8696A0]/30"
+} as const;
+
+function chatUiFor(conv: Conversation | null) {
+  return conv && isChannelConversation(conv) ? channelChatUi : directChatUi;
+}
+
+const LONG_PRESS_MS = 520;
+const LONG_PRESS_MOVE_CANCEL_PX = 12;
+const SWIPE_REPLY_PX = 52;
 
 function formatMessageTime(iso: string): string {
   try {
@@ -129,6 +202,16 @@ function formatDaySeparator(iso: string): string {
 
 function peerSubtitle(conv: Conversation | null, roster: OnlineUser[], myId?: string): string {
   if (!conv || !myId) return "";
+  if (isChannelConversation(conv)) {
+    const count = conv.participantCount ?? conv.participants.length;
+    if (conv.channelTopics?.trim()) {
+      const topic = conv.channelTopics.trim();
+      return topic.length > 64 ? `${topic.slice(0, 64)}… · ${count} members` : `${topic} · ${count} members`;
+    }
+    const project = conv.linkedProjectName ?? conv.name;
+    const status = conv.projectStatus?.replace(/_/g, " ") ?? "channel";
+    return `${project} · ${count} members · ${status}`;
+  }
   const otherId = conv.participants.find((p) => p !== myId);
   const peer = conv.otherUser ?? roster.find((u) => u.id === otherId);
   if (!peer) return conv.description || "Direct message";
@@ -315,11 +398,34 @@ function formatTimestampShort(timestamp: string): string {
 
 export default function CommunityPage() {
   const { auth, apiFetch } = useAuth();
-  const [sidebarPanel, setSidebarPanel] = useState<"chats" | "people">("chats");
+  const [sidebarPanel, setSidebarPanel] = useState<"chats" | "people" | "channels">("chats");
   const [searchQuery, setSearchQuery] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [channelDrafts, setChannelDrafts] = useState<ChannelDraft[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [creatingChannelProjectId, setCreatingChannelProjectId] = useState<string | null>(null);
+  const [showNewChannelModal, setShowNewChannelModal] = useState(false);
+  const [newChannelProjectId, setNewChannelProjectId] = useState("");
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelTopics, setNewChannelTopics] = useState("");
+  const [channelToast, setChannelToast] = useState<string | null>(null);
+  const [canDeleteChannel, setCanDeleteChannel] = useState(false);
+  const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  /** Chats / Channels / People list — collapses when opening a conversation. */
+  const [listPanelOpen, setListPanelOpen] = useState(true);
+
+  const selectConversation = useCallback((conv: Conversation) => {
+    setSelectedConversation(conv);
+    setListPanelOpen(false);
+  }, []);
+
+  const navigateSidebarPanel = useCallback((panel: "chats" | "people" | "channels") => {
+    setSidebarPanel(panel);
+    setListPanelOpen(true);
+  }, []);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesPage, setMessagesPage] = useState(1);
   const [messagesPages, setMessagesPages] = useState(1);
@@ -349,6 +455,9 @@ export default function CommunityPage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number; messageId: string } | null>(null);
   const [messageInfo, setMessageInfo] = useState<{
     messageId: string;
     data: { status: string; createdAt: string; editedAt: string | null; revokedAt: string | null; readBy: unknown };
@@ -678,6 +787,189 @@ export default function CommunityPage() {
       setLoading(false);
     }
   }, [auth.accessToken, auth.roleKeys, apiFetch, playCommunitySound]);
+
+  const loadChannels = useCallback(async () => {
+    if (!auth.accessToken) return;
+    setChannelsLoading(true);
+    try {
+      const response = await apiFetch("/chat-community/project-channels");
+      if (response.ok) {
+        const data = await response.json();
+        const available = (data.data?.availableProjects || data.data?.channelDrafts || []) as ChannelDraft[];
+        const channels = (data.data?.channels || []) as Conversation[];
+        setChannelDrafts(available);
+        setCanDeleteChannel(
+          Boolean(data.data?.canDeleteChannel) || canManageChannels(auth.roleKeys)
+        );
+        setConversations((prev) => {
+          const direct = prev.filter((c) => c.type === "direct");
+          const merged = [...direct];
+          for (const ch of channels) {
+            if (!merged.some((c) => c.id === ch.id)) merged.push(ch);
+          }
+          return merged.sort(
+            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load channels:", error);
+    } finally {
+      setChannelsLoading(false);
+    }
+  }, [auth.accessToken, apiFetch, auth.roleKeys]);
+
+  const deleteChannel = useCallback(
+    async (conv: Conversation) => {
+      if (!auth.accessToken || !canDeleteChannel) return;
+      const label = conv.name || conv.linkedProjectName || "this channel";
+      if (
+        !window.confirm(
+          `Delete channel “${label}”? All messages will be permanently removed. The project can get a new channel later.`
+        )
+      ) {
+        return;
+      }
+      const id = conv.projectId || conv.id;
+      setDeletingChannelId(conv.id);
+      try {
+        const response = await apiFetch(`/chat-community/project-channels/${id}`, {
+          method: "DELETE"
+        });
+        if (!response.ok) {
+          const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+          alert(err.message ?? err.error ?? "Could not delete channel");
+          return;
+        }
+        setConversations((prev) => prev.filter((c) => c.id !== conv.id));
+        if (selectedConversation?.id === conv.id) {
+          setSelectedConversation(null);
+          setListPanelOpen(true);
+        }
+        setChannelToast("Channel deleted");
+        window.setTimeout(() => setChannelToast(null), 4000);
+        void loadChannels();
+        void loadConversations();
+      } catch (error) {
+        console.error("Failed to delete channel:", error);
+        alert("Network error deleting channel");
+      } finally {
+        setDeletingChannelId(null);
+      }
+    },
+    [
+      auth.accessToken,
+      apiFetch,
+      canDeleteChannel,
+      loadChannels,
+      loadConversations,
+      selectedConversation?.id
+    ]
+  );
+
+  const openNewChannelModal = useCallback(() => {
+    void loadChannels();
+    setShowNewChannelModal(true);
+  }, [loadChannels]);
+
+  useEffect(() => {
+    if (!showNewChannelModal) return;
+    if (channelDrafts.length === 0) {
+      setNewChannelProjectId("");
+      return;
+    }
+    setNewChannelProjectId((prev) => {
+      if (prev && channelDrafts.some((p) => p.id === prev)) return prev;
+      return channelDrafts[0]!.id;
+    });
+  }, [showNewChannelModal, channelDrafts]);
+
+  useEffect(() => {
+    if (!showNewChannelModal || !newChannelProjectId) return;
+    const project = channelDrafts.find((p) => p.id === newChannelProjectId);
+    if (!project) return;
+    setNewChannelName((prev) => {
+      if (prev.trim()) return prev;
+      return project.name;
+    });
+    setNewChannelTopics((prev) => {
+      if (prev.trim()) return prev;
+      return `Discussion for ${project.name} — updates, blockers, and deliverables.`;
+    });
+  }, [showNewChannelModal, newChannelProjectId, channelDrafts]);
+
+  const resetNewChannelForm = useCallback(() => {
+    setNewChannelProjectId("");
+    setNewChannelName("");
+    setNewChannelTopics("");
+  }, []);
+
+  const submitNewChannel = useCallback(async () => {
+    if (!auth.accessToken || creatingChannelProjectId) return;
+    const projectId = newChannelProjectId.trim();
+    const channelName = newChannelName.trim();
+    const topics = newChannelTopics.trim();
+    if (!projectId) {
+      alert("Select a project for this channel.");
+      return;
+    }
+    if (!channelName) {
+      alert("Enter a channel name.");
+      return;
+    }
+    if (!topics) {
+      alert("Describe what will be discussed in this channel.");
+      return;
+    }
+    setCreatingChannelProjectId(projectId);
+    try {
+      const response = await apiFetch("/chat-community/project-channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, channelName, topics })
+      });
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+        alert(err.error ?? err.message ?? "Could not create channel");
+        return;
+      }
+      const data = await response.json();
+      const conv = data.data?.conversation as Conversation | undefined;
+      const msg = (data.message as string) || "Channel ready";
+      if (conv) {
+        setConversations((prev) => {
+          const rest = prev.filter((c) => c.id !== conv.id);
+          return [conv, ...rest].sort(
+            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+        });
+        selectConversation(conv);
+        setSidebarPanel("channels");
+      }
+      setChannelDrafts((prev) => prev.filter((p) => p.id !== projectId));
+      setChannelToast(msg);
+      window.setTimeout(() => setChannelToast(null), 4000);
+      setShowNewChannelModal(false);
+      resetNewChannelForm();
+      void loadConversations();
+    } catch (error) {
+      console.error("Failed to create channel:", error);
+      alert("Network error creating channel");
+    } finally {
+      setCreatingChannelProjectId(null);
+    }
+  }, [
+      auth.accessToken,
+      apiFetch,
+      creatingChannelProjectId,
+      loadConversations,
+      newChannelProjectId,
+      newChannelName,
+      newChannelTopics,
+      resetNewChannelForm,
+      selectConversation
+    ]
+  );
 
   useEffect(() => {
     if (!auth.accessToken) return;
@@ -1036,21 +1328,60 @@ export default function CommunityPage() {
     };
   }, [attachMenuOpen]);
 
+  const isChannelView = Boolean(selectedConversation && isChannelConversation(selectedConversation));
+  const activeChatUi = useMemo(() => chatUiFor(selectedConversation), [selectedConversation]);
+
+  const showListPanel = listPanelOpen || !selectedConversation;
+  const showChatPanel = Boolean(selectedConversation);
+  const mayDeleteChannel = canDeleteChannel || canManageChannels(auth.roleKeys);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const openMessageMenu = useCallback((messageId: string) => {
+    setMessageMenuId(messageId);
+    try {
+      navigator.vibrate?.(12);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const startMessageLongPress = useCallback(
+    (messageId: string) => {
+      cancelLongPress();
+      longPressFiredRef.current = false;
+      longPressTimerRef.current = setTimeout(() => {
+        longPressFiredRef.current = true;
+        openMessageMenu(messageId);
+      }, LONG_PRESS_MS);
+    },
+    [cancelLongPress, openMessageMenu]
+  );
+
   useEffect(() => {
-    if (!messageMenuId) return;
-    const h = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest?.("[data-msg-menu-root]")) return;
-      setMessageMenuId(null);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [messageMenuId]);
+    return () => cancelLongPress();
+  }, [cancelLongPress]);
+
+  const directConversations = useMemo(
+    () => conversations.filter((c) => c.type === "direct"),
+    [conversations]
+  );
+
+  const channelConversations = useMemo(
+    () => conversations.filter(isChannelConversation),
+    [conversations]
+  );
 
   const filteredConversations = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter((c) => {
+    const list = directConversations;
+    if (!q) return list;
+    return list.filter((c) => {
       if (c.name.toLowerCase().includes(q)) return true;
       if (c.otherUser?.roles?.some((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q)))
         return true;
@@ -1058,7 +1389,35 @@ export default function CommunityPage() {
       if ((c.lastMessage.senderName || "").toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [conversations, searchQuery]);
+  }, [directConversations, searchQuery]);
+
+  const filteredChannels = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return channelConversations;
+    return channelConversations.filter((c) => {
+      if (c.name.toLowerCase().includes(q)) return true;
+      if ((c.projectStatus || "").toLowerCase().includes(q)) return true;
+      if (c.lastMessage.content.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [channelConversations, searchQuery]);
+
+  const filteredChannelDrafts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return channelDrafts;
+    return channelDrafts.filter((p) => {
+      if (p.name.toLowerCase().includes(q)) return true;
+      if (p.status.toLowerCase().includes(q)) return true;
+      if (p.approvalStatus.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [channelDrafts, searchQuery]);
+
+  useEffect(() => {
+    if ((sidebarPanel === "channels" || showNewChannelModal) && auth.accessToken) {
+      void loadChannels();
+    }
+  }, [sidebarPanel, showNewChannelModal, auth.accessToken, loadChannels]);
 
   const filteredPeople = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1251,7 +1610,7 @@ export default function CommunityPage() {
       if (response.ok) {
         const data = await response.json();
         const conv = data.data?.conversation;
-        if (conv) setSelectedConversation(conv);
+        if (conv) selectConversation(conv);
         setSidebarPanel("chats");
         void loadConversations();
       }
@@ -1387,7 +1746,7 @@ export default function CommunityPage() {
           return;
         }
         setSidebarPanel("chats");
-        setSelectedConversation(conv);
+        selectConversation(conv);
         await loadConversations();
         requestAnimationFrame(() => {
           composerRef.current?.focus();
@@ -1739,8 +2098,8 @@ export default function CommunityPage() {
       <div className="flex min-h-0 flex-1 w-full flex-col overflow-hidden border-0 md:flex-row md:border md:border-[#2A3942]">
       {/* ——— Left: Chats + People (partitioned) ——— On small screens, hide when a 1:1 chat is open so the thread is full width. */}
       <div
-        className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
-          selectedConversation ? "hidden md:flex" : "flex"
+        className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b transition-[width] duration-200 md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
+          showListPanel ? "flex" : "hidden"
         }`}
       >
         <div className={`flex items-center gap-2 px-3 py-3 ${wa.sidebarHeader}`}>
@@ -1777,28 +2136,40 @@ export default function CommunityPage() {
           </div>
         </div>
 
-        <div className={`flex border-b ${wa.border} px-2`}>
+        <div className={`flex min-h-[44px] shrink-0 border-b ${wa.border} px-1`}>
           <button
             type="button"
-            onClick={() => setSidebarPanel("chats")}
-            className={`flex-1 border-b-2 py-2.5 text-sm font-medium transition-colors ${
+            onClick={() => navigateSidebarPanel("chats")}
+            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
               sidebarPanel === "chats"
                 ? "border-[#25D366] text-[#25D366]"
-                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF]"
+                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
             }`}
           >
             Chats
           </button>
           <button
             type="button"
-            onClick={() => setSidebarPanel("people")}
-            className={`flex-1 border-b-2 py-2.5 text-sm font-medium transition-colors ${
-              sidebarPanel === "people"
+            onClick={() => navigateSidebarPanel("channels")}
+            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+              sidebarPanel === "channels"
                 ? "border-[#25D366] text-[#25D366]"
-                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF]"
+                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
             }`}
           >
-            People ({onlineUsers.length})
+            Channels
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateSidebarPanel("people")}
+            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+              sidebarPanel === "people"
+                ? "border-[#25D366] text-[#25D366]"
+                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
+            }`}
+          >
+            <span className="sm:hidden">People</span>
+            <span className="hidden sm:inline">People ({onlineUsers.length})</span>
           </button>
         </div>
 
@@ -1816,7 +2187,7 @@ export default function CommunityPage() {
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => setSelectedConversation(c)}
+                    onClick={() => selectConversation(c)}
                     className={`flex w-full items-center gap-3 border-b border-[#202C33] px-3 py-2.5 text-left transition-colors ${wa.listHover} ${
                       selectedConversation?.id === c.id ? wa.listActive : ""
                     }`}
@@ -1835,6 +2206,85 @@ export default function CommunityPage() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm text-[#8696A0]">
+                          {c.lastMessage.senderId === auth.userId ? "You: " : ""}
+                          {c.lastMessage.content}
+                        </p>
+                        {c.unreadCount > 0 && (
+                          <span className="flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-[#25D366] px-1 text-[11px] font-medium text-[#111B21]">
+                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {sidebarPanel === "channels" && (
+            <div>
+              <div className="flex items-center justify-between gap-2 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-[#8696A0]">
+                  Your channels ({filteredChannels.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openNewChannelModal();
+                  }}
+                  className="flex items-center gap-1 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-medium text-[#111B21] hover:bg-[#20BD5A]"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New channel
+                </button>
+              </div>
+              {channelToast && (
+                <div className="mx-3 mb-2 rounded-lg bg-[#0D5C4B]/90 px-3 py-2 text-xs text-[#E9EDEF]">
+                  {channelToast}
+                </div>
+              )}
+              {channelsLoading ? (
+                <div className="px-4 py-8 text-center text-sm text-[#8696A0]">Loading channels…</div>
+              ) : filteredChannels.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-[#8696A0]">
+                  <p className="mb-3">No channels yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openNewChannelModal();
+                    }}
+                    className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-[#111B21] hover:bg-[#20BD5A]"
+                  >
+                    Create channel from a project
+                  </button>
+                </div>
+              ) : (
+                filteredChannels.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectConversation(c)}
+                    className={`flex w-full items-center gap-3 border-b border-[#202C33] px-3 py-2.5 text-left transition-colors ${wa.listHover} ${
+                      selectedConversation?.id === c.id ? wa.listActive : ""
+                    }`}
+                  >
+                    <CommunityChannelBadge className="h-12 w-12" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate font-medium text-[#E9EDEF]">{c.name}</span>
+                        <span className="flex-shrink-0 text-[11px] text-[#8696A0]">
+                          {formatMessageTime(c.lastMessage.timestamp)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-[#8696A0]">
+                          {c.linkedProjectName ? `Project: ${c.linkedProjectName}` : "Channel"}
+                          {c.channelTopics ? ` · ${c.channelTopics}` : ""}
+                        </p>
                         <p className="truncate text-sm text-[#8696A0]">
                           {c.lastMessage.senderId === auth.userId ? "You: " : ""}
                           {c.lastMessage.content}
@@ -1965,30 +2415,52 @@ export default function CommunityPage() {
       {/* ——— Right: 1:1 conversation ——— Hidden on small screens until a chat is selected (list-only mode). */}
       <div
         className={`flex min-h-0 min-w-0 flex-1 flex-col ${wa.chatBg} ${
-          selectedConversation ? "flex" : "hidden md:flex"
+          showChatPanel
+            ? listPanelOpen
+              ? "hidden md:flex"
+              : "flex"
+            : "hidden md:flex"
         }`}
       >
         {selectedConversation ? (
           <>
-            <div className={`flex flex-shrink-0 items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 ${wa.chatHeader}`}>
+            <div
+              className={`flex flex-shrink-0 items-center gap-2 border-b border-black/20 px-2 py-2 sm:gap-3 sm:px-3 ${activeChatUi.header}`}
+            >
               <button
                 type="button"
-                className="shrink-0 rounded-full p-2 text-[#AEBAC1] hover:bg-[#2A3942] md:hidden"
-                onClick={() => setSelectedConversation(null)}
-                aria-label="Back to chats"
+                className={`shrink-0 rounded-full p-2 text-[#AEBAC1] hover:bg-[#2A3942] ${listPanelOpen ? "md:hidden" : ""}`}
+                onClick={() => setListPanelOpen(true)}
+                aria-label="Back to list"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <div className="relative h-10 w-10 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-sm font-medium leading-10 text-white">
+              {isChannelView ? (
+                <CommunityChannelBadge className="h-10 w-10" />
+              ) : (
+              <div
+                className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#6B7B8C] text-sm font-medium text-white"
+              >
                 {initialsFromLabel(selectedConversation.name)}
-                {selectedPeer?.isOnline && (
-                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#202C33] bg-[#25D366]" />
+                {selectedConversation.type === "direct" && selectedPeer?.isOnline && (
+                  <span
+                    className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#202C33]"
+                    style={{ backgroundColor: activeChatUi.accent }}
+                  />
                 )}
               </div>
+              )}
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium text-[#E9EDEF]">{selectedConversation.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-medium text-[#E9EDEF]">{selectedConversation.name}</span>
+                  {isChannelView ? (
+                    <span className="shrink-0 rounded bg-[#2A3942] px-1.5 py-0.5 text-[10px] text-[#8696A0]">
+                      Channel
+                    </span>
+                  ) : null}
+                </div>
                 {selectedPeer?.roles && selectedPeer.roles.length > 0 && (
                   <div className="mt-0.5 flex flex-wrap gap-1">
                     {selectedPeer.roles.map((r) => (
@@ -2005,7 +2477,18 @@ export default function CommunityPage() {
                   {peerSubtitle(selectedConversation, onlineUsers, auth.userId)}
                 </div>
               </div>
-              {selectedPeer && (
+              {isChannelView && mayDeleteChannel ? (
+                <button
+                  type="button"
+                  disabled={deletingChannelId === selectedConversation.id}
+                  onClick={() => void deleteChannel(selectedConversation)}
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-950/40 disabled:opacity-50"
+                  title="Delete channel (admin)"
+                >
+                  {deletingChannelId === selectedConversation.id ? "Deleting…" : "Delete channel"}
+                </button>
+              ) : null}
+              {selectedPeer && selectedConversation.type === "direct" && (
                 <div className="flex flex-shrink-0 gap-1">
                   <button
                     type="button"
@@ -2034,13 +2517,16 @@ export default function CommunityPage() {
             </div>
 
             <div
-              className="chat-pattern min-h-0 flex-1 overflow-y-auto px-4 py-2"
-              style={{
-                backgroundColor: "#0B141A",
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232A3942' fill-opacity='0.35'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-              }}
+              className={`min-h-0 flex-1 overflow-y-auto px-3 py-2 sm:px-4 ${
+                isChannelView ? "bg-[#0B141A]" : activeChatUi.wallpaper
+              }`}
               ref={messagesScrollRef}
             >
+              {!isChannelView ? (
+                <p className="pointer-events-none mb-2 text-center text-[10px] text-[#8696A0]/70">
+                  Long-press a message for options · swipe right to reply
+                </p>
+              ) : null}
               {messagesPages > 1 && messagesPage < messagesPages ? (
                 <div className="mb-2 flex justify-center">
                   <button
@@ -2073,136 +2559,95 @@ export default function CommunityPage() {
                           </span>
                         </div>
                       )}
-                      <div className={`group/message mb-1 flex ${mine ? "justify-end" : "justify-start"}`}>
+                      {isChannelView ? (
                         <div
-                          className={`relative max-w-[min(85%,520px)] rounded-lg py-1.5 shadow-sm ${
-                            mine
-                              ? `${wa.outgoing} pl-2 pr-6 text-[#E9EDEF]`
-                              : `${wa.incoming} pl-6 pr-2 text-[#E9EDEF]`
-                          }`}
+                          className={`group/message mb-4 border-b border-[#2A3942]/40 pb-3 select-none touch-manipulation ${
+                            messageMenuId === message.id ? activeChatUi.selectedRing : ""
+                          } ${message.type === "deleted" || message.revokedAt ? "opacity-70" : ""}`}
+                          onContextMenu={(e) => {
+                            if (message.type === "deleted" || message.revokedAt) return;
+                            e.preventDefault();
+                            openMessageMenu(message.id);
+                          }}
+                          onMouseDown={() => {
+                            if (message.type === "deleted" || message.revokedAt) return;
+                            startMessageLongPress(message.id);
+                          }}
+                          onMouseUp={cancelLongPress}
+                          onMouseLeave={cancelLongPress}
+                        >
+                          <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <span className="text-xs font-medium text-[#E9EDEF]">
+                              {mine ? "You" : message.senderName}
+                            </span>
+                            <span className="text-[11px] text-[#8696A0]">
+                              {formatMessageTime(message.timestamp)}
+                              {message.editedAt ? " · edited" : ""}
+                            </span>
+                          </div>
+                          {message.replyTo ? (
+                            <div className="mb-2 border-l-2 border-[#8696A0]/60 pl-2 text-[11px] text-[#8696A0]">
+                              {(messages.find((m2) => m2.id === message.replyTo)?.content ?? "").slice(0, 120)}
+                            </div>
+                          ) : null}
+                          <ChatMessageBody message={message} apiOrigin={apiOrigin} />
+                        </div>
+                      ) : (
+                      <div className={`group/message mb-1.5 flex ${mine ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`relative max-w-[min(85%,520px)] px-2.5 py-1.5 shadow-md select-none touch-manipulation ${
+                            mine ? directChatUi.outgoingShape : directChatUi.incomingShape
+                          } ${mine ? directChatUi.outgoing : directChatUi.incoming} ${
+                            messageMenuId === message.id ? directChatUi.selectedRing : ""
+                          } ${message.type === "deleted" || message.revokedAt ? "opacity-70" : ""}`}
+                          onContextMenu={(e) => {
+                            if (message.type === "deleted" || message.revokedAt) return;
+                            e.preventDefault();
+                            openMessageMenu(message.id);
+                          }}
                           onTouchStart={(e) => {
+                            if (message.type === "deleted" || message.revokedAt) return;
                             const t = e.touches[0];
                             if (!t) return;
-                            (e.currentTarget as any).__swipeStartX = t.clientX;
+                            touchStartRef.current = { x: t.clientX, y: t.clientY, messageId: message.id };
+                            startMessageLongPress(message.id);
                           }}
                           onTouchMove={(e) => {
+                            const start = touchStartRef.current;
+                            if (!start || start.messageId !== message.id) return;
                             const t = e.touches[0];
                             if (!t) return;
-                            const startX = (e.currentTarget as any).__swipeStartX as number | undefined;
-                            if (startX == null) return;
-                            const dx = t.clientX - startX;
-                            if (dx > 52) {
-                              (e.currentTarget as any).__swipeStartX = undefined;
+                            const dx = t.clientX - start.x;
+                            const dy = t.clientY - start.y;
+                            if (Math.abs(dx) > LONG_PRESS_MOVE_CANCEL_PX || Math.abs(dy) > LONG_PRESS_MOVE_CANCEL_PX) {
+                              cancelLongPress();
+                            }
+                            if (!longPressFiredRef.current && dx > SWIPE_REPLY_PX && Math.abs(dy) < 40) {
+                              touchStartRef.current = null;
+                              cancelLongPress();
                               setReplyToId(message.id);
                               requestAnimationFrame(() => composerRef.current?.focus());
                             }
                           }}
+                          onTouchEnd={() => {
+                            touchStartRef.current = null;
+                            cancelLongPress();
+                          }}
+                          onTouchCancel={() => {
+                            touchStartRef.current = null;
+                            cancelLongPress();
+                          }}
+                          onMouseDown={() => {
+                            if (message.type === "deleted" || message.revokedAt) return;
+                            startMessageLongPress(message.id);
+                          }}
+                          onMouseUp={cancelLongPress}
+                          onMouseLeave={cancelLongPress}
                         >
-                          {message.type !== "deleted" && !message.revokedAt && (
-                            <div
-                              className={`absolute -top-1 z-10 flex flex-col gap-0 ${
-                                mine ? "-right-1 items-end" : "-left-1 items-start"
-                              }`}
-                              data-msg-menu-root
-                            >
-                              <button
-                                type="button"
-                                aria-label="Message options"
-                                className="rounded-full bg-[#111B21]/80 px-1.5 py-0.5 text-[11px] text-[#AEBAC1] opacity-0 shadow-sm transition-opacity hover:bg-[#2A3942] group-hover/message:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMessageMenuId((id) => (id === message.id ? null : message.id));
-                                }}
-                              >
-                                ⋮
-                              </button>
-                              {messageMenuId === message.id ? (
-                            <div
-                              className="mt-1 min-w-[180px] rounded-lg border border-[#2A3942] bg-[#202C33] py-1 text-xs shadow-lg"
-                              onMouseDown={(e) => e.stopPropagation()}
-                            >
-                              {mine && message.type === "text" && (
-                                <button
-                                  type="button"
-                                  className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                  onClick={() => {
-                                    setEditingMessageId(message.id);
-                                    setEditDraft(message.content);
-                                    setMessageMenuId(null);
-                                    requestAnimationFrame(() => composerRef.current?.focus());
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => {
-                                  setReplyToId(message.id);
-                                  setMessageMenuId(null);
-                                  requestAnimationFrame(() => composerRef.current?.focus());
-                                }}
-                              >
-                                Reply
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => {
-                                  setForwardingMessage(message);
-                                  setMessageMenuId(null);
-                                }}
-                              >
-                                Forward
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => void updateMessageFlags(message.id, { starred: !(message.flags?.starred === true) })}
-                              >
-                                {message.flags?.starred ? "Unstar" : "Star"}
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => void updateMessageFlags(message.id, { saved: !(message.flags?.saved === true) })}
-                              >
-                                {message.flags?.saved ? "Unsave" : "Save"}
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => void loadMessageInfo(message.id)}
-                              >
-                                Info
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
-                                onClick={() => void deleteMessageApi(message.id, "self")}
-                              >
-                                Delete for me
-                              </button>
-                              {mine && (
-                                <button
-                                  type="button"
-                                  className="block w-full px-3 py-2 text-left text-rose-200 hover:bg-[#2A3942]"
-                                  onClick={() => {
-                                    if (window.confirm("Delete this message for everyone in the chat?")) {
-                                      void deleteMessageApi(message.id, "everyone");
-                                    }
-                                  }}
-                                >
-                                  Delete for everyone
-                                </button>
-                              )}
-                            </div>
-                              ) : null}
-                            </div>
-                          )}
                           {message.replyTo ? (
-                            <div className="mb-1 rounded border border-[#2A3942] bg-[#111B21]/40 px-2 py-1 text-[11px] text-[#AEBAC1]">
+                            <div
+                              className={`mb-1 rounded-md bg-black/20 px-2 py-1 text-[11px] text-[#AEBAC1] ${directChatUi.replyBorder}`}
+                            >
                               Replying to{" "}
                               <span className="font-medium text-[#E9EDEF]">
                                 {messages.find((m2) => m2.id === message.replyTo)?.senderName ?? "message"}
@@ -2216,7 +2661,7 @@ export default function CommunityPage() {
                           <ChatMessageBody message={message} apiOrigin={apiOrigin} />
                           <div
                             className={`mt-0.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] ${
-                              mine ? "text-[#A3E0D4]" : "text-[#8696A0]"
+                              mine ? directChatUi.timeMine : directChatUi.timeTheir
                             }`}
                           >
                             {message.editedAt ? <span className="opacity-80">edited</span> : null}
@@ -2236,12 +2681,96 @@ export default function CommunityPage() {
                           </div>
                         </div>
                       </div>
+                      )}
                     </div>
                   );
                 })
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {messageMenuId &&
+              typeof document !== "undefined" &&
+              (() => {
+                const menuMessage = messages.find((m) => m.id === messageMenuId);
+                if (!menuMessage || menuMessage.type === "deleted" || menuMessage.revokedAt) return null;
+                const menuMine = menuMessage.senderId === auth.userId;
+                const closeMenu = () => setMessageMenuId(null);
+                const sheetBtn =
+                  "flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] text-[#E9EDEF] active:bg-[#2A3942]";
+                return createPortal(
+                  <div
+                    className="fixed inset-0 z-[140] flex flex-col justify-end bg-black/55"
+                    role="dialog"
+                    aria-label="Message options"
+                    onClick={closeMenu}
+                  >
+                    <div
+                      className={`message-menu-sheet mx-auto w-full max-w-lg rounded-t-2xl shadow-2xl ${activeChatUi.sheetBg}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="mx-auto my-2 h-1 w-10 rounded-full bg-[#3d4f56]" />
+                      <div className="px-4 pb-2">
+                        <p className="text-[11px] uppercase tracking-wide text-[#8696A0]">Message</p>
+                        <p className="mt-1 line-clamp-2 text-sm text-[#E9EDEF]">
+                          {menuMessage.content || "(attachment)"}
+                        </p>
+                      </div>
+                      <div className="border-t border-[#2A3942]/80">
+                        {menuMine && menuMessage.type === "text" && (
+                          <button
+                            type="button"
+                            className={sheetBtn}
+                            onClick={() => {
+                              setEditingMessageId(menuMessage.id);
+                              setEditDraft(menuMessage.content);
+                              closeMenu();
+                              requestAnimationFrame(() => composerRef.current?.focus());
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button type="button" className={sheetBtn} onClick={() => { setReplyToId(menuMessage.id); closeMenu(); requestAnimationFrame(() => composerRef.current?.focus()); }}>
+                          Reply
+                        </button>
+                        <button type="button" className={sheetBtn} onClick={() => { setForwardingMessage(menuMessage); closeMenu(); }}>
+                          Forward
+                        </button>
+                        <button type="button" className={sheetBtn} onClick={() => void updateMessageFlags(menuMessage.id, { starred: !(menuMessage.flags?.starred === true) })}>
+                          {menuMessage.flags?.starred ? "Unstar" : "Star"}
+                        </button>
+                        <button type="button" className={sheetBtn} onClick={() => void updateMessageFlags(menuMessage.id, { saved: !(menuMessage.flags?.saved === true) })}>
+                          {menuMessage.flags?.saved ? "Unsave" : "Save"}
+                        </button>
+                        <button type="button" className={sheetBtn} onClick={() => void loadMessageInfo(menuMessage.id)}>
+                          Info
+                        </button>
+                        <button type="button" className={sheetBtn} onClick={() => void deleteMessageApi(menuMessage.id, "self")}>
+                          Delete for me
+                        </button>
+                        {menuMine && (
+                          <button
+                            type="button"
+                            className={`${sheetBtn} text-rose-300`}
+                            onClick={() => {
+                              if (window.confirm("Delete this message for everyone in the chat?")) {
+                                void deleteMessageApi(menuMessage.id, "everyone");
+                              }
+                            }}
+                          >
+                            Delete for everyone
+                          </button>
+                        )}
+                      </div>
+                      <button type="button" className="mt-1 w-full border-t border-[#2A3942]/80 py-4 text-center text-[15px] font-medium text-[#53BDEB]" onClick={closeMenu}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>,
+                  document.body
+                );
+              })()}
 
             {messageInfo &&
               typeof document !== "undefined" &&
@@ -2366,9 +2895,11 @@ export default function CommunityPage() {
               </div>
             )}
 
-            <div className={`flex flex-shrink-0 flex-col gap-1 px-3 py-2 ${wa.inputBar}`}>
+            <div className={`flex flex-shrink-0 flex-col gap-1 border-t border-black/20 px-3 py-2 ${activeChatUi.inputBar}`}>
               {replyToId ? (
-                <div className="mb-1 flex items-start justify-between gap-2 rounded-lg border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1]">
+                <div
+                  className={`mb-1 flex items-start justify-between gap-2 rounded-lg bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1] ${activeChatUi.replyBorder}`}
+                >
                   <div className="min-w-0">
                     <div className="text-[11px] uppercase tracking-wide text-[#8696A0]">Replying</div>
                     <div className="truncate text-[#E9EDEF]">
@@ -2422,6 +2953,7 @@ export default function CommunityPage() {
                   <div className="mt-2 text-[11px] text-[#8696A0]">Tap Send to upload and deliver.</div>
                 </div>
               )}
+              {!isChannelView ? (
               <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-[#8696A0]">
                 <label className="flex cursor-pointer items-center gap-1.5 text-[#AEBAC1]">
                   <input
@@ -2443,10 +2975,11 @@ export default function CommunityPage() {
                 </label>
                 <span className="hidden sm:inline">·</span>
               </div>
-              {assistBusy && !assistPreview ? (
+              ) : null}
+              {!isChannelView && assistBusy && !assistPreview ? (
                 <div className="mb-1 text-[11px] text-[#8696A0]">Working on wording…</div>
               ) : null}
-              {assistPreview ? (
+              {!isChannelView && assistPreview ? (
                 <div className="mb-1 rounded-lg border border-[#25D366]/35 bg-[#111B21]/90 px-2 py-2 text-xs text-[#E9EDEF]">
                   <div className="mb-1 text-[11px] font-medium text-[#53BDEB]">
                     {assistPreview.kind === "translate"
@@ -2504,6 +3037,7 @@ export default function CommunityPage() {
                 multiple
               />
               <div className="flex items-end gap-2">
+                {!isChannelView ? (
                 <button
                   type="button"
                   onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
@@ -2521,9 +3055,11 @@ export default function CommunityPage() {
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
                   </svg>
                 </button>
-                {isRecordingVoice && (
+                ) : null}
+                {!isChannelView && isRecordingVoice && (
                   <span className="mb-2 text-xs tabular-nums text-red-400">{formatCallDuration(voiceRecordingDuration)}</span>
                 )}
+                {!isChannelView ? (
                 <div ref={attachWrapRef} className="relative z-10 mb-0.5">
                   <button
                     type="button"
@@ -2541,7 +3077,8 @@ export default function CommunityPage() {
                     </svg>
                   </button>
                 </div>
-                {typeof document !== "undefined" &&
+                ) : null}
+                {!isChannelView && typeof document !== "undefined" &&
                   attachMenuOpen &&
                   attachMenuPos &&
                   createPortal(
@@ -2614,18 +3151,21 @@ export default function CommunityPage() {
                     editingMessageId ? setEditDraft(e.target.value) : setNewMessage(e.target.value)
                   }
                   onKeyDown={onInputKeyDown}
-                  placeholder={editingMessageId ? "Edit message…" : "Type a message"}
+                  placeholder={
+                    editingMessageId ? "Edit message…" : isChannelView ? "Write in channel…" : "Type a message"
+                  }
                   spellCheck={!literalTypingMode}
                   autoCorrect={literalTypingMode ? "off" : "on"}
                   autoCapitalize="sentences"
-                  className="mb-0.5 max-h-[40vh] min-h-[42px] flex-1 resize-none rounded-lg border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                  className={`mb-0.5 max-h-[40vh] min-h-[42px] flex-1 resize-none border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 ${
+                    isChannelView ? "rounded-lg" : "rounded-3xl"
+                  } ${activeChatUi.composerFocus}`}
                 />
                 <button
                   type="button"
                   onClick={() => void handleSendMessage()}
-                  disabled={!(editingMessageId ? editDraft.trim() : newMessage.trim())}
-                  className="mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#111B21] transition-opacity disabled:opacity-40"
-                  style={{ backgroundColor: wa.accent }}
+                  disabled={!(editingMessageId ? editDraft.trim() : newMessage.trim()) && pendingFiles.length === 0}
+                  className={`mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-40 ${activeChatUi.sendBtn}`}
                   title="Send"
                 >
                   <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2737,6 +3277,122 @@ export default function CommunityPage() {
           </div>
         </div>
       )}
+
+      {showNewChannelModal &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-channel-title"
+            onClick={() => {
+              setShowNewChannelModal(false);
+              resetNewChannelForm();
+            }}
+          >
+            <div
+              className="flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-[#111B21] shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-[#2A3942] px-4 py-3">
+                <h2 id="new-channel-title" className="text-lg font-medium text-[#E9EDEF]">
+                  Create channel
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewChannelModal(false);
+                    resetNewChannelForm();
+                  }}
+                  className="rounded-full p-2 text-[#8696A0] hover:bg-[#2A3942] hover:text-[#E9EDEF]"
+                  aria-label="Close"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {channelsLoading ? (
+                <p className="px-4 py-8 text-center text-sm text-[#8696A0]">Loading projects…</p>
+              ) : channelDrafts.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-[#8696A0]">
+                  No projects available for a new channel.
+                </p>
+              ) : (
+                <form
+                  className="flex flex-col gap-4 px-4 py-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void submitNewChannel();
+                  }}
+                >
+                  <div>
+                    <label htmlFor="channel-project" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                      Project to discuss
+                    </label>
+                    <select
+                      id="channel-project"
+                      value={newChannelProjectId}
+                      onChange={(e) => setNewChannelProjectId(e.target.value)}
+                      className="w-full rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                    >
+                      {channelDrafts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.status.replace(/_/g, " ")}) · {p.teamMemberCount} members
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="channel-name" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                      Channel name
+                    </label>
+                    <input
+                      id="channel-name"
+                      type="text"
+                      value={newChannelName}
+                      onChange={(e) => setNewChannelName(e.target.value)}
+                      placeholder="e.g. Acme Website — Delivery"
+                      maxLength={120}
+                      className="w-full rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="channel-topics" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                      What will be discussed?
+                    </label>
+                    <textarea
+                      id="channel-topics"
+                      value={newChannelTopics}
+                      onChange={(e) => setNewChannelTopics(e.target.value)}
+                      placeholder="Milestones, blockers, handoffs, client updates…"
+                      rows={4}
+                      maxLength={2000}
+                      className="w-full resize-none rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                    />
+                    <p className="mt-1 text-[11px] text-[#8696A0]">
+                      Everyone on the project team is added to this channel automatically.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={Boolean(creatingChannelProjectId)}
+                    className="w-full rounded-lg bg-[#25D366] py-3 text-sm font-medium text-[#111B21] hover:bg-[#20BD5A] disabled:opacity-50"
+                  >
+                    {creatingChannelProjectId ? "Creating channel…" : "Create channel"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
     </div>
     </div>
   );

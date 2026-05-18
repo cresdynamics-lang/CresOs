@@ -145,7 +145,7 @@ function SidebarNavContent({
         {showMobileClose ? (
           <button
             type="button"
-            className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2.5 text-slate-400 hover:bg-slate-800 hover:text-white active:bg-slate-800 lg:hidden"
             aria-label="Close menu"
             onClick={() => onMobileClose?.()}
           >
@@ -179,10 +179,10 @@ function SidebarNavContent({
                       key={`${section.title}-${item.href}-${item.label}`}
                       href={item.href}
                       onClick={() => onNavClick?.()}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors touch-manipulation lg:min-h-0 lg:py-2 ${
                         isActive
                           ? "border border-brand/40 bg-brand/15 text-brand"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-800"
                       }`}
                     >
                       {item.label}
@@ -260,7 +260,7 @@ function SidebarNavContent({
         </div>
       )}
 
-      <div className="border-t border-slate-800 p-3">
+      <div className="safe-area-bottom border-t border-slate-800 p-3">
         {!isSidebarCollapsed && (
           <div className="mb-2 flex flex-wrap gap-1">
             {roles.map((r) => (
@@ -277,7 +277,7 @@ function SidebarNavContent({
               onOpenSettings();
               onNavClick?.();
             }}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
             aria-label="Settings"
             title={isSidebarCollapsed ? "Settings" : ""}
           >
@@ -298,7 +298,7 @@ function SidebarNavContent({
               onNavClick?.();
               onLogout();
             }}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0 lg:min-w-0"
             title={isSidebarCollapsed ? "Sign out" : ""}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -666,7 +666,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 bg-slate-950/70"
             onClick={() => setMobileNavOpen(false)}
           />
-          <aside className="absolute left-0 top-0 z-10 flex h-full w-[min(20rem,92vw)] max-w-sm flex-col border-r border-slate-800 bg-slate-900 shadow-2xl">
+          <aside className="safe-area-top absolute left-0 top-0 z-10 flex h-full max-h-[100dvh] w-[min(20rem,92vw)] max-w-sm flex-col border-r border-slate-800 bg-slate-900 shadow-2xl">
             <SidebarNavContent
               {...shellNavProps}
               isSidebarCollapsed={false}
@@ -722,7 +722,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
-              className="shrink-0 rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-400 hover:bg-slate-700 hover:text-slate-200 lg:hidden"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 lg:hidden"
               aria-label="Open menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
@@ -731,12 +731,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <img src="/LOGO.jpg" width={28} height={28} alt="" className="hidden h-7 w-7 shrink-0 rounded-lg sm:block" />
+            <img src="/LOGO.jpg" width={28} height={28} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
             <div className="min-w-0 text-xs font-medium uppercase tracking-wide text-slate-500">
               <span className="truncate text-slate-400">{auth.orgName?.trim() || "Workspace"}</span>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-wrap items-center justify-end gap-1.5 sm:max-w-none sm:gap-2">
             <HeaderStatusStrip />
             
             {/* Fullscreen Toggle */}

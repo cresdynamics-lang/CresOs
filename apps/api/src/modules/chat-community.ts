@@ -23,6 +23,18 @@ import {
 } from "./chat-community-helpers";
 import { saveChatUploadFromPath, messageTypeFromMime } from "../lib/chat-uploads";
 import { composeAssistText } from "../lib/groq-compose-assist";
+import {
+  CHANNEL_CONVERSATION_TYPES,
+  PROJECT_CHANNEL_ROLE_KEYS,
+  buildProjectListWhere,
+  countProjectChannelMembers,
+  canDeleteProjectChannel,
+  createOrGetProjectChannel,
+  deleteProjectChannel,
+  formatProjectConversation,
+  PROJECT_CHANNEL_DELETE_ROLE_KEYS,
+  userCanAccessProject
+} from "../lib/chat-project-channels";
 
 // Configure multer for file uploads (images, docs, audio, video; block obvious executables)
 const uploadMaxBytes = Math.min(
@@ -407,14 +419,28 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           [ROLE_KEYS.sales, ROLE_KEYS.director, ROLE_KEYS.admin].includes(k as any)
         );
 
-        const rows = await prisma.conversation.findMany({
-          where: {
-            orgId,
-            type: "direct",
-            participants: { has: userId }
-          },
-          orderBy: { updatedAt: "desc" }
-        });
+        const [directRows, projectRows] = await Promise.all([
+          prisma.conversation.findMany({
+            where: {
+              orgId,
+              type: "direct",
+              participants: { has: userId }
+            },
+            orderBy: { updatedAt: "desc" }
+          }),
+          prisma.conversation.findMany({
+            where: {
+              orgId,
+              type: { in: [...CHANNEL_CONVERSATION_TYPES] },
+              participants: { has: userId }
+            },
+            orderBy: { updatedAt: "desc" },
+            include: {
+              project: { select: { id: true, name: true, status: true, approvalStatus: true } }
+            }
+          })
+        ]);
+        const rows = directRows;
 
         const otherIds = rows
           .map((c) => c.participants.find((p) => p !== userId))
@@ -534,11 +560,19 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         })
           .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
+        const projectConversations = projectRows.map((conv) =>
+          formatProjectConversation(conv, userId)
+        );
+
+        const allConversations = [...userConversations, ...projectConversations].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+
         res.json({
           success: true,
           data: {
-            conversations: userConversations,
-            totalConversations: userConversations.length
+            conversations: allConversations,
+            totalConversations: allConversations.length
           }
         });
       } catch (error) {
@@ -670,6 +704,181 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           lower.includes("not a member") ? 403 : lower.includes("not found") ? 404 : 500;
         res.status(status).json({
           error: "Failed to create direct conversation",
+          message
+        });
+      }
+    }
+  );
+
+  // List projects available for channel creation + existing project channels
+  router.get(
+    "/project-channels",
+    requireRoles([...PROJECT_CHANNEL_ROLE_KEYS]),
+    async (req, res) => {
+      try {
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const roleKeys = req.auth!.roleKeys;
+
+        const projectWhere = buildProjectListWhere(orgId, userId, roleKeys);
+        const projects = await prisma.project.findMany({
+          where: projectWhere,
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            approvalStatus: true,
+            updatedAt: true,
+            communityChannel: { select: { id: true, conversationId: true } },
+            communityConversation: { select: { id: true } }
+          }
+        });
+
+        const projectsWithoutChannel = projects.filter(
+          (p) => !p.communityChannel && !p.communityConversation
+        );
+        const teamCounts = await Promise.all(
+          projectsWithoutChannel.map((p) => countProjectChannelMembers(prisma, p.id))
+        );
+        const availableProjects = projectsWithoutChannel.map((p, i) => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          approvalStatus: p.approvalStatus,
+          updatedAt: p.updatedAt.toISOString(),
+          teamMemberCount: teamCounts[i] ?? 0
+        }));
+
+        const withChannel = projects.filter(
+          (p) => p.communityChannel || p.communityConversation
+        );
+        const conversationIds = withChannel
+          .map((p) => p.communityConversation?.id ?? p.communityChannel?.conversationId)
+          .filter((id): id is string => Boolean(id));
+
+        const conversations =
+          conversationIds.length > 0
+            ? await prisma.conversation.findMany({
+                where: {
+                  orgId,
+                  id: { in: conversationIds },
+                  participants: { has: userId }
+                },
+                include: {
+                  project: { select: { id: true, name: true, status: true, approvalStatus: true } }
+                }
+              })
+            : [];
+
+        const channels = conversations.map((c) => formatProjectConversation(c, userId));
+
+        res.json({
+          success: true,
+          data: {
+            channels,
+            availableProjects,
+            totalChannels: channels.length,
+            totalAvailable: availableProjects.length,
+            canDeleteChannel: canDeleteProjectChannel(roleKeys)
+          }
+        });
+      } catch (error) {
+        console.error("Error listing project channels:", error);
+        res.status(500).json({
+          error: "Failed to list project channels",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  // Create (or open) a project channel
+  router.post(
+    "/project-channels",
+    requireRoles([...PROJECT_CHANNEL_ROLE_KEYS]),
+    async (req, res) => {
+      try {
+        const { projectId, channelName, topics } = req.body as {
+          projectId?: string;
+          channelName?: string;
+          topics?: string;
+        };
+        const userId = req.auth!.userId;
+        const orgId = req.auth!.orgId;
+        const roleKeys = req.auth!.roleKeys;
+
+        if (!projectId) {
+          return res.status(400).json({ error: "projectId is required" });
+        }
+        if (!channelName?.trim()) {
+          return res.status(400).json({ error: "channelName is required" });
+        }
+        if (!topics?.trim()) {
+          return res.status(400).json({ error: "topics is required — describe what will be discussed" });
+        }
+
+        const allowed = await userCanAccessProject(prisma, orgId, userId, roleKeys, projectId);
+        if (!allowed) {
+          return res.status(403).json({ error: "You do not have access to this project" });
+        }
+
+        await ensureChatUserAndInbox(prisma, userId, orgId, { touchPresence: false });
+
+        const { conversation, created, memberCount, membersAdded } =
+          await createOrGetProjectChannel(prisma, orgId, userId, projectId, {
+            channelName: channelName.trim(),
+            topics: topics.trim()
+          });
+
+        res.status(created ? 201 : 200).json({
+          success: true,
+          message: created
+            ? `Channel created with ${memberCount ?? 0} team members`
+            : membersAdded
+              ? `Channel opened — ${membersAdded} team member${membersAdded === 1 ? "" : "s"} synced`
+              : "Channel opened",
+          data: {
+            conversation: formatProjectConversation(conversation, userId),
+            created,
+            memberCount: memberCount ?? conversation.participants.length,
+            membersAdded: membersAdded ?? 0
+          }
+        });
+      } catch (error) {
+        console.error("Error creating channel:", error);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        const status = message.includes("not found") ? 404 : 500;
+        res.status(status).json({
+          error: "Failed to create channel",
+          message
+        });
+      }
+    }
+  );
+
+  router.delete(
+    "/project-channels/:id",
+    requireRoles([...PROJECT_CHANNEL_DELETE_ROLE_KEYS]),
+    async (req, res) => {
+      try {
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+        if (!id?.trim()) {
+          return res.status(400).json({ error: "Channel id is required" });
+        }
+        const orgId = req.auth!.orgId;
+        const { conversationId, projectId } = await deleteProjectChannel(prisma, orgId, id.trim());
+        res.json({
+          success: true,
+          message: "Channel deleted",
+          data: { conversationId, projectId }
+        });
+      } catch (error) {
+        console.error("Error deleting channel:", error);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        const status = message.includes("not found") ? 404 : 500;
+        res.status(status).json({
+          error: "Failed to delete channel",
           message
         });
       }

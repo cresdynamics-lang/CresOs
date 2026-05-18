@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
 
+const MD_COLS: Record<2 | 3 | 4, string> = {
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-2 lg:grid-cols-3",
+  4: "md:grid-cols-2 lg:grid-cols-4"
+};
+
 const LG_COLS: Record<2 | 3 | 4 | 5 | 6, string> = {
   2: "lg:grid-cols-2",
   3: "lg:grid-cols-3",
@@ -26,9 +32,10 @@ export function DashboardCardRow({
   layout = "responsive",
   className = ""
 }: DashboardCardRowProps) {
-  const grid = LG_COLS[lgCols];
+  const mdGrid = lgCols <= 4 ? MD_COLS[lgCols as 2 | 3 | 4] : "md:grid-cols-2";
+  const lgGrid = LG_COLS[lgCols];
   const responsive =
-    `flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] ${grid} lg:snap-none lg:grid lg:overflow-visible lg:pb-0`;
+    `flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] md:grid ${mdGrid} ${lgGrid} md:snap-none md:overflow-visible md:pb-0`;
   const scrollOnly = `flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]`;
   return <div className={`min-w-0 ${layout === "scroll" ? scrollOnly : responsive} ${className}`.trim()}>{children}</div>;
 }
@@ -43,6 +50,6 @@ type DashboardScrollCardProps = {
 export function DashboardScrollCard({ children, width = "stat", className = "" }: DashboardScrollCardProps) {
   const widthClass = width === "wide" ? "w-[min(88vw,300px)]" : "w-[min(88vw,260px)]";
   return (
-    <div className={`${widthClass} shrink-0 snap-start lg:w-auto lg:min-w-0 lg:shrink ${className}`.trim()}>{children}</div>
+    <div className={`${widthClass} shrink-0 snap-start md:w-auto md:min-w-0 md:shrink ${className}`.trim()}>{children}</div>
   );
 }

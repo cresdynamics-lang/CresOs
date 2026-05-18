@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { PageHeader } from "../page-header";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
+import { InvoiceCreateModal } from "./invoice-create-modal";
 
 type Invoice = {
   id: string;
@@ -174,8 +176,23 @@ const FINANCE_ALIGNMENT_RULES = [
   }
 ] as const;
 
+
+function pathnameToSection(pathname: string): FinanceSection {
+  if (pathname === "/finance" || pathname === "/finance/") return "overview";
+  if (pathname.startsWith("/finance/invoices")) return "invoices";
+  if (pathname.startsWith("/finance/payments")) return "payments";
+  if (pathname.startsWith("/finance/expenses")) return "expenses";
+  if (pathname.startsWith("/finance/ledger")) return "ledger";
+  if (pathname.startsWith("/finance/projects/analysis")) return "project_analysis";
+  if (pathname.startsWith("/finance/projects")) return "projects";
+  if (pathname.startsWith("/finance/clients-due")) return "clients_due";
+  return "overview";
+}
+
 export default function FinancePage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const section = pathnameToSection(pathname);
   const { apiFetch, auth, hydrated } = useAuth();
   const canAccessFinance = auth.roleKeys.some((r) =>
     ["admin", "finance", "analyst", "director_admin"].includes(r)
@@ -357,12 +374,7 @@ export default function FinancePage() {
   const isDirector = auth.roleKeys.includes("director_admin");
   const canCreateInvoice = isFinance || isAdmin;
   const canEditProjectMoney = isFinance || isAdmin || isDirector;
-  const [adminFinanceTab, setAdminFinanceTab] = useState<
-    "expenses" | "financial_report" | "project_status" | "project_analysis" | "invoices" | "payments" | "ledger"
-  >("financial_report");
-  const [financeTab, setFinanceTab] = useState<
-    "financial_report" | "project_status" | "invoices" | "payments" | "expenses" | "clients_due" | "ledger"
-  >("financial_report");
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const projectFinanceAnalysis = useMemo(() => {
     const allocated = projectFinancials.reduce((s, p) => s + (p.allocated ?? 0), 0);
@@ -536,10 +548,10 @@ export default function FinancePage() {
 
   useEffect(() => {
     const onLedger =
-      (isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger");
+      section === "ledger";
     if (!onLedger || !canSeeMoneyStats) return;
     void loadLedger();
-  }, [isFinance, isAdmin, financeTab, adminFinanceTab, canSeeMoneyStats, loadLedger]);
+  }, [section, canSeeMoneyStats, loadLedger]);
 
   useEffect(() => {
     const onVis = () => {
@@ -554,7 +566,7 @@ export default function FinancePage() {
       if (canSeeMoneyStats) void fetchReport();
       if (
         canSeeMoneyStats &&
-        ((isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger"))
+        (section === "ledger")
       ) {
         void loadLedger();
       }
@@ -568,10 +580,7 @@ export default function FinancePage() {
     fetchReport,
     canSeeMoneyStats,
     loadLedger,
-    isFinance,
-    isAdmin,
-    financeTab,
-    adminFinanceTab
+    section
   ]);
 
   const submitExpense = async (e: React.FormEvent) => {
@@ -965,6 +974,7 @@ export default function FinancePage() {
       else if (createdId) await downloadWithAuth(`/finance/invoices/${createdId}/pdf`, `invoice-${createdId}.pdf`);
       setInvoiceForm((f) => ({ ...f, lines: [emptyInvoiceLine()], notes: "" }));
       setInvoiceSubmitError(null);
+      setShowInvoiceModal(false);
       loadData();
     } catch (err) {
       setInvoiceSubmitError(err instanceof Error ? err.message : "Network error creating invoice.");
@@ -1003,14 +1013,14 @@ export default function FinancePage() {
     [filteredExpenses]
   );
 
-  return (
-    <section className="flex flex-col gap-4">
-      <PageHeader
-        title="Finance overview"
-        description="Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES). Numbers load from your workspace database; approved expenses and paid payouts count in net cash flow; recording a payment with source, account, and transaction reference confirms automatically."
-      />
+  const pageMeta = FINANCE_PAGE_TITLES[section];
 
-      {!canSeeMoneyStats && (
+  return (
+    <section className="flex min-h-0 flex-1 flex-col gap-4">
+      <PageHeader title={pageMeta.title} description={pageMeta.description} />
+
+
+      {!canSeeMoneyStats && section === "overview" && (
         <div className="shell border border-slate-600/80 bg-slate-900/50 text-sm text-slate-400">
           Dashboard revenue, outstanding, and net-flow summaries are visible to{" "}
           <span className="font-medium text-slate-200">Finance</span> and{" "}
@@ -1019,7 +1029,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeMoneyStats && (
+      {canSeeMoneyStats && section === "overview" && (
         <DashboardCardRow lgCols={4} layout="scroll">
           <DashboardScrollCard>
             <div className="shell">
@@ -1077,7 +1087,7 @@ export default function FinancePage() {
         </DashboardCardRow>
       )}
 
-      {isAdmin && (
+      {isAdmin && section === "overview" && (
         <div className="shell border border-slate-600/80 bg-slate-900/50">
           <h3 className="text-sm font-semibold text-slate-200">Admin&apos;s finance access rules</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -1106,82 +1116,9 @@ export default function FinancePage() {
         </div>
       )}
 
-      {isAdmin && (
-        <div className="shell border border-slate-700/70 bg-slate-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Admin finance sections
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { key: "expenses" as const, label: "Expenses" },
-                { key: "financial_report" as const, label: "Financial report" },
-                { key: "project_status" as const, label: "Projects finance status" },
-                { key: "project_analysis" as const, label: "Project finance analysis" },
-                { key: "invoices" as const, label: "Invoices" },
-                { key: "payments" as const, label: "Payments" },
-                { key: "ledger" as const, label: "All transactions" }
-              ].map((b) => (
-                <button
-                  key={b.key}
-                  type="button"
-                  onClick={() => setAdminFinanceTab(b.key)}
-                  className={
-                    adminFinanceTab === b.key
-                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
-                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-                  }
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            These panels load live from your workspace database via the API.
-          </p>
-        </div>
-      )}
-
-      {isFinance && !isAdmin && (
-        <div className="shell border border-slate-700/70 bg-slate-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Finance sections
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { key: "financial_report" as const, label: "Financial report" },
-                { key: "project_status" as const, label: "Projects finance status" },
-                { key: "invoices" as const, label: "Invoices" },
-                { key: "payments" as const, label: "Payments" },
-                { key: "expenses" as const, label: "Expenses" },
-                { key: "clients_due" as const, label: "Clients due" },
-                { key: "ledger" as const, label: "All transactions" }
-              ].map((b) => (
-                <button
-                  key={b.key}
-                  type="button"
-                  onClick={() => setFinanceTab(b.key)}
-                  className={
-                    financeTab === b.key
-                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
-                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-                  }
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Use these buttons to switch views; data loads live from the database.
-          </p>
-        </div>
-      )}
 
       {canSeeMoneyStats &&
-        ((isFinance && !isAdmin && financeTab === "ledger") || (isAdmin && adminFinanceTab === "ledger")) && (
+        (section === "ledger") && (
           <div className="shell border-slate-700/70 bg-slate-950/40">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
@@ -1244,7 +1181,7 @@ export default function FinancePage() {
           </div>
         )}
 
-      {canSeeMoneyStats && (!isAdmin || adminFinanceTab === "financial_report") && (!isFinance || isAdmin || financeTab === "financial_report") && (
+      {canSeeMoneyStats && section === "overview" && (
         <div className="shell border-emerald-800/40 bg-slate-900/60">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
@@ -1329,7 +1266,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeMoneyStats && (!isAdmin || adminFinanceTab === "project_status") && (!isFinance || isAdmin || financeTab === "project_status") && projectFinancials.length > 0 && (
+      {canSeeMoneyStats && section === "projects" && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Projects finance status
@@ -1470,7 +1407,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeMoneyStats && isAdmin && adminFinanceTab === "project_analysis" && (
+      {canSeeMoneyStats && section === "project_analysis" && (
         <div className="shell border border-slate-700/70 bg-slate-900/50">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Project finance analysis
@@ -1502,7 +1439,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeMoneyStats && (!isFinance || isAdmin || financeTab === "clients_due") && clientsDue.length > 0 && (
+      {canSeeMoneyStats && section === "clients_due" && clientsDue.length > 0 && (
         <div className="shell border-amber-800/40">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Amount due per client
@@ -1587,12 +1524,23 @@ export default function FinancePage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className={`${(isAdmin && adminFinanceTab !== "invoices") || (isFinance && !isAdmin && financeTab !== "invoices") ? "hidden" : "shell"}`}>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Invoices (for work done — link to project for clarity)
-          </p>
-          <ul className="space-y-2 text-sm">
+      {section === "invoices" && (
+        <div className="shell flex min-h-0 flex-1 flex-col">
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Invoices (for work done — link to project for clarity)
+            </p>
+            {canCreateInvoice && isFinance && clients.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(true)}
+                className="min-h-[44px] touch-manipulation rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+              >
+                New invoice
+              </button>
+            )}
+          </div>
+          <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto text-sm">
             {invoices.map((inv) => (
               <li
                 key={inv.id}
@@ -1633,136 +1581,11 @@ export default function FinancePage() {
               <li className="text-sm text-slate-400">No invoices yet.</li>
             )}
           </ul>
-          {canCreateInvoice && clients.length > 0 && (
-            <form onSubmit={submitInvoice} className="mt-3 flex flex-col gap-2 border-t border-slate-700 pt-3">
-              <p className="text-xs font-medium text-slate-400">Create invoice (for work done — link to project)</p>
-              {invoiceSubmitError && (
-                <p className="rounded border border-rose-800 bg-rose-950/40 px-2 py-1 text-xs text-rose-200">
-                  {invoiceSubmitError}
-                </p>
-              )}
-              <select
-                value={invoiceForm.clientId}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, clientId: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                required
-              >
-                <option value="">Select client</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <select
-                value={invoiceForm.projectId}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, projectId: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                required
-              >
-                <option value="">Select project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-500">
-                Invoice number is generated automatically in creation order (e.g.{" "}
-                <span className="text-slate-300">CD-INV-000042/26</span>).
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={invoiceForm.issueDate}
-                  onChange={(e) => setInvoiceForm((f) => ({ ...f, issueDate: e.target.value }))}
-                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                />
-                <input
-                  type="date"
-                  placeholder="Due date"
-                  value={invoiceForm.dueDate}
-                  onChange={(e) => setInvoiceForm((f) => ({ ...f, dueDate: e.target.value }))}
-                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                />
-              </div>
-              <p className="text-xs font-medium text-slate-400">Line items</p>
-              <div className="flex flex-col gap-2">
-                {invoiceForm.lines.map((line, idx) => (
-                  <div key={line.id} className="flex flex-wrap items-end gap-2 rounded border border-slate-700 bg-slate-950/40 p-2">
-                    <span className="pb-2 text-xs text-slate-500">#{idx + 1}</span>
-                    <input
-                      type="text"
-                      placeholder="Description"
-                      value={line.description}
-                      onChange={(e) =>
-                        setInvoiceForm((f) => ({
-                          ...f,
-                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, description: e.target.value } : l))
-                        }))
-                      }
-                      className="min-w-[140px] flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="Qty"
-                      value={line.quantity}
-                      onChange={(e) =>
-                        setInvoiceForm((f) => ({
-                          ...f,
-                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, quantity: e.target.value } : l))
-                        }))
-                      }
-                      className="w-16 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      placeholder="Unit (KES)"
-                      value={line.unitPrice}
-                      onChange={(e) =>
-                        setInvoiceForm((f) => ({
-                          ...f,
-                          lines: f.lines.map((l) => (l.id === line.id ? { ...l, unitPrice: e.target.value } : l))
-                        }))
-                      }
-                      className="w-28 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                    />
-                    {invoiceForm.lines.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setInvoiceForm((f) => ({
-                            ...f,
-                            lines: f.lines.filter((l) => l.id !== line.id)
-                          }))
-                        }
-                        className="rounded border border-rose-800 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setInvoiceForm((f) => ({ ...f, lines: [...f.lines, emptyInvoiceLine()] }))}
-                className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-              >
-                Add line item
-              </button>
-              <textarea
-                placeholder="Notes (shown on PDF under NOTES — e.g. payment terms, reference)"
-                value={invoiceForm.notes}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, notes: e.target.value }))}
-                className="min-h-[64px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <button type="submit" className="rounded bg-sky-600 px-2 py-1.5 text-sm text-white hover:bg-sky-500">
-                Create invoice
-              </button>
-            </form>
-          )}
         </div>
-        <div className={`${(isAdmin && adminFinanceTab !== "payments") || (isFinance && !isAdmin && financeTab !== "payments") ? "hidden" : "shell"}`}>
+      )}
+
+      {section === "payments" && (
+        <div className="shell flex min-h-0 flex-1 flex-col">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
             Payments received — fill source, transaction code, and account to confirm in one step, or save pending and confirm later
           </p>
@@ -1974,10 +1797,11 @@ export default function FinancePage() {
             </form>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className={`${(isAdmin && adminFinanceTab !== "expenses") || (isFinance && !isAdmin && financeTab !== "expenses") ? "hidden" : "shell"}`}>
+      {section === "expenses" && (
+        <>
+        <div className="shell flex min-h-0 flex-1 flex-col">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Expenses (need admin approval) — where from, receipt code, which account, how paid
@@ -2113,7 +1937,7 @@ export default function FinancePage() {
             )}
           </ul>
         </div>
-        {isFinance && (!isAdmin ? financeTab === "expenses" : true) && (
+        {isFinance && (
           <div className="shell">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
               Add expense (where from, receipt code, which account, how paid) — needs admin approval
@@ -2379,7 +2203,22 @@ export default function FinancePage() {
             )}
           </div>
         )}
-      </div>
+        </>
+      )}
+      <InvoiceCreateModal
+        open={showInvoiceModal}
+        onClose={() => {
+          setShowInvoiceModal(false);
+          setInvoiceSubmitError(null);
+        }}
+        form={invoiceForm}
+        setForm={setInvoiceForm}
+        clients={clients}
+        projects={projects}
+        submitError={invoiceSubmitError}
+        onSubmit={submitInvoice}
+        emptyLine={emptyInvoiceLine}
+      />
     </section>
   );
 }

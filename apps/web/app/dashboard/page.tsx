@@ -960,7 +960,7 @@ export default function DashboardPage() {
   ]);
 
   return (
-    <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4">
+    <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-1 sm:px-0">
       <DashboardWelcomeBanner firstName={firstName} roleLabel={primaryRoleLabel}>
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
           Today&apos;s priorities (your queue)
@@ -1958,7 +1958,7 @@ export default function DashboardPage() {
               <DashboardCardRow layout="scroll" lgCols={isDirectorOnly ? 3 : 4}>
                 {!isDirectorOnly && (
                   <DashboardScrollCard width="wide">
-                    <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                    <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Financial health</p>
                       <p className="mt-2 break-words text-sm text-slate-200">
                         Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
@@ -1974,7 +1974,7 @@ export default function DashboardPage() {
                   </DashboardScrollCard>
                 )}
                 <DashboardScrollCard width="wide">
-                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sales health</p>
                     <p className="mt-2 break-words text-sm text-slate-200">
                       Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
@@ -1984,7 +1984,7 @@ export default function DashboardPage() {
                   </div>
                 </DashboardScrollCard>
                 <DashboardScrollCard width="wide">
-                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operational health</p>
                     <p className="mt-2 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
                     <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
@@ -1994,7 +1994,7 @@ export default function DashboardPage() {
                   </div>
                 </DashboardScrollCard>
                 <DashboardScrollCard width="wide">
-                  <div className="shell flex min-h-[168px] min-w-0 flex-col">
+                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Approval queue</p>
                     <p className="mt-2 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
                     <Link href="/approvals" className="mt-auto inline-block text-sm text-sky-400 hover:underline">

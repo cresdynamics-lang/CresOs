@@ -23,7 +23,7 @@ export class PDFGenerator {
   private yPosition: number;
   private pageHeight: number;
   /** Space reserved at bottom for footer (signature + tagline). Body must stay above this. */
-  private readonly footerBandHeight = 118;
+  private readonly footerBandHeight = 128;
   private readonly sideMargin = 40;
   private readonly colGap = 12;
   /** Left column width — keeps header clear of right “invoice details” column. */
@@ -55,9 +55,19 @@ export class PDFGenerator {
     return this.options.margin?.bottom ?? 40;
   }
 
+  /** Last Y coordinate for content (above bottom margin). */
+  private pageMaxY(): number {
+    return this.pageHeight - this.bottomMargin();
+  }
+
   /** Y coordinate where footer band starts; no body text below this. */
   private contentBottomLimit(): number {
-    return this.pageHeight - this.bottomMargin() - this.footerBandHeight;
+    return this.pageMaxY() - this.footerBandHeight;
+  }
+
+  /** Prevent PDFKit from flowing content onto an extra page. */
+  private fitsAboveFooter(neededHeight: number): boolean {
+    return this.yPosition + neededHeight <= this.contentBottomLimit() - 4;
   }
 
   async generatePDF(invoice: InvoiceSchema): Promise<Buffer> {
@@ -201,10 +211,6 @@ export class PDFGenerator {
       this.doc.text(`Website: ${invoice.company.website}`, this.sideMargin, fromY, { width: fromW });
       fromY = this.doc.y + 2;
     }
-    if (invoice.company.tax_id) {
-      this.doc.text(`KRA PIN: ${invoice.company.tax_id}`, this.sideMargin, fromY, { width: fromW });
-      fromY = this.doc.y + 2;
-    }
 
     let billY = rowTop;
     const bx = this.rightColX;
@@ -329,59 +335,79 @@ export class PDFGenerator {
     this.yPosition += 14;
   }
 
-  private addSummary(invoice: InvoiceSchema): void {
-    const limit = this.contentBottomLimit() - 6;
-    if (this.yPosition > limit - 50) return;
+  /** Column layout matches addItemsTable so totals align with the Amount column. */
+  private itemsTableMetrics() {
+    const startX = this.sideMargin;
+    const columnWidths = [28, 242, 36, 88, 96];
+    const tableW = columnWidths.reduce((a, b) => a + b, 0);
+    return { startX, columnWidths, tableW };
+  }
 
-    const summaryX = 450;
-    const summaryWidth = 150;
-    
-    // Subtotal
-    this.doc.fontSize(10).font('Helvetica');
-    this.doc.text('Subtotal:', summaryX, this.yPosition, { width: summaryWidth, align: 'right' });
-    this.doc.text(
-      this.formatCurrency(invoice.summary.subtotal, invoice.currency),
-      summaryX,
-      this.yPosition + 12,
-      { width: summaryWidth, align: 'right' }
-    );
-    this.yPosition += 25;
-    
-    // Tax (if applicable)
+  private addSummary(invoice: InvoiceSchema): void {
+    const { startX, tableW } = this.itemsTableMetrics();
+    const boxWidth = 248;
+    const boxX = startX + tableW - boxWidth;
+    const rowH = 22;
+    const balanceRowH = 28;
+    const padY = 10;
+    const rowCount =
+      1 + (invoice.summary.tax_amount && invoice.summary.tax_amount > 0 ? 1 : 0) + 1 + 1;
+    const boxHeight = padY * 2 + (rowCount - 1) * rowH + balanceRowH;
+    if (!this.fitsAboveFooter(boxHeight + 12)) return;
+
+    const boxTop = this.yPosition;
+    const labelX = boxX + 12;
+    const labelW = 108;
+    const valueX = boxX + boxWidth - 12 - 108;
+    const valueW = 108;
+
+    this.doc
+      .roundedRect(boxX, boxTop, boxWidth, boxHeight, 4)
+      .fillAndStroke('#f1f5f9', '#cbd5e1');
+
+    let y = boxTop + padY;
+
+    const drawRow = (
+      label: string,
+      value: string,
+      opts: { bold?: boolean; valueSize?: number; valueColor?: string; tall?: boolean } = {}
+    ) => {
+      const fontSize = opts.bold ? 11 : 10;
+      this.doc.fontSize(fontSize).font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#0f172a');
+      this.doc.text(label, labelX, y + 4, { width: labelW, align: 'left', lineBreak: false });
+      this.doc
+        .fontSize(opts.valueSize ?? fontSize)
+        .font(opts.bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fillColor(opts.valueColor ?? '#0f172a')
+        .text(value, valueX, y + 4, { width: valueW, align: 'right', lineBreak: false });
+      y += opts.tall ? balanceRowH : rowH;
+    };
+
+    drawRow('Subtotal', this.formatCurrency(invoice.summary.subtotal, invoice.currency));
+
     if (invoice.summary.tax_amount && invoice.summary.tax_amount > 0) {
-      this.doc.text('Tax:', summaryX, this.yPosition, { width: summaryWidth, align: 'right' });
-      this.doc.text(
-        this.formatCurrency(invoice.summary.tax_amount, invoice.currency),
-        summaryX,
-        this.yPosition + 12,
-        { width: summaryWidth, align: 'right' }
-      );
-      this.yPosition += 25;
+      drawRow('Tax', this.formatCurrency(invoice.summary.tax_amount, invoice.currency));
     }
-    
-    // Total
-    this.doc.font('Helvetica-Bold');
-    this.doc.text('Total Amount:', summaryX, this.yPosition, { width: summaryWidth, align: 'right' });
-    this.doc.text(
-      this.formatCurrency(invoice.summary.total_amount, invoice.currency),
-      summaryX,
-      this.yPosition + 12,
-      { width: summaryWidth, align: 'right' }
-    );
-    this.yPosition += 25;
-    
-    // Balance Due
-    this.doc.fontSize(14).fillColor('#28a745');
-    this.doc.text('Balance Due:', summaryX, this.yPosition, { width: summaryWidth, align: 'right' });
-    this.doc.text(
-      this.formatCurrency(invoice.summary.balance_due, invoice.currency),
-      summaryX,
-      this.yPosition + 15,
-      { width: summaryWidth, align: 'right' }
-    );
+
+    drawRow('Total Amount', this.formatCurrency(invoice.summary.total_amount, invoice.currency), { bold: true });
+
+    this.doc
+      .moveTo(boxX + 10, y)
+      .lineTo(boxX + boxWidth - 10, y)
+      .lineWidth(0.5)
+      .strokeColor('#94a3b8')
+      .stroke();
+    y += 6;
+
+    drawRow('Balance Due', this.formatCurrency(invoice.summary.balance_due, invoice.currency), {
+      bold: true,
+      valueSize: 13,
+      valueColor: '#15803d',
+      tall: true
+    });
     this.doc.fillColor('#000000');
-    
-    this.yPosition += 35;
+
+    this.yPosition = boxTop + boxHeight + 12;
   }
 
   private addPaymentTerms(invoice: InvoiceSchema): void {
@@ -439,85 +465,83 @@ export class PDFGenerator {
   }
 
   private addFooter(invoice: InvoiceSchema): void {
-    const y0 = this.contentBottomLimit();
     const pageW = this.doc.page.width;
     const mx = this.sideMargin;
+    const footW = pageW - 2 * mx;
+    const bottom = this.pageMaxY();
+    const y0 = this.contentBottomLimit();
 
+    // Fixed positions (bottom-up) so footer never triggers a second page.
+    const lineH = 9;
+    let y = bottom - lineH;
+    this.doc.fontSize(7).font('Helvetica').fillColor('#94a3b8');
+    this.doc.text('Page 1 of 1', mx, y, { width: footW, align: 'right', lineBreak: false });
+
+    y -= lineH;
+    this.doc.fontSize(8).font('Helvetica').fillColor('#64748B');
+    this.doc.text('Thank you for your business. Cres Dynamics Ltd — cresdynamics.com', mx, y, {
+      width: footW,
+      align: 'center',
+      lineBreak: false
+    });
+
+    y -= lineH + 1;
+    this.doc.fillColor('#334155');
+    this.doc.text(
+      'P.O. BOX 1112 – 00100, Kivuli Towers-WESTLANDS, KENYA | info@cresdynamics.com | www.cresdynamics.com',
+      mx,
+      y,
+      { width: footW, align: 'center', lineBreak: false }
+    );
+
+    y -= lineH + 2;
+    this.doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+    this.doc.text('CRES DYNAMICS LTD | Building digital systems that Businesses Run On.', mx, y, {
+      width: footW,
+      align: 'center',
+      lineBreak: false
+    });
+
+    y -= 10;
+    this.doc.font('Helvetica').fontSize(9);
+    this.doc.text(`Date: ${invoice.invoice_date}`, mx, y, { lineBreak: false });
+    y -= lineH;
+    this.doc.text('Title: Chief Executive Officer, Cres Dynamics Ltd', mx, y, { lineBreak: false });
+    y -= lineH;
+    this.doc.text('Name: Nelson Were', mx, y, { lineBreak: false });
+    y -= 14;
+    this.doc.text('Signature:', mx, y, { lineBreak: false });
+    this.drawSignatureDraft(mx + 52, y - 1);
+    y -= lineH + 2;
+    this.doc.font('Helvetica-Bold').text('AUTHORISED BY:', mx, y, { lineBreak: false });
+
+    const ruleY = Math.min(y0 + 2, y - 6);
     this.doc
-      .moveTo(mx, y0 - 3)
-      .lineTo(pageW - mx, y0 - 3)
+      .moveTo(mx, ruleY)
+      .lineTo(pageW - mx, ruleY)
       .lineWidth(0.5)
       .strokeColor('#cccccc')
       .stroke();
 
-    let fy = y0 + 2;
-    this.doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
-    this.doc.text('AUTHORISED BY:', mx, fy);
-    fy += 11;
-    this.doc.font('Helvetica').fontSize(9).text('Signature:', mx, fy);
-    this.drawSignatureDraft(mx + 52, fy - 2);
-    fy += 18;
-    this.doc.text('Name: Nelson Were', mx, fy);
-    fy += 11;
-    this.doc.text('Title: Chief Executive Officer, Cres Dynamics Ltd', mx, fy);
-    fy += 11;
-    this.doc.text(`Date: ${invoice.invoice_date}`, mx, fy);
-    fy += 14;
-
-    const footW = pageW - 2 * mx;
-    this.doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
-    this.doc.text('CRES DYNAMICS LTD | Building digital systems that Businesses Run On.', mx, fy, {
-      align: 'center',
-      width: footW
-    });
-    fy = this.doc.y + 4;
-
-    this.doc.fontSize(8).font('Helvetica').fillColor('#334155');
-    this.doc.text(
-      'P.O. BOX 1112 – 00100, Kivuli Towers-WESTLANDS, KENYA | info@cresdynamics.com | www.cresdynamics.com',
-      mx,
-      fy,
-      { align: 'center', width: footW }
-    );
-    fy = this.doc.y + 2;
-
-    if (invoice.company.tax_id) {
-      this.doc.fontSize(8).font('Helvetica').fillColor('#64748B').text(`KRA PIN: ${invoice.company.tax_id}`, mx, fy, {
-        align: 'center',
-        width: footW
-      });
-      fy = this.doc.y + 2;
-    }
-    this.doc
-      .fontSize(8)
-      .font('Helvetica')
-      .fillColor('#64748B')
-      .text('Thank you for your business. Cres Dynamics Ltd — cresdynamics.com', mx, fy, {
-        align: 'center',
-        width: footW
-      });
-    fy = this.doc.y + 2;
-
-    this.doc.fontSize(7).font('Helvetica').fillColor('#94a3b8').text('Page 1 of 1', mx, fy, {
-      align: 'right',
-      width: footW
-    });
+    // Keep cursor above footer band so nothing auto-flows to page 2.
+    this.yPosition = Math.min(this.yPosition, y0 - 4);
+    this.doc.y = this.yPosition;
   }
 
   /** Stylised draft signature (no image asset). */
   private drawSignatureDraft(x: number, y: number): void {
     this.doc.save();
-    this.doc.font("Times-Italic").fontSize(16).fillColor("#1e3a5f");
-    this.doc.text("Nelson Were", x, y, { width: 200 });
+    this.doc.font('Times-Italic').fontSize(12).fillColor('#1e3a5f');
+    this.doc.text('Nelson Were', x, y, { width: 160, lineBreak: false });
     this.doc
-      .lineWidth(0.8)
-      .strokeColor("#0f172a")
+      .lineWidth(0.7)
+      .strokeColor('#0f172a')
       .opacity(0.85)
-      .moveTo(x, y + 18)
-      .bezierCurveTo(x + 28, y + 12, x + 55, y + 22, x + 88, y + 14)
-      .bezierCurveTo(x + 110, y + 8, x + 125, y + 18, x + 140, y + 12)
+      .moveTo(x, y + 12)
+      .bezierCurveTo(x + 24, y + 8, x + 48, y + 14, x + 72, y + 10)
+      .bezierCurveTo(x + 92, y + 6, x + 108, y + 12, x + 120, y + 8)
       .stroke();
-    this.doc.opacity(1).fillColor("#000000");
+    this.doc.opacity(1).fillColor('#000000');
     this.doc.restore();
   }
 
@@ -552,10 +576,16 @@ export class PDFGenerator {
   }
 
   private formatCurrency(amount: number, currency: string): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency === 'KES' ? 'KES' : 'USD',
-    }).format(amount);
+    const n = Number(amount);
+    const safe = Number.isFinite(n) ? n : 0;
+    const formatted = safe.toLocaleString('en-KE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    if (currency === 'KES') {
+      return `KES ${formatted}`;
+    }
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(safe);
   }
 
   async saveToFile(buffer: Buffer): Promise<string> {

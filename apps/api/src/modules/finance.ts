@@ -50,7 +50,7 @@ async function confirmPaymentCore(
     amount: Prisma.Decimal;
   },
   fields: { source: string; account: string; reference: string; howToProceed?: string | null }
-): Promise<void> {
+): Promise<{ invoiceStatus?: string; invoiceNumber?: string; paidTotal?: number; invoiceTotal?: number }> {
   const sourceVal = fields.source.trim();
   const accountVal = fields.account.trim();
   const referenceVal = fields.reference.trim();
@@ -69,13 +69,13 @@ async function confirmPaymentCore(
     }
   });
 
-  if (!payment.invoiceId) return;
+  if (!payment.invoiceId) return {};
 
   const inv = await tx.invoice.findUnique({
     where: { id: payment.invoiceId },
-    select: { projectId: true, totalAmount: true }
+    select: { projectId: true, totalAmount: true, number: true, orgId: true }
   });
-  if (!inv) return;
+  if (!inv) return {};
 
   if (inv.projectId) {
     const project = await tx.project.findUnique({
@@ -100,13 +100,133 @@ async function confirmPaymentCore(
   const invoiceTotal = Number(inv.totalAmount);
   const paidTotal = Number(paidOnInvoice._sum.amount ?? 0);
   let nextStatus = "sent";
-  if (invoiceTotal > 0 && paidTotal >= invoiceTotal) nextStatus = "paid";
+  if (invoiceTotal > 0 && paidTotal >= invoiceTotal - 0.01) nextStatus = "paid";
   else if (paidTotal > 0) nextStatus = "partial";
 
   await tx.invoice.update({
     where: { id: payment.invoiceId },
     data: { status: nextStatus }
   });
+
+  if (nextStatus === "paid") {
+    await tx.projectManagementMonth.updateMany({
+      where: { orgId: inv.orgId, invoiceId: payment.invoiceId, paid: false },
+      data: { paid: true, paidAt: new Date() }
+    });
+  }
+
+  return {
+    invoiceStatus: nextStatus,
+    invoiceNumber: inv.number,
+    paidTotal,
+    invoiceTotal
+  };
+}
+
+async function sumConfirmedPaymentsOnInvoice(
+  client: PrismaClient | Prisma.TransactionClient,
+  invoiceId: string
+): Promise<number> {
+  const paidOnInvoice = await client.payment.aggregate({
+    where: { invoiceId, status: "confirmed", deletedAt: null },
+    _sum: { amount: true }
+  });
+  return Number(paidOnInvoice._sum.amount ?? 0);
+}
+
+function paymentMethodLabel(method: string): string {
+  const labels: Record<string, string> = {
+    bank: "Bank",
+    card: "Card",
+    mpesa: "M-Pesa",
+    cash: "Cash"
+  };
+  return labels[method] ?? method;
+}
+
+function resolveInvoicePaymentConfirmFields(
+  payment: { method: string; id: string },
+  invoice: { number: string },
+  fields: {
+    source?: string | null;
+    account?: string | null;
+    reference?: string | null;
+    mpesaRef?: string | null;
+    howToProceed?: string | null;
+  }
+): { source: string; account: string; reference: string; howToProceed: string | null } {
+  const sourceVal = (fields.source ?? "").trim() || "Client payment";
+  const accountVal = (fields.account ?? "").trim() || paymentMethodLabel(payment.method);
+  const referenceVal =
+    (fields.reference ?? "").trim() ||
+    (fields.mpesaRef ?? "").trim() ||
+    `INV-${invoice.number}-${payment.id.slice(-6).toUpperCase()}`;
+  const howToProceedVal = (fields.howToProceed ?? "").trim() || `Matched to invoice ${invoice.number}`;
+  return { source: sourceVal, account: accountVal, reference: referenceVal, howToProceed: howToProceedVal };
+}
+
+/** Create + confirm a payment for any remaining invoice balance (used when marking management month paid). */
+async function recordConfirmedInvoicePayment(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  userId: string,
+  invoiceId: string,
+  opts: { receivedAt?: Date; method?: string; reference?: string; notes?: string }
+): Promise<{ created: boolean; paymentId?: string; amount?: number }> {
+  const inv = await tx.invoice.findFirst({
+    where: { id: invoiceId, orgId, deletedAt: null },
+    select: { id: true, number: true, totalAmount: true, projectId: true }
+  });
+  if (!inv) return { created: false };
+
+  const paidTotal = await sumConfirmedPaymentsOnInvoice(tx, invoiceId);
+  const invoiceTotal = Number(inv.totalAmount);
+  const remaining = Math.round((invoiceTotal - paidTotal) * 100) / 100;
+  if (!(remaining > 0)) return { created: false };
+
+  const receivedAt = opts.receivedAt ?? new Date();
+  const method = opts.method ?? "bank";
+  const payment = await tx.payment.create({
+    data: {
+      orgId,
+      invoiceId,
+      createdByUserId: userId,
+      amount: new Prisma.Decimal(remaining.toFixed(2)),
+      currency: "KES",
+      method,
+      reference: opts.reference?.trim() || `INV-${inv.number}`,
+      notes: opts.notes ?? `Management month marked paid — invoice ${inv.number}`,
+      source: "Client payment",
+      account: paymentMethodLabel(method),
+      howToProceed: `Matched to invoice ${inv.number}`,
+      receivedAt,
+      status: "pending"
+    }
+  });
+
+  const confirmFields = resolveInvoicePaymentConfirmFields(
+    payment,
+    inv,
+    {
+      source: "Client payment",
+      account: paymentMethodLabel(method),
+      reference: opts.reference ?? `INV-${inv.number}`,
+      howToProceed: `Matched to invoice ${inv.number}`
+    }
+  );
+
+  await confirmPaymentCore(
+    tx,
+    {
+      id: payment.id,
+      invoiceId: payment.invoiceId,
+      howToProceed: payment.howToProceed,
+      amount: payment.amount
+    },
+    confirmFields
+  );
+
+  return { created: true, paymentId: payment.id, amount: remaining };
 }
 
 function buildInvoicePdfNotes(savedNotes: string | null | undefined): string {
@@ -740,7 +860,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
               reference: true,
               account: true,
               notes: true,
-              invoiceId: true
+              invoiceId: true,
+              invoice: { select: { number: true } }
             }
           }),
           prisma.expense.findMany({
@@ -800,7 +921,14 @@ export default function financeRouter(prisma: PrismaClient): Router {
             status: p.status,
             label: p.status === "confirmed" ? "Payment in (confirmed)" : "Payment in (pending)",
             detail:
-              [p.method, p.source, p.reference, p.account, p.notes?.slice(0, 120)]
+              [
+                p.invoice?.number ? `Invoice ${p.invoice.number}` : null,
+                p.method,
+                p.source,
+                p.reference,
+                p.account,
+                p.notes?.slice(0, 120)
+              ]
                 .filter(Boolean)
                 .join(" · ") || null
           });
@@ -949,7 +1077,20 @@ export default function financeRouter(prisma: PrismaClient): Router {
       orderBy: { issueDate: "desc" },
       include: { project: { select: { id: true, name: true } } }
     });
-    res.json(invoices);
+    const enriched = await Promise.all(
+      invoices.map(async (inv) => {
+        const paidAmount = await sumConfirmedPaymentsOnInvoice(prisma, inv.id);
+        const total = Number(inv.totalAmount);
+        const amountRemaining = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
+        return {
+          ...inv,
+          paidAmount,
+          amountRemaining,
+          totalAmount: total
+        };
+      })
+    );
+    res.json(enriched);
     }
   );
 
@@ -1192,7 +1333,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
         notes,
         source,
         account,
-        howToProceed
+        howToProceed,
+        confirm
       } = req.body as {
         invoiceId?: string;
         amount: string;
@@ -1205,6 +1347,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
         source?: string;
         account?: string;
         howToProceed?: string;
+        /** When linked to an invoice, default true — confirms payment and records cash-in. */
+        confirm?: boolean;
       };
 
       const normalizedAmount = normalizePaymentAmount(amount);
@@ -1222,13 +1366,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      let linkedInvoice: { id: string; number: string; totalAmount: Prisma.Decimal } | null = null;
       if (invoiceId) {
-        const inv = await prisma.invoice.findFirst({
+        linkedInvoice = await prisma.invoice.findFirst({
           where: { id: invoiceId, orgId, deletedAt: null },
-          select: { id: true }
+          select: { id: true, number: true, totalAmount: true }
         });
-        if (!inv) {
+        if (!linkedInvoice) {
           res.status(400).json({ error: "Invoice not found", message: "Invoice must belong to your organization." });
+          return;
+        }
+        const paidSoFar = await sumConfirmedPaymentsOnInvoice(prisma, invoiceId);
+        const invoiceTotal = Number(linkedInvoice.totalAmount);
+        const payAmount = Number(normalizedAmount);
+        const remaining = Math.max(0, Math.round((invoiceTotal - paidSoFar) * 100) / 100);
+        if (payAmount > remaining + 0.01) {
+          res.status(400).json({
+            error: "Payment exceeds invoice balance",
+            message: `Invoice ${linkedInvoice.number} has ${remaining.toFixed(2)} KES remaining; you entered ${payAmount.toFixed(2)}.`
+          });
           return;
         }
       }
@@ -1236,7 +1392,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
       const refForConfirm = (reference?.trim() || mpesaRef?.trim() || "").trim();
       const sourceTrim = (source ?? "").trim();
       const accountTrim = (account ?? "").trim();
-      const autoConfirm = Boolean(sourceTrim && accountTrim && refForConfirm);
+      const wantsConfirm = confirm !== false;
+      const autoConfirmManual = Boolean(sourceTrim && accountTrim && refForConfirm);
+      /** Invoice payments are always confirmed so status, project received, and cash flow stay in sync. */
+      const autoConfirmInvoice = Boolean(linkedInvoice);
+      const autoConfirm = autoConfirmManual || autoConfirmInvoice;
+
+      const invoiceRef = linkedInvoice ? `INV-${linkedInvoice.number}` : null;
+      const paymentReference =
+        reference?.trim() || mpesaRef?.trim() || invoiceRef || null;
 
       let payment = await prisma.payment.create({
         data: {
@@ -1246,17 +1410,39 @@ export default function financeRouter(prisma: PrismaClient): Router {
           amount: new Prisma.Decimal(normalizedAmount),
           currency: currency ?? "KES",
           method,
-          reference: reference?.trim() ? reference.trim() : null,
+          reference: paymentReference,
           mpesaRef: mpesaRef?.trim() ? mpesaRef.trim() : null,
-          notes: notes ?? null,
+          notes: linkedInvoice
+            ? [notes?.trim(), `Payment for invoice ${linkedInvoice.number}`].filter(Boolean).join(" — ") ||
+              `Payment for invoice ${linkedInvoice.number}`
+            : notes ?? null,
           source: sourceTrim || null,
           account: accountTrim || null,
-          howToProceed: howToProceed?.trim() ? howToProceed.trim() : null,
+          howToProceed: howToProceed?.trim()
+            ? howToProceed.trim()
+            : linkedInvoice
+              ? `Matched to invoice ${linkedInvoice.number}`
+              : null,
           receivedAt: receivedAtDate
         }
       });
 
       if (autoConfirm) {
+        const confirmFields = linkedInvoice
+          ? resolveInvoicePaymentConfirmFields(payment, linkedInvoice, {
+              source,
+              account,
+              reference,
+              mpesaRef,
+              howToProceed
+            })
+          : {
+              source: sourceTrim,
+              account: accountTrim,
+              reference: refForConfirm,
+              howToProceed: howToProceed?.trim() || null
+            };
+
         await prisma.eventLog.create({
           data: {
             orgId,
@@ -1267,8 +1453,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         });
 
+        let invoiceApply: Awaited<ReturnType<typeof confirmPaymentCore>> = {};
         await prisma.$transaction(async (tx) => {
-          await confirmPaymentCore(
+          invoiceApply = await confirmPaymentCore(
             tx,
             {
               id: payment.id,
@@ -1276,12 +1463,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
               howToProceed: payment.howToProceed,
               amount: payment.amount
             },
-            {
-              source: sourceTrim,
-              account: accountTrim,
-              reference: refForConfirm,
-              howToProceed: howToProceed?.trim() || null
-            }
+            confirmFields
           );
         });
 
@@ -1291,7 +1473,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
             type: "payment.confirmed",
             entityType: "payment",
             entityId: payment.id,
-            metadata: { source: sourceTrim, account: accountTrim, reference: refForConfirm, auto: true }
+            metadata: {
+              source: confirmFields.source,
+              account: confirmFields.account,
+              reference: confirmFields.reference,
+              auto: true,
+              invoiceMatched: Boolean(linkedInvoice),
+              invoiceNumber: invoiceApply.invoiceNumber ?? null,
+              invoiceStatus: invoiceApply.invoiceStatus ?? null
+            }
           }
         });
 
@@ -1301,7 +1491,41 @@ export default function financeRouter(prisma: PrismaClient): Router {
             include: { invoice: { include: { project: { select: { id: true, name: true } } } } }
           })) ?? payment;
 
-        res.status(201).json(payment);
+        const paidAmount =
+          payment.invoiceId != null
+            ? await sumConfirmedPaymentsOnInvoice(prisma, payment.invoiceId)
+            : undefined;
+
+        res.status(201).json({
+          success: true,
+          payment,
+          invoiceApplied: linkedInvoice
+            ? {
+                id: linkedInvoice.id,
+                number: linkedInvoice.number,
+                status: invoiceApply.invoiceStatus ?? payment.invoice?.status ?? "sent",
+                paidAmount,
+                amountRemaining: Math.max(
+                  0,
+                  Number(linkedInvoice.totalAmount) - (paidAmount ?? 0)
+                ),
+                reference: confirmFields.reference
+              }
+            : null,
+          message: linkedInvoice
+            ? invoiceApply.invoiceStatus === "paid"
+              ? `Payment recorded — invoice ${linkedInvoice.number} marked paid and added to cash flow.`
+              : `Payment recorded — invoice ${linkedInvoice.number} updated (${invoiceApply.invoiceStatus ?? "partial"}).`
+            : "Payment recorded and confirmed."
+        });
+        return;
+      }
+
+      if (linkedInvoice) {
+        res.status(400).json({
+          error: "Invoice payment could not be confirmed",
+          message: "Linked invoice payments must be confirmed on save. Try again or contact support."
+        });
         return;
       }
 
@@ -1410,18 +1634,36 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      const sourceVal = (source ?? payment.source ?? "").trim();
-      const accountVal = (account ?? payment.account ?? "").trim();
-      const referenceVal = (reference ?? payment.reference ?? "").trim();
-      if (!sourceVal || !accountVal || !referenceVal) {
+      const linkedInv = payment.invoiceId
+        ? await prisma.invoice.findFirst({
+            where: { id: payment.invoiceId, orgId, deletedAt: null },
+            select: { id: true, number: true }
+          })
+        : null;
+
+      const confirmFields = linkedInv
+        ? resolveInvoicePaymentConfirmFields(
+            { id: payment.id, method: payment.method },
+            linkedInv,
+            { source, account, reference, mpesaRef: payment.mpesaRef, howToProceed }
+          )
+        : {
+            source: (source ?? payment.source ?? "").trim(),
+            account: (account ?? payment.account ?? "").trim(),
+            reference: (reference ?? payment.reference ?? payment.mpesaRef ?? "").trim(),
+            howToProceed: (howToProceed ?? payment.howToProceed) ?? null
+          };
+
+      if (!confirmFields.source || !confirmFields.account || !confirmFields.reference) {
         res.status(400).json({
-          error: "Confirmation requires: where from (source), transaction code (reference), and which account. Provide source, account, and reference."
+          error: "Confirmation requires: where from (source), transaction code (reference), and which account."
         });
         return;
       }
 
+      let invoiceApply: Awaited<ReturnType<typeof confirmPaymentCore>> = {};
       await prisma.$transaction(async (tx) => {
-        await confirmPaymentCore(
+        invoiceApply = await confirmPaymentCore(
           tx,
           {
             id: payment.id,
@@ -1429,12 +1671,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
             howToProceed: payment.howToProceed,
             amount: payment.amount
           },
-          {
-            source: sourceVal,
-            account: accountVal,
-            reference: referenceVal,
-            howToProceed: (howToProceed ?? payment.howToProceed) ?? null
-          }
+          confirmFields
         );
       });
 
@@ -1449,11 +1686,33 @@ export default function financeRouter(prisma: PrismaClient): Router {
           type: "payment.confirmed",
           entityType: "payment",
           entityId: id,
-          metadata: { source: sourceVal, account: accountVal, reference: referenceVal }
+          metadata: {
+            source: confirmFields.source,
+            account: confirmFields.account,
+            reference: confirmFields.reference,
+            invoiceNumber: invoiceApply.invoiceNumber ?? null,
+            invoiceStatus: invoiceApply.invoiceStatus ?? null
+          }
         }
       });
 
-      res.json(updated);
+      res.json({
+        success: true,
+        payment: updated,
+        invoiceApplied: linkedInv
+          ? {
+              id: linkedInv.id,
+              number: linkedInv.number,
+              status: invoiceApply.invoiceStatus ?? updated?.invoice?.status ?? "sent",
+              reference: confirmFields.reference
+            }
+          : null,
+        message: linkedInv
+          ? invoiceApply.invoiceStatus === "paid"
+            ? `Invoice ${linkedInv.number} marked paid.`
+            : `Payment applied to invoice ${linkedInv.number}.`
+          : "Payment confirmed."
+      });
     }
   );
 
@@ -2208,6 +2467,18 @@ export default function financeRouter(prisma: PrismaClient): Router {
           markedByUserId: isPaid ? userId : null
         }
       });
+
+      let paymentRecorded: { paymentId?: string; amount?: number } | null = null;
+      if (isPaid && row.invoiceId) {
+        paymentRecorded = await prisma.$transaction(async (tx) => {
+          const result = await recordConfirmedInvoicePayment(tx, orgId, userId, row.invoiceId!, {
+            receivedAt: row.paidAt ?? new Date(),
+            notes: `Management fee ${ymKey(y, mo)} marked paid`
+          });
+          return result.created ? { paymentId: result.paymentId, amount: result.amount } : null;
+        });
+      }
+
       res.json({
         id: row.id,
         projectId: row.projectId,
@@ -2216,7 +2487,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
         key: ymKey(row.year, row.month),
         paid: row.paid,
         paidAt: row.paidAt?.toISOString() ?? null,
-        invoiceId: row.invoiceId
+        invoiceId: row.invoiceId,
+        paymentRecorded
       });
     }
   );

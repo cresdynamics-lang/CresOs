@@ -9,8 +9,7 @@ export const CRES_DYNAMICS_PDF_COMPANY = {
     city: "Nairobi",
     country: "Kenya",
     postal_code: "P.O. BOX 1112 – 00100"
-  },
-  tax_id: "____________________"
+  }
 } as const;
 
 export type PdfCompanyBlock = {

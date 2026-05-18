@@ -496,6 +496,8 @@ model Project {
   leads                 Lead[]
   usersWithCurrentFocus User[]                       @relation("UserCurrentFocus")
   managementMonthRows   ProjectManagementMonth[]
+  communityChannel      ChatCommunityChannel?
+  communityConversation Conversation?              @relation("ProjectCommunityConversation")
 }
 
 /// One row per calendar month for management fee tracking (paid checkbox + optional invoice link).
@@ -866,7 +868,8 @@ model ChatUser {
 model Conversation {
   id           String   @id @default(cuid())
   orgId        String
-  type         String   @default("direct") // direct, group, community, channel
+  type         String   @default("direct") // direct, group, community, channel, project
+  projectId    String?  @unique
   name         String?
   description  String?
   avatar       String?
@@ -879,11 +882,13 @@ model Conversation {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  org           Org                @relation(fields: [orgId], references: [id])
-  creator       User               @relation("ConversationCreator", fields: [createdBy], references: [id])
+  org           Org                   @relation(fields: [orgId], references: [id])
+  project       Project?              @relation("ProjectCommunityConversation", fields: [projectId], references: [id])
+  creator       User                  @relation("ConversationCreator", fields: [createdBy], references: [id])
   messages      Message[]
   notifications ChatNotification[]
-  chatUsers     ChatUser[]         @relation("ParticipantConversations")
+  chatUsers     ChatUser[]            @relation("ParticipantConversations")
+  communityChannel ChatCommunityChannel?
 
   @@index([orgId, type])
   @@index([orgId, updatedAt])
@@ -984,19 +989,23 @@ model ChatNotification {
 }
 
 model ChatCommunityChannel {
-  id          String   @id @default(cuid())
-  orgId       String
-  name        String
-  description String
-  type        String   @default("general") // general, random, announcements, support, projects, custom
-  isPublic    Boolean  @default(true)
-  members     String[]
-  moderators  String[]
-  settings    Json     @default("{\"allowFileSharing\":true,\"allowReactions\":true,\"messageRetention\":90}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  orgId          String
+  projectId      String?  @unique
+  conversationId String?  @unique
+  name           String
+  description    String
+  type           String   @default("general") // general, random, announcements, support, projects, custom
+  isPublic       Boolean  @default(true)
+  members        String[]
+  moderators     String[]
+  settings       Json     @default("{\"allowFileSharing\":true,\"allowReactions\":true,\"messageRetention\":90}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  org Org @relation(fields: [orgId], references: [id])
+  org          Org           @relation(fields: [orgId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
 
   @@index([orgId, type])
   @@index([orgId, isPublic])
