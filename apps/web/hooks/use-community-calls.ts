@@ -19,6 +19,7 @@ import {
 } from "../lib/community-webrtc";
 
 export type CallType = "voice" | "video";
+export type CallPhase = "calling" | "ringing" | "connecting" | "active";
 
 export type IncomingCall = {
   callId: string;
@@ -27,14 +28,25 @@ export type IncomingCall = {
   callerName: string;
 };
 
+export type CallReaction = {
+  id: string;
+  emoji: string;
+  fromSelf: boolean;
+};
+
 export type ActiveCallState = {
   isInCall: boolean;
   callType: CallType | null;
   callWith: OnlineUser | null;
+  phase: CallPhase;
   callDuration: number;
   isMuted: boolean;
   isVideoOn: boolean;
   isScreenSharing: boolean;
+  isMinimized: boolean;
+  localHandRaised: boolean;
+  peerHandRaised: boolean;
+  reactions: CallReaction[];
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   connectionState: RTCPeerConnectionState | "new";
@@ -44,10 +56,15 @@ const EMPTY_CALL: ActiveCallState = {
   isInCall: false,
   callType: null,
   callWith: null,
+  phase: "calling",
   callDuration: 0,
   isMuted: false,
   isVideoOn: false,
   isScreenSharing: false,
+  isMinimized: false,
+  localHandRaised: false,
+  peerHandRaised: false,
+  reactions: [],
   localStream: null,
   remoteStream: null,
   connectionState: "new"
@@ -60,6 +77,21 @@ type UseCommunityCallsOptions = {
   wsUrl: string;
   onCallError?: (message: string) => void;
 };
+
+export function getCallStatusLabel(phase: CallPhase, durationLabel: string): string {
+  switch (phase) {
+    case "calling":
+      return "Calling…";
+    case "ringing":
+      return "Ringing…";
+    case "connecting":
+      return "Connecting…";
+    case "active":
+      return durationLabel;
+    default:
+      return "Calling…";
+  }
+}
 
 export function useCommunityCalls({
   accessToken,
@@ -81,10 +113,12 @@ export function useCommunityCalls({
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const iceQueueRef = useRef(new IceCandidateQueue());
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callActiveRef = useRef(false);
   const isInCallRef = useRef(false);
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const isScreenSharingRef = useRef(false);
   const onlineUsersRef = useRef(onlineUsers);
+  const markCallActiveRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     onlineUsersRef.current = onlineUsers;
@@ -139,6 +173,32 @@ export function useCommunityCalls({
     }, 1000);
   }, [stopCallTimer]);
 
+  const markCallActive = useCallback(() => {
+    if (callActiveRef.current) return;
+    callActiveRef.current = true;
+    stopOutgoingRingback();
+    setCallState((prev) => (prev.phase === "active" ? prev : { ...prev, phase: "active" }));
+    startCallTimer();
+  }, [startCallTimer]);
+
+  useEffect(() => {
+    markCallActiveRef.current = markCallActive;
+  }, [markCallActive]);
+
+  const addReaction = useCallback((emoji: string, fromSelf: boolean) => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setCallState((prev) => ({
+      ...prev,
+      reactions: [...prev.reactions.slice(-8), { id, emoji, fromSelf }]
+    }));
+    window.setTimeout(() => {
+      setCallState((prev) => ({
+        ...prev,
+        reactions: prev.reactions.filter((r) => r.id !== id)
+      }));
+    }, 3200);
+  }, []);
+
   const cleanupMedia = useCallback(() => {
     screenTrackRef.current?.stop();
     screenTrackRef.current = null;
@@ -150,6 +210,7 @@ export function useCommunityCalls({
     pcRef.current?.close();
     pcRef.current = null;
     iceQueueRef.current.clear();
+    callActiveRef.current = false;
   }, []);
 
   const endCall = useCallback(() => {
@@ -182,6 +243,16 @@ export function useCommunityCalls({
     [wsSend]
   );
 
+  const sendCallSignal = useCallback(
+    (signal: "ringing" | "hand_up" | "hand_down" | "emoji", emoji?: string) => {
+      const callId = activeCallIdRef.current;
+      const toUserId = activePeerIdRef.current;
+      if (!callId || !toUserId) return;
+      wsSend({ type: "call_signal", callId, toUserId, signal, emoji });
+    },
+    [wsSend]
+  );
+
   const setupPeer = useCallback(
     (callType: CallType, localStream: MediaStream) => {
       const remoteStream = new MediaStream();
@@ -199,9 +270,11 @@ export function useCommunityCalls({
             }
           });
           setCallState((prev) => ({ ...prev, remoteStream }));
+          markCallActiveRef.current();
         },
         (state) => {
           setCallState((prev) => ({ ...prev, connectionState: state }));
+          if (state === "connected") markCallActiveRef.current();
           if (state === "failed") {
             onCallError?.("Connection failed. Try again or check your network.");
           }
@@ -216,23 +289,33 @@ export function useCommunityCalls({
   );
 
   const beginActiveCall = useCallback(
-    (peer: OnlineUser, callType: CallType, localStream: MediaStream, remoteStream: MediaStream) => {
+    (
+      peer: OnlineUser,
+      callType: CallType,
+      localStream: MediaStream,
+      remoteStream: MediaStream,
+      phase: CallPhase
+    ) => {
       localStreamRef.current = localStream;
       setCallState({
         isInCall: true,
         callType,
         callWith: peer,
+        phase,
         callDuration: 0,
         isMuted: false,
         isVideoOn: callType === "video",
         isScreenSharing: false,
+        isMinimized: false,
+        localHandRaised: false,
+        peerHandRaised: false,
+        reactions: [],
         localStream,
         remoteStream,
         connectionState: "connecting"
       });
-      startCallTimer();
     },
-    [startCallTimer]
+    []
   );
 
   const handleRemoteOffer = useCallback(
@@ -244,19 +327,20 @@ export function useCommunityCalls({
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       wsSend({ type: "call_answer", callId, toUserId: fromUserId, sdp: answer });
+      setCallState((prev) =>
+        prev.phase === "active" ? prev : { ...prev, phase: "connecting" }
+      );
     },
     [wsSend]
   );
 
-  const handleRemoteAnswer = useCallback(
-    async (callId: string, sdp: RTCSessionDescriptionInit) => {
-      const pc = pcRef.current;
-      if (!pc || activeCallIdRef.current !== callId) return;
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      await iceQueueRef.current.flush(pc);
-    },
-    []
-  );
+  const handleRemoteAnswer = useCallback(async (callId: string, sdp: RTCSessionDescriptionInit) => {
+    const pc = pcRef.current;
+    if (!pc || activeCallIdRef.current !== callId) return;
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    await iceQueueRef.current.flush(pc);
+    setCallState((prev) => (prev.phase === "active" ? prev : { ...prev, phase: "connecting" }));
+  }, []);
 
   const acceptIncomingCall = useCallback(async () => {
     const pending = incomingCall;
@@ -282,7 +366,7 @@ export function useCommunityCalls({
         defaultMediaConstraints(pending.callType)
       );
       const { remoteStream } = setupPeer(pending.callType, stream);
-      beginActiveCall(peer, pending.callType, stream, remoteStream);
+      beginActiveCall(peer, pending.callType, stream, remoteStream, "connecting");
       wsSend({ type: "call_accept", callId: pending.callId, toUserId: pending.fromUserId });
     } catch {
       onCallError?.("Could not access camera or microphone.");
@@ -315,6 +399,13 @@ export function useCommunityCalls({
         return;
       }
 
+      if (!user.isOnline) {
+        onCallError?.(
+          `${user.name} is offline. They need to open Community to receive your call.`
+        );
+        return;
+      }
+
       if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
         onCallError?.("Connecting to call service… try again in a moment.");
         return;
@@ -327,7 +418,7 @@ export function useCommunityCalls({
       try {
         const stream = await navigator.mediaDevices.getUserMedia(defaultMediaConstraints(callType));
         const { remoteStream } = setupPeer(callType, stream);
-        beginActiveCall(user, callType, stream, remoteStream);
+        beginActiveCall(user, callType, stream, remoteStream, "calling");
         wsSend({ type: "call_request", callId, toUserId: user.id, callType });
         startOutgoingRingback();
       } catch {
@@ -360,6 +451,26 @@ export function useCommunityCalls({
     });
   }, []);
 
+  const toggleMinimize = useCallback(() => {
+    setCallState((prev) => ({ ...prev, isMinimized: !prev.isMinimized }));
+  }, []);
+
+  const toggleRaiseHand = useCallback(() => {
+    setCallState((prev) => {
+      const next = !prev.localHandRaised;
+      sendCallSignal(next ? "hand_up" : "hand_down");
+      return { ...prev, localHandRaised: next };
+    });
+  }, [sendCallSignal]);
+
+  const sendCallEmoji = useCallback(
+    (emoji: string) => {
+      addReaction(emoji, true);
+      sendCallSignal("emoji", emoji);
+    },
+    [addReaction, sendCallSignal]
+  );
+
   const stopScreenShare = useCallback(async () => {
     if (!isScreenSharingRef.current) return;
     const pc = pcRef.current;
@@ -389,10 +500,7 @@ export function useCommunityCalls({
     }
 
     try {
-      const display = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false
-      });
+      const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = display.getVideoTracks()[0];
       if (!screenTrack) {
         display.getTracks().forEach((t) => t.stop());
@@ -408,7 +516,7 @@ export function useCommunityCalls({
         wsSend({ type: "call_offer", callId, toUserId: peerId, sdp });
       });
     } catch {
-      // user cancelled picker
+      // cancelled
     }
   }, [wsSend, stopScreenShare]);
 
@@ -425,7 +533,9 @@ export function useCommunityCalls({
         if (!type) return;
 
         if (type === "error" && payload.code === "RECIPIENT_OFFLINE") {
-          onCallError?.("They are not on Community right now. Ask them to open Community.");
+          onCallError?.(
+            "They are offline — not on Community right now. You'll be notified when they can't receive calls."
+          );
           endCall();
           return;
         }
@@ -444,7 +554,28 @@ export function useCommunityCalls({
           const label =
             onlineUsersRef.current.find((u) => u.id === fromUserId)?.name || "Someone";
           setIncomingCall({ callId, fromUserId, callType, callerName: label });
+          activeCallIdRef.current = callId;
+          activePeerIdRef.current = fromUserId;
+          wsSend({ type: "call_signal", callId, toUserId: fromUserId, signal: "ringing" });
           notifyIncomingCallIfHidden(label, callType);
+          return;
+        }
+
+        if (type === "call_signal") {
+          const callId = String(payload.callId || "");
+          if (callId && activeCallIdRef.current !== callId) return;
+          const signal = String(payload.signal || "");
+          if (signal === "ringing") {
+            setCallState((prev) =>
+              prev.isInCall && prev.phase === "calling" ? { ...prev, phase: "ringing" } : prev
+            );
+          } else if (signal === "hand_up") {
+            setCallState((prev) => ({ ...prev, peerHandRaised: true }));
+          } else if (signal === "hand_down") {
+            setCallState((prev) => ({ ...prev, peerHandRaised: false }));
+          } else if (signal === "emoji" && payload.emoji) {
+            addReaction(String(payload.emoji), false);
+          }
           return;
         }
 
@@ -453,6 +584,9 @@ export function useCommunityCalls({
           const callId = String(payload.callId || "");
           const fromUserId = String(payload.fromUserId || "");
           if (!callId || !fromUserId || activeCallIdRef.current !== callId) return;
+          setCallState((prev) =>
+            prev.isInCall ? { ...prev, phase: "connecting" } : prev
+          );
           const pc = pcRef.current;
           if (!pc) return;
           const offer = await pc.createOffer();
@@ -505,7 +639,7 @@ export function useCommunityCalls({
           return;
         }
       } catch {
-        // ignore malformed
+        // ignore
       }
     };
 
@@ -524,7 +658,8 @@ export function useCommunityCalls({
     endCall,
     handleRemoteOffer,
     handleRemoteAnswer,
-    onCallError
+    onCallError,
+    addReaction
   ]);
 
   useEffect(() => {
@@ -544,6 +679,12 @@ export function useCommunityCalls({
     };
   }, [stopCallTimer, cleanupMedia]);
 
+  const formatCallDuration = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }, []);
+
   return {
     callState,
     incomingCall,
@@ -554,10 +695,11 @@ export function useCommunityCalls({
     toggleMute,
     toggleVideo,
     toggleScreenShare,
-    formatCallDuration: (seconds: number) => {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-    }
+    toggleMinimize,
+    toggleRaiseHand,
+    sendCallEmoji,
+    formatCallDuration,
+    getStatusLabel: (phase: CallPhase) =>
+      getCallStatusLabel(phase, formatCallDuration(callState.callDuration))
   };
 }

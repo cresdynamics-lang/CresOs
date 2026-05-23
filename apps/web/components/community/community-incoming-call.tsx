@@ -1,7 +1,7 @@
 "use client";
 
 import type { IncomingCall } from "../../hooks/use-community-calls";
-import { VideoCamIcon } from "./call-icons";
+import { HangupIcon, MicIcon, VideoCamIcon } from "./call-icons";
 
 type Props = {
   incoming: IncomingCall;
@@ -29,17 +29,22 @@ export function CommunityIncomingCall({ incoming, onAccept, onReject }: Props) {
           <button
             type="button"
             onClick={onReject}
-            className="rounded-full bg-red-600 px-8 py-3 text-sm font-semibold text-white hover:bg-red-500"
+            title="Decline"
+            className="flex items-center justify-center rounded-full bg-red-600 p-4 text-white hover:bg-red-500"
           >
-            Decline
+            <HangupIcon className="h-6 w-6" />
           </button>
           <button
             type="button"
             onClick={onAccept}
-            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-500 hover:to-teal-500"
+            title="Accept"
+            className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 p-4 text-white shadow-lg hover:from-emerald-500 hover:to-teal-500"
           >
-            {incoming.callType === "video" ? <VideoCamIcon /> : null}
-            Accept
+            {incoming.callType === "video" ? (
+              <VideoCamIcon className="h-6 w-6" />
+            ) : (
+              <MicIcon className="h-6 w-6" />
+            )}
           </button>
         </div>
       </div>

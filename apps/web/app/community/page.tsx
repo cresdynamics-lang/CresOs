@@ -14,6 +14,7 @@ import { useAuth } from "../auth-context";
 import { browserNotificationSoundAllowed } from "../../lib/notification-signals";
 import { CommunityCallOverlay } from "../../components/community/community-call-overlay";
 import { CommunityIncomingCall } from "../../components/community/community-incoming-call";
+import { CommunityEmojiPicker } from "../../components/community/community-emoji-picker";
 import { VoiceMessageMicIcon } from "../../components/community/call-icons";
 import { CommunityMemberPicker } from "../../components/community/community-member-picker";
 import { CommunitySidebar } from "../../components/community/community-sidebar";
@@ -333,6 +334,7 @@ export default function CommunityPage() {
   const [messagesPages, setMessagesPages] = useState(1);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [newMessage, setNewMessage] = useState("");
+  const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
   const [literalTypingMode, setLiteralTypingMode] = useState(false);
   const [assistPreview, setAssistPreview] = useState<{
     kind: "polish" | "translate";
@@ -394,6 +396,9 @@ export default function CommunityPage() {
     toggleMute,
     toggleVideo,
     toggleScreenShare,
+    toggleMinimize,
+    toggleRaiseHand,
+    sendCallEmoji,
     formatCallDuration
   } = useCommunityCalls({
     accessToken: auth.accessToken,
@@ -2408,6 +2413,28 @@ export default function CommunityPage() {
                     </div>,
                     document.body
                   )}
+                <div className="relative mb-0.5 min-w-0 flex-1">
+                  <CommunityEmojiPicker
+                    open={composerEmojiOpen}
+                    onClose={() => setComposerEmojiOpen(false)}
+                    onPick={(emoji) => {
+                      if (editingMessageId) {
+                        setEditDraft((t) => t + emoji);
+                      } else {
+                        setNewMessage((t) => t + emoji);
+                      }
+                      requestAnimationFrame(() => composerRef.current?.focus());
+                    }}
+                    className="absolute bottom-full left-0 z-30 mb-2 w-64"
+                  />
+                  <button
+                    type="button"
+                    className="absolute bottom-2 left-2 z-10 rounded-full p-1 text-lg text-[#8696A0] hover:bg-[#3B4A54] hover:text-[#E9EDEF]"
+                    title="Insert emoji"
+                    onClick={() => setComposerEmojiOpen((o) => !o)}
+                  >
+                    😊
+                  </button>
                 <textarea
                   ref={composerRef}
                   rows={1}
@@ -2422,10 +2449,11 @@ export default function CommunityPage() {
                   spellCheck={!literalTypingMode}
                   autoCorrect={literalTypingMode ? "off" : "on"}
                   autoCapitalize="sentences"
-                  className={`mb-0.5 max-h-[40vh] min-h-[42px] flex-1 resize-none border-0 bg-[#2A3942] px-4 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 ${
+                  className={`max-h-[40vh] min-h-[42px] w-full resize-none border-0 bg-[#2A3942] py-2.5 pl-10 pr-4 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 ${
                     isChannelView ? "rounded-lg" : "rounded-3xl"
                   } ${activeChatUi.composerFocus}`}
                 />
+                </div>
                 <button
                   type="button"
                   onClick={() => void handleSendMessage()}
@@ -2470,6 +2498,9 @@ export default function CommunityPage() {
         onToggleMute={toggleMute}
         onToggleVideo={toggleVideo}
         onToggleScreenShare={() => void toggleScreenShare()}
+        onToggleMinimize={toggleMinimize}
+        onToggleRaiseHand={toggleRaiseHand}
+        onSendEmoji={sendCallEmoji}
         onEndCall={endCall}
       />
 

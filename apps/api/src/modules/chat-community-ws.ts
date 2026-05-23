@@ -52,6 +52,13 @@ type SignalMessage =
       callId: string;
       toUserId: string;
       reason?: string;
+    }
+  | {
+      type: "call_signal";
+      callId: string;
+      toUserId: string;
+      signal: "ringing" | "hand_up" | "hand_down" | "emoji";
+      emoji?: string;
     };
 
 function wsSend(ws: WebSocket, payload: unknown) {
@@ -224,6 +231,7 @@ export function attachChatCommunityWs(server: http.Server, prisma: PrismaClient)
           case "call_answer":
           case "ice_candidate":
           case "call_hangup":
+          case "call_signal":
             forward(userId, toUserId, parsed as SignalMessage);
             break;
           default:
