@@ -12,8 +12,13 @@ import {
 import { createPortal } from "react-dom";
 import { useAuth } from "../auth-context";
 import { browserNotificationSoundAllowed } from "../../lib/notification-signals";
+import { CommunityCallOverlay } from "../../components/community/community-call-overlay";
+import { CommunityIncomingCall } from "../../components/community/community-incoming-call";
+import { VoiceMessageMicIcon } from "../../components/community/call-icons";
 import { CommunityMemberPicker } from "../../components/community/community-member-picker";
 import { CommunitySidebar } from "../../components/community/community-sidebar";
+import { useCommunityCalls } from "../../hooks/use-community-calls";
+import { unlockCommunityCallAudio } from "../../lib/community-call-ring";
 import { chatUiFor, communityTheme, directChatUi } from "../../components/community/community-theme";
 import type {
   ChannelDraft,
@@ -46,18 +51,6 @@ function canDeleteChannelRole(roleKeys: string[] | undefined): boolean {
   return Boolean(
     roleKeys?.includes("admin") || roleKeys?.includes("director_admin")
   );
-}
-
-interface CallState {
-  isInCall: boolean;
-  callType: "voice" | "video" | null;
-  callWith: OnlineUser | null;
-  callDuration: number;
-  isMuted: boolean;
-  isVideoOn: boolean;
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
-  peerConnection: RTCPeerConnection | null;
 }
 
 const LONG_PRESS_MS = 520;
@@ -372,26 +365,6 @@ export default function CommunityPage() {
     data: { status: string; createdAt: string; editedAt: string | null; revokedAt: string | null; readBy: unknown };
   } | null>(null);
 
-  const [callState, setCallState] = useState<CallState>({
-    isInCall: false,
-    callType: null,
-    callWith: null,
-    callDuration: 0,
-    isMuted: false,
-    isVideoOn: false,
-    localStream: null,
-    remoteStream: null,
-    peerConnection: null
-  });
-  const wsRef = useRef<WebSocket | null>(null);
-  const wsReadyRef = useRef(false);
-  const activeCallIdRef = useRef<string | null>(null);
-  const activePeerIdRef = useRef<string | null>(null);
-  const pendingInboundCallRef = useRef<{ callId: string; fromUserId: string; callType: "voice" | "video" } | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
-  const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [voiceRecordingTimer, setVoiceRecordingTimer] = useState<NodeJS.Timeout | null>(null);
@@ -402,43 +375,6 @@ export default function CommunityPage() {
   const lastUnreadTotalRef = useRef(0);
   const lastBeepAtRef = useRef(0);
 
-  const startCallTimer = useCallback(() => {
-    if (callTimer) {
-      clearInterval(callTimer);
-      setCallTimer(null);
-    }
-    const timer = setInterval(() => {
-      setCallState((prev) => ({
-        ...prev,
-        callDuration: prev.callDuration + 1
-      }));
-    }, 1000);
-    setCallTimer(timer);
-  }, [callTimer]);
-
-  const wsSend = useCallback((payload: unknown) => {
-    const ws = wsRef.current;
-    if (!ws) return;
-    const sendNow = () => {
-      try {
-        ws.send(JSON.stringify(payload));
-      } catch {
-        // ignore
-      }
-    };
-    if (ws.readyState === WebSocket.OPEN) {
-      sendNow();
-      return;
-    }
-    if (ws.readyState === WebSocket.CONNECTING) {
-      const onOpen = () => {
-        ws.removeEventListener("open", onOpen);
-        sendNow();
-      };
-      ws.addEventListener("open", onOpen);
-    }
-  }, []);
-
   const wsUrl = useMemo(() => {
     const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
     const wsBase = base.startsWith("https://")
@@ -448,216 +384,24 @@ export default function CommunityPage() {
     return `${wsBase}/chat-community/ws?token=${token}`;
   }, [auth.accessToken]);
 
-  const ensureWs = useCallback((): WebSocket | null => {
-    if (!auth.accessToken) return null;
-    const existing = wsRef.current;
-    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
-      return existing;
-    }
-
-    wsReadyRef.current = false;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      wsReadyRef.current = true;
-    };
-
-    ws.onclose = () => {
-      wsReadyRef.current = false;
-      if (wsRef.current === ws) wsRef.current = null;
-    };
-
-    ws.onerror = () => {
-      wsReadyRef.current = false;
-    };
-
-    ws.onmessage = async (evt) => {
-      try {
-        const payload = JSON.parse(String(evt.data)) as any;
-        if (!payload || typeof payload.type !== "string") return;
-
-        if (payload.type === "call_request") {
-          const fromUserId = String(payload.fromUserId || "");
-          const callId = String(payload.callId || "");
-          const callType = payload.callType === "video" ? "video" : "voice";
-          if (!fromUserId || !callId) return;
-          if (callState.isInCall) {
-            ws.send(
-              JSON.stringify({
-                type: "call_reject",
-                callId,
-                toUserId: fromUserId,
-                reason: "busy"
-              })
-            );
-            return;
-          }
-          pendingInboundCallRef.current = { callId, fromUserId, callType };
-          const label = onlineUsers.find((u) => u.id === fromUserId)?.name || "Someone";
-          const ok = window.confirm(`${label} is calling you (${callType}). Accept?`);
-          if (!ok) {
-            ws.send(
-              JSON.stringify({
-                type: "call_reject",
-                callId,
-                toUserId: fromUserId,
-                reason: "rejected"
-              })
-            );
-            pendingInboundCallRef.current = null;
-            return;
-          }
-
-          activeCallIdRef.current = callId;
-          activePeerIdRef.current = fromUserId;
-
-          const peer = onlineUsers.find((u) => u.id === fromUserId) || {
-            id: fromUserId,
-            name: label,
-            status: "online",
-            lastSeen: null,
-            isOnline: true
-          };
-
-          const constraints = {
-            audio: true,
-            video: callType === "video"
-          };
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-          const pc = new RTCPeerConnection({
-            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-          });
-
-          pcRef.current = pc;
-          localStreamRef.current = stream;
-
-          const remoteStream = new MediaStream();
-          remoteStreamRef.current = remoteStream;
-          pc.ontrack = (e) => {
-            e.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
-            setCallState((prev) => ({ ...prev, remoteStream }));
-          };
-
-          pc.onicecandidate = (e) => {
-            if (!e.candidate) return;
-            const toUserId = activePeerIdRef.current;
-            const callId2 = activeCallIdRef.current;
-            if (!toUserId || !callId2) return;
-            ws.send(
-              JSON.stringify({
-                type: "ice_candidate",
-                callId: callId2,
-                toUserId,
-                candidate: e.candidate
-              })
-            );
-          };
-
-          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-          setCallState({
-            isInCall: true,
-            callType,
-            callWith: peer as OnlineUser,
-            callDuration: 0,
-            isMuted: false,
-            isVideoOn: callType === "video",
-            localStream: stream,
-            remoteStream,
-            peerConnection: pc
-          });
-
-          startCallTimer();
-
-          wsSend({ type: "call_accept", callId, toUserId: fromUserId });
-          pendingInboundCallRef.current = null;
-          return;
-        }
-
-        if (payload.type === "call_accept") {
-          const callId = String(payload.callId || "");
-          const fromUserId = String(payload.fromUserId || "");
-          if (!callId || !fromUserId) return;
-          if (activeCallIdRef.current !== callId) return;
-          const pc = pcRef.current;
-          if (!pc) return;
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          wsSend({ type: "call_offer", callId, toUserId: fromUserId, sdp: offer });
-          return;
-        }
-
-        if (payload.type === "call_offer") {
-          const callId = String(payload.callId || "");
-          const fromUserId = String(payload.fromUserId || "");
-          if (!callId || !fromUserId) return;
-          if (activeCallIdRef.current !== callId) return;
-          const pc = pcRef.current;
-          if (!pc) return;
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          wsSend({ type: "call_answer", callId, toUserId: fromUserId, sdp: answer });
-          return;
-        }
-
-        if (payload.type === "call_answer") {
-          const callId = String(payload.callId || "");
-          if (!callId) return;
-          if (activeCallIdRef.current !== callId) return;
-          const pc = pcRef.current;
-          if (!pc) return;
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          return;
-        }
-
-        if (payload.type === "ice_candidate") {
-          const callId = String(payload.callId || "");
-          if (!callId) return;
-          if (activeCallIdRef.current !== callId) return;
-          const pc = pcRef.current;
-          if (!pc) return;
-          if (payload.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          }
-          return;
-        }
-
-        if (payload.type === "call_reject") {
-          const callId = String(payload.callId || "");
-          if (!callId) return;
-          if (activeCallIdRef.current !== callId) return;
-          alert("Call rejected");
-          endCall();
-          return;
-        }
-
-        if (payload.type === "call_hangup") {
-          const callId = String(payload.callId || "");
-          if (!callId) return;
-          if (activeCallIdRef.current !== callId) return;
-          endCall();
-          return;
-        }
-      } catch {
-        return;
-      }
-    };
-
-    return ws;
-  }, [auth.accessToken, wsUrl, callState.isInCall, callState.peerConnection, onlineUsers]);
-
-  useEffect(() => {
-    return () => {
-      try {
-        wsRef.current?.close();
-      } catch {
-        // ignore
-      }
-    };
-  }, []);
+  const {
+    callState,
+    incomingCall,
+    startCall: placeCall,
+    endCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    toggleMute,
+    toggleVideo,
+    toggleScreenShare,
+    formatCallDuration
+  } = useCommunityCalls({
+    accessToken: auth.accessToken,
+    userId: auth.userId,
+    onlineUsers,
+    wsUrl,
+    onCallError: setChatError
+  });
 
   const loadConversations = useCallback(async () => {
     if (!auth.accessToken) return;
@@ -696,6 +440,31 @@ export default function CommunityPage() {
       setLoading(false);
     }
   }, [auth.accessToken, auth.roleKeys, apiFetch, playCommunitySound]);
+
+  const startCall = useCallback(
+    async (user: OnlineUser, callType: "voice" | "video") => {
+      await placeCall(user, callType);
+      try {
+        const response = await apiFetch("/chat-community/conversations/direct", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ participantId: user.id })
+        });
+        if (response.ok) {
+          const data = (await response.json()) as { data?: { conversation?: Conversation } };
+          const conv = data.data?.conversation;
+          if (conv) {
+            selectConversation(conv);
+            setSidebarPanel("chats");
+            void loadConversations();
+          }
+        }
+      } catch {
+        // call proceeds even if DM open fails
+      }
+    },
+    [placeCall, apiFetch, selectConversation, loadConversations]
+  );
 
   const loadChannels = useCallback(async () => {
     if (!auth.accessToken) return;
@@ -945,6 +714,7 @@ export default function CommunityPage() {
     if (audioUnlockedRef.current) return;
     const unlock = () => {
       audioUnlockedRef.current = true;
+      unlockCommunityCallAudio();
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
@@ -1477,179 +1247,6 @@ export default function CommunityPage() {
     }
   };
 
-  const formatCallDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const startCall = async (user: OnlineUser, callType: "voice" | "video") => {
-    if (!auth.accessToken) return;
-    if (!user.isOnline) {
-      alert("Voice and video calls are only available when the other person is online.");
-      return;
-    }
-    if (!auth.userId) {
-      alert("Missing user id. Refresh and try again.");
-      return;
-    }
-
-    const ws = ensureWs();
-    if (!ws) {
-      alert("Could not connect to call service.");
-      return;
-    }
-
-    const callId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    activeCallIdRef.current = callId;
-    activePeerIdRef.current = user.id;
-
-    try {
-      const constraints = {
-        audio: true,
-        video: callType === "video"
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-      });
-
-      pcRef.current = pc;
-      localStreamRef.current = stream;
-
-      const remoteStream = new MediaStream();
-      remoteStreamRef.current = remoteStream;
-      pc.ontrack = (e) => {
-        e.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
-        setCallState((prev) => ({ ...prev, remoteStream }));
-      };
-
-      pc.onicecandidate = (e) => {
-        if (!e.candidate) return;
-        const toUserId = activePeerIdRef.current;
-        const callId2 = activeCallIdRef.current;
-        if (!toUserId || !callId2) return;
-        ws.send(
-          JSON.stringify({
-            type: "ice_candidate",
-            callId: callId2,
-            toUserId,
-            candidate: e.candidate
-          })
-        );
-      };
-
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-      const response = await apiFetch("/chat-community/conversations/direct", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          participantId: user.id
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const conv = data.data?.conversation;
-        if (conv) selectConversation(conv);
-        setSidebarPanel("chats");
-        void loadConversations();
-      }
-
-      setCallState({
-        isInCall: true,
-        callType,
-        callWith: user,
-        callDuration: 0,
-        isMuted: false,
-        isVideoOn: callType === "video",
-        localStream: stream,
-        remoteStream,
-        peerConnection: pc
-      });
-
-      startCallTimer();
-      wsSend({ type: "call_request", callId, toUserId: user.id, callType });
-    } catch (error) {
-      console.error("Failed to start call:", error);
-      alert("Failed to access camera/microphone. Please check permissions.");
-      endCall();
-    }
-  };
-
-  const endCall = () => {
-    if (callTimer) {
-      clearInterval(callTimer);
-      setCallTimer(null);
-    }
-
-    const callId = activeCallIdRef.current;
-    const toUserId = activePeerIdRef.current;
-    if (callId && toUserId) {
-      wsSend({ type: "call_hangup", callId, toUserId });
-    }
-
-    activeCallIdRef.current = null;
-    activePeerIdRef.current = null;
-
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-    }
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
-    }
-    if (pcRef.current) {
-      pcRef.current.close();
-    }
-
-    localStreamRef.current = null;
-    remoteStreamRef.current = null;
-    pcRef.current = null;
-
-    setCallState({
-      isInCall: false,
-      callType: null,
-      callWith: null,
-      callDuration: 0,
-      isMuted: false,
-      isVideoOn: false,
-      localStream: null,
-      remoteStream: null,
-      peerConnection: null
-    });
-  };
-
-  const toggleMute = () => {
-    if (callState.localStream) {
-      const audioTracks = callState.localStream.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = !callState.isMuted;
-      });
-    }
-    setCallState((prev) => ({
-      ...prev,
-      isMuted: !prev.isMuted
-    }));
-  };
-
-  const toggleVideo = () => {
-    if (callState.localStream) {
-      const videoTracks = callState.localStream.getVideoTracks();
-      videoTracks.forEach((track) => {
-        track.enabled = !callState.isVideoOn;
-      });
-    }
-    setCallState((prev) => ({
-      ...prev,
-      isVideoOn: !prev.isVideoOn
-    }));
-  };
-
   const stopVoiceRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
@@ -2164,7 +1761,6 @@ export default function CommunityPage() {
                 <div className="flex flex-shrink-0 gap-1">
                   <button
                     type="button"
-                    disabled={!selectedPeer.isOnline}
                     onClick={() => void startCall(selectedPeer, "voice")}
                     className="rounded-full p-2.5 text-[#AEBAC1] hover:bg-[#2A3942] disabled:cursor-not-allowed disabled:opacity-30"
                     title="Voice call"
@@ -2175,7 +1771,6 @@ export default function CommunityPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={!selectedPeer.isOnline}
                     onClick={() => void startCall(selectedPeer, "video")}
                     className="rounded-full p-2.5 text-[#AEBAC1] hover:bg-[#2A3942] disabled:cursor-not-allowed disabled:opacity-30"
                     title="Video call"
@@ -2723,9 +2318,7 @@ export default function CommunityPage() {
                   }
                   aria-pressed={isRecordingVoice}
                 >
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                  </svg>
+                  <VoiceMessageMicIcon />
                 </button>
                 ) : null}
                 {!isChannelView && isRecordingVoice && (
@@ -2863,92 +2456,22 @@ export default function CommunityPage() {
         )}
       </div>
 
-      {callState.isInCall && callState.callWith && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
-          <div className="mx-4 w-full max-w-md rounded-xl bg-[#202C33] p-6">
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#2A3942] text-2xl font-medium text-[#E9EDEF]">
-                {initialsFromLabel(callState.callWith.name)}
-              </div>
-              <h3 className="text-xl font-semibold text-[#E9EDEF]">{callState.callWith.name}</h3>
-              <p className="capitalize text-[#8696A0]">{callState.callType} call</p>
-              <p className="mt-2 font-mono text-2xl text-[#25D366]">{formatCallDuration(callState.callDuration)}</p>
-            </div>
-
-            {callState.callType === "video" && (
-              <div className="mb-4 space-y-4">
-                <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-lg bg-[#111B21]">
-                  {callState.remoteStream ? (
-                    <video
-                      ref={(el) => {
-                        if (el && callState.remoteStream) {
-                          el.srcObject = callState.remoteStream;
-                          void el.play();
-                        }
-                      }}
-                      autoPlay
-                      playsInline
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-[#8696A0]">Connecting…</div>
-                  )}
-
-                  {callState.localStream && (
-                    <video
-                      ref={(el) => {
-                        if (el && callState.localStream) {
-                          el.srcObject = callState.localStream;
-                          el.muted = true;
-                          void el.play();
-                        }
-                      }}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="absolute bottom-2 right-2 h-20 w-28 rounded-md object-cover ring-2 ring-black/30"
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-center gap-4">
-              <button
-                type="button"
-                onClick={toggleMute}
-                className={`rounded-full p-3 transition-colors ${
-                  callState.isMuted ? "bg-red-600 text-white" : "bg-[#2A3942] text-[#E9EDEF]"
-                }`}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a7 7 0 017 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4" />
-                </svg>
-              </button>
-
-              {callState.callType === "video" && (
-                <button
-                  type="button"
-                  onClick={toggleVideo}
-                  className={`rounded-full p-3 ${
-                    callState.isVideoOn ? "bg-[#2A3942] text-[#E9EDEF]" : "bg-red-600 text-white"
-                  }`}
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-              )}
-
-              <button type="button" onClick={endCall} className="rounded-full bg-red-600 p-3 text-white hover:bg-red-700">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-1c0-8.284-6.716-15-15-15H5z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+      {incomingCall && (
+        <CommunityIncomingCall
+          incoming={incomingCall}
+          onAccept={() => void acceptIncomingCall()}
+          onReject={rejectIncomingCall}
+        />
       )}
+
+      <CommunityCallOverlay
+        callState={callState}
+        durationLabel={formatCallDuration(callState.callDuration)}
+        onToggleMute={toggleMute}
+        onToggleVideo={toggleVideo}
+        onToggleScreenShare={() => void toggleScreenShare()}
+        onEndCall={endCall}
+      />
 
       {showNewChannelModal &&
         typeof document !== "undefined" &&

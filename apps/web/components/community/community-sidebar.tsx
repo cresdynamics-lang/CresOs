@@ -201,10 +201,9 @@ const PersonRow = memo(function PersonRow({
         </button>
         <button
           type="button"
-          disabled={!user.isOnline}
           onClick={() => void onVoice(user)}
-          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30"
-          title="Voice call"
+          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+          title={user.isOnline ? "Voice call" : "Call (they must have Community open)"}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -217,10 +216,9 @@ const PersonRow = memo(function PersonRow({
         </button>
         <button
           type="button"
-          disabled={!user.isOnline}
           onClick={() => void onVideo(user)}
-          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30"
-          title="Video call"
+          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+          title={user.isOnline ? "Video call" : "Video call (they must have Community open)"}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
