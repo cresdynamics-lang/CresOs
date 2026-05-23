@@ -1,89 +1,51 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../auth-context";
 import { browserNotificationSoundAllowed } from "../../lib/notification-signals";
+import { CommunityMemberPicker } from "../../components/community/community-member-picker";
+import { CommunitySidebar } from "../../components/community/community-sidebar";
+import { chatUiFor, communityTheme, directChatUi } from "../../components/community/community-theme";
+import type {
+  ChannelDraft,
+  Conversation,
+  Message,
+  OnlineUser,
+  SidebarSection
+} from "../../components/community/community-types";
+import {
+  CommunityChannelBadge,
+  formatMessageTime,
+  initialsFromLabel,
+  isChannelConversation
+} from "../../components/community/community-utils";
 
-interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  senderName: string;
-  timestamp: string;
-  type: "text" | "system" | string;
-  status: "sent" | "delivered" | "read" | string;
-  metadata?: Record<string, unknown> | null;
-  flags?: { starred?: boolean; saved?: boolean } | null;
-  replyTo?: string | null;
-  editedAt?: string | null;
-  revokedAt?: string | null;
+function avatarUrl(pathOrUrl: string | null | undefined): string | null {
+  if (!pathOrUrl) return null;
+  const raw = String(pathOrUrl).trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
-interface OrgRoleRef {
-  key: string;
-  name: string;
+function canCreateChannel(roleKeys: string[] | undefined): boolean {
+  return Boolean(roleKeys?.includes("director_admin"));
 }
 
-interface Conversation {
-  id: string;
-  type: "channel" | "project" | "direct" | "group";
-  name: string;
-  description: string;
-  participants: string[];
-  otherUser?: OnlineUser;
-  projectId?: string | null;
-  projectStatus?: string | null;
-  projectApprovalStatus?: string | null;
-  channelTopics?: string | null;
-  linkedProjectName?: string | null;
-  participantCount?: number;
-  lastMessage: Message;
-  unreadCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ChannelDraft {
-  id: string;
-  name: string;
-  status: string;
-  approvalStatus: string;
-  updatedAt: string;
-  teamMemberCount: number;
-}
-
-function isChannelConversation(c: Conversation): boolean {
-  return c.type === "channel" || c.type === "project";
-}
-
-function CommunityChannelBadge({ className = "" }: { className?: string }) {
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#25D366]/35 bg-[#111B21] p-0.5 ${className}`}
-    >
-      <img src="/LOGO.jpg" width={40} height={40} alt="" className="h-full w-full rounded-full object-cover" />
-    </div>
-  );
-}
-
-function canManageChannels(roleKeys: string[] | undefined): boolean {
+function canDeleteChannelRole(roleKeys: string[] | undefined): boolean {
   return Boolean(
     roleKeys?.includes("admin") || roleKeys?.includes("director_admin")
   );
-}
-
-interface OnlineUser {
-  id: string;
-  /** Resolved label: profile name, or email if no name */
-  name: string;
-  hasDisplayName?: boolean;
-  roles?: OrgRoleRef[];
-  status: "online" | "busy" | "away" | "offline";
-  lastSeen: string | null;
-  isOnline: boolean;
-  avatar?: string | null;
-  onlineHours?: string | null;
 }
 
 interface CallState {
@@ -98,70 +60,9 @@ interface CallState {
   peerConnection: RTCPeerConnection | null;
 }
 
-/** Sidebar + shared chrome (WhatsApp-inspired) */
-const wa = {
-  sidebarHeader: "bg-[#202C33]",
-  sidebarBg: "bg-[#111B21]",
-  chatHeader: "bg-[#202C33]",
-  chatBg: "bg-[#0B141A]",
-  listHover: "hover:bg-[#2A3942]",
-  listActive: "bg-[#2A3942]",
-  outgoing: "bg-[#005C4B]",
-  incoming: "bg-[#202C33]",
-  inputBar: "bg-[#202C33]",
-  accent: "#25D366",
-  border: "border-[#2A3942]"
-};
-
-const directChatUi = {
-  wallpaper: "chat-wallpaper-wa",
-  header: wa.chatHeader,
-  inputBar: wa.inputBar,
-  accent: wa.accent,
-  sendBtn: "bg-[#25D366] text-[#111B21] hover:bg-[#20BD5A]",
-  outgoing: "bg-[#005C4B] text-[#E9EDEF]",
-  incoming: "bg-[#202C33] text-[#E9EDEF]",
-  outgoingShape: "rounded-lg rounded-br-[3px]",
-  incomingShape: "rounded-lg rounded-bl-[3px]",
-  timeMine: "text-[#A3E0D4]",
-  timeTheir: "text-[#8696A0]",
-  replyBorder: "border-l-4 border-[#25D366]",
-  selectedRing: "ring-2 ring-[#25D366]/70 ring-offset-2 ring-offset-[#0B141A]",
-  sheetBg: "bg-[#1f2c34]",
-  composerFocus: "focus:ring-[#25D366]/40"
-} as const;
-
-const channelChatUi = {
-  wallpaper: "",
-  header: wa.chatHeader,
-  inputBar: wa.inputBar,
-  accent: "#8696A0",
-  sendBtn: "bg-[#2A3942] text-[#E9EDEF] hover:bg-[#3B4A54]",
-  replyBorder: "border-l-2 border-[#8696A0]",
-  selectedRing: "ring-1 ring-[#8696A0]/50",
-  sheetBg: "bg-[#202C33]",
-  composerFocus: "focus:ring-[#8696A0]/30"
-} as const;
-
-function chatUiFor(conv: Conversation | null) {
-  return conv && isChannelConversation(conv) ? channelChatUi : directChatUi;
-}
-
 const LONG_PRESS_MS = 520;
 const LONG_PRESS_MOVE_CANCEL_PX = 12;
 const SWIPE_REPLY_PX = 52;
-
-function formatMessageTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    });
-  } catch {
-    return "";
-  }
-}
 
 function dayKey(iso: string): string {
   const d = new Date(iso);
@@ -223,20 +124,6 @@ function peerSubtitle(conv: Conversation | null, roster: OnlineUser[], myId?: st
     return `last seen ${formatTimestampShort(peer.lastSeen)}`;
   }
   return "offline — messages deliver when they’re back";
-}
-
-function initialsFromLabel(label: string): string {
-  const c = label.trim().charAt(0);
-  return c ? c.toUpperCase() : "?";
-}
-
-function avatarUrl(pathOrUrl: string | null | undefined): string | null {
-  if (!pathOrUrl) return null;
-  const raw = String(pathOrUrl).trim();
-  if (!raw) return null;
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
-  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
 function resolveMediaUrl(pathOrUrl: string | null | undefined, apiOrigin: string): string | null {
@@ -398,8 +285,15 @@ function formatTimestampShort(timestamp: string): string {
 
 export default function CommunityPage() {
   const { auth, apiFetch } = useAuth();
-  const [sidebarPanel, setSidebarPanel] = useState<"chats" | "people" | "channels">("chats");
+  const [sidebarPanel, setSidebarPanel] = useState<SidebarSection>("chats");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<SidebarSection, boolean>>({
+    chats: true,
+    channels: true,
+    people: false
+  });
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [channelDrafts, setChannelDrafts] = useState<ChannelDraft[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
@@ -408,7 +302,10 @@ export default function CommunityPage() {
   const [newChannelProjectId, setNewChannelProjectId] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelTopics, setNewChannelTopics] = useState("");
+  const [newChannelMemberIds, setNewChannelMemberIds] = useState<string[]>([]);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [channelToast, setChannelToast] = useState<string | null>(null);
+  const [canCreateChannelFlag, setCanCreateChannelFlag] = useState(false);
   const [canDeleteChannel, setCanDeleteChannel] = useState(false);
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
@@ -421,8 +318,20 @@ export default function CommunityPage() {
     setListPanelOpen(false);
   }, []);
 
-  const navigateSidebarPanel = useCallback((panel: "chats" | "people" | "channels") => {
+  const navigateSidebarPanel = useCallback((panel: SidebarSection) => {
     setSidebarPanel(panel);
+    setExpandedSections((prev) => ({ ...prev, [panel]: true }));
+    setListPanelOpen(true);
+  }, []);
+
+  const toggleSidebarSection = useCallback((section: SidebarSection) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  }, []);
+
+  const openStartNewChat = useCallback(() => {
+    setShowNewChatModal(true);
+    setSidebarPanel("people");
+    setExpandedSections((prev) => ({ ...prev, people: true }));
     setListPanelOpen(true);
   }, []);
 
@@ -798,8 +707,11 @@ export default function CommunityPage() {
         const available = (data.data?.availableProjects || data.data?.channelDrafts || []) as ChannelDraft[];
         const channels = (data.data?.channels || []) as Conversation[];
         setChannelDrafts(available);
+        setCanCreateChannelFlag(
+          Boolean(data.data?.canCreateChannel) || canCreateChannel(auth.roleKeys)
+        );
         setCanDeleteChannel(
-          Boolean(data.data?.canDeleteChannel) || canManageChannels(auth.roleKeys)
+          Boolean(data.data?.canDeleteChannel) || canDeleteChannelRole(auth.roleKeys)
         );
         setConversations((prev) => {
           const direct = prev.filter((c) => c.type === "direct");
@@ -868,9 +780,22 @@ export default function CommunityPage() {
   );
 
   const openNewChannelModal = useCallback(() => {
+    if (!canCreateChannel(auth.roleKeys)) {
+      setChatError("Only directors can create channels.");
+      return;
+    }
     void loadChannels();
+    if (auth.userId) setNewChannelMemberIds([auth.userId]);
     setShowNewChannelModal(true);
-  }, [loadChannels]);
+  }, [loadChannels, auth.userId, auth.roleKeys]);
+
+  const applyProjectTeamToChannel = useCallback(() => {
+    const project = channelDrafts.find((p) => p.id === newChannelProjectId);
+    if (!project?.suggestedMemberIds?.length || !auth.userId) return;
+    setNewChannelMemberIds(
+      Array.from(new Set([auth.userId, ...(project.suggestedMemberIds ?? [])]))
+    );
+  }, [channelDrafts, newChannelProjectId, auth.userId]);
 
   useEffect(() => {
     if (!showNewChannelModal) return;
@@ -898,13 +823,33 @@ export default function CommunityPage() {
     });
   }, [showNewChannelModal, newChannelProjectId, channelDrafts]);
 
+  useEffect(() => {
+    if (!showNewChannelModal || !newChannelProjectId || !auth.userId) return;
+    const project = channelDrafts.find((p) => p.id === newChannelProjectId);
+    const uid = auth.userId;
+    if (!uid) return;
+    if (!project?.suggestedMemberIds?.length) {
+      setNewChannelMemberIds((prev) => (prev.length > 0 ? prev : [uid]));
+      return;
+    }
+    setNewChannelMemberIds((prev) => {
+      if (prev.length > 1) return prev;
+      return Array.from(new Set([uid, ...project.suggestedMemberIds!]));
+    });
+  }, [showNewChannelModal, newChannelProjectId, channelDrafts, auth.userId]);
+
   const resetNewChannelForm = useCallback(() => {
     setNewChannelProjectId("");
     setNewChannelName("");
     setNewChannelTopics("");
-  }, []);
+    setNewChannelMemberIds(auth.userId ? [auth.userId] : []);
+  }, [auth.userId]);
 
   const submitNewChannel = useCallback(async () => {
+    if (!canCreateChannel(auth.roleKeys)) {
+      setChatError("Only directors can create channels.");
+      return;
+    }
     if (!auth.accessToken || creatingChannelProjectId) return;
     const projectId = newChannelProjectId.trim();
     const channelName = newChannelName.trim();
@@ -921,12 +866,17 @@ export default function CommunityPage() {
       alert("Describe what will be discussed in this channel.");
       return;
     }
+    const memberIds = Array.from(new Set(newChannelMemberIds));
+    if (memberIds.length === 0) {
+      alert("Add at least one member — only selected people will see this channel.");
+      return;
+    }
     setCreatingChannelProjectId(projectId);
     try {
       const response = await apiFetch("/chat-community/project-channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, channelName, topics })
+        body: JSON.stringify({ projectId, channelName, topics, memberIds })
       });
       if (!response.ok) {
         const err = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -966,6 +916,7 @@ export default function CommunityPage() {
       newChannelProjectId,
       newChannelName,
       newChannelTopics,
+      newChannelMemberIds,
       resetNewChannelForm,
       selectConversation
     ]
@@ -1333,7 +1284,8 @@ export default function CommunityPage() {
 
   const showListPanel = listPanelOpen || !selectedConversation;
   const showChatPanel = Boolean(selectedConversation);
-  const mayDeleteChannel = canDeleteChannel || canManageChannels(auth.roleKeys);
+  const mayDeleteChannel = canDeleteChannel || canDeleteChannelRole(auth.roleKeys);
+  const mayCreateChannel = canCreateChannelFlag || canCreateChannel(auth.roleKeys);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -1378,7 +1330,7 @@ export default function CommunityPage() {
   );
 
   const filteredConversations = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     const list = directConversations;
     if (!q) return list;
     return list.filter((c) => {
@@ -1389,10 +1341,10 @@ export default function CommunityPage() {
       if ((c.lastMessage.senderName || "").toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [directConversations, searchQuery]);
+  }, [directConversations, deferredSearchQuery]);
 
   const filteredChannels = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) return channelConversations;
     return channelConversations.filter((c) => {
       if (c.name.toLowerCase().includes(q)) return true;
@@ -1400,10 +1352,10 @@ export default function CommunityPage() {
       if (c.lastMessage.content.toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [channelConversations, searchQuery]);
+  }, [channelConversations, deferredSearchQuery]);
 
   const filteredChannelDrafts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) return channelDrafts;
     return channelDrafts.filter((p) => {
       if (p.name.toLowerCase().includes(q)) return true;
@@ -1411,7 +1363,7 @@ export default function CommunityPage() {
       if (p.approvalStatus.toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [channelDrafts, searchQuery]);
+  }, [channelDrafts, deferredSearchQuery]);
 
   useEffect(() => {
     if ((sidebarPanel === "channels" || showNewChannelModal) && auth.accessToken) {
@@ -1420,7 +1372,7 @@ export default function CommunityPage() {
   }, [sidebarPanel, showNewChannelModal, auth.accessToken, loadChannels]);
 
   const filteredPeople = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     const sorted = [...onlineUsers].sort((a, b) => Number(b.isOnline) - Number(a.isOnline));
     if (!q) return sorted;
     return sorted.filter((u) => {
@@ -1428,7 +1380,16 @@ export default function CommunityPage() {
       if (u.roles?.some((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q))) return true;
       return false;
     });
-  }, [onlineUsers, searchQuery]);
+  }, [onlineUsers, deferredSearchQuery]);
+
+  const chatUnreadTotal = useMemo(
+    () => directConversations.reduce((n, c) => n + c.unreadCount, 0),
+    [directConversations]
+  );
+  const channelUnreadTotal = useMemo(
+    () => channelConversations.reduce((n, c) => n + c.unreadCount, 0),
+    [channelConversations]
+  );
 
   const selectedPeer = useMemo((): OnlineUser | null => {
     if (!selectedConversation) return null;
@@ -1513,21 +1474,6 @@ export default function CommunityPage() {
     } catch (error) {
       console.error("Failed to send message:", error);
       setChatError("Could not send message. Check your connection.");
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "online":
-        return "bg-[#25D366]";
-      case "busy":
-        return "bg-red-500";
-      case "away":
-        return "bg-amber-400";
-      case "offline":
-        return "bg-slate-500";
-      default:
-        return "bg-slate-500";
     }
   };
 
@@ -1746,6 +1692,8 @@ export default function CommunityPage() {
           return;
         }
         setSidebarPanel("chats");
+        setExpandedSections((prev) => ({ ...prev, chats: true }));
+        setShowNewChatModal(false);
         selectConversation(conv);
         await loadConversations();
         requestAnimationFrame(() => {
@@ -2073,8 +2021,16 @@ export default function CommunityPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center font-body">
-        <div className="text-slate-400">Loading Community…</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 font-body">
+        <div className="h-12 w-48 animate-pulse rounded-xl bg-slate-800/60" />
+        <div className="flex min-h-0 flex-1 gap-3">
+          <div className="hidden w-72 shrink-0 flex-col gap-2 md:flex">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-800/40" />
+            ))}
+          </div>
+          <div className="min-h-[200px] flex-1 animate-pulse rounded-2xl bg-slate-800/30" />
+        </div>
       </div>
     );
   }
@@ -2095,326 +2051,42 @@ export default function CommunityPage() {
           </div>
         </div>
       )}
-      <div className="flex min-h-0 flex-1 w-full flex-col overflow-hidden border-0 md:flex-row md:border md:border-[#2A3942]">
-      {/* ——— Left: Chats + People (partitioned) ——— On small screens, hide when a 1:1 chat is open so the thread is full width. */}
       <div
-        className={`flex min-h-0 w-full flex-shrink-0 flex-col border-b transition-[width] duration-200 md:max-w-[400px] md:border-b-0 md:border-r ${wa.sidebarBg} ${wa.border} ${
-          showListPanel ? "flex" : "hidden"
-        }`}
+        className={`flex min-h-0 flex-1 w-full flex-col overflow-hidden rounded-none md:flex-row md:rounded-2xl ${communityTheme.shell}`}
       >
-        <div className={`flex items-center gap-2 px-3 py-3 ${wa.sidebarHeader}`}>
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="rounded-full p-2 text-[#AEBAC1] hover:bg-[#2A3942]"
-            title="Back"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-medium text-[#E9EDEF]">Community</h1>
-            <p className="truncate text-xs text-[#8696A0]">All org accounts — names and roles</p>
-          </div>
-        </div>
+        <CommunitySidebar
+          visible={showListPanel}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          expandedSections={expandedSections}
+          onToggleSection={toggleSidebarSection}
+          activeSection={sidebarPanel}
+          onFocusSection={navigateSidebarPanel}
+          filteredConversations={filteredConversations}
+          filteredChannels={filteredChannels}
+          filteredPeople={filteredPeople}
+          conversationsTotal={conversations.length}
+          channelsLoading={channelsLoading}
+          channelToast={channelToast}
+          onlineUsers={onlineUsers}
+          selectedConversationId={selectedConversation?.id ?? null}
+          myId={auth.userId}
+          onSelectConversation={selectConversation}
+          canCreateChannel={mayCreateChannel}
+          onOpenNewChannel={openNewChannelModal}
+          onStartNewChat={openStartNewChat}
+          onMessageUser={sendMessageToUser}
+          onVoiceCall={(u) => void startCall(u, "voice")}
+          onVideoCall={(u) => void startCall(u, "video")}
+          chatUnread={chatUnreadTotal}
+          channelUnread={channelUnreadTotal}
+        />
 
-        <div className="px-2 pb-2">
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8696A0]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name or role"
-              className="w-full rounded-lg border-0 bg-[#202C33] py-2 pl-9 pr-3 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/50"
-            />
-          </div>
-        </div>
-
-        <div className={`flex min-h-[44px] shrink-0 border-b ${wa.border} px-1`}>
-          <button
-            type="button"
-            onClick={() => navigateSidebarPanel("chats")}
-            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
-              sidebarPanel === "chats"
-                ? "border-[#25D366] text-[#25D366]"
-                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
-            }`}
-          >
-            Chats
-          </button>
-          <button
-            type="button"
-            onClick={() => navigateSidebarPanel("channels")}
-            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
-              sidebarPanel === "channels"
-                ? "border-[#25D366] text-[#25D366]"
-                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
-            }`}
-          >
-            Channels
-          </button>
-          <button
-            type="button"
-            onClick={() => navigateSidebarPanel("people")}
-            className={`min-h-[44px] min-w-0 flex-1 touch-manipulation border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
-              sidebarPanel === "people"
-                ? "border-[#25D366] text-[#25D366]"
-                : "border-transparent text-[#8696A0] hover:text-[#E9EDEF] active:text-[#E9EDEF]"
-            }`}
-          >
-            <span className="sm:hidden">People</span>
-            <span className="hidden sm:inline">People ({onlineUsers.length})</span>
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {sidebarPanel === "chats" && (
-            <div>
-              {filteredConversations.length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-[#8696A0]">
-                  {conversations.length === 0
-                    ? "No chats yet. Open People and tap someone to message them."
-                    : "No matches."}
-                </div>
-              ) : (
-                filteredConversations.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => selectConversation(c)}
-                    className={`flex w-full items-center gap-3 border-b border-[#202C33] px-3 py-2.5 text-left transition-colors ${wa.listHover} ${
-                      selectedConversation?.id === c.id ? wa.listActive : ""
-                    }`}
-                  >
-                    <div className="relative h-12 w-12 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-lg font-medium leading-[3rem] text-white">
-                      {initialsFromLabel(c.name)}
-                      {c.otherUser?.isOnline && (
-                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#111B21] bg-[#25D366]" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate font-medium text-[#E9EDEF]">{c.name}</span>
-                        <span className="flex-shrink-0 text-[11px] text-[#8696A0]">
-                          {formatMessageTime(c.lastMessage.timestamp)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm text-[#8696A0]">
-                          {c.lastMessage.senderId === auth.userId ? "You: " : ""}
-                          {c.lastMessage.content}
-                        </p>
-                        {c.unreadCount > 0 && (
-                          <span className="flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-[#25D366] px-1 text-[11px] font-medium text-[#111B21]">
-                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-
-          {sidebarPanel === "channels" && (
-            <div>
-              <div className="flex items-center justify-between gap-2 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-[#8696A0]">
-                  Your channels ({filteredChannels.length})
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    openNewChannelModal();
-                  }}
-                  className="flex items-center gap-1 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-medium text-[#111B21] hover:bg-[#20BD5A]"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  New channel
-                </button>
-              </div>
-              {channelToast && (
-                <div className="mx-3 mb-2 rounded-lg bg-[#0D5C4B]/90 px-3 py-2 text-xs text-[#E9EDEF]">
-                  {channelToast}
-                </div>
-              )}
-              {channelsLoading ? (
-                <div className="px-4 py-8 text-center text-sm text-[#8696A0]">Loading channels…</div>
-              ) : filteredChannels.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-[#8696A0]">
-                  <p className="mb-3">No channels yet.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openNewChannelModal();
-                    }}
-                    className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-[#111B21] hover:bg-[#20BD5A]"
-                  >
-                    Create channel from a project
-                  </button>
-                </div>
-              ) : (
-                filteredChannels.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => selectConversation(c)}
-                    className={`flex w-full items-center gap-3 border-b border-[#202C33] px-3 py-2.5 text-left transition-colors ${wa.listHover} ${
-                      selectedConversation?.id === c.id ? wa.listActive : ""
-                    }`}
-                  >
-                    <CommunityChannelBadge className="h-12 w-12" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate font-medium text-[#E9EDEF]">{c.name}</span>
-                        <span className="flex-shrink-0 text-[11px] text-[#8696A0]">
-                          {formatMessageTime(c.lastMessage.timestamp)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-xs text-[#8696A0]">
-                          {c.linkedProjectName ? `Project: ${c.linkedProjectName}` : "Channel"}
-                          {c.channelTopics ? ` · ${c.channelTopics}` : ""}
-                        </p>
-                        <p className="truncate text-sm text-[#8696A0]">
-                          {c.lastMessage.senderId === auth.userId ? "You: " : ""}
-                          {c.lastMessage.content}
-                        </p>
-                        {c.unreadCount > 0 && (
-                          <span className="flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-[#25D366] px-1 text-[11px] font-medium text-[#111B21]">
-                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-
-          {sidebarPanel === "people" && (
-            <div>
-              <p className="px-4 py-2 text-[11px] uppercase tracking-wide text-[#8696A0]">
-                Organization · {onlineUsers.filter((u) => u.isOnline).length} online
-              </p>
-              {filteredPeople.length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-[#8696A0]">
-                  {onlineUsers.length === 0 ? "No other members in this org." : "No matches."}
-                </div>
-              ) : (
-                filteredPeople.map((user) => (
-                  <div
-                    key={user.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => void sendMessageToUser(user)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        void sendMessageToUser(user);
-                      }
-                    }}
-                    className={`flex cursor-pointer items-center gap-3 border-b border-[#202C33] px-3 py-2.5 outline-none ${wa.listHover} focus-visible:ring-2 focus-visible:ring-[#25D366]/50`}
-                  >
-                    <div className="relative h-12 w-12 flex-shrink-0 rounded-full bg-[#6B7B8C] text-center text-lg font-medium leading-[3rem] text-white">
-                      {avatarUrl(user.avatar) ? (
-                        <img
-                          src={avatarUrl(user.avatar) as string}
-                          alt={user.name}
-                          className="h-12 w-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        initialsFromLabel(user.name)
-                      )}
-                      <span
-                        className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#111B21] ${getStatusColor(user.isOnline ? user.status : "offline")}`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-[#E9EDEF]">{user.name}</div>
-                      {user.roles && user.roles.length > 0 && (
-                        <div className="mt-0.5 flex flex-wrap gap-1">
-                          {user.roles.map((r) => (
-                            <span
-                              key={`${user.id}-${r.key}`}
-                              className="rounded bg-[#2A3942] px-1.5 py-0 text-[10px] text-[#AEBAC1]"
-                            >
-                              {r.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {user.onlineHours && (
-                        <div className="truncate text-[11px] text-[#8696A0]">Hours online: {user.onlineHours}</div>
-                      )}
-                      <div className={`truncate text-xs ${user.isOnline ? "text-[#25D366]" : "text-[#8696A0]"}`}>
-                        {user.isOnline
-                          ? user.status === "online"
-                            ? "online — tap row to message"
-                            : `${user.status} — tap row to message`
-                          : "offline — tap row to open chat"}
-                      </div>
-                    </div>
-                    <div
-                      className="flex flex-shrink-0 gap-0.5"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => void sendMessageToUser(user)}
-                        className="rounded-full p-2 text-[#25D366] hover:bg-[#2A3942]"
-                        title="Open chat"
-                        aria-label={`Message ${user.name}`}
-                      >
-                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!user.isOnline}
-                        onClick={() => void startCall(user, "voice")}
-                        className="rounded-full p-2 text-[#8696A0] hover:bg-[#2A3942] hover:text-[#E9EDEF] disabled:cursor-not-allowed disabled:opacity-30"
-                        title={user.isOnline ? "Voice call" : "Online only"}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!user.isOnline}
-                        onClick={() => void startCall(user, "video")}
-                        className="rounded-full p-2 text-[#8696A0] hover:bg-[#2A3942] hover:text-[#E9EDEF] disabled:cursor-not-allowed disabled:opacity-30"
-                        title={user.isOnline ? "Video call" : "Online only"}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ——— Right: 1:1 conversation ——— Hidden on small screens until a chat is selected (list-only mode). */}
+      {/* ——— Right: conversation thread ——— */}
       <div
-        className={`flex min-h-0 min-w-0 flex-1 flex-col ${wa.chatBg} ${
+        className={`flex min-h-0 min-w-0 flex-1 flex-col ${communityTheme.chatBg} ${
           showChatPanel
             ? listPanelOpen
               ? "hidden md:flex"
@@ -2551,7 +2223,7 @@ export default function CommunityPage() {
                   const showDay =
                     !prev || dayKey(prev.timestamp) !== dayKey(message.timestamp);
                   return (
-                    <div key={message.id}>
+                    <div key={message.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_4rem]">
                       {showDay && (
                         <div className="my-3 flex justify-center">
                           <span className="rounded-lg bg-[#202C33]/90 px-3 py-1 text-xs text-[#AEBAC1] shadow-sm">
@@ -3370,24 +3042,105 @@ export default function CommunityPage() {
                       value={newChannelTopics}
                       onChange={(e) => setNewChannelTopics(e.target.value)}
                       placeholder="Milestones, blockers, handoffs, client updates…"
-                      rows={4}
+                      rows={3}
                       maxLength={2000}
-                      className="w-full resize-none rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                      className="w-full resize-none rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-violet-500/40"
                     />
-                    <p className="mt-1 text-[11px] text-[#8696A0]">
-                      Everyone on the project team is added to this channel automatically.
-                    </p>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-[#AEBAC1]">Who can see this channel?</span>
+                      <button
+                        type="button"
+                        onClick={applyProjectTeamToChannel}
+                        className="text-[11px] text-violet-300 hover:underline"
+                      >
+                        Add project team
+                      </button>
+                    </div>
+                    <CommunityMemberPicker
+                      members={onlineUsers}
+                      selectedIds={newChannelMemberIds}
+                      onChange={setNewChannelMemberIds}
+                      myId={auth.userId}
+                      minSelected={1}
+                      label="Channel members"
+                      hint="Private channel — only selected people will see it in Community."
+                    />
                   </div>
 
                   <button
                     type="submit"
-                    disabled={Boolean(creatingChannelProjectId)}
-                    className="w-full rounded-lg bg-[#25D366] py-3 text-sm font-medium text-[#111B21] hover:bg-[#20BD5A] disabled:opacity-50"
+                    disabled={Boolean(creatingChannelProjectId) || newChannelMemberIds.length < 1}
+                    className="w-full rounded-lg bg-gradient-to-r from-violet-600 to-sky-600 py-3 text-sm font-medium text-white hover:from-violet-500 hover:to-sky-500 disabled:opacity-50"
                   >
-                    {creatingChannelProjectId ? "Creating channel…" : "Create channel"}
+                    {creatingChannelProjectId ? "Creating channel…" : "Create private channel"}
                   </button>
                 </form>
               )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {showNewChatModal &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-chat-title"
+            onClick={() => setShowNewChatModal(false)}
+          >
+            <div
+              className="flex max-h-[min(85dvh,32rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-950 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-700/50 px-4 py-3">
+                <h2 id="new-chat-title" className="text-lg font-semibold text-white">
+                  Start a chat
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowNewChatModal(false)}
+                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-800"
+                  aria-label="Close"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="px-4 pt-2 text-xs text-slate-400">
+                Choose someone in your organization. You can message them even when they are offline.
+              </p>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {filteredPeople.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-sm text-slate-500">No people match your search.</p>
+                ) : (
+                  filteredPeople.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => void sendMessageToUser(user)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-800/60"
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/40 to-sky-600/30 text-sm font-semibold text-white">
+                        {initialsFromLabel(user.name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-slate-100">{user.name}</span>
+                        {user.roles?.[0] && (
+                          <span className="block truncate text-xs text-slate-500">{user.roles[0].name}</span>
+                        )}
+                      </span>
+                      <span className="text-xs font-medium text-violet-300">Message</span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </div>,
           document.body

@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { logAdminActivity } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { getProjectDeveloperAccess } from "../lib/project-access";
+import { primaryRoleLabel } from "../lib/user-capabilities";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -44,19 +45,19 @@ export default function userRouter(prisma: PrismaClient): Router {
             email: true,
             phone: true,
             profilePicture: true,
-            role: {
+            roles: {
               select: {
-                name: true,
-                department: {
+                role: {
                   select: {
-                    name: true
+                    name: true,
+                    key: true,
+                    department: { select: { name: true } }
                   }
                 }
               }
             },
             createdAt: true,
             updatedAt: true,
-            // Additional profile fields
             phoneNumbers: true,
             workEmails: true,
             nextOfKin: true
@@ -67,7 +68,7 @@ export default function userRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "User not found" });
         }
 
-        // Transform the data to match frontend expectations
+        const { role, department } = primaryRoleLabel(user.roles);
         const profileData = {
           id: user.id,
           name: user.name,
@@ -79,8 +80,8 @@ export default function userRouter(prisma: PrismaClient): Router {
             { name: "", phone: "", relationship: "" },
             { name: "", phone: "", relationship: "" }
           ],
-          role: user.role?.name || "",
-          department: user.role?.department?.name || "",
+          role,
+          department,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt
         };
@@ -172,12 +173,13 @@ export default function userRouter(prisma: PrismaClient): Router {
             workEmails: true,
             nextOfKin: true,
             profilePicture: true,
-            role: {
+            roles: {
               select: {
-                name: true,
-                department: {
+                role: {
                   select: {
-                    name: true
+                    name: true,
+                    key: true,
+                    department: { select: { name: true } }
                   }
                 }
               }
@@ -187,6 +189,7 @@ export default function userRouter(prisma: PrismaClient): Router {
           }
         });
 
+        const { role, department } = primaryRoleLabel(updatedUser.roles);
         res.json({
           success: true,
           message: "Profile updated successfully",
@@ -198,8 +201,8 @@ export default function userRouter(prisma: PrismaClient): Router {
             workEmails: updatedUser.workEmails,
             nextOfKin: updatedUser.nextOfKin,
             profilePicture: updatedUser.profilePicture,
-            role: updatedUser.role?.name || "",
-            department: updatedUser.role?.department?.name || "",
+            role,
+            department,
             createdAt: updatedUser.createdAt,
             updatedAt: updatedUser.updatedAt
           }
@@ -349,8 +352,7 @@ export default function userRouter(prisma: PrismaClient): Router {
           return res.status(404).json({ error: "User not found" });
         }
 
-        // Default preferences
-        const defaultPreferences = {
+        const defaultUi = {
           theme: "dark",
           language: "en",
           timezone: "UTC",
@@ -375,10 +377,19 @@ export default function userRouter(prisma: PrismaClient): Router {
             screenReader: false
           }
         };
+        const raw = user.notificationPreferences;
+        const stored =
+          raw && typeof raw === "object" && !Array.isArray(raw)
+            ? (raw as Record<string, unknown>)
+            : {};
+        const ui =
+          stored.ui && typeof stored.ui === "object" && !Array.isArray(stored.ui)
+            ? { ...defaultUi, ...(stored.ui as object) }
+            : { ...defaultUi, ...stored };
 
         res.json({
           success: true,
-          data: user.notificationPreferences || defaultPreferences
+          data: ui
         });
 
       } catch (error) {
@@ -399,21 +410,33 @@ export default function userRouter(prisma: PrismaClient): Router {
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
         const preferences = req.body;
+        const existing = await prisma.user.findFirst({
+          where: { id: userId, orgId },
+          select: { notificationPreferences: true }
+        });
+        const prev =
+          existing?.notificationPreferences &&
+          typeof existing.notificationPreferences === "object" &&
+          !Array.isArray(existing.notificationPreferences)
+            ? (existing.notificationPreferences as Record<string, unknown>)
+            : {};
+        const merged = {
+          ...prev,
+          ui: { ...(typeof prev.ui === "object" && prev.ui && !Array.isArray(prev.ui) ? prev.ui : {}), ...preferences }
+        };
 
         await prisma.user.update({
-          where: {
-            id: userId,
-            orgId
-          },
+          where: { id: userId, orgId },
           data: {
-            notificationPreferences: preferences,
+            notificationPreferences: merged,
             updatedAt: new Date()
           }
         });
 
         res.json({
           success: true,
-          message: "Preferences updated successfully"
+          message: "Preferences updated successfully",
+          data: preferences
         });
 
       } catch (error) {

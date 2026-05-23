@@ -30,7 +30,9 @@ model Org {
   tasks                       Task[]
   taskComments                TaskComment[]
   projectDeveloperAssignments ProjectDeveloperAssignment[]
-  developerDailyDigestsSent   DeveloperDailyDigestSent[]
+  developerDailyDigestsSent          DeveloperDailyDigestSent[]
+  developerReminderSnoozes         DeveloperReminderSnooze[]
+  developerProgressRemindersSent   DeveloperProgressReminderSent[]
   attachments                 Attachment[]
 
   invoices Invoice[]
@@ -74,6 +76,7 @@ model Org {
 
   dailyReminderSents DailyReminderSent[]
   adminAiReports     AdminAiReport[]
+  directorReports    DirectorReport[]
 
   projectManagementMonths ProjectManagementMonth[]
 
@@ -147,6 +150,14 @@ model User {
   currentFocusUpdatedAt DateTime?
   currentFocusProject   Project?  @relation("UserCurrentFocus", fields: [currentFocusProjectId], references: [id], onDelete: SetNull)
 
+  /// Assigned director for team reporting (sales/developer ICs report to this user).
+  reportsToDirectorId String?
+  reportsToDirector   User?  @relation("DirectorTeam", fields: [reportsToDirectorId], references: [id], onDelete: SetNull)
+  teamMembers         User[] @relation("DirectorTeam")
+
+  /// Admin-controlled flags: canSeeFinance, canSubmitReports, canReviewTeamReports, etc.
+  capabilityFlags Json?
+
   memberships OrgMember[]
   roles       UserRole[]
 
@@ -186,6 +197,8 @@ model User {
   salesReportComments          SalesReportComment[]
   developerReportsSubmitted    DeveloperReport[]
   developerReportsReviewed     DeveloperReport[]            @relation("DeveloperReportReviewedBy")
+  directorReportsSubmitted     DirectorReport[]
+  directorReportsReviewed      DirectorReport[]             @relation("DirectorReportReviewedBy")
   meetingRequestsRequested     MeetingRequest[]             @relation("MeetingRequestedBy")
   meetingRequestsResponded     MeetingRequest[]             @relation("MeetingRespondedBy")
   adminActivityMessages        AdminActivityMessage[]       @relation("ActivityActor")
@@ -194,7 +207,9 @@ model User {
   leadFollowUpsAssigned        LeadFollowUp[]
   crmContactsAdded             CrmContact[]
 
-  developerDailyDigestsSent DeveloperDailyDigestSent[]
+  developerDailyDigestsSent        DeveloperDailyDigestSent[]
+  developerReminderSnoozes       DeveloperReminderSnooze[]
+  developerProgressRemindersSent DeveloperProgressReminderSent[]
 
   expensesAsBeneficiary Expense[] @relation("ExpenseBeneficiary")
   expensesDevAcked      Expense[] @relation("ExpenseDevAck")
@@ -210,6 +225,30 @@ model User {
   DailyReminderSent DailyReminderSent[]
 
   @@index([email])
+  @@index([reportsToDirectorId])
+}
+
+model DirectorReport {
+  id            String    @id @default(cuid())
+  orgId         String
+  submittedById String
+  title         String
+  body          String    @db.Text
+  status        String    @default("draft") // draft, submitted
+  reviewStatus  String    @default("pending") // pending, viewed, checked
+  reviewedAt    DateTime?
+  reviewedById  String?
+  remarks       String?   @db.Text
+  submittedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  org         Org  @relation(fields: [orgId], references: [id])
+  submittedBy User @relation(fields: [submittedById], references: [id])
+  reviewedBy  User? @relation("DirectorReportReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([orgId, submittedById, status])
+  @@index([orgId, reviewStatus])
 }
 
 model OrgMember {
@@ -654,6 +693,40 @@ model DeveloperDailyDigestSent {
 
   @@unique([orgId, userId, dateKey])
   @@index([orgId, dateKey])
+}
+
+/// Per-developer snooze for progress reminders (daily update, untasked focus, stale project).
+model DeveloperReminderSnooze {
+  id          String   @id @default(cuid())
+  orgId       String
+  userId      String
+  reminderKey String
+  snoozeUntil DateTime
+  label       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId, reminderKey])
+  @@index([orgId, userId, snoozeUntil])
+}
+
+/// Idempotent sends for developer progress nudges.
+model DeveloperProgressReminderSent {
+  id          String   @id @default(cuid())
+  orgId       String
+  userId      String
+  reminderKey String
+  bucketKey   String
+  sentAt      DateTime @default(now())
+
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId, reminderKey, bucketKey])
+  @@index([orgId, userId])
 }
 
 model Attachment {

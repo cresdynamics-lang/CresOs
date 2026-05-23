@@ -11,6 +11,7 @@ import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 import { deleteOrgUserHard } from "../lib/delete-org-user";
+import { mergeCapabilityFlags } from "../lib/user-capabilities";
 
 const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
 
@@ -1466,6 +1467,36 @@ export default function adminRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Directors in org (for team assignment UI)
+  router.get(
+    "/directors",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const directorRole = await prisma.role.findFirst({
+        where: { orgId, key: ROLE_KEYS.director }
+      });
+      if (!directorRole) {
+        res.json([]);
+        return;
+      }
+      const assignments = await prisma.userRole.findMany({
+        where: { roleId: directorRole.id, user: { orgId, deletedAt: null } },
+        include: {
+          user: { select: { id: true, name: true, email: true, profilePicture: true } }
+        }
+      });
+      res.json(
+        assignments.map((a) => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          profilePicture: a.user.profilePicture
+        }))
+      );
+    }
+  );
+
   // Users list with profile details (for admin to view/edit)
   router.get(
     "/users",
@@ -1483,6 +1514,11 @@ export default function adminRouter(prisma: PrismaClient): Router {
           profileCompletedAt: true,
           status: true,
           createdAt: true,
+          reportsToDirectorId: true,
+          capabilityFlags: true,
+          reportsToDirector: {
+            select: { id: true, name: true, email: true }
+          },
           roles: {
             select: {
               role: {
@@ -1528,6 +1564,9 @@ export default function adminRouter(prisma: PrismaClient): Router {
         profileCompletedAt: user.profileCompletedAt,
         status: user.status,
         createdAt: user.createdAt,
+        reportsToDirectorId: user.reportsToDirectorId,
+        reportsToDirector: user.reportsToDirector,
+        capabilityFlags: user.capabilityFlags,
         roles: user.roles.map(r => ({
           id: r.role.id,
           name: r.role.name,
@@ -1556,21 +1595,60 @@ export default function adminRouter(prisma: PrismaClient): Router {
       const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
       const { id } = req.params;
-      const body = req.body as { name?: string; phone?: string; notificationEmail?: string | null };
+      const body = req.body as {
+        name?: string;
+        phone?: string;
+        notificationEmail?: string | null;
+        reportsToDirectorId?: string | null;
+        capabilityFlags?: Record<string, boolean>;
+      };
       const user = await prisma.user.findFirst({
         where: { id, orgId, deletedAt: null }
       });
       if (!user) return res.status(404).json({ error: "User not found" });
-      const data: { name?: string; phone?: string; notificationEmail?: string | null; profileCompletedAt?: Date } = {};
+      const data: {
+        name?: string;
+        phone?: string;
+        notificationEmail?: string | null;
+        profileCompletedAt?: Date;
+        reportsToDirectorId?: string | null;
+        capabilityFlags?: object;
+      } = {};
       if (body.name !== undefined) data.name = body.name?.trim() || null;
       if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
       if (body.notificationEmail !== undefined) data.notificationEmail = body.notificationEmail?.trim() || null;
+      if (body.reportsToDirectorId !== undefined) {
+        if (body.reportsToDirectorId === null || body.reportsToDirectorId === "") {
+          data.reportsToDirectorId = null;
+        } else {
+          const director = await prisma.user.findFirst({
+            where: { id: body.reportsToDirectorId, orgId, deletedAt: null },
+            include: { roles: { include: { role: true } } }
+          });
+          const isDirector = director?.roles.some((r) => r.role.key === ROLE_KEYS.director);
+          if (!isDirector) {
+            res.status(400).json({ error: "reportsToDirectorId must be a user with the director role" });
+            return;
+          }
+          if (body.reportsToDirectorId === id) {
+            res.status(400).json({ error: "A user cannot report to themselves" });
+            return;
+          }
+          data.reportsToDirectorId = body.reportsToDirectorId;
+        }
+      }
+      if (body.capabilityFlags !== undefined) {
+        data.capabilityFlags = mergeCapabilityFlags(user.capabilityFlags, body.capabilityFlags);
+      }
       // Mark profile as completed once admin fills core contact fields
       if (data.name !== undefined || data.phone !== undefined || data.notificationEmail !== undefined) {
         data.profileCompletedAt = new Date();
       }
       if (Object.keys(data).length === 0) {
-        res.status(400).json({ error: "No profile fields to update (send name, phone, and/or notificationEmail)." });
+        res.status(400).json({
+          error:
+            "No fields to update (send name, phone, notificationEmail, reportsToDirectorId, and/or capabilityFlags)."
+        });
         return;
       }
 

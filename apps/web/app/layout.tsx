@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Syne, DM_Sans, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "./auth-context";
 import { AuthGuard } from "./auth-guard";
+import { ThemeProvider } from "../lib/theme-provider";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -57,10 +58,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${syne.variable} ${dmSans.variable} ${spaceGrotesk.variable}`}>
-      <body className="min-h-screen bg-slate-950 text-slate-50 font-body antialiased">
-        <AuthProvider>
-          <AuthGuard>{children}</AuthGuard>
-        </AuthProvider>
+      <body className="min-h-screen bg-slate-950 font-body text-slate-50 antialiased">
+        <ThemeProvider>
+          <AuthProvider>
+            <AuthGuard>{children}</AuthGuard>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

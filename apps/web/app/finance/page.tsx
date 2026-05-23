@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
-import { PageHeader } from "../page-header";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { StatCard, StatCardGrid } from "../../components/stat-card";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
 
@@ -366,7 +367,9 @@ export default function FinancePage() {
   const [invoiceSubmitError, setInvoiceSubmitError] = useState<string | null>(null);
 
   /** Aggregate money KPIs & reports — Finance and Admin only (not Director). */
-  const canSeeMoneyStats = auth.roleKeys.some((r) => ["finance", "admin"].includes(r));
+  const canSeeMoneyStats =
+    auth.canSeeFinance === true ||
+    auth.roleKeys.some((r) => ["finance", "admin"].includes(r));
   // Only Finance role can perform actions; Director/Admin see read-only
   const isFinance = auth.roleKeys.includes("finance");
   const isAdmin = auth.roleKeys.includes("admin");
@@ -1017,7 +1020,12 @@ export default function FinancePage() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader title={pageMeta.title} description={pageMeta.description} />
+      <WorkspaceDashboardIntro
+        title={pageMeta.title}
+        description={pageMeta.description}
+        eyebrow="Finance"
+        showWelcomeBanner={section === "overview"}
+      />
 
 
       {!canSeeMoneyStats && section === "overview" && (
@@ -1030,61 +1038,38 @@ export default function FinancePage() {
       )}
 
       {canSeeMoneyStats && section === "overview" && (
-        <DashboardCardRow lgCols={4} layout="scroll">
-          <DashboardScrollCard>
-            <div className="shell">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Revenue (period)</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-400">
-                {report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
-              </p>
-              <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                Confirmed payments received this calendar month (UTC), from the database.
-              </p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
-              <p className="mt-1 text-xl font-semibold text-amber-300">
-                {report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
-              </p>
-              <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                Remaining on approved projects (price − received). If projects are not priced, shows unpaid
-                invoice balance instead.
-              </p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Net flow</p>
-              <p
-                className={`mt-1 text-xl font-semibold ${
-                  !report ? "text-slate-500" : report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"
-                }`}
-              >
-                {report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
-              </p>
-              <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                Confirmed inflows minus approved expenses and paid payouts (UTC month).
-              </p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
-              <p className="mt-1 text-xl font-semibold text-slate-100">
-                {reportLoading
-                  ? "…"
-                  : report?.pending?.total ?? pendingFinanceApprovalCount}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">
-                {report?.pending != null
-                  ? `${report.pending.approvalQueue} approvals · ${report.pending.paymentsPending} payments`
-                  : "Expense / payout queue"}
-              </p>
-            </div>
-          </DashboardScrollCard>
-        </DashboardCardRow>
+        <StatCardGrid>
+          <StatCard
+            label="Revenue (period)"
+            value={report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
+            hint="Confirmed payments this month (UTC)"
+            tone="emerald"
+          />
+          <StatCard
+            label="Outstanding"
+            value={report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
+            hint="Unpaid invoice / project balance"
+            tone="amber"
+          />
+          <StatCard
+            label="Net flow"
+            value={report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
+            hint="Inflows minus outflows (UTC month)"
+            tone={
+              !report ? "brand" : report.cashFlow.netThisMonth >= 0 ? "emerald" : "rose"
+            }
+          />
+          <StatCard
+            label="Pending requests"
+            value={reportLoading ? "…" : report?.pending?.total ?? pendingFinanceApprovalCount}
+            hint={
+              report?.pending != null
+                ? `${report.pending.approvalQueue} approvals · ${report.pending.paymentsPending} payments`
+                : "Expense / payout queue"
+            }
+            tone="violet"
+          />
+        </StatCardGrid>
       )}
 
       {isAdmin && section === "overview" && (

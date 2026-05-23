@@ -19,6 +19,8 @@ export type AuthState = {
   userId?: string;
   userEmail?: string;
   userName?: string | null;
+  profilePicture?: string | null;
+  canSeeFinance?: boolean;
   orgId?: string;
   orgName?: string | null;
   orgSlug?: string | null;
@@ -88,6 +90,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(joinApiPath("/account/me"), {
+          headers: { Authorization: `Bearer ${auth.accessToken}` }
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          name?: string | null;
+          profilePicture?: string | null;
+          canSeeFinance?: boolean;
+        };
+        patchAuth({
+          userName: data.name ?? undefined,
+          profilePicture: data.profilePicture ?? null,
+          canSeeFinance: data.canSeeFinance === true
+        });
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, auth.accessToken, patchAuth]);
 
   const refreshInFlight = useRef<Promise<string | null> | null>(null);
 

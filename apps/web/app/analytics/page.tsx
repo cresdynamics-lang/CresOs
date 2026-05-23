@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
-import { PageHeader } from "../page-header";
+import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 
 type CeoAnalytics = {
   revenueHealth: {
@@ -190,19 +191,18 @@ export default function AnalyticsPage() {
 
   return (
     <section className="flex flex-col gap-4 text-[11px] leading-snug text-slate-300 max-sm:gap-3 max-sm:text-[10px] sm:gap-6 sm:text-sm sm:leading-normal">
-      <div className="max-sm:[&_h1]:text-base max-sm:[&_p]:leading-snug sm:[&_h1]:text-xl [&_p]:text-[10px] sm:[&_p]:text-sm">
-        <PageHeader
-          title="Analytics"
-          description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
-        />
-      </div>
+      <WorkspaceDashboardIntro
+        title="Analytics"
+        description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
+        eyebrow="Insights"
+      />
 
       {isAdmin && (
         <>
           <div>
-            <h3 className="mb-2 text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:mb-3 sm:text-sm">
+            <DashboardSectionLabel roleKeys={auth.roleKeys} tone="dashboard">
               Admin analytics scope
-            </h3>
+            </DashboardSectionLabel>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
               {ADMIN_ANALYTICS_SCOPE_GROUPS.map((g) => (
                 <div

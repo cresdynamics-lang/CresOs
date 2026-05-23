@@ -6,6 +6,7 @@ import { sendWelcomeEmail } from "../lib/resend";
 import { logAdminActivity, logEmailSent } from "./admin-activity";
 import bcrypt from "bcryptjs";
 import { mergeNotificationPreferences } from "../lib/notification-preferences";
+import { parseCapabilityFlags, userHasFinanceAccess } from "../lib/user-capabilities";
 import { notifyAdminsInApp } from "./director-notifications";
 
 export default function accountRouter(prisma: PrismaClient): Router {
@@ -24,7 +25,10 @@ export default function accountRouter(prisma: PrismaClient): Router {
         notificationEmail: true,
         notificationPreferences: true,
         profileCompletedAt: true,
-        status: true
+        status: true,
+        profilePicture: true,
+        capabilityFlags: true,
+        reportsToDirectorId: true
       }
     });
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -32,7 +36,14 @@ export default function accountRouter(prisma: PrismaClient): Router {
       where: { id: orgId },
       select: { id: true, name: true, slug: true }
     });
-    res.json({ ...user, org: org ?? { id: orgId, name: null, slug: null } });
+    const capabilityFlags = parseCapabilityFlags(user.capabilityFlags);
+    const canSeeFinance = userHasFinanceAccess(req.auth!.roleKeys, user.capabilityFlags);
+    res.json({
+      ...user,
+      capabilityFlags,
+      canSeeFinance,
+      org: org ?? { id: orgId, name: null, slug: null }
+    });
   });
 
   router.patch("/me", async (req, res) => {

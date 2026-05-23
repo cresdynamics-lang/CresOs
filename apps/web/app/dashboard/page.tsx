@@ -4,12 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
-import { PageHeader } from "../page-header";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { DashboardWelcomeBanner, WelcomeBullet } from "../../components/dashboard-welcome-banner";
+import { StatCard, StatCardGrid, type StatTone } from "../../components/stat-card";
+import {
+  DashboardSectionLabel,
+  DashboardWelcomeBanner,
+  WelcomeBullet
+} from "../../components/dashboard-welcome-banner";
+import { PageHeader } from "../page-header";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
+import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import {
+  DeveloperDashboardSections,
+  type DeveloperProgressReminder
+} from "../../components/developer-dashboard";
 
 type Summary = {
   leadsThisWeek: number;
@@ -21,6 +31,7 @@ type Summary = {
 };
 
 type DirectorDashboard = {
+  canSeeFinance?: boolean;
   financialHealth: {
     revenueThisPeriod: number;
     outstandingInvoices: number;
@@ -31,7 +42,7 @@ type DirectorDashboard = {
     forecast30Day: { cashIn: number; cashOut: number; netFlow: number };
     pendingPayouts: number;
     pendingExpenseApprovals: number;
-  };
+  } | null;
   salesHealth: {
     totalPipelineValue: number;
     weightedForecast: number;
@@ -174,6 +185,7 @@ type Attention = {
   handoffRequestsReceived?: { id: string; projectId: string; project: { name: string }; fromUser: { name: string | null; email: string } }[];
   overdueTasks?: { id: string; title: string; projectId: string; dueDate: string }[];
   latestDeveloperReportNeedsAttention?: string | null;
+  developerProgressReminders?: DeveloperProgressReminder[];
 };
 
 /** `GET /dashboard/focus-coach` — deterministic bullets + optional Groq alignment hint. */
@@ -203,6 +215,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   sales: [
+    { href: "/schedule", label: "Tasks" },
     { href: "/sales", label: "Sales hub" },
     { href: "/crm", label: "CRM" },
     { href: "/leads", label: "Leads" },
@@ -210,24 +223,35 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
     { href: "/approvals", label: "Approvals" }
   ],
   developer: [
+    { href: "/schedule", label: "Tasks" },
     { href: "/projects", label: "Projects" },
     { href: "/developer-reports", label: "Reports" },
     { href: "/community", label: "Community" }
   ],
   director_admin: [
+    { href: "/schedule", label: "Tasks" },
     { href: "/projects", label: "Projects" },
     { href: "/leads", label: "Leads" },
     { href: "/approvals", label: "Approvals" },
     { href: "/analytics", label: "Analytics" },
     { href: "/developer-reports", label: "Reports" }
   ],
-  finance: [{ href: "/finance", label: "Finance" }, { href: "/approvals", label: "Approvals" }],
-  analyst: [{ href: "/analytics", label: "Analytics" }, { href: "/crm", label: "CRM" }],
+  finance: [
+    { href: "/schedule", label: "Tasks" },
+    { href: "/finance", label: "Finance" },
+    { href: "/approvals", label: "Approvals" }
+  ],
+  analyst: [
+    { href: "/schedule", label: "Tasks" },
+    { href: "/analytics", label: "Analytics" },
+    { href: "/crm", label: "CRM" }
+  ],
   admin: [
+    { href: "/schedule", label: "Tasks" },
     { href: "/admin/users", label: "Users & org" },
     { href: "/analytics", label: "Analytics" }
   ],
-  client: []
+  client: [{ href: "/schedule", label: "Tasks" }]
 };
 
 const REPORT_REMINDER_DISMISS_KEY = "cresos_report_reminder_dismiss";
@@ -593,16 +617,14 @@ export default function DashboardPage() {
   const hasMetrics = canViewOrgAnalyticsSummary && summary != null && !summaryError;
   const primaryRoleLabel = auth.roleKeys.map((r) => ROLE_LABELS[r]).filter(Boolean)[0] ?? "User";
 
-  const firstName = useMemo(() => {
-    const n = auth.userName?.trim();
-    if (n) {
-      const part = n.split(/\s+/)[0] ?? n;
-      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-    }
-    const em = auth.userEmail?.split("@")[0];
-    if (em) return em.charAt(0).toUpperCase() + em.slice(1).toLowerCase();
-    return "there";
-  }, [auth.userName, auth.userEmail]);
+  const firstName = useMemo(
+    () => getDisplayFirstName(auth.userName, auth.userEmail),
+    [auth.userName, auth.userEmail]
+  );
+  const welcomeHeadline = useMemo(
+    () => buildWelcomeHeadline(auth.userName, auth.userEmail),
+    [auth.userName, auth.userEmail]
+  );
   const unreadCount = attention?.stats?.notificationsCount ?? attention?.notifications?.filter((n) => !n.readAt).length ?? 0;
   const messagesCount = attention?.stats?.messagesCount ?? attention?.messages?.length ?? 0;
   const dueCount = attention?.stats?.dueCount ?? attention?.dueToday?.length ?? 0;
@@ -848,7 +870,7 @@ export default function DashboardPage() {
 
     if (communityUnread > 0) {
       items.push(
-        <WelcomeBullet key="cu">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="cu">
           You have{" "}
           <Link href="/community">
             {communityUnread} unread message{communityUnread === 1 ? "" : "s"}
@@ -862,7 +884,7 @@ export default function DashboardPage() {
       const href =
         auth.roleKeys.includes("sales") && messagesCount > 0 ? "/developer-reports" : "/community";
       items.push(
-        <WelcomeBullet key="mq">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="mq">
           <Link href={href}>
             {messagesCount} thread{messagesCount === 1 ? "" : "s"}
           </Link>{" "}
@@ -873,7 +895,7 @@ export default function DashboardPage() {
 
     if (dueCount > 0) {
       items.push(
-        <WelcomeBullet key="due">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="due">
           <Link href="/schedule">{dueCount}</Link> calendar item{dueCount === 1 ? "" : "s"} due today.
         </WelcomeBullet>
       );
@@ -881,7 +903,7 @@ export default function DashboardPage() {
 
     if (attentionSignalSummary.project > 0) {
       items.push(
-        <WelcomeBullet key="proj">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="proj">
           <Link href="/projects">{attentionSignalSummary.project}</Link> active project signal
           {attentionSignalSummary.project === 1 ? "" : "s"} (tasks, assignments, handoffs).
         </WelcomeBullet>
@@ -890,7 +912,7 @@ export default function DashboardPage() {
 
     if (attentionSignalSummary.inquiry > 0) {
       items.push(
-        <WelcomeBullet key="lead">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="lead">
           <Link href="/leads">{attentionSignalSummary.inquiry}</Link> lead / inquiry item
           {attentionSignalSummary.inquiry === 1 ? "" : "s"} in the queue.
         </WelcomeBullet>
@@ -900,7 +922,7 @@ export default function DashboardPage() {
     if (isDeveloper && projectsNeedingReview.length + handoffRequests.length > 0) {
       const n = projectsNeedingReview.length + handoffRequests.length;
       items.push(
-        <WelcomeBullet key="drev">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="drev">
           <Link href="/projects">{n === 1 ? "One project needs" : `${n} projects need`}</Link> your review — add tasks on
           each so delivery can proceed.
         </WelcomeBullet>
@@ -909,7 +931,7 @@ export default function DashboardPage() {
 
     if (isDeveloper && overdueTasks.length > 0) {
       items.push(
-        <WelcomeBullet key="ov">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="ov">
           <Link href="/schedule">{overdueTasks.length}</Link> overdue task{overdueTasks.length === 1 ? "" : "s"} assigned to
           you.
         </WelcomeBullet>
@@ -918,7 +940,7 @@ export default function DashboardPage() {
 
     if ((auth.roleKeys.includes("developer") || auth.roleKeys.includes("sales")) && focusProjectName) {
       items.push(
-        <WelcomeBullet key="focus">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="focus">
           Focus project: <span className="font-medium text-slate-100">{focusProjectName}</span>. Update progress under{" "}
           <Link href="/projects">Projects</Link> so delivery stays unblocked.
         </WelcomeBullet>
@@ -927,7 +949,7 @@ export default function DashboardPage() {
 
     if (reportReminderDue) {
       items.push(
-        <WelcomeBullet key="sr">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="sr">
           <Link href="/reports/new">Submit your sales report</Link> — it&apos;s been 12+ hours since your last one.
         </WelcomeBullet>
       );
@@ -935,7 +957,7 @@ export default function DashboardPage() {
 
     if (canFinanceApprovals && approvalQueueCount > 0) {
       items.push(
-        <WelcomeBullet key="ap">
+        <WelcomeBullet roleKeys={auth.roleKeys} key="ap">
           <Link href="/approvals">{approvalQueueCount}</Link> finance approval request
           {approvalQueueCount === 1 ? "" : "s"} pending.
         </WelcomeBullet>
@@ -961,42 +983,50 @@ export default function DashboardPage() {
 
   return (
     <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-1 sm:px-0">
-      <DashboardWelcomeBanner firstName={firstName} roleLabel={primaryRoleLabel}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <DashboardWelcomeBanner
+        firstName={firstName}
+        roleLabel={primaryRoleLabel}
+        roleKeys={auth.roleKeys}
+        headline={welcomeHeadline}
+      >
+        <DashboardSectionLabel roleKeys={auth.roleKeys}>
           Today&apos;s priorities (your queue)
-        </p>
+        </DashboardSectionLabel>
         {welcomeItems.length > 0 ? (
-          <ul className="ml-1 list-disc space-y-1.5 pl-4">{welcomeItems}</ul>
+          <ul className="ml-1 list-disc space-y-2 pl-4">{welcomeItems}</ul>
         ) : (
-          <p className="text-sm text-slate-500">
-            You&apos;re caught up on the automatic priority queue. Use the sections below for full detail.
+          <p className="font-body text-sm leading-relaxed text-slate-400">
+            <span className="font-medium text-emerald-400/90">You&apos;re caught up</span> on the automatic
+            priority queue. Use the sections below for full detail.
           </p>
         )}
       </DashboardWelcomeBanner>
 
       {focusCoachReady && focusCoach && (
-        <div className="shell min-w-0 border-violet-500/25 bg-violet-950/20">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300/90">
+        <div className="shell min-w-0 border-l-4 border-violet-500/45 bg-gradient-to-br from-violet-950/40 via-slate-900/85 to-fuchsia-950/20 shadow-[0_0_36px_-14px_rgba(139,92,246,0.35)]">
+          <DashboardSectionLabel roleKeys={auth.roleKeys} tone="focus">
             Stay focused &amp; aligned
-          </p>
-          <p className="mb-3 text-[11px] leading-snug text-slate-500">
-            Grounded in this dashboard: unread notifications, your active projects, sales/developer report submission and
-            review state, and approvals — plus a short AI nudge when enabled (facts only; does not replace your queue
-            above).
+          </DashboardSectionLabel>
+          <p className="mb-4 font-body text-sm leading-relaxed text-slate-400">
+            <span className="font-medium text-violet-300/90">Grounded in this dashboard:</span> unread notifications,
+            your active projects, sales/developer report submission and review state, and approvals — plus a short AI
+            nudge when enabled{" "}
+            <span className="text-slate-500">(facts only; does not replace your queue above)</span>.
           </p>
           {(focusCoach.deterministicTips?.length ?? 0) > 0 ? (
-            <ul className="mb-3 ml-1 list-disc space-y-1.5 pl-4 text-sm text-slate-200">
+            <ul className="mb-4 ml-1 list-disc space-y-2 pl-4 font-body text-sm text-slate-200 marker:text-violet-500">
               {focusCoach.deterministicTips.map((t, i) => (
                 <li key={i}>{t}</li>
               ))}
             </ul>
           ) : (
-            <p className="mb-3 text-sm text-slate-400">
-              Nothing flagged by the automated scan — use Today’s priorities and the tiles below as the source of truth.
+            <p className="mb-4 font-body text-sm text-slate-400">
+              <span className="font-medium text-slate-300">Nothing flagged</span> by the automated scan — use
+              Today&apos;s priorities and the tiles below as the source of truth.
             </p>
           )}
           {focusCoach.aiHint ? (
-            <p className="border-t border-slate-800/80 pt-3 text-sm italic leading-relaxed text-slate-300">
+            <p className="border-t border-violet-800/40 pt-4 font-body text-sm italic leading-relaxed text-violet-200/90">
               {focusCoach.aiHint}
             </p>
           ) : null}
@@ -1006,12 +1036,14 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         showWorkspaceProfile={false}
+        eyebrow="Command center"
+        brandLead="Operating System for Growth"
         description={
           canViewOrgAnalyticsSummary
-            ? "Operating System for Growth — one place for approvals, delivery signals, and finance health."
+            ? "one place for approvals, delivery signals, and finance health."
             : isSalesOrDeveloper
               ? "Your queue and work history — org-wide analytics are reserved for leadership roles. Submitted report history is read-only."
-              : "Operating System for Growth — one place for approvals, delivery signals, and your work."
+              : "one place for approvals, delivery signals, and your work."
         }
       />
 
@@ -1021,50 +1053,35 @@ export default function DashboardPage() {
             Alerts — sounds only for sales, developer, and director (messages, projects, reports, inquiries). Admins see
             the same signals here without audio. Task reminders never play a sound.
           </p>
-          <DashboardCardRow lgCols={3}>
-            <DashboardScrollCard>
-              <Link
-                href={messageJumpHref}
-                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
-                  attentionSignalSummary.message > 0
-                    ? "border-sky-600/50 bg-sky-950/40 hover:border-sky-500/70"
-                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
-                }`}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Messages</span>
-                <span className="mt-1 text-2xl font-semibold text-sky-100">{attentionSignalSummary.message}</span>
-                <span className="mt-0.5 text-[11px] text-slate-500">Chat and report threads</span>
-              </Link>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-              <Link
-                href="/projects"
-                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
-                  attentionSignalSummary.project > 0
-                    ? "border-amber-600/50 bg-amber-950/30 hover:border-amber-500/70"
-                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
-                }`}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">Project updates</span>
-                <span className="mt-1 text-2xl font-semibold text-amber-50">{attentionSignalSummary.project}</span>
-                <span className="mt-0.5 text-[11px] text-slate-500">Assignments, tasks, and handoffs</span>
-              </Link>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-              <Link
-                href="/leads"
-                className={`flex h-full min-h-[112px] flex-col rounded-xl border px-4 py-3 transition-colors ${
-                  attentionSignalSummary.inquiry > 0
-                    ? "border-emerald-600/50 bg-emerald-950/25 hover:border-emerald-500/70"
-                    : "border-slate-800/80 bg-slate-950/30 opacity-60"
-                }`}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200">Inquiries</span>
-                <span className="mt-1 text-2xl font-semibold text-emerald-50">{attentionSignalSummary.inquiry}</span>
-                <span className="mt-0.5 text-[11px] text-slate-500">Leads and meeting requests</span>
-              </Link>
-            </DashboardScrollCard>
-          </DashboardCardRow>
+          <StatCardGrid>
+            <Link href={messageJumpHref} className="block h-full">
+              <StatCard
+                label="Messages"
+                value={attentionSignalSummary.message}
+                hint="Chat and report threads"
+                tone="sky"
+                className={attentionSignalSummary.message === 0 ? "opacity-60" : ""}
+              />
+            </Link>
+            <Link href="/projects" className="block h-full">
+              <StatCard
+                label="Project updates"
+                value={attentionSignalSummary.project}
+                hint="Tasks and handoffs"
+                tone="amber"
+                className={attentionSignalSummary.project === 0 ? "opacity-60" : ""}
+              />
+            </Link>
+            <Link href="/leads" className="block h-full">
+              <StatCard
+                label="Inquiries"
+                value={attentionSignalSummary.inquiry}
+                hint="Leads and meetings"
+                tone="emerald"
+                className={attentionSignalSummary.inquiry === 0 ? "opacity-60" : ""}
+              />
+            </Link>
+          </StatCardGrid>
         </div>
       )}
 
@@ -1078,9 +1095,9 @@ export default function DashboardPage() {
         </p>
         <Link
           href="/schedule"
-          className="shrink-0 self-start rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 sm:self-auto"
+          className="shrink-0 self-start rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-900/30 hover:from-sky-500 hover:to-violet-500 sm:self-auto"
         >
-          Open Tasks
+          Open Tasks →
         </Link>
       </div>
 
@@ -1117,217 +1134,75 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <DashboardCardRow lgCols={4}>
+          <StatCardGrid>
             {actionCards.slice(0, 8).map((c) => {
-              const tone =
+              const tone: StatTone =
                 c.tone === "rose"
-                  ? "text-rose-300"
+                  ? "rose"
                   : c.tone === "amber"
-                    ? "text-amber-300"
+                    ? "amber"
                     : c.tone === "emerald"
-                      ? "text-emerald-300"
-                      : "text-sky-300";
+                      ? "emerald"
+                      : "sky";
               return (
-                <DashboardScrollCard key={`${c.href}-${c.title}`} width="wide">
-                  <Link
-                    href={c.href}
-                    className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.title}</p>
-                    <p className={`mt-1 text-2xl font-semibold ${tone}`}>{c.value}</p>
-                    <p className="mt-1 text-xs text-slate-500">{c.sub}</p>
-                  </Link>
-                </DashboardScrollCard>
+                <Link key={`${c.href}-${c.title}`} href={c.href} className="block h-full min-h-[5.5rem]">
+                  <StatCard label={c.title} value={c.value} hint={c.sub} tone={tone} />
+                </Link>
               );
             })}
-          </DashboardCardRow>
+          </StatCardGrid>
+        </div>
+      )}
+
+      {isDeveloper && hydrated && auth.accessToken && pendingDevPaymentAck.length > 0 && (
+        <div className="rounded-2xl border border-amber-600/50 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-4 sm:px-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+            Confirm developer payments (finance)
+          </p>
+          <p className="mt-1 text-xs text-amber-100/90">
+            Finance recorded a payment to you — confirm so the ledger stays aligned.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {pendingDevPaymentAck.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-800/60 bg-slate-950/40 px-3 py-2"
+              >
+                <span className="text-slate-100">
+                  {formatMoney(Number(row.amount))}
+                  {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
+                  {row.description?.trim() || "Developer payment"} · {new Date(row.spentAt).toLocaleDateString()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void acknowledgeDevPayment(row.id)}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+                >
+                  Confirm receipt
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
       {isDeveloper && hydrated && auth.accessToken && (
-        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Developer overview
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void loadSummaryAndAttention()}
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                Refresh
-              </button>
-              <Link
-                href="/projects"
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                Open projects →
-              </Link>
-            </div>
-          </div>
-
-          {pendingDevPaymentAck.length > 0 && (
-            <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/25 px-3 py-3 text-sm text-amber-50">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
-                Confirm developer payments (finance)
-              </p>
-              <p className="mt-1 text-xs text-amber-100/90">
-                Finance recorded a payment to you — confirm so the ledger stays aligned.
-              </p>
-              <ul className="mt-3 space-y-2">
-                {pendingDevPaymentAck.map((row) => (
-                  <li
-                    key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-800/60 bg-slate-950/40 px-2 py-2"
-                  >
-                    <span className="text-slate-100">
-                      {formatMoney(Number(row.amount))}
-                      {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
-                      {row.description?.trim() || "Developer payment"} ·{" "}
-                      {new Date(row.spentAt).toLocaleDateString()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void acknowledgeDevPayment(row.id)}
-                      className="rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-500"
-                    >
-                      Confirm receipt
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <DashboardCardRow lgCols={4}>
-            <DashboardScrollCard>
-              <Link
-                href="/projects"
-                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tasks</p>
-                <p className="mt-1 text-2xl font-semibold text-rose-300">{tasksOverdue}</p>
-                <p className="mt-1 text-xs text-slate-500">Overdue</p>
-                {tasksDueSoon > 0 && (
-                  <p className="mt-1 text-xs text-amber-200">{tasksDueSoon} due soon</p>
-                )}
-              </Link>
-            </DashboardScrollCard>
-
-            <DashboardScrollCard>
-              <Link
-                href="/developer-reports"
-                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
-                <p className="mt-1 text-2xl font-semibold text-sky-300">{messagesCount}</p>
-                <p className="mt-1 text-xs text-slate-500">Need a reply</p>
-              </Link>
-            </DashboardScrollCard>
-
-            <DashboardScrollCard>
-              <Link
-                href="/developer-reports"
-                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Reports</p>
-                <p className="mt-1 text-2xl font-semibold text-emerald-400">
-                  {developerReportStreak}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Streak (days)</p>
-              </Link>
-            </DashboardScrollCard>
-
-            <DashboardScrollCard>
-              <Link
-                href="/projects"
-                className="flex h-full min-h-[120px] flex-col rounded-xl border border-slate-700/80 bg-slate-950/20 p-4 hover:border-slate-600 hover:bg-slate-900/40"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Projects</p>
-                <p className="mt-1 text-2xl font-semibold text-amber-300">
-                  {projectsNeedingReview.length + handoffRequests.length}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Need attention</p>
-              </Link>
-            </DashboardScrollCard>
-          </DashboardCardRow>
-
-          {(overdueTasks.length > 0 ||
-            (attention?.messages?.length ?? 0) > 0 ||
-            projectsNeedingReview.length > 0 ||
-            handoffRequests.length > 0) && (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {(overdueTasks.length > 0 || projectsNeedingReview.length > 0 || handoffRequests.length > 0) && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Next actions</p>
-                  <ul className="space-y-2 text-sm">
-                    {projectsNeedingReview.slice(0, 3).map((p) => (
-                      <li key={p.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
-                        <Link href={`/projects/${p.id}`} className="text-sky-300 hover:underline">
-                          Review project: {p.name}
-                        </Link>
-                      </li>
-                    ))}
-                    {handoffRequests.slice(0, 2).map((h) => (
-                      <li key={h.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-slate-200">
-                        Handoff request: <span className="text-slate-100">{h.project.name}</span>
-                        <span className="ml-1 text-xs text-slate-400">from {h.fromUser.name ?? h.fromUser.email}</span>
-                      </li>
-                    ))}
-                    {overdueTasks.slice(0, 3).map((t) => (
-                      <li key={t.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
-                        <Link href={`/projects/${t.projectId}`} className="text-rose-200 hover:underline">
-                          Overdue: {t.title}
-                        </Link>
-                        <span className="ml-2 text-xs text-slate-500">
-                          Due {new Date(t.dueDate).toLocaleDateString()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {(attention?.messages?.length ?? 0) > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Messages</p>
-                  <ul className="space-y-2 text-sm">
-                    {(attention?.messages ?? []).slice(0, 5).map((m) => (
-                      <li key={m.id} className="rounded border border-slate-700 bg-slate-900/60 px-3 py-2">
-                        <Link href={`/reports/${m.reportId}`} className="text-brand hover:underline">
-                          {m.content.slice(0, 90)}
-                          {m.content.length > 90 ? "…" : ""}
-                        </Link>
-                        <span className="ml-2 text-xs text-slate-500">
-                          {new Date(m.askedAt).toLocaleString()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link
-              href="/developer-reports"
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-            >
-              Submit report →
-            </Link>
-            <Link
-              href="/community"
-              className="rounded-lg border border-slate-600 bg-slate-950/30 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-900/40"
-            >
-              Community →
-            </Link>
-          </div>
-        </div>
+        <DeveloperDashboardSections
+          apiFetch={apiFetch}
+          onRefreshAttention={() => void loadSummaryAndAttention()}
+          tasksOverdue={tasksOverdue}
+          tasksDueSoon={tasksDueSoon}
+          developerReportStreak={developerReportStreak}
+          messagesCount={messagesCount}
+          projectsNeedingReview={projectsNeedingReview}
+          handoffCount={handoffRequests.length}
+          progressReminders={attention?.developerProgressReminders ?? []}
+          overdueTasks={overdueTasks}
+          attentionMessages={attention?.messages ?? []}
+        />
       )}
 
-      {navCards.length > 0 && (
+      {navCards.length > 0 && !isDeveloper && (
         <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
@@ -1403,95 +1278,86 @@ export default function DashboardPage() {
           )}
 
           {kpis && (
-            <DashboardCardRow lgCols={3}>
+            <div className="space-y-6">
               {canViewFinanceKpis && (
-              <DashboardScrollCard width="wide">
-                <div className="shell min-h-[180px]">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Finance
-                  </p>
-                  <ul className="space-y-1 break-words text-sm text-slate-200">
-                    <li>Revenue this month: <span className="text-emerald-400">{formatMoney(kpis.finance.revenueThisMonth)}</span></li>
-                    <li>Outstanding invoices: <span className="text-amber-300">{formatMoney(kpis.finance.outstandingInvoicesAmount)}</span></li>
-                    <li>Overdue invoices: <span className="text-rose-300">{kpis.finance.overdueInvoicesCount}</span></li>
-                    <li>
-                      Cash out this month:{" "}
-                      <span className="text-amber-300">
-                        {formatMoney(kpis.finance.cashOutflowsThisMonth ?? kpis.finance.expensesThisMonth)}
-                      </span>
-                    </li>
-                    <li className="text-[11px] text-slate-500">
-                      — of which approved expenses{" "}
-                      {formatMoney(kpis.finance.expensesThisMonth)}
-                      {kpis.finance.payoutsPaidThisMonth != null && kpis.finance.payoutsPaidThisMonth > 0
-                        ? ` · paid payouts ${formatMoney(kpis.finance.payoutsPaidThisMonth)}`
-                        : ""}
-                    </li>
-                    <li className="border-t border-slate-700/80 pt-2 mt-2">
-                      Project contracts (approved):{" "}
-                      <span className="text-slate-100">{formatMoney(kpis.finance.projectContractTotal ?? 0)}</span>
-                    </li>
-                    <li>
-                      Collected on projects:{" "}
-                      <span className="text-emerald-400">{formatMoney(kpis.finance.projectAmountReceivedTotal ?? 0)}</span>
-                    </li>
-                    <li>
-                      Pending on projects:{" "}
-                      <span className="text-amber-300">{formatMoney(kpis.finance.projectPendingTotal ?? 0)}</span>
-                    </li>
-                  </ul>
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Finance</p>
+                  <StatCardGrid>
+                    <StatCard label="Revenue (month)" value={formatMoney(kpis.finance.revenueThisMonth)} tone="emerald" />
+                    <StatCard
+                      label="Outstanding"
+                      value={formatMoney(kpis.finance.outstandingInvoicesAmount)}
+                      tone="amber"
+                    />
+                    <StatCard label="Overdue invoices" value={kpis.finance.overdueInvoicesCount} tone="rose" />
+                    <StatCard
+                      label="Cash out (month)"
+                      value={formatMoney(kpis.finance.cashOutflowsThisMonth ?? kpis.finance.expensesThisMonth)}
+                      tone="amber"
+                      hint={`Expenses ${formatMoney(kpis.finance.expensesThisMonth)}`}
+                    />
+                    <StatCard
+                      label="Contracts"
+                      value={formatMoney(kpis.finance.projectContractTotal ?? 0)}
+                      tone="violet"
+                    />
+                    <StatCard
+                      label="Collected"
+                      value={formatMoney(kpis.finance.projectAmountReceivedTotal ?? 0)}
+                      tone="emerald"
+                    />
+                    <StatCard
+                      label="Pending"
+                      value={formatMoney(kpis.finance.projectPendingTotal ?? 0)}
+                      tone="rose"
+                    />
+                  </StatCardGrid>
                 </div>
-              </DashboardScrollCard>
               )}
               {!canViewFinanceKpis && auth.roleKeys.includes("director_admin") && (
-                <DashboardScrollCard width="wide">
-                  <div className="shell min-h-[120px]">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Finance
-                    </p>
-                    <p className="text-sm text-slate-400">
-                      Aggregate money totals are visible to <span className="text-slate-200">Finance</span> and{" "}
-                      <span className="text-slate-200">Admin</span> only. Use Approvals and operational cards below;
-                      detailed cash position lives under Finance for those roles.
-                    </p>
-                  </div>
-                </DashboardScrollCard>
+                <div className="rounded-xl border border-slate-700/80 bg-slate-950/30 p-4 text-sm text-slate-400">
+                  Finance totals are restricted — Admin can enable <span className="text-slate-200">Can see finance</span> on
+                  your user profile.
+                </div>
               )}
-
-              <DashboardScrollCard width="wide">
-                <div className="shell min-h-[180px]">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Project health
-                  </p>
-                  <ul className="space-y-1 break-words text-sm text-slate-200">
-                    <li>Active projects: <span className="text-sky-300">{kpis.projectHealth.activeProjects}</span></li>
-                    <li>Overdue tasks: <span className="text-rose-300">{kpis.projectHealth.overdueTasks}</span></li>
-                    <li>Blocked tasks: <span className="text-amber-300">{kpis.projectHealth.blockedTasks}</span></li>
-                    <li>Milestones done / pending: <span className="text-slate-100">{kpis.projectHealth.milestonesDone} / {kpis.projectHealth.milestonesPending}</span></li>
-                  </ul>
-                </div>
-              </DashboardScrollCard>
-
-              <DashboardScrollCard width="wide">
-                <div className="shell min-h-[180px]">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Lead conversion
-                  </p>
-                  <ul className="space-y-1 break-words text-sm text-slate-200">
-                    <li>Leads this month: <span className="text-sky-300">{kpis.leadConversion.leadsThisMonth}</span></li>
-                    <li>Deals won: <span className="text-emerald-400">{kpis.leadConversion.dealsWon}</span></li>
-                    <li>Deals lost: <span className="text-rose-300">{kpis.leadConversion.dealsLost}</span></li>
-                    <li>Win rate: <span className="text-slate-100">{kpis.leadConversion.winRate.toFixed(1)}%</span></li>
-                    <li>Avg time to close: <span className="text-slate-100">{kpis.leadConversion.avgTimeToCloseDays.toFixed(1)} days</span></li>
-                  </ul>
-                </div>
-              </DashboardScrollCard>
-            </DashboardCardRow>
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Project health</p>
+                <StatCardGrid>
+                  <StatCard label="Active projects" value={kpis.projectHealth.activeProjects} tone="sky" />
+                  <StatCard label="Overdue tasks" value={kpis.projectHealth.overdueTasks} tone="rose" />
+                  <StatCard label="Blocked tasks" value={kpis.projectHealth.blockedTasks} tone="amber" />
+                  <StatCard
+                    label="Milestones"
+                    value={`${kpis.projectHealth.milestonesDone} / ${kpis.projectHealth.milestonesPending}`}
+                    tone="violet"
+                    hint="Done / pending"
+                  />
+                </StatCardGrid>
+              </div>
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Lead conversion</p>
+                <StatCardGrid>
+                  <StatCard label="Leads (month)" value={kpis.leadConversion.leadsThisMonth} tone="sky" />
+                  <StatCard label="Deals won" value={kpis.leadConversion.dealsWon} tone="emerald" />
+                  <StatCard label="Deals lost" value={kpis.leadConversion.dealsLost} tone="rose" />
+                  <StatCard
+                    label="Win rate"
+                    value={`${kpis.leadConversion.winRate.toFixed(1)}%`}
+                    tone="brand"
+                  />
+                  <StatCard
+                    label="Avg close time"
+                    value={`${kpis.leadConversion.avgTimeToCloseDays.toFixed(1)}d`}
+                    tone="violet"
+                  />
+                </StatCardGrid>
+              </div>
+            </div>
           )}
         </div>
       )}
 
-      {!canViewOrgAnalyticsSummary && isSalesOrDeveloper && (
+      {!canViewOrgAnalyticsSummary && isSalesOrDeveloper && !isDeveloper && (
         <div className="shell min-w-0 border-sky-800/50 bg-sky-950/25">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
             Your work history (read-only)
@@ -1522,36 +1388,12 @@ export default function DashboardPage() {
       )}
 
       {isAdmin && directorDashboard && summary && (
-        <DashboardCardRow lgCols={4}>
-          <DashboardScrollCard>
-            <div className="shell min-w-0 border-slate-700/80">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Active projects</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-100">{summary.activeProjects}</p>
-              <p className="text-xs text-slate-500">Across all teams</p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell min-w-0 border-slate-700/80">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending approvals</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-300">{pendingFinanceApprovals}</p>
-              <p className="text-xs text-slate-500">Finance requests</p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell min-w-0 border-slate-700/80">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">At risk</p>
-              <p className="mt-1 text-2xl font-semibold text-rose-300">{atRiskProjects}</p>
-              <p className="text-xs text-slate-500">Delayed or stalled</p>
-            </div>
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <div className="shell min-w-0 border-slate-700/80">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Team members</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-100">{teamMembers}</p>
-              <p className="text-xs text-slate-500">Seats in this workspace</p>
-            </div>
-          </DashboardScrollCard>
-        </DashboardCardRow>
+        <StatCardGrid>
+          <StatCard label="Active projects" value={summary.activeProjects} hint="Across all teams" tone="sky" />
+          <StatCard label="Pending approvals" value={pendingFinanceApprovals} hint="Finance requests" tone="amber" />
+          <StatCard label="At risk" value={atRiskProjects} hint="Delayed or stalled" tone="rose" />
+          <StatCard label="Team members" value={teamMembers ?? 0} hint="Workspace seats" tone="violet" />
+        </StatCardGrid>
       )}
 
       {isAdmin && directorDashboard && (
@@ -1661,7 +1503,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {projectsNeedingReview.length > 0 && (
+      {projectsNeedingReview.length > 0 && !isDeveloper && (
         <div className="rounded-xl border border-sky-600/50 bg-sky-950/40 px-3 py-3 sm:px-4">
           <p className="mb-2 text-sm leading-snug text-sky-200">
             Review and add tasks for {projectsNeedingReview.length} project(s) assigned to you.
@@ -1731,27 +1573,17 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {auth.roleKeys.includes("developer") && <CurrentFocusPanel apiFetch={apiFetch} />}
+      {auth.roleKeys.includes("developer") && !isDeveloper && <CurrentFocusPanel apiFetch={apiFetch} />}
 
       {/* Stats row (hide for developers — replaced by simple cards above) */}
       {!isDeveloper && (
-        <DashboardCardRow lgCols={5} layout="scroll">
-          <DashboardScrollCard>
-            <StatCard label="Notifications" value={unreadCount} />
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <StatCard label="Messages" value={messagesCount} sub="to respond" />
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <StatCard label="Due today" value={dueCount} />
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <StatCard label="Work progress" value={`${workProgress}%`} />
-          </DashboardScrollCard>
-          <DashboardScrollCard>
-            <StatCard label="Report streak" value={reportStreak} sub="days" />
-          </DashboardScrollCard>
-        </DashboardCardRow>
+        <StatCardGrid>
+          <StatCard label="Notifications" value={unreadCount} hint="Unread" tone="brand" />
+          <StatCard label="Messages" value={messagesCount} hint="To respond" tone="sky" />
+          <StatCard label="Due today" value={dueCount} hint="Follow-ups" tone="amber" />
+          <StatCard label="Work progress" value={`${workProgress}%`} hint="Delivery" tone="violet" />
+          <StatCard label="Report streak" value={reportStreak} hint="Days" tone="emerald" />
+        </StatCardGrid>
       )}
 
       {!isDeveloper && hasAttention && attention && (
@@ -1912,36 +1744,17 @@ export default function DashboardPage() {
       {!isDeveloper && (workProgress > 0 || developerReportStreak > 0 || tasksOverdue > 0 || tasksDueSoon > 0) && (
         <div className="shell min-w-0 border-sky-800/40 bg-sky-950/20">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Performance</h3>
-          <DashboardCardRow lgCols={4}>
-            <DashboardScrollCard>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">Work progress</p>
-              <p className="mt-1 text-2xl font-semibold text-sky-400">{workProgress}%</p>
-              <p className="text-xs text-slate-500">Tasks done vs assigned</p>
-            </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">Report streak</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-400">{developerReportStreak} day{developerReportStreak !== 1 ? "s" : ""}</p>
-              <p className="text-xs text-slate-500">Consecutive days with reports</p>
-            </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">Tasks overdue</p>
-              <p className="mt-1 text-2xl font-semibold text-rose-400">{tasksOverdue}</p>
-              <p className="text-xs text-slate-500">Past due date</p>
-            </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">Tasks due soon</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-400">{tasksDueSoon}</p>
-              <p className="text-xs text-slate-500">Next 7 days</p>
-            </div>
-            </DashboardScrollCard>
-          </DashboardCardRow>
+          <StatCardGrid>
+            <StatCard label="Work progress" value={`${workProgress}%`} hint="Tasks done vs assigned" tone="sky" />
+            <StatCard
+              label="Report streak"
+              value={`${developerReportStreak} day${developerReportStreak !== 1 ? "s" : ""}`}
+              hint="Consecutive reports"
+              tone="emerald"
+            />
+            <StatCard label="Tasks overdue" value={tasksOverdue} hint="Past due date" tone="rose" />
+            <StatCard label="Tasks due soon" value={tasksDueSoon} hint="Next 7 days" tone="amber" />
+          </StatCardGrid>
         </div>
       )}
 
@@ -1955,54 +1768,57 @@ export default function DashboardPage() {
                   ? "Sales, delivery, and operational signals in one place. Invoice and billing detail live under Finance for Admin."
                   : "Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES)."}
               </p>
-              <DashboardCardRow layout="scroll" lgCols={isDirectorOnly ? 3 : 4}>
-                {!isDirectorOnly && (
-                  <DashboardScrollCard width="wide">
-                    <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Financial health</p>
-                      <p className="mt-2 break-words text-sm text-slate-200">
-                        Revenue (period): {formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
-                      </p>
-                      <p className="break-words text-sm text-slate-200">
-                        Outstanding: {formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
-                      </p>
-                      <p className="break-words text-sm text-slate-200">Net flow: {formatMoney(directorDashboard.financialHealth.netFlow)}</p>
-                      <p className="mt-auto text-xs text-slate-400">
-                        Pending approvals: {directorDashboard.financialHealth.pendingExpenseApprovals}
-                      </p>
-                    </div>
-                  </DashboardScrollCard>
+              <StatCardGrid>
+                {directorDashboard.financialHealth && (
+                  <>
+                    <StatCard
+                      label="Revenue (period)"
+                      value={formatMoney(directorDashboard.financialHealth.revenueThisPeriod)}
+                      tone="emerald"
+                    />
+                    <StatCard
+                      label="Outstanding"
+                      value={formatMoney(directorDashboard.financialHealth.outstandingInvoices)}
+                      tone="amber"
+                    />
+                    <StatCard
+                      label="Net flow"
+                      value={formatMoney(directorDashboard.financialHealth.netFlow)}
+                      tone="brand"
+                    />
+                    <StatCard
+                      label="Pending approvals"
+                      value={directorDashboard.financialHealth.pendingExpenseApprovals}
+                      tone="rose"
+                    />
+                  </>
                 )}
-                <DashboardScrollCard width="wide">
-                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sales health</p>
-                    <p className="mt-2 break-words text-sm text-slate-200">
-                      Pipeline: {formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
-                    </p>
-                    <p className="text-sm text-slate-200">Win rate: {directorDashboard.salesHealth.winRate.toFixed(0)}%</p>
-                    <p className="text-sm text-slate-200">Stalled deals: {directorDashboard.salesHealth.stalledDealsCount}</p>
-                  </div>
-                </DashboardScrollCard>
-                <DashboardScrollCard width="wide">
-                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operational health</p>
-                    <p className="mt-2 text-sm text-slate-200">Active projects: {directorDashboard.operationalHealth.activeProjects}</p>
-                    <p className="text-sm text-slate-200">At risk: {directorDashboard.operationalHealth.projectsAtRisk}</p>
-                    <p className="text-sm text-slate-200">
-                      Blocked tasks (threshold): {directorDashboard.operationalHealth.blockedTasksAboveThreshold}
-                    </p>
-                  </div>
-                </DashboardScrollCard>
-                <DashboardScrollCard width="wide">
-                  <div className="flex min-h-[168px] min-w-0 flex-col rounded-xl border border-slate-700/80 bg-slate-950/30 p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Approval queue</p>
-                    <p className="mt-2 text-xl font-semibold text-amber-400">{directorDashboard.approvalQueue.totalPending} pending</p>
-                    <Link href="/approvals" className="mt-auto inline-block text-sm text-sky-400 hover:underline">
-                      View approvals →
-                    </Link>
-                  </div>
-                </DashboardScrollCard>
-              </DashboardCardRow>
+                <StatCard
+                  label="Pipeline"
+                  value={formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
+                  hint={`Win ${directorDashboard.salesHealth.winRate.toFixed(0)}% · ${directorDashboard.salesHealth.stalledDealsCount} stalled`}
+                  tone="sky"
+                />
+                <StatCard
+                  label="Active projects"
+                  value={directorDashboard.operationalHealth.activeProjects}
+                  hint={`${directorDashboard.operationalHealth.projectsAtRisk} at risk`}
+                  tone="violet"
+                />
+                <StatCard
+                  label="Blocked tasks"
+                  value={directorDashboard.operationalHealth.blockedTasksAboveThreshold}
+                  tone="rose"
+                />
+                <Link href="/approvals" className="block h-full">
+                  <StatCard
+                    label="Approval queue"
+                    value={directorDashboard.approvalQueue.totalPending}
+                    hint="Pending items"
+                    tone="amber"
+                  />
+                </Link>
+              </StatCardGrid>
               <div className="mt-6 min-w-0">
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Team — current project focus</h4>
                 <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
@@ -2169,33 +1985,19 @@ export default function DashboardPage() {
       )}
 
       {hasMetrics && (
-        <div className="flex w-full min-w-0 flex-nowrap items-stretch gap-1.5 sm:gap-3">
-          {(
-            [
-              { key: "leads", label: "Leads this week", value: summary!.leadsThisWeek, tone: "green" as const },
-              { key: "deals", label: "Deals won", value: summary!.dealsWon, tone: "green" as const },
-              { key: "projects", label: "Active projects", value: summary!.activeProjects, tone: "blue" as const },
-              { key: "revenue", label: "Revenue received", value: formatMoney(summary!.revenueReceived), tone: "green" as const },
-              ...(!isDirectorOnly
-                ? [
-                    {
-                      key: "inv",
-                      label: "Invoices outstanding",
-                      value: formatMoney(summary!.invoiceOutstanding),
-                      tone: "amber" as const
-                    }
-                  ]
-                : [])
-            ] as const
-          ).map((m) => (
-            <div
-              key={m.key}
-              className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col justify-center rounded-xl border border-slate-800 bg-slate-900/70 px-1 py-1.5 text-center shadow-sm sm:px-3 sm:py-3 sm:text-left"
-            >
-              <Metric label={m.label} value={m.value} tone={m.tone} />
-            </div>
-          ))}
-        </div>
+        <StatCardGrid>
+          <StatCard label="Leads this week" value={summary!.leadsThisWeek} tone="sky" />
+          <StatCard label="Deals won" value={summary!.dealsWon} tone="emerald" />
+          <StatCard label="Active projects" value={summary!.activeProjects} tone="violet" />
+          <StatCard label="Revenue received" value={formatMoney(summary!.revenueReceived)} tone="emerald" />
+          {!isDirectorOnly && (
+            <StatCard
+              label="Invoices outstanding"
+              value={formatMoney(summary!.invoiceOutstanding)}
+              tone="amber"
+            />
+          )}
+        </StatCardGrid>
       )}
 
       {auth.roleKeys.includes("sales") && (
@@ -2208,7 +2010,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {quickLinks.length > 0 && (
+      {quickLinks.length > 0 && !isDeveloper && (
         <div className="shell min-w-0">
           <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Your duties</p>
           <div className="flex flex-wrap gap-2">
@@ -2348,55 +2150,6 @@ function CurrentFocusPanel({
       {updatedAt && (
         <p className="mt-2 text-xs text-slate-500">Last updated: {new Date(updatedAt).toLocaleString()}</p>
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub
-}: {
-  label: string;
-  value: number | string;
-  sub?: string;
-}) {
-  return (
-    <div className="shell min-w-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 break-words text-xl font-semibold text-slate-100">
-        {value}
-        {sub && <span className="ml-1 text-sm font-normal text-slate-400">{sub}</span>}
-      </p>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone
-}: {
-  label: string;
-  value: number | string;
-  tone: "green" | "amber" | "blue";
-}) {
-  const color =
-    tone === "green"
-      ? "text-emerald-400"
-      : tone === "amber"
-        ? "text-amber-400"
-        : "text-sky-400";
-  return (
-    <div className="min-h-0 min-w-0">
-      <p className="line-clamp-2 text-[7px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px] sm:leading-snug sm:text-slate-400 md:text-xs">
-        {label}
-      </p>
-      <p
-        className={`mt-0.5 truncate text-[10px] font-semibold leading-tight sm:mt-1 sm:text-base sm:leading-normal md:text-xl ${color}`}
-      >
-        {value}
-      </p>
     </div>
   );
 }

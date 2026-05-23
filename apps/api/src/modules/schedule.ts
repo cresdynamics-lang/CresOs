@@ -2,7 +2,17 @@
 import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
-import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { requireRoles, ROLE_KEYS, ALL_APP_ROLE_KEYS } from "./auth-middleware";
+
+const SCHEDULE_ROLES = ALL_APP_ROLE_KEYS;
+
+function canViewOrgSchedule(roleKeys: string[]): boolean {
+  return roleKeys.some((r) => [ROLE_KEYS.admin, ROLE_KEYS.director].includes(r));
+}
+
+function canActOnOrgScheduleItem(roleKeys: string[]): boolean {
+  return roleKeys.some((r) => [ROLE_KEYS.admin, ROLE_KEYS.director].includes(r));
+}
 
 const REMINDER_MINUTES_OPTIONS = [5, 15, 30, 60, 120] as const;
 
@@ -62,15 +72,14 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
   // List schedule items: own items, or org-wide when admin passes scope=org
   router.get(
     "/",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles(SCHEDULE_ROLES),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const roleKeys = req.auth!.roleKeys;
-      const isAdmin = roleKeys.includes(ROLE_KEYS.admin);
       const period = (req.query.period as Period) || "week";
       const completedFilter = (req.query.completed as string) || "all"; // all | done | pending
-      const scopeOrg = isAdmin && (req.query.scope as string) === "org";
+      const scopeOrg = canViewOrgSchedule(roleKeys) && (req.query.scope as string) === "org";
 
       const { start, end } = getRange(period);
 
@@ -139,7 +148,7 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
   // Create schedule item
   router.post(
     "/",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles(SCHEDULE_ROLES),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -178,17 +187,17 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
   // Update schedule item. Sales/developer may only mark done/undo; admin/director/analyst may also edit fields.
   router.patch(
     "/:id",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.analyst, ROLE_KEYS.admin]),
+    requireRoles(SCHEDULE_ROLES),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const roleKeys = req.auth!.roleKeys;
-      const isAdmin = roleKeys.includes(ROLE_KEYS.admin);
       const canEditHistory = roleKeys.some((r) => [ROLE_KEYS.admin, ROLE_KEYS.director].includes(r));
+      const actOnAny = canActOnOrgScheduleItem(roleKeys);
       const { id } = req.params;
       const body = req.body as { title?: string; type?: string; scheduledAt?: string; notes?: string; completed?: boolean; reminderMinutesBefore?: number | null };
       const existing = await prisma.scheduleItem.findFirst({
-        where: isAdmin ? { id, orgId } : { id, orgId, userId }
+        where: actOnAny ? { id, orgId } : { id, orgId, userId }
       });
       if (!existing) {
         res.status(404).json({ error: "Schedule item not found" });
@@ -242,7 +251,7 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
   // Delete schedule item — only admin/director may delete (sales/developer cannot tamper with history)
   router.delete(
     "/:id",
-    requireRoles([ROLE_KEYS.admin, ROLE_KEYS.director, ROLE_KEYS.sales, ROLE_KEYS.developer, ROLE_KEYS.analyst]),
+    requireRoles(SCHEDULE_ROLES),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
@@ -253,9 +262,9 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
         return;
       }
       const { id } = req.params;
-      const isAdmin = roleKeys.includes(ROLE_KEYS.admin);
+      const actOnAny = canActOnOrgScheduleItem(roleKeys);
       const existing = await prisma.scheduleItem.findFirst({
-        where: isAdmin ? { id, orgId } : { id, orgId, userId }
+        where: actOnAny ? { id, orgId } : { id, orgId, userId }
       });
       if (!existing) {
         res.status(404).json({ error: "Schedule item not found" });

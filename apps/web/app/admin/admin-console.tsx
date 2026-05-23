@@ -14,6 +14,12 @@ function tabFromPathname(path: string | null): TabKey {
   return "users";
 }
 
+type CapabilityFlags = {
+  canSeeFinance?: boolean;
+  canSubmitReports?: boolean;
+  canReviewTeamReports?: boolean;
+};
+
 type UserRow = {
   id: string;
   email: string;
@@ -22,6 +28,9 @@ type UserRow = {
   notificationEmail: string | null;
   profileCompletedAt: string | null;
   status: string;
+  reportsToDirectorId?: string | null;
+  reportsToDirector?: { id: string; name: string | null; email: string } | null;
+  capabilityFlags?: CapabilityFlags | null;
 };
 
 type DepartmentRow = { id: string; name: string; description: string | null; _count?: { roles: number } };
@@ -66,6 +75,11 @@ export function AdminConsole() {
   const [editNotificationEmail, setEditNotificationEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [directors, setDirectors] = useState<{ id: string; name: string | null; email: string }[]>([]);
+  const [editDirectorId, setEditDirectorId] = useState<string>("");
+  const [editCanSeeFinance, setEditCanSeeFinance] = useState(false);
+  const [editCanSubmitReports, setEditCanSubmitReports] = useState(true);
+  const [editCanReviewTeamReports, setEditCanReviewTeamReports] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [createUserBusy, setCreateUserBusy] = useState(false);
@@ -134,15 +148,27 @@ export function AdminConsole() {
     void loadDepartments();
   }, [isAdmin, loadRoles, loadDepartments]);
 
+  const loadDirectors = useCallback(async () => {
+    try {
+      const res = await apiFetch("/admin/directors");
+      if (res.ok) setDirectors((await res.json()) as { id: string; name: string | null; email: string }[]);
+    } catch {
+      // ignore
+    }
+  }, [apiFetch]);
+
   useEffect(() => {
     if (!isAdmin) return;
-    if (tab === "users") void loadUsersWithRoles();
+    if (tab === "users") {
+      void loadUsersWithRoles();
+      void loadDirectors();
+    }
     if (tab === "departments") void loadDepartments();
     if (tab === "roles") {
       void loadRoles();
       void loadDepartments();
     }
-  }, [isAdmin, tab, loadUsersWithRoles, loadDepartments, loadRoles]);
+  }, [isAdmin, tab, loadUsersWithRoles, loadDepartments, loadRoles, loadDirectors]);
 
   const rolesForSelect = useMemo(() => roles.slice().sort((a, b) => a.name.localeCompare(b.name)), [roles]);
 
@@ -152,6 +178,11 @@ export function AdminConsole() {
     setEditName(u.name ?? "");
     setEditPhone(u.phone ?? "");
     setEditNotificationEmail(u.notificationEmail ?? u.email ?? "");
+    setEditDirectorId(u.reportsToDirectorId ?? "");
+    const caps = (u.capabilityFlags ?? {}) as CapabilityFlags;
+    setEditCanSeeFinance(caps.canSeeFinance === true);
+    setEditCanSubmitReports(caps.canSubmitReports !== false);
+    setEditCanReviewTeamReports(caps.canReviewTeamReports !== false);
   }
 
   async function saveEdit() {
@@ -165,7 +196,13 @@ export function AdminConsole() {
         body: JSON.stringify({
           name: editName.trim() || null,
           phone: editPhone.trim() || null,
-          notificationEmail: editNotificationEmail.trim() || null
+          notificationEmail: editNotificationEmail.trim() || null,
+          reportsToDirectorId: editDirectorId || null,
+          capabilityFlags: {
+            canSeeFinance: editCanSeeFinance,
+            canSubmitReports: editCanSubmitReports,
+            canReviewTeamReports: editCanReviewTeamReports
+          }
         })
       });
       if (res.ok) {
@@ -569,6 +606,51 @@ export function AdminConsole() {
                     className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
                   />
                 </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Reports to director</span>
+                  <select
+                    value={editDirectorId}
+                    onChange={(e) => setEditDirectorId(e.target.value)}
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:text-sm"
+                  >
+                    <option value="">— None —</option>
+                    {directors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name ?? d.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
+                  <p className="mb-2 text-[11px] font-medium text-slate-300 sm:text-xs">Capabilities (dynamic)</p>
+                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+                    <span>Can see finance / cash flow</span>
+                    <input
+                      type="checkbox"
+                      checked={editCanSeeFinance}
+                      onChange={(e) => setEditCanSeeFinance(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-600"
+                    />
+                  </label>
+                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+                    <span>Can submit reports</span>
+                    <input
+                      type="checkbox"
+                      checked={editCanSubmitReports}
+                      onChange={(e) => setEditCanSubmitReports(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-600"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                    <span>Can review team reports</span>
+                    <input
+                      type="checkbox"
+                      checked={editCanReviewTeamReports}
+                      onChange={(e) => setEditCanReviewTeamReports(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-600"
+                    />
+                  </label>
+                </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"

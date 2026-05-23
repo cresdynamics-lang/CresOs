@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { PageHeader } from "../page-header";
 import { SalesWorkspaceNav } from "./sales-workspace-nav";
+import { StatCard, StatCardGrid, type StatTone } from "../../components/stat-card";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { WorkspaceHubCard } from "../../components/workspace-hub-card";
 import { ScheduleKpiStrip, type ScheduleKpiStats } from "../../components/schedule-kpi-strip";
 
 type HubCard = {
@@ -15,6 +16,8 @@ type HubCard = {
   description: string;
   action: string;
   roles: string[];
+  tone: StatTone;
+  icon: string;
 };
 
 const HUB_CARDS: HubCard[] = [
@@ -23,42 +26,54 @@ const HUB_CARDS: HubCard[] = [
     title: "Invoices",
     description: "Dashboard, create draft invoices, and track finance approval status.",
     action: "Open invoices",
-    roles: ["admin", "sales"]
+    roles: ["admin", "sales"],
+    tone: "brand",
+    icon: "₹"
   },
   {
     href: "/crm",
     title: "CRM",
     description: "Accounts, contacts, and pipeline in one place.",
     action: "Go to CRM",
-    roles: ["admin", "sales", "director_admin", "finance"]
+    roles: ["admin", "sales", "director_admin", "finance"],
+    tone: "sky",
+    icon: "◎"
   },
   {
     href: "/leads",
     title: "Leads",
     description: "Capture, qualify, and move leads through your funnel.",
     action: "View leads",
-    roles: ["admin", "director_admin", "sales", "finance"]
+    roles: ["admin", "director_admin", "sales", "finance"],
+    tone: "amber",
+    icon: "◆"
   },
   {
     href: "/reports",
     title: "Sales reports",
     description: "Activity, targets, and performance summaries.",
     action: "Open reports",
-    roles: ["admin", "director_admin", "sales"]
+    roles: ["admin", "director_admin", "sales"],
+    tone: "violet",
+    icon: "▤"
   },
   {
     href: "/projects",
     title: "Projects",
     description: "Delivery status, handoffs, and client work in progress.",
     action: "Browse projects",
-    roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"]
+    roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"],
+    tone: "emerald",
+    icon: "▣"
   },
   {
     href: "/approvals",
     title: "Approvals",
     description: "Pending finance and director decisions affecting sales.",
     action: "Review queue",
-    roles: ["admin", "director_admin", "finance"]
+    roles: ["admin", "director_admin", "finance"],
+    tone: "rose",
+    icon: "✓"
   }
 ];
 
@@ -107,8 +122,7 @@ export default function SalesHubPage() {
   }, [auth.accessToken, apiFetch, keys]);
 
   useEffect(() => {
-    const canSchedule = keys.some((r) => ["sales", "admin", "director_admin"].includes(r));
-    if (!hydrated || !auth.accessToken || !canSchedule) return;
+    if (!hydrated || !auth.accessToken) return;
     let cancelled = false;
     (async () => {
       try {
@@ -135,9 +149,10 @@ export default function SalesHubPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10">
-      <PageHeader
+      <WorkspaceDashboardIntro
         title="Sales workspace"
         description="Jump to the tools you use for pipeline, delivery handoffs, and revenue."
+        eyebrow="Sales"
       />
 
       <div className="mb-8">
@@ -145,61 +160,48 @@ export default function SalesHubPage() {
       </div>
 
       {scheduleKpis && (
-        <div className="mb-6">
-          <div className="shell py-1.5 sm:py-2.5">
-            <ScheduleKpiStrip stats={scheduleKpis} />
+        <div className="mb-6 rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-950/40 via-slate-950/90 to-slate-950 p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="font-display text-sm font-semibold text-sky-300">This week — tasks & schedule</p>
+            <a
+              href="/schedule"
+              className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+            >
+              Open Tasks →
+            </a>
           </div>
+          <ScheduleKpiStrip stats={scheduleKpis} />
         </div>
       )}
 
       {keys.some((r) => ["admin", "sales"].includes(r)) && statsLoaded && stats && (
-        <div className="mb-8">
-          <div className="shell py-1.5 sm:py-2.5">
-            <div className="flex w-full min-w-0 flex-nowrap items-stretch divide-x divide-slate-700/70 overflow-x-auto">
-              {(
-                [
-                  { title: "Total", sub: "invoice drafts", value: stats.total, tone: "text-slate-100" },
-                  { title: "Pending", sub: "awaiting approval", value: stats.pending, tone: "text-amber-400" },
-                  { title: "Approved", sub: "cleared", value: stats.approved, tone: "text-emerald-400" },
-                  { title: "Rejected", sub: "declined", value: stats.rejected, tone: "text-rose-400" }
-                ] as const
-              ).map((s) => (
-                <div
-                  key={s.title}
-                  className="flex min-w-0 flex-1 flex-nowrap items-center justify-center gap-x-0.5 px-1 py-0.5 sm:gap-x-1.5 sm:px-2 sm:py-1"
-                >
-                  <span className="shrink-0 text-[8px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px]">
-                    {s.title}
-                  </span>
-                  <span className={`shrink-0 text-xs font-semibold tabular-nums leading-none sm:text-base ${s.tone}`}>
-                    {s.value}
-                  </span>
-                  <span className="min-w-0 truncate text-[8px] leading-tight text-slate-500 sm:text-[10px]">{s.sub}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <StatCardGrid>
+          <StatCard label="Invoice drafts" value={stats.total} hint="Total drafts" tone="brand" />
+          <StatCard label="Pending" value={stats.pending} hint="Awaiting approval" tone="amber" />
+          <StatCard label="Approved" value={stats.approved} hint="Cleared" tone="emerald" />
+          <StatCard label="Rejected" value={stats.rejected} hint="Declined" tone="rose" />
+        </StatCardGrid>
       )}
 
-      <DashboardCardRow lgCols={3}>
-        {cards.map((card) => (
-          <DashboardScrollCard key={card.href} width="wide">
-          <div
-            className="group flex h-full min-h-[200px] flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm transition-colors hover:border-slate-600 hover:bg-slate-900/70"
-          >
-            <h2 className="text-lg font-semibold text-slate-100">{card.title}</h2>
-            <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">{card.description}</p>
-            <Link
-              href={card.href}
-              className="mt-5 inline-flex w-fit items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-            >
-              {card.action}
-            </Link>
-          </div>
-          </DashboardScrollCard>
-        ))}
-      </DashboardCardRow>
+      <div className="mt-8">
+        <p className="mb-3 font-label text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+          Workspace tools
+        </p>
+        <DashboardCardRow lgCols={3}>
+          {cards.map((card) => (
+            <DashboardScrollCard key={card.href} width="wide">
+              <WorkspaceHubCard
+                href={card.href}
+                title={card.title}
+                description={card.description}
+                action={card.action}
+                tone={card.tone}
+                icon={card.icon}
+              />
+            </DashboardScrollCard>
+          ))}
+        </DashboardCardRow>
+      </div>
     </div>
   );
 }

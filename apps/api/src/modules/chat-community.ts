@@ -28,8 +28,11 @@ import {
   PROJECT_CHANNEL_ROLE_KEYS,
   buildProjectListWhere,
   countProjectChannelMembers,
+  collectProjectChannelMemberIds,
+  canCreateProjectChannel,
   canDeleteProjectChannel,
   createOrGetProjectChannel,
+  PROJECT_CHANNEL_CREATE_ROLE_KEYS,
   deleteProjectChannel,
   formatProjectConversation,
   PROJECT_CHANNEL_DELETE_ROLE_KEYS,
@@ -741,13 +744,31 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const teamCounts = await Promise.all(
           projectsWithoutChannel.map((p) => countProjectChannelMembers(prisma, p.id))
         );
+        const suggestedByProject = await Promise.all(
+          projectsWithoutChannel.map(async (p) => {
+            const project = await prisma.project.findFirst({
+              where: { id: p.id, orgId, deletedAt: null },
+              select: {
+                id: true,
+                orgId: true,
+                createdByUserId: true,
+                ownerUserId: true,
+                assignedDeveloperId: true,
+                approvedById: true
+              }
+            });
+            if (!project) return [] as string[];
+            return collectProjectChannelMemberIds(prisma, project);
+          })
+        );
         const availableProjects = projectsWithoutChannel.map((p, i) => ({
           id: p.id,
           name: p.name,
           status: p.status,
           approvalStatus: p.approvalStatus,
           updatedAt: p.updatedAt.toISOString(),
-          teamMemberCount: teamCounts[i] ?? 0
+          teamMemberCount: teamCounts[i] ?? 0,
+          suggestedMemberIds: suggestedByProject[i] ?? []
         }));
 
         const withChannel = projects.filter(
@@ -772,14 +793,16 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             : [];
 
         const channels = conversations.map((c) => formatProjectConversation(c, userId));
+        const canCreate = canCreateProjectChannel(roleKeys);
 
         res.json({
           success: true,
           data: {
             channels,
-            availableProjects,
+            availableProjects: canCreate ? availableProjects : [],
             totalChannels: channels.length,
-            totalAvailable: availableProjects.length,
+            totalAvailable: canCreate ? availableProjects.length : 0,
+            canCreateChannel: canCreate,
             canDeleteChannel: canDeleteProjectChannel(roleKeys)
           }
         });
@@ -793,16 +816,17 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Create (or open) a project channel
+  // Create (or open) a project channel — directors only
   router.post(
     "/project-channels",
-    requireRoles([...PROJECT_CHANNEL_ROLE_KEYS]),
+    requireRoles([...PROJECT_CHANNEL_CREATE_ROLE_KEYS]),
     async (req, res) => {
       try {
-        const { projectId, channelName, topics } = req.body as {
+        const { projectId, channelName, topics, memberIds } = req.body as {
           projectId?: string;
           channelName?: string;
           topics?: string;
+          memberIds?: string[];
         };
         const userId = req.auth!.userId;
         const orgId = req.auth!.orgId;
@@ -817,6 +841,11 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         if (!topics?.trim()) {
           return res.status(400).json({ error: "topics is required — describe what will be discussed" });
         }
+        if (!Array.isArray(memberIds) || memberIds.length === 0) {
+          return res.status(400).json({
+            error: "memberIds is required — add at least one person who can see this channel"
+          });
+        }
 
         const allowed = await userCanAccessProject(prisma, orgId, userId, roleKeys, projectId);
         if (!allowed) {
@@ -828,15 +857,16 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
         const { conversation, created, memberCount, membersAdded } =
           await createOrGetProjectChannel(prisma, orgId, userId, projectId, {
             channelName: channelName.trim(),
-            topics: topics.trim()
+            topics: topics.trim(),
+            memberIds
           });
 
         res.status(created ? 201 : 200).json({
           success: true,
           message: created
-            ? `Channel created with ${memberCount ?? 0} team members`
+            ? `Channel created — ${memberCount ?? 0} member${memberCount === 1 ? "" : "s"} can see it`
             : membersAdded
-              ? `Channel opened — ${membersAdded} team member${membersAdded === 1 ? "" : "s"} synced`
+              ? `Channel opened — ${membersAdded} member${membersAdded === 1 ? "" : "s"} added`
               : "Channel opened",
           data: {
             conversation: formatProjectConversation(conversation, userId),

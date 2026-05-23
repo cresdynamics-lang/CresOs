@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
-import { PageHeader } from "../../page-header";
 import { SalesWorkspaceNav } from "../sales-workspace-nav";
-import { DashboardCardRow, DashboardScrollCard } from "../../../components/dashboard-card-row";
+import { StatCard, StatCardGrid } from "../../../components/stat-card";
+import { WorkspaceDashboardIntro } from "../../../components/workspace-dashboard-intro";
 
 type InvoiceStatus =
   | "draft"
@@ -312,9 +312,11 @@ export default function SalesInvoicesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10">
-      <PageHeader
+      <WorkspaceDashboardIntro
         title="Sales invoices"
-        description="Create invoices tied to projects—lists load from the database. Finance records payments on each invoice; confirming payment increases the project’s amount received when the invoice has a project."
+        description="Create invoices tied to projects—lists load from the database. Finance records payments on each invoice; confirming payment increases the project's amount received when the invoice has a project."
+        eyebrow="Sales"
+        showWelcomeBanner={false}
       />
       <div className="mb-6">
         <SalesWorkspaceNav />
@@ -363,33 +365,12 @@ export default function SalesInvoicesPage() {
       {/* Dashboard Tab */}
       {activeTab === "dashboard" && (
         <div className="space-y-6">
-          {/* Stats Cards */}
-          <DashboardCardRow lgCols={4} layout="scroll">
-            <DashboardScrollCard>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-slate-200">{stats.total}</div>
-                <div className="text-sm text-slate-400">Total Invoices</div>
-              </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-yellow-400">{stats.outstanding}</div>
-                <div className="text-sm text-slate-400">Outstanding (not fully paid)</div>
-              </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-green-400">{stats.paid}</div>
-                <div className="text-sm text-slate-400">Paid</div>
-              </div>
-            </DashboardScrollCard>
-            <DashboardScrollCard>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-5">
-                <div className="text-2xl font-bold text-red-400">{stats.cancelled}</div>
-                <div className="text-sm text-slate-400">Cancelled</div>
-              </div>
-            </DashboardScrollCard>
-          </DashboardCardRow>
+          <StatCardGrid>
+            <StatCard label="Total invoices" value={stats.total} tone="brand" />
+            <StatCard label="Outstanding" value={stats.outstanding} hint="Not fully paid" tone="amber" />
+            <StatCard label="Paid" value={stats.paid} tone="emerald" />
+            <StatCard label="Cancelled" value={stats.cancelled} tone="rose" />
+          </StatCardGrid>
 
           {/* Recent Invoices */}
           <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">

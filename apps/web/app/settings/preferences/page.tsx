@@ -2,9 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth-context";
+import { useTheme, type ThemeMode } from "../../../lib/theme-provider";
+
+function Toggle({
+  on,
+  onToggle
+}: {
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className={`h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-brand" : "bg-slate-600"}`}
+    >
+      <span
+        className={`block h-5 w-5 translate-y-0.5 rounded-full bg-white transition-transform ${
+          on ? "translate-x-[1.35rem]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
 
 export default function PreferencesPage() {
-  const { auth, apiFetch } = useAuth();
+  const { apiFetch } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState({
@@ -42,7 +68,11 @@ export default function PreferencesPage() {
       const response = await apiFetch("/user/preferences");
       if (response.ok) {
         const data = await response.json();
-        setPreferences({ ...preferences, ...data.data });
+        const merged = { ...preferences, ...data.data };
+        setPreferences(merged);
+        if (merged.theme === "light" || merged.theme === "dark" || merged.theme === "auto") {
+          setTheme(merged.theme);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch preferences:", error);
@@ -51,22 +81,44 @@ export default function PreferencesPage() {
     }
   };
 
+  const persistPreferences = async (next: typeof preferences) => {
+    try {
+      await apiFetch("/user/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next)
+      });
+    } catch (error) {
+      console.error("Failed to update preferences:", error);
+    }
+  };
+
+  const applyTheme = (mode: ThemeMode) => {
+    setTheme(mode);
+    const next = { ...preferences, theme: mode };
+    setPreferences(next);
+    void persistPreferences(next);
+  };
+
+  const patchPreference = <K extends keyof typeof preferences>(
+    key: K,
+    value: (typeof preferences)[K]
+  ) => {
+    const next = { ...preferences, [key]: value };
+    setPreferences(next);
+    void persistPreferences(next);
+  };
+
   const updatePreferences = async () => {
     setSaving(true);
     try {
       const response = await apiFetch("/user/preferences", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(preferences)
       });
-
-      if (response.ok) {
-        alert("Preferences updated successfully!");
-      }
-    } catch (error) {
-      console.error("Failed to update preferences:", error);
+      if (!response.ok) alert("Failed to update preferences.");
+    } catch {
       alert("Failed to update preferences. Please try again.");
     } finally {
       setSaving(false);
@@ -82,31 +134,31 @@ export default function PreferencesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Preferences</h1>
-        <p className="text-slate-400">Customize your experience and interface settings.</p>
-      </div>
-
-      <div className="space-y-6">
+    <div className="w-full max-w-none space-y-0">
         {/* Appearance */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Appearance</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Appearance</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Theme
-              </label>
-              <select
-                value={preferences.theme}
-                onChange={(e) => setPreferences({ ...preferences, theme: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="auto">Auto</option>
-              </select>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Theme</label>
+              <div className="flex flex-wrap gap-2">
+                {(["dark", "light", "auto"] as ThemeMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => applyTheme(mode)}
+                    className={`rounded-lg px-4 py-2 text-sm capitalize ${
+                      (preferences.theme === mode || theme === mode)
+                        ? "bg-brand text-white"
+                        : "border border-slate-700 bg-slate-800 text-slate-300"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Applies immediately when selected.</p>
             </div>
 
             <div>
@@ -159,8 +211,8 @@ export default function PreferencesPage() {
         </div>
 
         {/* Notifications */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Notifications</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Notifications</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -168,19 +220,15 @@ export default function PreferencesPage() {
                 <div className="font-medium text-slate-200">Email Notifications</div>
                 <div className="text-sm text-slate-400">Receive notifications via email</div>
               </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  notifications: { ...preferences.notifications, email: !preferences.notifications.email }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.notifications.email ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.notifications.email ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+              <Toggle
+                on={preferences.notifications.email}
+                onToggle={() =>
+                  patchPreference("notifications", {
+                    ...preferences.notifications,
+                    email: !preferences.notifications.email
+                  })
+                }
+              />
             </div>
 
             <div className="flex items-center justify-between">
@@ -246,8 +294,8 @@ export default function PreferencesPage() {
         </div>
 
         {/* Privacy */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Privacy</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Privacy</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -331,8 +379,8 @@ export default function PreferencesPage() {
         </div>
 
         {/* Accessibility */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Accessibility</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Accessibility</h2>
           
           <div className="space-y-4">
             <div>
@@ -426,7 +474,6 @@ export default function PreferencesPage() {
             {saving ? "Saving..." : "Save Preferences"}
           </button>
         </div>
-      </div>
     </div>
   );
 }

@@ -14,6 +14,13 @@ import { processQueuedEmails } from "./email-delivery";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 import { processStaleActivityAdminDigest, TWELVE_HOURS_MS } from "./stale-activity-admin-digest";
 import { generateDashboardFocusCoachGroq } from "./director-ai-automation";
+import {
+  getDeveloperProjectAnalytics,
+  processDeveloperProgressReminders,
+  resolveSnoozeInput,
+  upsertDeveloperReminderSnooze
+} from "./developer-progress-reminders";
+import { SNOOZE_PRESET_OPTIONS } from "../lib/reminder-snooze";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const REPORT_REMINDER_THROTTLE_MS = TWELVE_HOURS_MS;
@@ -808,6 +815,26 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         (isDeveloper ? projectsNeedingReview.length + handoffRequestsReceived.length + tasksOverdue : 0) ||
         0;
 
+      let developerProgressReminders: Awaited<ReturnType<typeof processDeveloperProgressReminders>> = [];
+      if (isDeveloper) {
+        const devUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, email: true }
+        });
+        const devLabel = devUser?.name?.trim() || devUser?.email || "Developer";
+        try {
+          developerProgressReminders = await processDeveloperProgressReminders(
+            prisma,
+            orgId,
+            userId,
+            devLabel
+          );
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("[dashboard] developer progress reminders:", e);
+        }
+      }
+
       res.json({
         notifications: inAppNotifications,
         upcomingMeetings,
@@ -832,8 +859,87 @@ export default function dashboardRouter(prisma: PrismaClient): Router {
         projectsNeedingReview,
         handoffRequestsReceived,
         overdueTasks: isDeveloper ? overdueTasks : undefined,
-        latestDeveloperReportNeedsAttention: isDeveloper ? latestDeveloperReportNeedsAttention : undefined
+        latestDeveloperReportNeedsAttention: isDeveloper ? latestDeveloperReportNeedsAttention : undefined,
+        developerProgressReminders: isDeveloper ? developerProgressReminders : undefined
       });
+    }
+  );
+
+  router.get(
+    "/developer-analytics",
+    requireRoles([ROLE_KEYS.developer]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const data = await getDeveloperProjectAnalytics(prisma, orgId, userId);
+        res.json({ data });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[dashboard] developer-analytics:", e);
+        res.status(500).json({ error: "Failed to load developer analytics" });
+      }
+    }
+  );
+
+  router.post(
+    "/developer-reminders/snooze",
+    requireRoles([ROLE_KEYS.developer]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const reminderKey = String(req.body?.reminderKey ?? "").trim();
+        if (!reminderKey) {
+          res.status(400).json({ error: "reminderKey is required" });
+          return;
+        }
+        const parsed = resolveSnoozeInput({
+          preset: req.body?.preset,
+          phrase: req.body?.phrase,
+          until: req.body?.until
+        });
+        if (!parsed) {
+          res.status(400).json({
+            error:
+              "Could not parse snooze time. Use preset (5m, 15m, 20m, 30m, 1h, 2h, 5h, 12h, tomorrow) or a phrase like “remind me in 30 minutes” or “Monday”."
+          });
+          return;
+        }
+        const devUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, email: true }
+        });
+        const devLabel = devUser?.name?.trim() || devUser?.email || "Developer";
+        await upsertDeveloperReminderSnooze(
+          prisma,
+          orgId,
+          userId,
+          reminderKey,
+          parsed.until,
+          parsed.label,
+          devLabel
+        );
+        res.json({
+          data: {
+            reminderKey,
+            snoozeUntil: parsed.until.toISOString(),
+            label: parsed.label
+          }
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[dashboard] developer-reminders/snooze:", e);
+        res.status(500).json({ error: "Failed to snooze reminder" });
+      }
+    }
+  );
+
+  router.get(
+    "/developer-reminders/snooze-presets",
+    requireRoles([ROLE_KEYS.developer]),
+    (_req, res) => {
+      res.json({ presets: SNOOZE_PRESET_OPTIONS });
     }
   );
 

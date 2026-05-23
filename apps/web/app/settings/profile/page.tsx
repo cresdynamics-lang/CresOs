@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "../../auth-context";
+import { SettingsProfilePhoto } from "../../../components/settings-profile-photo";
 
 interface UserProfile {
   id: string;
@@ -22,7 +24,7 @@ interface UserProfile {
 }
 
 export default function ProfileSettingsPage() {
-  const { auth, apiFetch } = useAuth();
+  const { auth, apiFetch, patchAuth } = useAuth();
   const [activeTab, setActiveTab] = useState<"profile" | "contact" | "kin" | "picture">("profile");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -167,6 +169,7 @@ export default function ProfileSettingsPage() {
         const next = (data as any)?.data?.profilePicture as string | undefined;
         if (next) {
           setProfile((p) => ({ ...p, profilePicture: next }));
+          patchAuth({ profilePicture: next });
         }
       } catch (error) {
         console.error("Failed to upload profile picture:", error);
@@ -187,10 +190,20 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Profile Settings</h1>
-        <p className="text-slate-400">Manage your personal information and contact details.</p>
+    <div className="w-full max-w-none">
+      <div className="mb-8 border-b border-slate-800/70 pb-8 space-y-3">
+        <SettingsProfilePhoto
+          picturePath={profile.profilePicture}
+          displayName={profile.name || profile.email}
+          onPictureChange={(path) => setProfile((p) => ({ ...p, profilePicture: path ?? undefined }))}
+        />
+        <p className="text-xs text-slate-400">
+          <Link href="/settings/account" className="text-sky-400 hover:underline">
+            ← Back to Account
+          </Link>
+          {" · "}
+          Name, login email, and notification email are on the Account tab.
+        </p>
       </div>
 
       {/* Tabs */}
@@ -239,8 +252,8 @@ export default function ProfileSettingsPage() {
 
       {/* Basic Info Tab */}
       {activeTab === "profile" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Basic Information</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Basic Information</h2>
           
           <div className="space-y-6">
             <div>
@@ -312,8 +325,8 @@ export default function ProfileSettingsPage() {
 
       {/* Contact Details Tab */}
       {activeTab === "contact" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Contact Details</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Contact Details</h2>
           
           <div className="space-y-6">
             {/* Phone Numbers */}
@@ -405,8 +418,8 @@ export default function ProfileSettingsPage() {
 
       {/* Next of Kin Tab */}
       {activeTab === "kin" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Next of Kin Information</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Next of Kin Information</h2>
           
           <div className="space-y-6">
             {profile.nextOfKin.map((kin, index) => (
@@ -473,8 +486,8 @@ export default function ProfileSettingsPage() {
 
       {/* Profile Picture Tab */}
       {activeTab === "picture" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Profile Picture</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Profile Picture</h2>
           
           <div className="space-y-6">
             <div className="flex items-center gap-6">

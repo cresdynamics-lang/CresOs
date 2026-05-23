@@ -8,9 +8,9 @@ import { FinanceNav } from "./finance-nav";
 export function FinanceLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { auth, hydrated } = useAuth();
-  const canAccessFinance = auth.roleKeys.some((r) =>
-    ["admin", "finance", "analyst", "director_admin"].includes(r)
-  );
+  const canAccessFinance =
+    auth.canSeeFinance === true ||
+    auth.roleKeys.some((r) => ["admin", "finance", "analyst"].includes(r));
   const isAdmin = auth.roleKeys.includes("admin");
 
   useEffect(() => {

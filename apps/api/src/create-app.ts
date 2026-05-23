@@ -17,6 +17,7 @@ import dashboardRouter from "./modules/dashboard";
 import accountRouter from "./modules/account";
 import scheduleRouter from "./modules/schedule";
 import developerReportsRouter from "./modules/developer-reports";
+import directorReportsRouter from "./modules/director-reports";
 import meetingRequestsRouter from "./modules/meeting-requests";
 import chatCommunityRouter from "./modules/chat-community";
 import salesRouter from "./modules/sales";
@@ -78,6 +79,7 @@ export function createApp(prisma: PrismaClient): express.Application {
   app.use("/account", accountRouter(prisma));
   app.use("/schedule", scheduleRouter(prisma));
   app.use("/developer-reports", developerReportsRouter(prisma));
+  app.use("/director-reports", directorReportsRouter(prisma));
   app.use("/meeting-requests", meetingRequestsRouter(prisma));
   app.use("/chat-community", chatCommunityRouter(prisma));
   app.use("/sales", salesRouter(prisma));

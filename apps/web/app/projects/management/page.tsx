@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "../../auth-context";
 import { emitDataRefresh } from "../../data-refresh";
 import { formatMoney } from "../../format-money";
-import { PageHeader } from "../../page-header";
+import { WorkspaceDashboardIntro } from "../../../components/workspace-dashboard-intro";
 
 type MonthDetail = {
   year: number;
@@ -230,9 +230,11 @@ export default function ProjectsManagementPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <PageHeader
+      <WorkspaceDashboardIntro
         title="Projects on management"
         description="Monthly retainer tracking: directors enroll projects (default 2,000 KES/month, editable). Finance marks months paid and can issue invoices for unpaid periods. Figures update from live billing rules."
+        eyebrow="Delivery"
+        showWelcomeBanner={false}
       />
       <div className="flex flex-wrap gap-3 text-sm">
         <Link href="/projects" className="text-sky-400 hover:underline">

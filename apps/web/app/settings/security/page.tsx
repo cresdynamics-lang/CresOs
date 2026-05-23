@@ -179,16 +179,10 @@ export default function SecurityPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Security</h1>
-        <p className="text-slate-400">Manage your account security and privacy settings.</p>
-      </div>
-
-      <div className="space-y-6">
+    <div className="w-full max-w-none space-y-0">
         {/* Password Change */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Change Password</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Change Password</h2>
           
           <div className="space-y-4">
             <div>
@@ -248,8 +242,8 @@ export default function SecurityPage() {
         </div>
 
         {/* Two-Factor Authentication */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Two-Factor Authentication</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Two-Factor Authentication</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -286,8 +280,8 @@ export default function SecurityPage() {
         </div>
 
         {/* Active Sessions */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Active Sessions</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Active Sessions</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -354,8 +348,8 @@ export default function SecurityPage() {
         </div>
 
         {/* Privacy Settings */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Privacy Settings</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Privacy Settings</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -441,8 +435,8 @@ export default function SecurityPage() {
         </div>
 
         {/* Login Security */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Login Security</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Login Security</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -497,7 +491,6 @@ export default function SecurityPage() {
             {saving ? "Saving..." : "Save Security Settings"}
           </button>
         </div>
-      </div>
     </div>
   );
 }

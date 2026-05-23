@@ -4,6 +4,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { getDirectorAndAdminUserIds, notifyDirectors } from "./director-notifications";
+import { getDirectorTeamMemberIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
 import { queueAutoDirectorReplyForSalesReport } from "./director-ai-automation";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -81,12 +82,24 @@ export default function reportsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
-      const isDirector = req.auth!.roleKeys.some((k) =>
+      const roleKeys = req.auth!.roleKeys;
+      const isLeadership = roleKeys.some((k) =>
         [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k)
       );
 
+      let reportWhere: { orgId: string; status: string; submittedById?: { in: string[] } } = {
+        orgId,
+        status: "submitted"
+      };
+      if (isDirectorOnly(roleKeys)) {
+        const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
+        reportWhere = { orgId, status: "submitted", submittedById: { in: teamIds } };
+      } else if (!isAdminRole(roleKeys)) {
+        reportWhere = { orgId, status: "submitted", submittedById: userId };
+      }
+
       const reports = await prisma.salesReport.findMany({
-        where: isDirector ? { orgId, status: "submitted" } : { orgId, submittedById: userId, status: "submitted" },
+        where: reportWhere,
         select: { id: true }
       });
       const reportIds = reports.map((r) => r.id);
@@ -131,14 +144,23 @@ export default function reportsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
-      const isDirector = req.auth!.roleKeys.some((k) =>
+      const roleKeys = req.auth!.roleKeys;
+      const isLeadership = roleKeys.some((k) =>
         [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k)
       );
 
-      if (isDirector) {
+      if (isLeadership) {
+        let where: { orgId: string; status: string; submittedById?: { in: string[] } } = {
+          orgId,
+          status: "submitted"
+        };
+        if (isDirectorOnly(roleKeys)) {
+          const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
+          where = { orgId, status: "submitted", submittedById: { in: teamIds } };
+        }
         const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
         const list = await prisma.salesReport.findMany({
-          where: { orgId, status: "submitted" },
+          where,
           orderBy: { submittedAt: "desc" },
           include: {
             submittedBy: { select: { id: true, email: true, name: true } },

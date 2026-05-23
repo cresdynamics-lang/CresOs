@@ -6,6 +6,17 @@ import { useRouter } from "next/navigation";
 import { formatMoney } from "../format-money";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
+import {
+  CrmActionLink,
+  CrmDataTable,
+  CrmSectionPanel,
+  CrmSectionQuickCard,
+  CrmTabBar,
+  CrmTableHead,
+  type CrmTabDef
+} from "../../components/crm/crm-section";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 
 type Lead = {
   id: string;
@@ -69,16 +80,15 @@ export default function CrmPage() {
   const canManageContacts = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
   const canBulkMessage = auth.roleKeys.some((r) => ["admin", "sales", "director_admin"].includes(r));
 
-  const tabs = useMemo(
-    () =>
-      [
-        { key: "outreach" as const, label: "Outreach" },
-        { key: "bulk" as const, label: "Bulk messages", hidden: !canBulkMessage },
-        { key: "leads_deals" as const, label: "Leads & deals" },
-        { key: "clients" as const, label: "Clients" }
-      ].filter((t) => !t.hidden),
-    [canBulkMessage]
-  );
+  const tabs = useMemo((): CrmTabDef[] => {
+    const all: (CrmTabDef & { hidden?: boolean })[] = [
+      { key: "leads_deals", label: "Leads & deals", tone: "amber", icon: "◆" },
+      { key: "outreach", label: "Outreach", tone: "violet", icon: "✉" },
+      { key: "bulk", label: "Bulk messages", tone: "sky", icon: "◎", hidden: !canBulkMessage },
+      { key: "clients", label: "Clients", tone: "emerald", icon: "▣" }
+    ];
+    return all.filter((t) => !t.hidden);
+  }, [canBulkMessage]);
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -292,150 +302,136 @@ export default function CrmPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="mb-2 text-lg font-semibold text-slate-50">CRM</h2>
-          <p className="text-sm text-slate-300">
-            Pipeline and outreach in one place. Contacts below can receive bulk emails (templates for invoices, new products,
-            or new services). Use <code className="rounded bg-slate-800 px-1">{"{{name}}"}</code> and{" "}
-            <code className="rounded bg-slate-800 px-1">{"{{org}}"}</code> in the message body.
-          </p>
-        </div>
-        <Link
-          href="/leads"
-          className="shrink-0 rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
-        >
-          Open Leads →
-        </Link>
-      </div>
+      <WorkspaceDashboardIntro
+        title="CRM"
+        description="Contacts below can receive bulk emails (templates for invoices, new products, or new services)."
+        brandLead="Pipeline and outreach in one place"
+        eyebrow="Sales"
+        showWelcomeBanner={false}
+        actions={
+          <Link
+            href="/leads"
+            className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/25"
+          >
+            Open Leads →
+          </Link>
+        }
+      />
+
+      <p className="-mt-2 text-xs text-slate-500">
+        Message templates: use <code className="rounded bg-slate-800 px-1 text-amber-400/90">{"{{name}}"}</code> and{" "}
+        <code className="rounded bg-slate-800 px-1 text-amber-400/90">{"{{org}}"}</code> in the body.
+      </p>
 
       {loadedOnce && (
-        <div className="shell border border-slate-700/70 bg-slate-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">CRM sections</p>
-            <div className="flex flex-wrap gap-2">
-              {tabs.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={
-                    tab === t.key
-                      ? "rounded bg-slate-600 px-3 py-2 text-sm text-white"
-                      : "rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+        <>
+          <DashboardCardRow lgCols={4} layout="scroll">
+            {tabs.map((t) => (
+              <DashboardScrollCard key={t.key}>
+                <CrmSectionQuickCard
+                  label={t.label}
+                  description={
+                    t.key === "leads_deals"
+                      ? "Pipeline titles, status, and deal value."
+                      : t.key === "outreach"
+                        ? "Manual contacts and client outreach list."
+                        : t.key === "bulk"
+                          ? "Queue emails to selected contacts."
+                          : "All clients and linked projects."
                   }
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+                  tone={t.tone}
+                  icon={t.icon}
+                  active={tab === t.key}
+                  onClick={() => setTab(t.key as typeof tab)}
+                />
+              </DashboardScrollCard>
+            ))}
+          </DashboardCardRow>
+          <CrmTabBar tabs={tabs} active={tab} onChange={(k) => setTab(k as typeof tab)} />
+        </>
       )}
 
-      {!loadedOnce && (
-        <div className="shell">
-          <p className="text-sm text-slate-400">Loading CRM…</p>
-        </div>
-      )}
+      {!loadedOnce && <p className="text-sm text-slate-400">Loading CRM…</p>}
 
       {loadedOnce && (
         <>
           {tab === "leads_deals" && (
-            <div className="flex flex-col gap-6">
-              <div className="shell min-w-0">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Leads</p>
-                <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <CrmSectionPanel title="Leads" tone="amber" description="Capture and qualify opportunities in your funnel.">
+                <CrmDataTable emptyMessage="No leads yet." isEmpty={leads.length === 0}>
                   <table className="min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                        <th className="px-3 py-2 font-medium">Title</th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
-                        <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Open</th>
-                      </tr>
-                    </thead>
+                    <CrmTableHead>
+                      <th className="px-3 py-2.5 font-medium">Title</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-medium">Status</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Open</th>
+                    </CrmTableHead>
                     <tbody>
                       {leads.map((lead) => (
-                        <tr key={lead.id} className="border-b border-slate-800/80 text-slate-200 last:border-0">
-                          <td className="max-w-[20rem] px-3 py-2 font-medium text-slate-100 break-words">{lead.title}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-400">{lead.status}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right">
-                            <Link
-                              href={`/leads/${lead.id}`}
-                              className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                            >
-                              View
-                            </Link>
+                        <tr key={lead.id} className="border-b border-slate-800/60 text-slate-200 last:border-0">
+                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-slate-100">
+                            {lead.title}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5">
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
+                              {lead.status}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                            <CrmActionLink href={`/leads/${lead.id}`}>View</CrmActionLink>
                           </td>
                         </tr>
                       ))}
-                      {leads.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
-                            No leads yet.
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
-                </div>
-              </div>
-              <div className="shell min-w-0">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Deals</p>
-                <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+                </CrmDataTable>
+              </CrmSectionPanel>
+              <CrmSectionPanel title="Deals" tone="emerald" description="Track stage and value through the pipeline.">
+                <CrmDataTable emptyMessage="No deals yet." isEmpty={deals.length === 0}>
                   <table className="min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                        <th className="px-3 py-2 font-medium">Title</th>
-                        <th className="px-3 py-2 font-medium">Stage</th>
-                        <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Value</th>
-                      </tr>
-                    </thead>
+                    <CrmTableHead>
+                      <th className="px-3 py-2.5 font-medium">Title</th>
+                      <th className="px-3 py-2.5 font-medium">Stage</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Value</th>
+                    </CrmTableHead>
                     <tbody>
                       {deals.map((deal) => (
-                        <tr key={deal.id} className="border-b border-slate-800/80 text-slate-200 last:border-0">
-                          <td className="max-w-[20rem] px-3 py-2 font-medium text-slate-100 break-words">{deal.title}</td>
-                          <td className="px-3 py-2 text-slate-400">{deal.stage}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right text-emerald-400">
+                        <tr key={deal.id} className="border-b border-slate-800/60 text-slate-200 last:border-0">
+                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-slate-100">
+                            {deal.title}
+                          </td>
+                          <td className="px-3 py-2.5 text-violet-300">{deal.stage}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-400">
                             {deal.value !== undefined ? formatMoney(deal.value) : "—"}
                           </td>
                         </tr>
                       ))}
-                      {deals.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
-                            No deals yet.
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
-                </div>
-              </div>
+                </CrmDataTable>
+              </CrmSectionPanel>
             </div>
           )}
 
           {tab === "clients" && (
-            <div className="shell min-w-0">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                Clients ({clientSummary?.total ?? 0})
-              </p>
-              <p className="mb-3 text-sm text-slate-400">
-                All project owners/clients are listed here automatically. One row per project; contact columns repeat for the same client.
-              </p>
-              <div className="overflow-x-auto rounded-lg border border-slate-800/80">
+            <CrmSectionPanel
+              title={`Clients (${clientSummary?.total ?? 0})`}
+              tone="emerald"
+              description="All project owners/clients are listed automatically. One row per project; contact columns repeat for the same client."
+            >
+              <CrmDataTable
+                emptyMessage="No clients yet. Add a project with client details to populate."
+                isEmpty={(clientSummary?.clients?.length ?? 0) === 0}
+              >
                 <table className="min-w-[42rem] w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-                      <th className="px-3 py-2 font-medium">Client</th>
-                      <th className="px-3 py-2 font-medium">Email</th>
-                      <th className="px-3 py-2 font-medium">Phone</th>
-                      <th className="px-3 py-2 font-medium">Project</th>
-                      <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
-                      <th className="whitespace-nowrap px-3 py-2 font-medium">Approval</th>
-                      <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Open</th>
-                    </tr>
-                  </thead>
+                  <CrmTableHead>
+                    <th className="px-3 py-2.5 font-medium">Client</th>
+                    <th className="px-3 py-2.5 font-medium">Email</th>
+                    <th className="px-3 py-2.5 font-medium">Phone</th>
+                    <th className="px-3 py-2.5 font-medium">Project</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-medium">Status</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-medium">Approval</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Open</th>
+                  </CrmTableHead>
                   <tbody>
                     {(clientSummary?.clients ?? []).slice(0, 30).flatMap((c) =>
                       c.projects.length === 0
@@ -494,36 +490,23 @@ export default function CrmPage() {
                               <td className="whitespace-nowrap px-3 py-2 capitalize text-slate-400">{p.status}</td>
                               <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{p.approvalStatus}</td>
                               <td className="whitespace-nowrap px-3 py-2 text-right">
-                                <Link
-                                  href={`/projects/${p.id}`}
-                                  className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                                >
-                                  View
-                                </Link>
+                                <CrmActionLink href={`/projects/${p.id}`}>View</CrmActionLink>
                               </td>
                             </tr>
                           ))
                     )}
-                    {(clientSummary?.clients?.length ?? 0) === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
-                          No clients yet. Add a project with client details to populate.
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
-              </div>
-            </div>
+              </CrmDataTable>
+            </CrmSectionPanel>
           )}
 
           {tab === "bulk" && canBulkMessage && (
-            <div className="shell border-sky-800/40 bg-sky-950/20">
-              <h3 className="mb-1 text-sm font-semibold text-sky-200">Bulk messages to clients &amp; contacts</h3>
-              <p className="mb-4 text-xs text-slate-400">
-                Choose recipients with email, pick a sample message or write your own, then queue. Messages are sent through
-                the same email queue as the rest of the app (not instant).
-              </p>
+            <CrmSectionPanel
+              title="Bulk messages"
+              tone="sky"
+              description="Choose recipients with email, pick a sample message or write your own, then queue. Messages are sent through the same email queue as the rest of the app (not instant)."
+            >
               <form onSubmit={handleBulkSend} className="flex flex-col gap-4">
                 <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/50 p-2">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -610,22 +593,20 @@ export default function CrmPage() {
                 <button
                   type="submit"
                   disabled={bulkSending || selectedIds.size === 0}
-                  className="w-fit rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                  className="w-fit rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-6px_rgba(14,165,233,0.5)] hover:bg-sky-500 disabled:opacity-50"
                 >
                   {bulkSending ? "Queueing…" : "Queue bulk emails"}
                 </button>
               </form>
-            </div>
+            </CrmSectionPanel>
           )}
 
           {tab === "outreach" && (
-            <div className="shell">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Outreach contacts (manual) and clients with projects
-            </p>
-            <p className="mb-3 text-sm text-slate-400">
-              Add emails or phone numbers. These appear above for bulk messaging when an email is set.
-            </p>
+            <CrmSectionPanel
+              title="Outreach"
+              tone="violet"
+              description="Manual contacts and clients with projects. Add emails or phone numbers — they appear in Bulk messages when an email is set."
+            >
             {canManageContacts && (
               <form onSubmit={handleAddContact} className="mb-4 flex flex-wrap items-end gap-3">
                 <label className="flex flex-col gap-1">
@@ -672,7 +653,7 @@ export default function CrmPage() {
               {contacts.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                  className="flex items-center justify-between rounded-xl border border-violet-500/20 bg-slate-950/50 px-3 py-2.5 transition-colors hover:border-violet-500/35"
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     {c.name && (
@@ -715,12 +696,12 @@ export default function CrmPage() {
                 </li>
               ))}
               {contacts.length === 0 && (
-                <li className="text-sm text-slate-400">
+                <li className="rounded-xl border border-dashed border-violet-500/25 bg-violet-500/5 px-4 py-8 text-center font-display text-sm text-violet-300/80">
                   No outreach contacts yet. Add emails or phones to reach out about your services.
                 </li>
               )}
             </ul>
-            </div>
+            </CrmSectionPanel>
           )}
         </>
       )}

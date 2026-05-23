@@ -4,6 +4,11 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import {
+  getDirectorTeamMemberIds,
+  isDirectorOnly,
+  userHasFinanceAccess
+} from "../lib/user-capabilities";
 import { enforceApprovalConflicts } from "./conflict-engine";
 import { notifyAdminsInApp } from "./director-notifications";
 import { DEFAULT_ORG_DAY_TZ, getZonedDateKey } from "./org-zoned-day";
@@ -311,8 +316,29 @@ export default function directorRouter(prisma: PrismaClient): Router {
 
         const blockedThresholdCount = blockedTasksOverThreshold;
 
+        const roleKeys = req.auth!.roleKeys;
+        const userId = req.auth!.userId;
+        const canSeeFinance = userHasFinanceAccess(
+          roleKeys,
+          (
+            await prisma.user.findUnique({
+              where: { id: userId },
+              select: { capabilityFlags: true }
+            })
+          )?.capabilityFlags
+        );
+
+        let teamFocusWhere: { orgId: string; deletedAt: null; id?: { in: string[] } } = {
+          orgId,
+          deletedAt: null
+        };
+        if (isDirectorOnly(roleKeys)) {
+          const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
+          teamFocusWhere = { orgId, deletedAt: null, id: { in: [...teamIds, userId] } };
+        }
+
         const teamCurrentFocus = await prisma.user.findMany({
-          where: { orgId, deletedAt: null },
+          where: teamFocusWhere,
           select: {
             id: true,
             name: true,
@@ -333,22 +359,25 @@ export default function directorRouter(prisma: PrismaClient): Router {
           orderBy: [{ name: "asc" }, { email: "asc" }]
         });
 
-        res.json({
-          financialHealth: {
-            revenueThisPeriod: revenueValue,
-            outstandingInvoices: outstandingValue,
-            overdueInvoices: overdueInvoicesCount,
-            cashIn: revenueValue,
-            cashOut: expensesValue,
-            netFlow: revenueValue - expensesValue,
-            forecast30Day: {
-              cashIn: forecastIn,
-              cashOut: forecastOut,
-              netFlow: forecastIn - forecastOut
-            },
-            pendingPayouts: pendingPayoutsValue,
-            pendingExpenseApprovals: pendingExpenses
-          },
+        const payload: Record<string, unknown> = {
+          canSeeFinance,
+          financialHealth: canSeeFinance
+            ? {
+                revenueThisPeriod: revenueValue,
+                outstandingInvoices: outstandingValue,
+                overdueInvoices: overdueInvoicesCount,
+                cashIn: revenueValue,
+                cashOut: expensesValue,
+                netFlow: revenueValue - expensesValue,
+                forecast30Day: {
+                  cashIn: forecastIn,
+                  cashOut: forecastOut,
+                  netFlow: forecastIn - forecastOut
+                },
+                pendingPayouts: pendingPayoutsValue,
+                pendingExpenseApprovals: pendingExpenses
+              }
+            : null,
           salesHealth: {
             totalPipelineValue: pipelineTotalValue,
             weightedForecast,
@@ -384,11 +413,12 @@ export default function directorRouter(prisma: PrismaClient): Router {
             updatedAt: u.currentFocusUpdatedAt
           })),
           riskSummary: {
-            financial: topFinancialRisks,
+            financial: canSeeFinance ? topFinancialRisks : [],
             operational: topOperationalRisks,
             sales: topSalesRisks
           }
-        });
+        };
+        res.json(payload);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(err);

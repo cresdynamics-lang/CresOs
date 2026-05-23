@@ -5,6 +5,16 @@ import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
+import {
+  CrmActionLink,
+  CrmDataTable,
+  CrmSectionPanel,
+  CrmTableHead,
+  WorkspaceFilterPills
+} from "../../components/crm/crm-section";
+import { WorkspaceHubCard } from "../../components/workspace-hub-card";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 
 type Developer = { id: string; name: string | null; email: string };
 
@@ -90,7 +100,9 @@ export default function ProjectsPage() {
           endDate: p.endDate,
           clientLink: p.clientLink,
           timeline: p.timeline,
-          taskSummary: p.taskSummary
+          taskSummary: p.taskSummary,
+          financeProjectSeq: p.financeProjectSeq,
+          financeRefYear: p.financeRefYear
         }))
       );
     } catch {
@@ -183,91 +195,98 @@ export default function ProjectsPage() {
     });
   }
 
+  const emptyMessage =
+    filter === "all"
+      ? `No projects yet.${canCreateProject ? " Create one to get started." : ""}`
+      : `No ${filter} projects.`;
+
+  const toolbar = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {canFilterByApproval && (
+        <WorkspaceFilterPills
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: "All", tone: "brand" },
+            { value: "pending", label: "Pending", tone: "amber" },
+            { value: "approved", label: "Approved", tone: "emerald" }
+          ]}
+        />
+      )}
+      {canCreateProject && (
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-6px_rgba(14,165,233,0.45)] hover:bg-sky-500"
+        >
+          New project
+        </button>
+      )}
+    </div>
+  );
+
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-50">Projects</h2>
-          <p className="text-sm text-slate-300">
-            Sales and Directors create projects. Developers only work on assigned projects (accept when invited). Directors can invite multiple developers and comment on tasks; daily reports remain on Developer reports.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canFilterByApproval && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setFilter("all")}
-                className={`rounded px-3 py-2 text-sm ${
-                  filter === "all"
-                    ? "bg-slate-600 text-white"
-                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter("pending")}
-                className={`rounded px-3 py-2 text-sm ${
-                  filter === "pending"
-                    ? "bg-amber-700/70 text-white"
-                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                Pending
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter("approved")}
-                className={`rounded px-3 py-2 text-sm ${
-                  filter === "approved"
-                    ? "bg-emerald-700/70 text-white"
-                    : "border border-slate-600 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                Approved
-              </button>
+    <section className="flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-1 flex-col gap-5">
+      <WorkspaceDashboardIntro
+        title="Projects"
+        brandLead="Operating system for growth"
+        description="Developers only work on assigned projects (accept when invited). Directors can invite multiple developers and comment on tasks; daily reports remain on Developer reports."
+        eyebrow="Delivery"
+        showWelcomeBanner={false}
+      />
+
+      {canSeeManagement && (
+        <DashboardCardRow lgCols={2} layout="scroll" className="shrink-0">
+          <DashboardScrollCard>
+            <div className="min-w-[14rem]">
+              <WorkspaceHubCard
+                href="/projects"
+                title="Project directory"
+                description="All delivery work: finance ref, client, developer assignment, and approval."
+                action="Current view"
+                tone="emerald"
+                icon="▣"
+              />
             </div>
-          )}
+          </DashboardScrollCard>
+          <DashboardScrollCard>
+            <div className="min-w-[14rem]">
+              <WorkspaceHubCard
+                href="/projects/management"
+                title="Projects on management"
+                description="Monthly retainer tracking, paid months, and finance invoicing."
+                action="Open management"
+                tone="sky"
+                icon="◎"
+              />
+            </div>
+          </DashboardScrollCard>
+        </DashboardCardRow>
+      )}
 
-          {canCreateProject && (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-            >
-              New project
-            </button>
-          )}
-          {canSeeManagement && (
-            <Link
-              href="/projects/management"
-              className="shrink-0 rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
-            >
-              Projects on management
-            </Link>
-          )}
-        </div>
-      </div>
-
-      <div className="-mx-1 min-w-0 overflow-x-auto rounded-lg border border-slate-700/80 sm:mx-0">
-        <table className="min-w-[64rem] w-full text-left text-sm text-slate-200">
-          <thead>
-            <tr className="border-b border-slate-700 bg-slate-900/90 text-xs uppercase tracking-wide text-slate-400">
+      <CrmSectionPanel
+        title="Project directory"
+        tone="emerald"
+        description={`${filteredProjects.length} project${filteredProjects.length === 1 ? "" : "s"}${filter !== "all" ? ` · ${filter} filter` : ""}`}
+        action={toolbar}
+        className="flex min-h-[min(28rem,55vh)] flex-1 flex-col lg:min-h-0"
+      >
+        <div className="min-h-0 flex-1 overflow-auto">
+        <CrmDataTable emptyMessage={emptyMessage} isEmpty={filteredProjects.length === 0}>
+          <table className="min-w-[64rem] w-full text-left text-sm text-slate-200">
+            <CrmTableHead>
               <th className="px-3 py-2.5 font-medium">Project</th>
-              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Finance ref</th>
-              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Type</th>
+              <th className="whitespace-nowrap px-3 py-2.5 font-medium">Finance ref</th>
+              <th className="whitespace-nowrap px-3 py-2.5 font-medium">Type</th>
               <th className="px-3 py-2.5 font-medium">Client</th>
-              <th className="px-3 py-2.5 font-medium whitespace-nowrap text-right">Price</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Price</th>
               <th className="px-3 py-2.5 font-medium">Developer</th>
               <th className="px-3 py-2.5 font-medium">Delivery</th>
-              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Approval</th>
-              <th className="px-3 py-2.5 font-medium whitespace-nowrap">Status</th>
+              <th className="whitespace-nowrap px-3 py-2.5 font-medium">Approval</th>
+              <th className="whitespace-nowrap px-3 py-2.5 font-medium">Status</th>
               <th className="px-3 py-2.5 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+            </CrmTableHead>
+            <tbody>
             {filteredProjects.map((project) => {
               const ts = project.taskSummary;
               const financeRef =
@@ -279,19 +298,29 @@ export default function ProjectsPage() {
                   ? `Done ${ts.done} · IP ${ts.in_progress} · Wait ${ts.waiting_response} · Blk ${ts.blocked} · NS ${ts.not_started ?? (ts as { todo?: number }).todo ?? 0}`
                   : "—";
               return (
-                <tr key={project.id} className="border-b border-slate-800/90 align-top hover:bg-slate-900/40">
+                <tr key={project.id} className="border-b border-slate-800/60 align-top transition-colors hover:bg-emerald-500/5">
                   <td className="max-w-[14rem] px-3 py-2.5 font-medium text-slate-100">
                     {isDeveloperOnly ? (
                       <span className="line-clamp-2">{project.name}</span>
                     ) : (
-                      <Link href={`/projects/${project.id}`} className="text-sky-300 hover:underline line-clamp-2">
+                      <Link href={`/projects/${project.id}`} className="font-medium text-emerald-300 hover:underline line-clamp-2">
                         {project.name}
                       </Link>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-400">{financeRef}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-400">
-                    {project.type === "demo" ? "Demo" : project.type === "project" ? "Project" : "—"}
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-violet-300/90">{financeRef}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    {project.type === "demo" ? (
+                      <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-xs text-violet-300">
+                        Demo
+                      </span>
+                    ) : project.type === "project" ? (
+                      <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
+                        Project
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="max-w-[10rem] px-3 py-2.5 text-slate-400">
                     <span className="line-clamp-2">{project.clientOrOwnerName ?? "—"}</span>
@@ -325,16 +354,17 @@ export default function ProjectsPage() {
                     )}
                     {!project.approvalStatus && <span className="text-slate-500">—</span>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 capitalize text-slate-300">{project.status}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 capitalize text-slate-300">
+                    <span className="rounded-full border border-slate-600/50 bg-slate-800/60 px-2 py-0.5 text-xs">
+                      {project.status}
+                    </span>
+                  </td>
                   <td className="px-3 py-2.5 text-right">
                     <div className="flex flex-col items-end gap-1.5">
                       <div className="flex flex-wrap justify-end gap-1">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                        >
+                        <CrmActionLink href={`/projects/${project.id}`}>
                           {isDeveloperOnly ? "Details" : "View"}
-                        </Link>
+                        </CrmActionLink>
                         {canApproveProject && project.approvalStatus === "pending_approval" && (
                           <button
                             type="button"
@@ -370,16 +400,11 @@ export default function ProjectsPage() {
                 </tr>
               );
             })}
-          </tbody>
-        </table>
-      </div>
-      {filteredProjects.length === 0 && (
-        <div className="shell text-center text-sm text-slate-400">
-          {filter === "all"
-            ? `No projects yet.${canCreateProject ? " Create one to get started." : ""}`
-            : `No ${filter} projects.`}
+            </tbody>
+          </table>
+        </CrmDataTable>
         </div>
-      )}
+      </CrmSectionPanel>
 
       {createOpen && canCreateProject && (
         <CreateProjectModal
@@ -396,11 +421,8 @@ export default function ProjectsPage() {
       )}
 
       {clientMessage && (
-        <div className="shell">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Client message — {clientMessage.projectName}
-          </p>
-          <p className="whitespace-pre-wrap rounded border border-slate-700 bg-slate-800/60 p-3 text-sm text-slate-200">
+        <CrmSectionPanel title={`Client message — ${clientMessage.projectName}`} tone="violet">
+          <p className="whitespace-pre-wrap rounded-xl border border-violet-500/20 bg-slate-950/50 p-3 text-sm text-slate-200">
             {clientMessage.result.message}
             {clientMessage.result.link && (
               <>
@@ -419,7 +441,7 @@ export default function ProjectsPage() {
               Close
             </button>
           </div>
-        </div>
+        </CrmSectionPanel>
       )}
     </section>
   );

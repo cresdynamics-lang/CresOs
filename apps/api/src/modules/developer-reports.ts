@@ -4,6 +4,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { notifyDirectors } from "./director-notifications";
+import { getDirectorTeamMemberIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
 import { queueAutoDirectorReplyForDeveloperReport } from "./director-ai-automation";
 
 const LEADERSHIP_APPEND_SEP =
@@ -45,12 +46,21 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
-      const isDirector = req.auth!.roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+      const roleKeys = req.auth!.roleKeys;
+      const isLeadership = roleKeys.some((k) => [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k));
+
+      let where: { orgId: string; submittedById?: string | { in: string[] } } = { orgId, submittedById: userId };
+      if (isAdminRole(roleKeys)) {
+        where = { orgId };
+      } else if (isDirectorOnly(roleKeys)) {
+        const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
+        where = { orgId, submittedById: { in: teamIds } };
+      }
 
       const list = await prisma.developerReport.findMany({
-        where: isDirector ? { orgId } : { orgId, submittedById: userId },
+        where,
         orderBy: { reportDate: "desc" },
-        include: isDirector
+        include: isLeadership
           ? { submittedBy: { select: { id: true, name: true, email: true } } }
           : undefined
       });

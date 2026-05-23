@@ -2,6 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth-context";
+import { CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 
 type DeveloperReport = {
   id: string;
@@ -169,87 +171,70 @@ export default function DeveloperReportsPage() {
   }
 
   return (
-    <section className="flex flex-col gap-4 max-sm:gap-3">
-      <div className="shell flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="mb-2 text-base font-semibold text-slate-50 sm:text-lg">
-            {isDirector ? "Developer reports" : "My reports"}
-          </h2>
-          <p className="text-xs leading-relaxed text-slate-300 sm:text-sm sm:leading-normal">
-            {isDirector
-              ? "View reports from developers. Each entry shows when it was filed and last updated on the server — useful even if you were not online when it was submitted."
-              : "Daily standard: cover the sections with enough detail (at least 60 characters total). Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day)."}
-          </p>
-        </div>
-        {isDeveloper && (
-          <button
-            type="button"
-            onClick={startNew}
-            className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 sm:px-4 sm:py-2 sm:text-sm"
-          >
-            New report
-          </button>
-        )}
-      </div>
+    <section className="flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-1 flex-col gap-5">
+      <WorkspaceDashboardIntro
+        title={isDirector ? "Developer reports" : "My reports"}
+        description={
+          isDirector
+            ? "View reports from developers. Each entry shows when it was filed and last updated on the server — useful even if you were not online when it was submitted."
+            : "Daily standard: cover the sections with enough detail (at least 60 characters total). Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day)."
+        }
+        eyebrow={isDirector ? "Director" : "Developer reports"}
+        brandLead="Operating system for growth"
+        showWelcomeBanner={isDeveloper && !isDirector}
+        showWelcomeRoleLabel={false}
+        actions={
+          isDeveloper ? (
+            <button
+              type="button"
+              onClick={startNew}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/35 hover:from-violet-500 hover:to-sky-500"
+            >
+              <span className="text-lg leading-none" aria-hidden>
+                +
+              </span>
+              New report
+            </button>
+          ) : undefined
+        }
+      />
 
-      {showForm && isDeveloper && (
-        <div className="shell max-w-2xl border-sky-600/30">
-          <h3 className="mb-3 text-xs font-semibold text-slate-200 sm:text-sm">Submit report</h3>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Report date</span>
-              <input
-                type="date"
-                value={form.reportDate}
-                onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
-                className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
-                required
-              />
-            </label>
-            {FIELDS.map(({ key, label }) => (
-              <label key={key} className="flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 sm:text-xs">{label}</span>
-                <textarea
-                  value={form[key]}
-                  onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                  rows={2}
-                  className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
-                />
-              </label>
-            ))}
-            <div className="flex gap-2">
-              <button type="submit" disabled={submitting} className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50 sm:px-4 sm:py-2 sm:text-sm">
-                {submitting ? "Saving…" : "Submit"}
-              </button>
-              <button type="button" onClick={() => setShowForm(false)} className="rounded border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 sm:px-4 sm:py-2 sm:text-sm">
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="shell">
-        <h3 className="mb-3 text-xs font-semibold text-slate-200 sm:text-sm">
-          {isDirector ? "All reports" : "My reports"} — {list.length} total
-        </h3>
+      <CrmSectionPanel
+        title={isDirector ? "All developer reports" : "My report history"}
+        tone="violet"
+        description={`${list.length} report${list.length === 1 ? "" : "s"} · filed entries are read-only`}
+        className="flex min-h-[min(28rem,55vh)] flex-1 flex-col lg:min-h-0"
+      >
+        <div className="min-h-0 flex-1 overflow-auto">
         {list.length === 0 ? (
-          <p className="text-xs text-slate-400 sm:text-sm">
-            No reports yet. {isDeveloper && "Use “New report” to add one."}
-          </p>
+          <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-violet-800/40 bg-gradient-to-br from-violet-950/25 via-slate-950/60 to-slate-950 px-6 py-12 text-center">
+            <p className="font-display text-xl font-bold tracking-tight text-violet-200/90">No reports yet</p>
+            <p className="mt-2 max-w-sm text-sm text-slate-400">
+              {isDeveloper
+                ? "Submit your first daily report to keep delivery visible to leadership."
+                : "Reports from your team will appear here."}
+            </p>
+            {isDeveloper && (
+              <button
+                type="button"
+                onClick={startNew}
+                className="mt-6 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-violet-500"
+              >
+                New report
+              </button>
+            )}
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
-                  <th className="pb-2 pr-3">Date</th>
-                  {isDirector && <th className="pb-2 pr-3">Submitted by</th>}
-                  <th className="pb-2 pr-3">Status</th>
-                  <th className="pb-2 pr-3">Remarks</th>
-                  <th className="pb-2 pr-3">Filed</th>
-                  {(isDirector || isDevSelfView) && <th className="pb-2 text-right">Action</th>}
-                </tr>
-              </thead>
+          <CrmDataTable emptyMessage="No reports" isEmpty={false}>
+            <table className="min-w-full text-left text-sm text-slate-200">
+              <CrmTableHead>
+                <th className="px-3 py-2.5 font-medium">Date</th>
+                {isDirector && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
+                <th className="px-3 py-2.5 font-medium">Status</th>
+                <th className="px-3 py-2.5 font-medium">Remarks</th>
+                <th className="px-3 py-2.5 font-medium">Filed</th>
+                {(isDirector || isDevSelfView) && <th className="px-3 py-2.5 text-right font-medium">Action</th>}
+              </CrmTableHead>
               <tbody>
                 {list.map((report) => {
                   const isExpanded = Boolean(expandedIds[report.id]);
@@ -358,18 +343,73 @@ export default function DeveloperReportsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </CrmDataTable>
         )}
+        </div>
 
         {isDevSelfView && list.some((r) => (r.reviewStatus ?? "pending") !== "pending" || Boolean(r.remarks?.trim())) && (
-          <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-            <p className="text-xs font-medium text-slate-200 sm:text-sm">Director review notes</p>
-            <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
+          <div className="mt-4 shrink-0 rounded-xl border border-violet-500/25 bg-violet-950/20 p-4">
+            <p className="text-sm font-medium text-violet-200">Director review notes</p>
+            <p className="mt-1 text-xs text-slate-400">
               When leadership marks a report as viewed/checked, remarks appear here and in the table.
             </p>
           </div>
         )}
-      </div>
+      </CrmSectionPanel>
+
+      {showForm && isDeveloper && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-violet-500/40 bg-gradient-to-br from-violet-950/60 via-slate-950 to-sky-950/30 shadow-2xl">
+            <div className="border-b border-slate-800/80 px-5 py-4 sm:px-6">
+              <h3 className="font-display text-xl font-bold tracking-tight text-violet-200">Submit developer report</h3>
+              <p className="mt-1 text-sm text-slate-400">At least 60 characters total across sections.</p>
+            </div>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 py-5 sm:px-6">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Report date</span>
+                <input
+                  type="date"
+                  value={form.reportDate}
+                  onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
+                  className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
+                  required
+                />
+              </label>
+              {FIELDS.map(({ key, label }) => (
+                <label key={key} className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
+                  <textarea
+                    value={form[key]}
+                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                    rows={2}
+                    className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
+                  />
+                </label>
+              ))}
+              <div className="flex flex-wrap gap-2 border-t border-slate-800/80 pt-4">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:from-violet-500 hover:to-sky-500 disabled:opacity-50"
+                >
+                  {submitting ? "Saving…" : "Submit report"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-xl border border-slate-600 px-5 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isDevSelfView && viewReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 sm:px-4">

@@ -1,1 +1,5 @@
-export { default } from "./simple-page";
+import { redirect } from "next/navigation";
+
+export default function SettingsIndexPage() {
+  redirect("/settings/account");
+}

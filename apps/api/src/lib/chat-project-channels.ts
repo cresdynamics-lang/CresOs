@@ -6,7 +6,7 @@ import { ensureChatUserAndInbox } from "../modules/chat-community-helpers";
 /** Conversation types used for project-linked channels (legacy + current). */
 export const CHANNEL_CONVERSATION_TYPES = ["channel", "project"] as const;
 
-/** Roles that can list projects and create channels (matches /projects list). */
+/** Roles that can list and participate in project channels. */
 export const PROJECT_CHANNEL_ROLE_KEYS = [
   ROLE_KEYS.developer,
   ROLE_KEYS.director,
@@ -16,8 +16,17 @@ export const PROJECT_CHANNEL_ROLE_KEYS = [
   ROLE_KEYS.finance
 ] as const;
 
+/** Only directors can create new project channels. */
+export const PROJECT_CHANNEL_CREATE_ROLE_KEYS = [ROLE_KEYS.director] as const;
+
 /** Admin and director can delete project channels. */
 export const PROJECT_CHANNEL_DELETE_ROLE_KEYS = [ROLE_KEYS.admin, ROLE_KEYS.director] as const;
+
+export function canCreateProjectChannel(roleKeys: string[]): boolean {
+  return roleKeys.some((k) =>
+    (PROJECT_CHANNEL_CREATE_ROLE_KEYS as readonly string[]).includes(k)
+  );
+}
 
 export function canDeleteProjectChannel(roleKeys: string[]): boolean {
   return roleKeys.some((k) =>
@@ -156,7 +165,32 @@ export type CreateProjectChannelInput = {
   channelName?: string;
   /** What will be discussed in this channel (milestones, blockers, etc.). */
   topics?: string;
+  /** Explicit members — only these users see the channel. Creator is always included. */
+  memberIds?: string[];
 };
+
+export async function validateChannelMemberIds(
+  prisma: PrismaClient,
+  orgId: string,
+  memberIds: string[],
+  creatorId: string
+): Promise<string[]> {
+  const unique = [...new Set(memberIds.map((id) => id.trim()).filter(Boolean))];
+  if (!unique.includes(creatorId)) unique.unshift(creatorId);
+  if (unique.length < 1) {
+    throw new Error("At least one channel member is required");
+  }
+  const inOrg = await prisma.user.findMany({
+    where: { id: { in: unique }, orgId, deletedAt: null },
+    select: { id: true }
+  });
+  const allowed = new Set(inOrg.map((u) => u.id));
+  const invalid = unique.filter((id) => !allowed.has(id));
+  if (invalid.length > 0) {
+    throw new Error("One or more selected members are not in your organization");
+  }
+  return unique;
+}
 
 function resolveChannelLabels(
   project: { name: string; status: string },
@@ -189,8 +223,11 @@ export async function createOrGetProjectChannel(
     if (!project) throw new Error("Project not found");
     const labels = resolveChannelLabels(project, input);
     const prevParticipants = [...existingConv.participants];
-    const members = await collectProjectChannelMemberIds(prisma, project);
-    const nextParticipants = [...new Set([...existingConv.participants, ...members, userId])];
+    const members =
+      input?.memberIds && input.memberIds.length > 0
+        ? await validateChannelMemberIds(prisma, orgId, input.memberIds, userId)
+        : [...existingConv.participants];
+    const nextParticipants = [...new Set([...members, userId])];
     const unread = (existingConv.unreadCounts as Record<string, number>) ?? {};
     for (const pid of nextParticipants) {
       if (unread[pid] === undefined) unread[pid] = 0;
@@ -241,8 +278,10 @@ export async function createOrGetProjectChannel(
   if (!project) throw new Error("Project not found");
 
   const labels = resolveChannelLabels(project, input);
-  const members = await collectProjectChannelMemberIds(prisma, project);
-  if (!members.includes(userId)) members.push(userId);
+  if (!input?.memberIds?.length) {
+    throw new Error("memberIds is required — add at least one person to this channel");
+  }
+  const members = await validateChannelMemberIds(prisma, orgId, input.memberIds, userId);
 
   const unreadCounts: Record<string, number> = {};
   for (const pid of members) unreadCounts[pid] = 0;
@@ -255,8 +294,8 @@ export async function createOrGetProjectChannel(
   const admins = [...new Set(adminIds)];
 
   const systemIntro = labels.topics
-    ? `Channel “${labels.channelName}” created for project ${project.name}. Topics: ${labels.topics}`
-    : `Channel “${labels.channelName}” created for project ${project.name} — ${members.length} team member${members.length === 1 ? "" : "s"} added.`;
+    ? `Channel “${labels.channelName}” created for project ${project.name}. Topics: ${labels.topics} · ${members.length} member${members.length === 1 ? "" : "s"} invited.`
+    : `Channel “${labels.channelName}” created for project ${project.name} — ${members.length} member${members.length === 1 ? "" : "s"} invited.`;
 
   const conversation = await prisma.conversation.create({
     data: {

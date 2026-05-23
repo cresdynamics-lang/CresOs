@@ -7,6 +7,7 @@ import { validateEnv } from "./lib/env";
 import { registerGracefulShutdown } from "./lib/graceful-shutdown";
 import { scheduleDeveloperDailyDigest } from "./modules/developer-daily-digest";
 import { scheduleDailyOps } from "./modules/daily-reminders-ai-reports";
+import { scheduleDeveloperProgressReminders } from "./modules/developer-progress-reminders-scheduler";
 import { attachChatCommunityWs } from "./modules/chat-community-ws";
 
 // Ensure local `.env` wins over inherited environment variables in dev.
@@ -32,6 +33,7 @@ server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.info(`CresOS API listening on port ${PORT} (health /health, readiness /health/ready)`);
   scheduleDeveloperDailyDigest(prisma);
+  scheduleDeveloperProgressReminders(prisma);
   scheduleDailyOps(prisma);
 });
 

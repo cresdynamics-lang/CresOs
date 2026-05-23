@@ -21,7 +21,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     title: "Overview",
     items: [
       { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
-      { href: "/schedule", label: "Tasks", roles: ["admin", "director_admin", "developer", "sales", "analyst"] }
+      { href: "/schedule", label: "Tasks", roles: [...ALL_APP_ROLE_KEYS] }
     ]
   },
   {
@@ -34,7 +34,8 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     title: "Reports",
     items: [
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
-      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] }
+      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] },
+      { href: "/director-reports", label: "Director → Admin", roles: ["admin", "director_admin"] }
     ]
   },
   {
@@ -53,14 +54,14 @@ const SIDEBAR_SECTIONS: NavSection[] = [
       {
         href: "/projects/management",
         label: "Projects on management",
-        roles: ["admin", "director_admin", "finance"]
+        roles: ["admin", "director_finance", "finance"]
       }
     ]
   },
   {
     title: "Finance",
     items: [
-      { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst"] },
+      { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst", "director_finance"] },
       { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] }
     ]
   },
@@ -96,8 +97,12 @@ function roleLabel(key: string): string {
 type ShellNavItem = { href: string; label: string; roles: string[] };
 type ShellNavSection = { title: string; items: ShellNavItem[] };
 
+const navLabelReveal =
+  "min-w-0 overflow-hidden whitespace-nowrap opacity-0 w-0 transition-all duration-200 ease-out group-hover/hover-nav:ml-2 group-hover/hover-nav:w-auto group-hover/hover-nav:opacity-100";
+
 type SidebarNavContentProps = {
-  isSidebarCollapsed: boolean;
+  /** Mobile drawer: always show labels. Desktop: reveal on sidebar hover. */
+  alwaysExpanded?: boolean;
   pathname: string;
   roles: string[];
   visibleSections: ShellNavSection[];
@@ -112,7 +117,7 @@ type SidebarNavContentProps = {
 };
 
 function SidebarNavContent({
-  isSidebarCollapsed,
+  alwaysExpanded = false,
   pathname,
   roles,
   visibleSections,
@@ -124,9 +129,14 @@ function SidebarNavContent({
   showMobileClose,
   onMobileClose
 }: SidebarNavContentProps) {
+  const labelClass = alwaysExpanded ? "ml-2 min-w-0 flex-1 truncate text-sm font-medium opacity-100" : `min-w-0 flex-1 truncate text-sm font-medium ${navLabelReveal}`;
+  const sectionClass = alwaysExpanded
+    ? "mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+    : `mb-0 h-0 overflow-hidden px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 opacity-0 transition-all duration-200 group-hover/hover-nav:mb-2 group-hover/hover-nav:h-auto group-hover/hover-nav:opacity-100`;
+
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-4">
+      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <img
             src="/LOGO.jpg"
@@ -135,12 +145,16 @@ function SidebarNavContent({
             alt=""
             className="h-9 w-9 shrink-0 rounded-xl ring-2 ring-brand/50"
           />
-          {!isSidebarCollapsed && (
-            <div className="min-w-0">
-              <p className="text-sm font-semibold tracking-wide text-brand">CresOS</p>
-              <p className="text-[10px] text-slate-400">Operating System for Growth</p>
-            </div>
-          )}
+          <div
+            className={
+              alwaysExpanded
+                ? "min-w-0"
+                : "min-w-0 overflow-hidden opacity-0 w-0 transition-all duration-200 group-hover/hover-nav:w-auto group-hover/hover-nav:opacity-100"
+            }
+          >
+            <p className="whitespace-nowrap text-sm font-semibold tracking-wide text-brand">CresOS</p>
+            <p className="whitespace-nowrap text-[10px] text-slate-400">Operating System for Growth</p>
+          </div>
         </div>
         {showMobileClose ? (
           <button
@@ -156,141 +170,98 @@ function SidebarNavContent({
         ) : null}
       </div>
 
-      {!isSidebarCollapsed && (
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          {visibleSections.map((section) => (
-            <div key={section.title} className="mb-6">
-              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                {section.title}
-              </p>
-              <nav className="flex flex-col gap-0.5">
-                {section.items.map((item) => {
-                  const onCommunity = pathname.startsWith("/community");
-                  const isActive =
-                    pathname === item.href ||
-                    (item.href === "/reports" && pathname.startsWith("/reports")) ||
-                    (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
-                    (item.href === "/leads" && pathname.startsWith("/leads")) ||
-                    (item.href === "/crm" && pathname.startsWith("/crm")) ||
-                    (item.href === "/community" && communityChatUnread > 0 && !onCommunity);
-                  const badge = badgeForItem(item.href, item.label);
-                  return (
-                    <Link
-                      key={`${section.title}-${item.href}-${item.label}`}
-                      href={item.href}
-                      onClick={() => onNavClick?.()}
-                      className={`flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors touch-manipulation lg:min-h-0 lg:py-2 ${
-                        isActive
-                          ? "border border-brand/40 bg-brand/15 text-brand"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-800"
-                      }`}
-                    >
-                      {item.label}
-                      {badge && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
-                            badge.tone === "rose"
-                              ? "bg-rose-500"
-                              : badge.tone === "amber"
-                                ? "bg-amber-500"
-                                : "bg-sky-500"
-                          }`}
-                          title={`${badge.count} needs attention`}
-                        >
-                          {badge.count > 99 ? "99+" : badge.count}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {isSidebarCollapsed && (
-        <div className="flex-1 overflow-y-auto px-2 py-4">
-          {visibleSections.map((section) => (
-            <div key={section.title} className="mb-4">
-              <div className="mb-2 text-center text-[8px] font-semibold uppercase tracking-wider text-slate-500">
-                {section.title.charAt(0)}
-              </div>
-              <nav className="flex flex-col gap-1">
-                {section.items.map((item) => {
-                  const onCommunity = pathname.startsWith("/community");
-                  const isActive =
-                    pathname === item.href ||
-                    (item.href === "/reports" && pathname.startsWith("/reports")) ||
-                    (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
-                    (item.href === "/leads" && pathname.startsWith("/leads")) ||
-                    (item.href === "/crm" && pathname.startsWith("/crm")) ||
-                    (item.href === "/community" && communityChatUnread > 0 && !onCommunity);
-                  const badge = badgeForItem(item.href, item.label);
-                  return (
-                    <Link
-                      key={`${section.title}-${item.href}-${item.label}`}
-                      href={item.href}
-                      onClick={() => onNavClick?.()}
-                      className={`relative flex items-center justify-center rounded-lg p-2 text-xs font-medium transition-colors ${
-                        isActive
-                          ? "border border-brand/40 bg-brand/15 text-brand"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                      }`}
-                      title={item.label}
-                    >
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
+        {visibleSections.map((section) => (
+          <div key={section.title} className="mb-4 last:mb-0">
+            <p className={sectionClass}>{section.title}</p>
+            <nav className="flex flex-col gap-0.5">
+              {section.items.map((item) => {
+                const onCommunity = pathname.startsWith("/community");
+                const isActive =
+                  pathname === item.href ||
+                  (item.href === "/reports" && pathname.startsWith("/reports")) ||
+                  (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
+                  (item.href === "/leads" && pathname.startsWith("/leads")) ||
+                  (item.href === "/crm" && pathname.startsWith("/crm")) ||
+                  (item.href === "/community" && communityChatUnread > 0 && !onCommunity);
+                const badge = badgeForItem(item.href, item.label);
+                return (
+                  <Link
+                    key={`${section.title}-${item.href}-${item.label}`}
+                    href={item.href}
+                    onClick={() => onNavClick?.()}
+                    title={item.label}
+                    className={`flex min-h-[44px] items-center rounded-lg px-2 py-2 transition-colors touch-manipulation lg:min-h-0 ${
+                      isActive
+                        ? "border border-brand/40 bg-brand/15 text-brand"
+                        : "text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-800"
+                    }`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800/90 text-xs font-semibold">
                       {item.label.charAt(0)}
-                      {badge && (
-                        <span
-                          className={`absolute -right-1 -top-1 h-2 w-2 rounded-full ${
-                            badge.tone === "rose"
-                              ? "bg-rose-500"
-                              : badge.tone === "amber"
-                                ? "bg-amber-500"
-                                : "bg-sky-500"
-                          }`}
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
+                    </span>
+                    <span className={labelClass}>{item.label}</span>
+                    {badge ? (
+                      <span
+                        className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover/hover-nav:opacity-100 ${
+                          alwaysExpanded ? "opacity-100" : ""
+                        } ${
+                          badge.tone === "rose"
+                            ? "bg-rose-500"
+                            : badge.tone === "amber"
+                              ? "bg-amber-500"
+                              : "bg-sky-500"
+                        }`}
+                        title={`${badge.count} needs attention`}
+                      >
+                        {badge.count > 99 ? "99+" : badge.count}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        ))}
+      </div>
+
+      <div className="safe-area-bottom shrink-0 border-t border-slate-800 p-2">
+        <div
+          className={
+            alwaysExpanded
+              ? "mb-2 flex flex-wrap gap-1 px-1"
+              : "mb-0 flex h-0 flex-wrap gap-1 overflow-hidden px-1 opacity-0 transition-all duration-200 group-hover/hover-nav:mb-2 group-hover/hover-nav:h-auto group-hover/hover-nav:opacity-100"
+          }
+        >
+          {roles.map((r) => (
+            <span key={r} className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+              {roleLabel(r)}
+            </span>
           ))}
         </div>
-      )}
-
-      <div className="safe-area-bottom border-t border-slate-800 p-3">
-        {!isSidebarCollapsed && (
-          <div className="mb-2 flex flex-wrap gap-1">
-            {roles.map((r) => (
-              <span key={r} className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                {roleLabel(r)}
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-col gap-1">
           <button
             type="button"
             onClick={() => {
               onOpenSettings();
               onNavClick?.();
             }}
-            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
+            className="flex min-h-[44px] w-full items-center rounded-lg border border-slate-700 px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
             aria-label="Settings"
-            title={isSidebarCollapsed ? "Settings" : ""}
+            title="Settings"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {!isSidebarCollapsed && <span>Settings</span>}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </span>
+            <span className={labelClass}>Settings</span>
           </button>
           <button
             type="button"
@@ -298,17 +269,20 @@ function SidebarNavContent({
               onNavClick?.();
               onLogout();
             }}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0 lg:min-w-0"
-            title={isSidebarCollapsed ? "Sign out" : ""}
+            className="flex min-h-[44px] w-full items-center rounded-lg border border-slate-700 px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
+            title="Sign out"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </span>
+            <span className={labelClass}>Sign out</span>
           </button>
         </div>
       </div>
@@ -330,7 +304,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [unreadByKeyword, setUnreadByKeyword] = useState<Record<string, number>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<"preferences" | "account">("account");
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -578,12 +551,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     return null;
   };
 
+  const directorFinanceOk =
+    auth.canSeeFinance === true ||
+    roles.includes("admin") ||
+    roles.includes("finance") ||
+    roles.includes("analyst");
+
   const visibleSections = SIDEBAR_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) =>
-        item.roles.some((r) => roles.includes(r))
-    )
+    items: section.items.filter((item) => {
+      if (item.roles.includes("director_finance")) {
+        return roles.includes("director_admin") && directorFinanceOk;
+      }
+      return item.roles.some((r) => roles.includes(r));
+    })
   })).filter((s) => s.items.length > 0);
 
   const handleLogout = () => {
@@ -599,10 +580,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       orgSlug: undefined
     });
     router.replace("/login");
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
   const toggleFullscreen = () => {
@@ -655,6 +632,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const hideTopHeader = isFullscreenPage && isFullscreen;
+  const isSettingsRoute = pathname.startsWith("/settings");
 
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${isFullscreenPage && isFullscreen ? "bg-slate-950" : ""}`}>
@@ -669,7 +647,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <aside className="safe-area-top absolute left-0 top-0 z-10 flex h-full max-h-[100dvh] w-[min(20rem,92vw)] max-w-sm flex-col border-r border-slate-800 bg-slate-900 shadow-2xl">
             <SidebarNavContent
               {...shellNavProps}
-              isSidebarCollapsed={false}
+              alwaysExpanded
               onNavClick={() => setMobileNavOpen(false)}
               showMobileClose
               onMobileClose={() => setMobileNavOpen(false)}
@@ -679,30 +657,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <aside
-        className={`hidden shrink-0 flex-col border-r border-slate-800 bg-slate-900/50 transition-all duration-300 lg:flex ${
-          isSidebarCollapsed ? "w-16" : "w-64"
-        } ${isFullscreenPage && isFullscreen ? "!hidden" : ""}`}
-      >
-        <SidebarNavContent {...shellNavProps} isSidebarCollapsed={isSidebarCollapsed} />
-      </aside>
-
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        className={`fixed top-4 z-30 hidden rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-400 transition-all duration-300 hover:bg-slate-700 hover:text-slate-200 lg:block ${
-          isFullscreenPage && isFullscreen ? "hidden" : ""
+        className={`group/hover-nav hidden w-[4.25rem] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 transition-[width] duration-200 ease-out hover:w-64 lg:flex ${
+          isFullscreenPage && isFullscreen ? "!hidden" : ""
         }`}
-        style={{ left: isSidebarCollapsed ? "4rem" : "16rem" }}
-        title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {isSidebarCollapsed ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          )}
-        </svg>
-      </button>
+        <SidebarNavContent {...shellNavProps} />
+      </aside>
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
 
@@ -772,12 +732,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ? hideTopHeader
                   ? "flex flex-col overflow-hidden"
                   : "flex max-lg:pt-0 flex-col overflow-hidden lg:pt-0"
-                : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
+                : isSettingsRoute
+                  ? "flex min-h-0 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
+                  : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
             }`}
           >
             {children}
           </div>
-          {!(isFullscreenPage && hideTopHeader) && <AppSiteFooter />}
+          {!(isFullscreenPage && hideTopHeader) && !isSettingsRoute && <AppSiteFooter />}
         </div>
       </main>
     </div>

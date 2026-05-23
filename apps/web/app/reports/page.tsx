@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
+import { CrmActionLink, CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 
 type Report = {
   id: string;
@@ -14,7 +16,6 @@ type Report = {
   submittedAt: string | null;
   createdAt: string;
   submittedBy?: { id: string; name: string | null; email: string };
-  /** Leadership list only: short preview of submitted activity text. */
   bodyPreview?: string;
   bodyCharCount?: number;
   hasAiLeadershipReply?: boolean;
@@ -35,6 +36,9 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [overdue, setOverdue] = useState<OverdueItem[]>([]);
   const isLeadership = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const isSalesOnly =
+    auth.roleKeys.includes("sales") &&
+    !auth.roleKeys.some((r) => ["admin", "director_admin", "director"].includes(r));
 
   useEffect(() => {
     async function load() {
@@ -52,181 +56,200 @@ export default function ReportsPage() {
         // ignore
       }
     }
-    load();
+    void load();
   }, [apiFetch, isLeadership]);
 
+  const reportTitle = isLeadership ? "Submitted reports" : "My reports";
+  const reportDescription = isLeadership
+    ? auth.roleKeys.includes("admin")
+      ? "Admins and directors see who submitted each sales report, a short preview of what they wrote, character count, whether an automated leadership reply was added to the thread, and exact server timestamps."
+      : "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
+    : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report.";
+
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell flex flex-col gap-3 border-cres-border bg-cres-surface/70 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="mb-2 text-lg font-semibold text-cres-text">
-            {isLeadership ? "Submitted reports" : "My reports"}
-          </h2>
-          <p className="text-sm text-cres-text-muted">
-            {isLeadership
-              ? auth.roleKeys.includes("admin")
-                ? "Admins and directors see who submitted each sales report, a short preview of what they wrote, character count, whether an automated leadership reply was added to the thread, and exact server timestamps."
-                : "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
-              : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {isLeadership && (
-            <Link
-              href="/reports/ai"
-              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-cres-border px-4 py-2 text-sm font-medium text-cres-text hover:bg-cres-surface"
-            >
-              AI Reports →
-            </Link>
-          )}
-          {!isLeadership && (
-            <Link
-              href="/reports/new"
-              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover"
-            >
-              New report
-            </Link>
-          )}
-        </div>
-      </div>
+    <section className="flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-1 flex-col gap-5">
+      <WorkspaceDashboardIntro
+        title={reportTitle}
+        description={reportDescription}
+        eyebrow="Sales reports"
+        brandLead="Operating system for growth"
+        showWelcomeBanner={isSalesOnly}
+        showWelcomeRoleLabel={false}
+        actions={
+          <>
+            {isLeadership && (
+              <Link
+                href="/reports/ai"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-950/30 px-4 py-2.5 text-sm font-medium text-violet-200 hover:bg-violet-900/40"
+              >
+                AI Reports →
+              </Link>
+            )}
+            {!isLeadership && (
+              <Link
+                href="/reports/new"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-900/30 hover:from-amber-500 hover:to-rose-500"
+              >
+                <span className="text-lg leading-none" aria-hidden>
+                  +
+                </span>
+                New report
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {!isLeadership && overdue.length > 0 && (
-        <div className="rounded-xl border border-cres-accent/40 bg-cres-surface px-4 py-3">
-          <p className="mb-2 font-semibold text-cres-accent">
-            Alarm: {overdue.length} director question(s) not answered within 24 hours
+        <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
+          <p className="font-semibold text-amber-200">
+            Alarm: {overdue.length} director question{overdue.length === 1 ? "" : "s"} not answered within 24 hours
           </p>
-          <ul className="list-inside list-disc text-sm text-cres-text">
+          <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
             {overdue.slice(0, 5).map((o) => (
               <li key={o.id}>
-                <Link href={`/reports/${o.reportId}`} className="underline">
+                <Link href={`/reports/${o.reportId}`} className="text-amber-300 hover:underline">
                   {o.reportTitle}
                 </Link>
-                — answer by deadline
+                {" — answer by deadline"}
               </li>
             ))}
-            {overdue.length > 5 && <li>… and {overdue.length - 5} more</li>}
+            {overdue.length > 5 && <li className="text-slate-500">… and {overdue.length - 5} more</li>}
           </ul>
         </div>
       )}
 
-      <div className="shell overflow-x-auto border-cres-border bg-cres-card/80">
-        {reports.length === 0 ? (
-          <p className="text-cres-muted">
-            {isLeadership ? "No submitted reports yet." : "You have no reports yet. Create one to get started."}
-          </p>
-        ) : (
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-cres-border text-xs uppercase tracking-wide text-cres-muted">
-                <th className="pb-2 pr-3">Title</th>
-                {isLeadership && <th className="pb-2 pr-3">Submitted by</th>}
-                {isLeadership && <th className="pb-2 pr-3">Activity preview</th>}
-                {isLeadership && <th className="pb-2 pr-3">Chars</th>}
-                {isLeadership && <th className="pb-2 pr-3">Auto reply</th>}
-                <th className="pb-2 pr-3">Status</th>
-                <th className="pb-2 pr-3">Review</th>
-                <th className="pb-2 pr-3">Remarks</th>
-                <th className="pb-2 pr-3">Submitted at</th>
-                <th className="pb-2 pr-3">Created at</th>
-                <th className="pb-2 pr-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reports.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-cres-border/60 hover:bg-cres-surface/60"
+      <CrmSectionPanel
+        title={isLeadership ? "Sales report submissions" : "Your submitted reports"}
+        tone="amber"
+        description={`${reports.length} report${reports.length === 1 ? "" : "s"}${isLeadership ? " · leadership review" : " · read-only after submit"}`}
+        className="flex min-h-[min(28rem,55vh)] flex-1 flex-col lg:min-h-0"
+      >
+        <div className="min-h-0 flex-1 overflow-auto">
+          {reports.length === 0 ? (
+            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-amber-800/40 bg-gradient-to-br from-amber-950/25 via-slate-950/60 to-slate-950 px-6 py-12 text-center">
+              <p className="font-display text-xl font-bold tracking-tight text-amber-200/90">
+                {isLeadership ? "No submitted reports yet" : "No reports yet"}
+              </p>
+              <p className="mt-2 max-w-sm text-sm text-slate-400">
+                {isLeadership
+                  ? "Sales activity reports will appear here when your team submits them."
+                  : "Create a draft and submit your first activity report."}
+              </p>
+              {!isLeadership && (
+                <Link
+                  href="/reports/new"
+                  className="mt-6 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-500"
                 >
-                  <td className="py-2 pr-3">
-                    <Link
-                      href={`/reports/${r.id}`}
-                      className="text-cres-text hover:text-cres-accent"
+                  New report
+                </Link>
+              )}
+            </div>
+          ) : (
+            <CrmDataTable emptyMessage="No reports" isEmpty={false}>
+              <table className="min-w-full text-left text-sm text-slate-200">
+                <CrmTableHead>
+                  <th className="px-3 py-2.5 font-medium">Title</th>
+                  {isLeadership && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
+                  {isLeadership && <th className="px-3 py-2.5 font-medium">Activity preview</th>}
+                  {isLeadership && <th className="px-3 py-2.5 font-medium">Chars</th>}
+                  {isLeadership && <th className="px-3 py-2.5 font-medium">Auto reply</th>}
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium">Review</th>
+                  <th className="px-3 py-2.5 font-medium">Remarks</th>
+                  <th className="px-3 py-2.5 font-medium">Submitted at</th>
+                  <th className="px-3 py-2.5 font-medium">Created at</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Action</th>
+                </CrmTableHead>
+                <tbody>
+                  {reports.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-b border-slate-800/60 align-top transition-colors hover:bg-amber-500/5"
                     >
-                      {r.title}
-                    </Link>
-                  </td>
-                  {isLeadership && (
-                    <td className="py-2 pr-3 text-xs text-cres-text-muted">
-                      {r.submittedBy
-                        ? r.submittedBy.name ?? r.submittedBy.email
-                        : "—"}
-                    </td>
-                  )}
-                  {isLeadership && (
-                    <td className="max-w-[14rem] py-2 pr-3 text-xs text-cres-text-muted" title={r.bodyPreview ?? r.body}>
-                      {(() => {
-                        if (r.bodyPreview?.trim()) return r.bodyPreview.trim();
-                        if (!r.body) return "—";
-                        const flat = r.body.replace(/\s+/g, " ").trim();
-                        return flat.length > 120 ? `${flat.slice(0, 120)}…` : flat;
-                      })()}
-                    </td>
-                  )}
-                  {isLeadership && (
-                    <td className="py-2 pr-3 text-xs text-cres-muted tabular-nums">
-                      {typeof r.bodyCharCount === "number" ? r.bodyCharCount : r.body?.length ?? "—"}
-                    </td>
-                  )}
-                  {isLeadership && (
-                    <td className="py-2 pr-3 text-xs">
-                      {r.hasAiLeadershipReply === true ? (
-                        <span className="rounded bg-sky-500/15 px-2 py-0.5 text-sky-300">Yes</span>
-                      ) : r.hasAiLeadershipReply === false ? (
-                        <span className="text-cres-text-muted">No</span>
-                      ) : (
-                        "—"
+                      <td className="px-3 py-2.5">
+                        <Link href={`/reports/${r.id}`} className="font-medium text-amber-300 hover:underline">
+                          {r.title}
+                        </Link>
+                      </td>
+                      {isLeadership && (
+                        <td className="px-3 py-2.5 text-xs text-slate-400">
+                          {r.submittedBy ? r.submittedBy.name ?? r.submittedBy.email : "—"}
+                        </td>
                       )}
-                    </td>
-                  )}
-                  <td className="py-2 pr-3 text-xs">
-                    <span
-                      className={
-                        r.status === "submitted"
-                          ? "rounded bg-cres-accent/20 px-2 py-0.5 text-cres-accent"
-                          : "rounded bg-cres-border px-2 py-0.5 text-cres-text-muted"
-                      }
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-xs">
-                    <span
-                      className={
-                        r.reviewStatus === "checked"
-                          ? "rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
-                          : r.reviewStatus === "viewed"
-                            ? "rounded bg-sky-500/15 px-2 py-0.5 text-sky-300"
-                            : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200"
-                      }
-                    >
-                      {r.reviewStatus ?? "pending"}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-cres-text-muted">
-                    {r.remarks?.trim() ? r.remarks.trim().slice(0, 80) : "—"}
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-cres-muted">
-                    {r.submittedAt
-                      ? new Date(r.submittedAt).toLocaleString()
-                      : "—"}
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-cres-muted">
-                    {new Date(r.createdAt).toLocaleString()}
-                  </td>
-                  <td className="py-2 pr-3 text-right text-xs">
-                    <Link
-                      href={`/reports/${r.id}`}
-                      className="inline-flex items-center rounded border border-cres-border px-2 py-1 text-cres-text hover:bg-cres-surface"
-                    >
-                      Review
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                      {isLeadership && (
+                        <td
+                          className="max-w-[14rem] px-3 py-2.5 text-xs text-slate-400"
+                          title={r.bodyPreview ?? r.body}
+                        >
+                          {(() => {
+                            if (r.bodyPreview?.trim()) return r.bodyPreview.trim();
+                            if (!r.body) return "—";
+                            const flat = r.body.replace(/\s+/g, " ").trim();
+                            return flat.length > 120 ? `${flat.slice(0, 120)}…` : flat;
+                          })()}
+                        </td>
+                      )}
+                      {isLeadership && (
+                        <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500">
+                          {typeof r.bodyCharCount === "number" ? r.bodyCharCount : (r.body?.length ?? "—")}
+                        </td>
+                      )}
+                      {isLeadership && (
+                        <td className="px-3 py-2.5 text-xs">
+                          {r.hasAiLeadershipReply === true ? (
+                            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300">Yes</span>
+                          ) : r.hasAiLeadershipReply === false ? (
+                            <span className="text-slate-500">No</span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      )}
+                      <td className="px-3 py-2.5 text-xs">
+                        <span
+                          className={
+                            r.status === "submitted"
+                              ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
+                              : "rounded-full bg-slate-700/80 px-2 py-0.5 text-slate-400"
+                          }
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs">
+                        <span
+                          className={
+                            r.reviewStatus === "checked"
+                              ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
+                              : r.reviewStatus === "viewed"
+                                ? "rounded-full bg-sky-500/15 px-2 py-0.5 text-sky-300"
+                                : "rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-200"
+                          }
+                        >
+                          {r.reviewStatus ?? "pending"}
+                        </span>
+                      </td>
+                      <td className="max-w-[10rem] px-3 py-2.5 text-xs text-slate-400">
+                        {r.remarks?.trim() ? r.remarks.trim().slice(0, 80) : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
+                        {r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
+                        {new Date(r.createdAt).toLocaleString()}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <CrmActionLink href={`/reports/${r.id}`}>Review</CrmActionLink>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CrmDataTable>
+          )}
+        </div>
+      </CrmSectionPanel>
     </section>
   );
 }

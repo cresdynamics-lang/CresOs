@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { subscribeDataRefresh } from "../data-refresh";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 
 type Lead = {
   id: string;
@@ -105,23 +106,23 @@ export default function LeadsPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="shell flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="mb-2 text-lg font-semibold text-slate-50">Leads</h2>
-          <p className="text-sm text-slate-300">
-            New projects automatically create or update a client and a linked lead (project name, phone, email). This list refreshes when projects change. Manual adds may require admin approval.
-          </p>
-        </div>
-        {auth.roleKeys.some((r) => ["sales", "admin"].includes(r)) && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(!showAdd)}
-            className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-          >
-            {showAdd ? "Cancel" : "Add lead"}
-          </button>
-        )}
-      </div>
+      <WorkspaceDashboardIntro
+        title="Leads"
+        description="New projects automatically create or update a client and a linked lead (project name, phone, email). This list refreshes when projects change. Manual adds may require admin approval."
+        eyebrow="Sales"
+        showWelcomeBanner={false}
+        actions={
+          auth.roleKeys.some((r) => ["sales", "admin"].includes(r)) ? (
+            <button
+              type="button"
+              onClick={() => setShowAdd(!showAdd)}
+              className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+            >
+              {showAdd ? "Cancel" : "Add lead"}
+            </button>
+          ) : undefined
+        }
+      />
 
       {showAdd && (
         <form onSubmit={handleAdd} className="shell flex flex-col gap-3">

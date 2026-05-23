@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth-context";
-import { PageHeader } from "../page-header";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 
 type AdminMessage = {
   id: string;
@@ -154,9 +154,11 @@ export default function ActivityPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <PageHeader
+      <WorkspaceDashboardIntro
         title="Activity log"
         description="Admin activity messages plus the immutable event audit. Filter by category; expand rows for full detail."
+        eyebrow="Admin"
+        showWelcomeBanner={false}
       />
 
       <div className="shell border border-slate-600/60 bg-slate-950/40">

@@ -107,16 +107,10 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Notifications</h1>
-        <p className="text-slate-400">Manage how and when you receive notifications.</p>
-      </div>
-
-      <div className="space-y-6">
+    <div className="w-full max-w-none space-y-0">
         {/* Email Notifications */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Email Notifications</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Email Notifications</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -241,8 +235,8 @@ export default function NotificationsPage() {
         </div>
 
         {/* Push Notifications */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Push Notifications</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Push Notifications</h2>
           
           <div className="space-y-4">
             {Object.entries(notifications.push).map(([key, value]) => (
@@ -281,8 +275,8 @@ export default function NotificationsPage() {
         </div>
 
         {/* In-App Notifications */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">In-App Notifications</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">In-App Notifications</h2>
           
           <div className="space-y-4">
             {Object.entries(notifications.inApp).map(([key, value]) => (
@@ -321,8 +315,8 @@ export default function NotificationsPage() {
         </div>
 
         {/* Schedule Notifications */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Schedule Notifications</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Schedule Notifications</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -379,8 +373,8 @@ export default function NotificationsPage() {
         </div>
 
         {/* Frequency */}
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Notification Frequency</h2>
+        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
+          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Notification Frequency</h2>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -475,7 +469,6 @@ export default function NotificationsPage() {
             {saving ? "Saving..." : "Save Notification Settings"}
           </button>
         </div>
-      </div>
     </div>
   );
 }
