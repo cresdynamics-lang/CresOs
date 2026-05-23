@@ -33,6 +33,12 @@ type Project = {
   approvalStatus?: string;
   assignedDeveloperId?: string | null;
   assignedDeveloper?: Developer | null;
+  developerAssignments?: {
+    id: string;
+    userId: string;
+    status: string;
+    user: { id: string; name: string | null; email: string };
+  }[];
   createdBy?: { id: string; name: string | null; email: string } | null;
   approvedBy?: { id: string; name: string | null } | null;
   startDate?: string | null;
@@ -94,6 +100,7 @@ export default function ProjectsPage() {
           approvalStatus: p.approvalStatus,
           assignedDeveloperId: p.assignedDeveloperId,
           assignedDeveloper: p.assignedDeveloper,
+          developerAssignments: Array.isArray(p.developerAssignments) ? p.developerAssignments : [],
           createdBy: p.createdBy,
           approvedBy: p.approvedBy,
           startDate: p.startDate,
@@ -280,7 +287,7 @@ export default function ProjectsPage() {
               <th className="whitespace-nowrap px-3 py-2.5 font-medium">Type</th>
               <th className="px-3 py-2.5 font-medium">Client</th>
               <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Price</th>
-              <th className="px-3 py-2.5 font-medium">Developer</th>
+              <th className="px-3 py-2.5 font-medium">Team</th>
               <th className="px-3 py-2.5 font-medium">Delivery</th>
               <th className="whitespace-nowrap px-3 py-2.5 font-medium">Approval</th>
               <th className="whitespace-nowrap px-3 py-2.5 font-medium">Status</th>
@@ -332,10 +339,18 @@ export default function ProjectsPage() {
                         : project.price
                       : "—"}
                   </td>
-                  <td className="max-w-[9rem] px-3 py-2.5 text-xs text-slate-500">
-                    {project.assignedDeveloper
-                      ? project.assignedDeveloper.name || project.assignedDeveloper.email
-                      : "—"}
+                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-slate-500">
+                    {project.developerAssignments && project.developerAssignments.length > 0 ? (
+                      <span className="line-clamp-2" title={project.developerAssignments.map((a) => a.user.name || a.user.email).join(", ")}>
+                        {project.developerAssignments
+                          .map((a) => `${a.user.name || a.user.email}${a.status === "accepted" ? "" : ` (${a.status})`}`)
+                          .join(", ")}
+                      </span>
+                    ) : project.assignedDeveloper ? (
+                      project.assignedDeveloper.name || project.assignedDeveloper.email
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="max-w-[12rem] px-3 py-2.5 text-xs text-slate-500">
                     <span className="line-clamp-2" title={deliveryShort}>

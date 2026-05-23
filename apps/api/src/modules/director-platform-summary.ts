@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { enrichPlatformEventSummaries } from "../lib/platform-event-summary";
 import { DEFAULT_ORG_DAY_TZ, getUtcRangeForZonedDate } from "./org-zoned-day";
 
 const EVENT_EXCLUDE_TYPES = new Set(["user.login"]);
@@ -12,24 +13,6 @@ export type PlatformActionRow = {
   detail: string | null;
   actorLabel: string | null;
 };
-
-function formatEventSummary(ev: {
-  type: string;
-  entityType: string;
-  entityId: string;
-  metadata: unknown;
-}): string {
-  let extra = "";
-  if (ev.metadata != null && typeof ev.metadata === "object") {
-    try {
-      extra = JSON.stringify(ev.metadata).slice(0, 180);
-    } catch {
-      extra = "";
-    }
-  }
-  const tail = extra ? ` — ${extra}` : "";
-  return `${ev.type} · ${ev.entityType} ${ev.entityId}${tail}`;
-}
 
 /**
  * Admin activity feed + (non-login) event log for one org calendar day in `tz`.
@@ -62,9 +45,20 @@ export async function listPlatformActionsForZonedDay(
         type: { notIn: Array.from(EVENT_EXCLUDE_TYPES) }
       },
       orderBy: { createdAt: "asc" },
-      take: eventLimit
+      take: eventLimit,
+      select: {
+        id: true,
+        type: true,
+        entityType: true,
+        entityId: true,
+        actorId: true,
+        metadata: true,
+        createdAt: true
+      }
     })
   ]);
+
+  const eventEnriched = await enrichPlatformEventSummaries(prisma, events);
 
   const activityRows: PlatformActionRow[] = activities.map((a) => ({
     id: `a:${a.id}`,
@@ -76,15 +70,18 @@ export async function listPlatformActionsForZonedDay(
     actorLabel: a.actor ? (a.actor.name?.trim() || a.actor.email) : null
   }));
 
-  const eventRows: PlatformActionRow[] = events.map((ev) => ({
-    id: `e:${ev.id}`,
-    source: "event",
-    createdAt: ev.createdAt.toISOString(),
-    type: ev.type,
-    summary: formatEventSummary(ev),
-    detail: null,
-    actorLabel: null
-  }));
+  const eventRows: PlatformActionRow[] = events.map((ev) => {
+    const rich = eventEnriched.get(ev.id);
+    return {
+      id: `e:${ev.id}`,
+      source: "event",
+      createdAt: ev.createdAt.toISOString(),
+      type: ev.type,
+      summary: rich?.summary ?? `${ev.type} · ${ev.entityType}`,
+      detail: null,
+      actorLabel: rich?.actorLabel ?? null
+    };
+  });
 
   const merged = [...activityRows, ...eventRows].sort(
     (x, y) => new Date(x.createdAt).getTime() - new Date(y.createdAt).getTime()

@@ -24,9 +24,22 @@ type Task = {
   blockedReason?: string | null;
   dueDate?: string | null;
   description?: string | null;
+  assignee?: { id: string; name: string | null; email: string } | null;
   comments?: TaskComment[];
 };
 type Milestone = { id: string; name: string; status: string; dueDate?: string | null };
+
+function DevNameTag({ name }: { name: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-violet-500/20 px-2 py-0.5 text-[0.65rem] font-medium text-violet-200">
+      {name}
+    </span>
+  );
+}
+
+function devLabel(u: { name: string | null; email: string } | null | undefined) {
+  return u?.name?.trim() || u?.email || null;
+}
 type DevAssignment = {
   id: string;
   userId: string;
@@ -100,6 +113,10 @@ export default function ProjectDetailPage() {
   const [addMilestoneDueDate, setAddMilestoneDueDate] = useState("");
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [milestoneError, setMilestoneError] = useState<string | null>(null);
+  const [inviteDevIds, setInviteDevIds] = useState<string[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invitingDevs, setInvitingDevs] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const progressKey = useMemo(() => (id ? `cresos_dev_project_progress_${id}` : ""), [id]);
 
@@ -402,13 +419,51 @@ export default function ProjectDetailPage() {
   }
 
   useEffect(() => {
-    if (handoffOpen || swapOpen) {
+    if (handoffOpen || swapOpen || inviteOpen || editOpen) {
       apiFetch("/projects/assignable-developers")
         .then((r) => r.ok && r.json())
         .then((list) => setDevelopers(Array.isArray(list) ? list : []))
         .catch(() => setDevelopers([]));
     }
-  }, [handoffOpen, swapOpen, apiFetch]);
+  }, [handoffOpen, swapOpen, inviteOpen, editOpen, apiFetch]);
+
+  async function handleInviteDevelopers(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id || inviteDevIds.length === 0) return;
+    setInvitingDevs(true);
+    setInviteError(null);
+    try {
+      const res = await apiFetch(`/projects/${id}/developer-assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: inviteDevIds })
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setInviteError(j.error ?? "Could not invite developers");
+        return;
+      }
+      setInviteDevIds([]);
+      setInviteOpen(false);
+      await load();
+      emitDataRefresh();
+    } finally {
+      setInvitingDevs(false);
+    }
+  }
+
+  async function handleMilestoneStatusChange(milestoneId: string, status: string) {
+    try {
+      const res = await apiFetch(`/projects/milestones/${milestoneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) await load();
+    } catch {
+      // ignore
+    }
+  }
 
   if (loading) {
     return (
@@ -655,17 +710,70 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {project.developerAssignments && project.developerAssignments.length > 0 && (
+      {(project.developerAssignments?.length || isDirector) && (
         <div className="shell">
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Team</h3>
-          <ul className="space-y-1 text-sm text-slate-200">
-            {project.developerAssignments.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-2">
-                <span>{a.user.name || a.user.email}</span>
-                <span className="rounded bg-slate-700 px-2 py-0.5 text-xs capitalize text-slate-300">{a.status}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-medium text-slate-300">Team</h3>
+            {isDirector && (
+              <button
+                type="button"
+                onClick={() => setInviteOpen((o) => !o)}
+                className="rounded border border-violet-500/40 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-950/40"
+              >
+                {inviteOpen ? "Cancel" : "+ Invite developers"}
+              </button>
+            )}
+          </div>
+          {inviteOpen && isDirector && (
+            <form onSubmit={(e) => void handleInviteDevelopers(e)} className="mb-3 rounded-lg border border-violet-800/40 bg-violet-950/20 p-3">
+              <p className="mb-2 text-xs text-slate-400">Select one or more developers. Each must accept before working on tasks.</p>
+              <div className="max-h-32 space-y-1 overflow-y-auto">
+                {developers.length === 0 ? (
+                  <p className="text-xs text-slate-500">No developers available.</p>
+                ) : (
+                  developers.map((d) => {
+                    const already = project.developerAssignments?.some((a) => a.userId === d.id);
+                    return (
+                      <label key={d.id} className={`flex cursor-pointer items-center gap-2 text-sm ${already ? "text-slate-500" : "text-slate-200"}`}>
+                        <input
+                          type="checkbox"
+                          disabled={already}
+                          checked={inviteDevIds.includes(d.id)}
+                          onChange={(e) => {
+                            setInviteDevIds((prev) =>
+                              e.target.checked ? [...prev, d.id] : prev.filter((x) => x !== d.id)
+                            );
+                          }}
+                        />
+                        {d.name || d.email}
+                        {already ? <span className="text-xs text-slate-500">(already on team)</span> : null}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              {inviteError && <p className="mt-2 text-xs text-rose-300">{inviteError}</p>}
+              <button
+                type="submit"
+                disabled={invitingDevs || inviteDevIds.length === 0}
+                className="mt-2 rounded bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                {invitingDevs ? "Sending invites…" : "Send invites"}
+              </button>
+            </form>
+          )}
+          {project.developerAssignments && project.developerAssignments.length > 0 ? (
+            <ul className="flex flex-wrap gap-2">
+              {project.developerAssignments.map((a) => (
+                <li key={a.id} className="flex items-center gap-1.5">
+                  <DevNameTag name={a.user.name || a.user.email} />
+                  <span className="text-[0.65rem] capitalize text-slate-500">{a.status}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No developers invited yet.</p>
+          )}
         </div>
       )}
       {project.assignedDeveloper && (!project.developerAssignments || project.developerAssignments.length === 0) && (
@@ -751,7 +859,17 @@ export default function ProjectDetailPage() {
               <li key={t.id} className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-slate-100">{t.title}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-medium text-slate-100">{t.title}</span>
+                      {devLabel(t.assignee) && (t.status === "done" || t.status === "in_progress" || t.status === "blocked") && (
+                        <DevNameTag name={devLabel(t.assignee)!} />
+                      )}
+                      {t.status === "done" && (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-300">
+                          Done
+                        </span>
+                      )}
+                    </div>
                     {t.description && (
                       <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-400">{t.description}</p>
                     )}
@@ -973,9 +1091,29 @@ export default function ProjectDetailPage() {
         ) : (
           <ul className="space-y-2">
             {project.milestones.map((m) => (
-              <li key={m.id} className="flex items-center justify-between rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
-                <span className="text-slate-100">{m.name}</span>
-                <span className="capitalize text-slate-400">{m.status}</span>
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-slate-100">{m.name}</span>
+                  {m.status === "completed" && (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-300">
+                      Completed
+                    </span>
+                  )}
+                </div>
+                {(isAssignedDev || isDirector) ? (
+                  <select
+                    value={m.status}
+                    onChange={(e) => void handleMilestoneStatusChange(m.id, e.target.value)}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs capitalize text-slate-200"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                ) : (
+                  <span className="capitalize text-slate-400">{m.status.replace("_", " ")}</span>
+                )}
               </li>
             ))}
           </ul>
@@ -1139,6 +1277,7 @@ function EditProjectContactModal({
   );
   const [developers, setDevelopers] = useState<{ id: string; name: string | null; email: string }[]>([]);
   const [assignedDeveloperId, setAssignedDeveloperId] = useState(initial.assignedDeveloperId ?? "");
+  const [inviteDeveloperIds, setInviteDeveloperIds] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch2("/projects/assignable-developers")
@@ -1167,7 +1306,8 @@ function EditProjectContactModal({
           managementMonths: managementMonths.trim() ? Math.max(0, Math.floor(Number(managementMonths))) : null,
           projectDetails: projectDetails.trim() || null,
           timeline: timeline.length ? timeline.map((t) => ({ date: t.date || undefined, title: t.title || undefined })) : null,
-          assignedDeveloperId: assignedDeveloperId || null
+          assignedDeveloperId: assignedDeveloperId || null,
+          assignedDeveloperIds: inviteDeveloperIds.length > 0 ? inviteDeveloperIds : undefined
         })
       });
       if (res.ok) onSaved();
@@ -1213,7 +1353,7 @@ function EditProjectContactModal({
             </label>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Assigned developer</span>
+            <span className="text-xs text-slate-400">Primary developer</span>
             <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
               <option value="">—</option>
               {developers.map((d) => (
@@ -1223,6 +1363,25 @@ function EditProjectContactModal({
               ))}
             </select>
           </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Invite additional developers</span>
+            <div className="max-h-28 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-800/80 p-2">
+              {developers.map((d) => (
+                <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={inviteDeveloperIds.includes(d.id)}
+                    onChange={(e) => {
+                      setInviteDeveloperIds((prev) =>
+                        e.target.checked ? [...prev, d.id] : prev.filter((id) => id !== d.id)
+                      );
+                    }}
+                  />
+                  {d.name || d.email}
+                </label>
+              ))}
+            </div>
+          </div>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Client / owner name</span>
             <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />

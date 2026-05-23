@@ -9,6 +9,7 @@ import { getDirectorUsers, notifyDirectors } from "./director-notifications";
 import { notifyProjectExecutionStakeholders } from "./project-stakeholder-notifications";
 import { syncLeadAndClientFromProject } from "./project-lead-sync";
 import { getProjectDeveloperAccess, getAcceptedDeveloperIds } from "../lib/project-access";
+import { inviteDevelopersToProject, userDisplayLabel } from "../lib/project-developer-invites";
 import {
   billableMonthsUtc,
   DEFAULT_MANAGEMENT_MONTHLY_KES,
@@ -88,7 +89,14 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
           assignedDeveloper: { select: { id: true, name: true, email: true } },
-          approvedBy: { select: { id: true, name: true } }
+          approvedBy: { select: { id: true, name: true } },
+          ...(isDirector || isAdmin
+            ? {
+                developerAssignments: {
+                  include: { user: { select: { id: true, name: true, email: true } } }
+                }
+              }
+            : {})
         }
       });
 
@@ -341,35 +349,13 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }
 
       if (developerIds.length > 0 && isDirectorLike) {
-        const developerRole = await prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.developer } });
-        for (const devId of developerIds) {
-          if (!developerRole) break;
-          const hasDev = await prisma.userRole.findFirst({ where: { userId: devId, roleId: developerRole.id } });
-          if (!hasDev) continue;
-          await prisma.projectDeveloperAssignment
-            .create({
-              data: {
-                orgId,
-                projectId: project.id,
-                userId: devId,
-                status: "pending",
-                invitedById: userId
-              }
-            })
-            .catch(() => {});
-          await prisma.notification.create({
-            data: {
-              orgId,
-              channel: "in_app",
-              to: devId,
-              subject: "Project assignment",
-              body: `You were invited to work on "${project.name}". Open Projects to accept or decline.`,
-              status: "sent",
-              type: "project.assignment",
-              tier: "execution"
-            }
-          });
-        }
+        await inviteDevelopersToProject(prisma, {
+          orgId,
+          projectId: project.id,
+          projectName: project.name,
+          invitedById: userId,
+          userIds: developerIds
+        });
       }
 
       await prisma.eventLog.create({
@@ -699,6 +685,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         projectDetails?: string | null;
         status?: string;
         assignedDeveloperId?: string | null;
+        assignedDeveloperIds?: string[];
         timeline?: { date?: string; title?: string }[] | null;
         managementMonthlyAmount?: string | number | null;
         managementMonths?: string | number | null;
@@ -717,6 +704,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       const canEditSales = isSales && project.createdByUserId === userId && project.approvalStatus === "pending_approval";
 
       const data: Record<string, unknown> = {};
+      let invitedDevelopers = false;
       if (body.clientLink !== undefined) data.clientLink = body.clientLink && String(body.clientLink).trim() ? String(body.clientLink).trim() : null;
       if (isDirector) {
         if (body.name !== undefined) data.name = body.name && String(body.name).trim() ? String(body.name).trim() : project.name;
@@ -727,6 +715,16 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         if (body.projectDetails !== undefined) data.projectDetails = body.projectDetails && String(body.projectDetails).trim() ? String(body.projectDetails).trim() : null;
         if (body.status !== undefined) data.status = body.status;
         if (body.assignedDeveloperId !== undefined) data.assignedDeveloperId = body.assignedDeveloperId && String(body.assignedDeveloperId).trim() ? String(body.assignedDeveloperId).trim() : null;
+        if (Array.isArray(body.assignedDeveloperIds) && body.assignedDeveloperIds.length > 0) {
+          await inviteDevelopersToProject(prisma, {
+            orgId,
+            projectId,
+            projectName: project.name,
+            invitedById: userId,
+            userIds: body.assignedDeveloperIds
+          });
+          invitedDevelopers = true;
+        }
         if (body.timeline !== undefined) data.timeline = body.timeline;
         if (body.managementMonthlyAmount !== undefined) data.managementMonthlyAmount = body.managementMonthlyAmount != null && body.managementMonthlyAmount !== "" ? new Prisma.Decimal(Number(body.managementMonthlyAmount)) : null;
         if (body.managementMonths !== undefined) data.managementMonths = body.managementMonths != null && body.managementMonths !== "" ? Math.max(0, Math.floor(Number(body.managementMonths))) : null;
@@ -743,16 +741,40 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         if (body.timeline !== undefined) data.timeline = body.timeline;
       }
 
-      if (Object.keys(data).length === 0) {
+      if (Object.keys(data).length === 0 && !invitedDevelopers) {
         res.status(403).json({ error: "You do not have permission to update this project" });
         return;
       }
 
-      const updated = await prisma.project.update({
-        where: { id: projectId },
-        data,
-        include: { assignedDeveloper: { select: { id: true, name: true, email: true } }, createdBy: { select: { id: true, name: true, email: true } }, approvedBy: { select: { id: true, name: true } } }
-      });
+      const updated =
+        Object.keys(data).length > 0
+          ? await prisma.project.update({
+              where: { id: projectId },
+              data,
+              include: {
+                assignedDeveloper: { select: { id: true, name: true, email: true } },
+                createdBy: { select: { id: true, name: true, email: true } },
+                approvedBy: { select: { id: true, name: true } },
+                developerAssignments: {
+                  include: { user: { select: { id: true, name: true, email: true } } }
+                }
+              }
+            })
+          : await prisma.project.findFirst({
+              where: { id: projectId, orgId },
+              include: {
+                assignedDeveloper: { select: { id: true, name: true, email: true } },
+                createdBy: { select: { id: true, name: true, email: true } },
+                approvedBy: { select: { id: true, name: true } },
+                developerAssignments: {
+                  include: { user: { select: { id: true, name: true, email: true } } }
+                }
+              }
+            });
+      if (!updated) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
       if ("timeline" in data) {
         const timelineChanged =
           JSON.stringify(project.timeline ?? null) !== JSON.stringify(updated.timeline ?? null);
@@ -885,6 +907,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
             where: { deletedAt: null },
             orderBy: { dueDate: "asc" },
             include: {
+              assignee: { select: { id: true, name: true, email: true } },
               comments: {
                 where: { deletedAt: null },
                 orderBy: { createdAt: "asc" },
@@ -982,47 +1005,18 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Project not found" });
         return;
       }
-      const developerRole = await prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.developer } });
-      if (!developerRole) {
-        res.status(400).json({ error: "No developer role in org" });
-        return;
-      }
-      const created: unknown[] = [];
-      for (const raw of userIds) {
-        const uid = String(raw).trim();
-        if (!uid) continue;
-        const hasDev = await prisma.userRole.findFirst({ where: { userId: uid, roleId: developerRole.id } });
-        if (!hasDev) continue;
-        const row = await prisma.projectDeveloperAssignment
-          .upsert({
-            where: { projectId_userId: { projectId, userId: uid } },
-            create: {
-              orgId,
-              projectId,
-              userId: uid,
-              status: "pending",
-              invitedById: userId
-            },
-            update: { status: "pending", invitedById: userId, respondedAt: null }
-          })
-          .catch(() => null);
-        if (row) {
-          created.push(row);
-          await prisma.notification.create({
-            data: {
-              orgId,
-              channel: "in_app",
-              to: uid,
-              subject: "Project assignment",
-              body: `You were invited to work on "${project.name}". Open Projects to accept or decline.`,
-              status: "sent",
-              type: "project.assignment",
-              tier: "execution"
-            }
-          });
-        }
-      }
-      res.status(201).json({ assignments: created });
+      const { invited } = await inviteDevelopersToProject(prisma, {
+        orgId,
+        projectId,
+        projectName: project.name,
+        invitedById: userId,
+        userIds
+      });
+      const assignments = await prisma.projectDeveloperAssignment.findMany({
+        where: { projectId, userId: { in: userIds.map((x) => String(x).trim()).filter(Boolean) } },
+        include: { user: { select: { id: true, name: true, email: true } } }
+      });
+      res.status(201).json({ invited, assignments });
     }
   );
 
@@ -1275,6 +1269,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       }
     });
 
+    const actorName = (await userDisplayLabel(prisma, userId)) ?? "Developer";
     await prisma.eventLog.create({
       data: {
         orgId,
@@ -1282,10 +1277,68 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         type: "milestone.created",
         entityType: "milestone",
         entityId: milestone.id,
-        metadata: { projectId }
+        metadata: {
+          projectId,
+          projectName: project.name,
+          milestoneName: name,
+          status: milestone.status,
+          actorName
+        }
       }
     });
     res.status(201).json(milestone);
+    }
+  );
+
+  router.patch(
+    "/milestones/:id",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const isDirector = req.auth!.roleKeys.includes(ROLE_KEYS.director) || req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      const { status } = req.body as { status?: string };
+      if (!status || !["pending", "in_progress", "completed", "rejected"].includes(status)) {
+        res.status(400).json({ error: "Valid status is required" });
+        return;
+      }
+      const existing = await prisma.milestone.findFirst({
+        where: { id, orgId, deletedAt: null },
+        include: { project: true }
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Milestone not found" });
+        return;
+      }
+      const access = await getProjectDeveloperAccess(prisma, existing.project, userId);
+      if (!isDirector && access !== "active") {
+        res.status(403).json({ error: "Only an accepted developer on this project can update milestones" });
+        return;
+      }
+      const milestone = await prisma.milestone.update({
+        where: { id },
+        data: { status }
+      });
+      const actorName = (await userDisplayLabel(prisma, userId)) ?? "Developer";
+      const eventType = status === "completed" ? "milestone.completed" : "milestone.updated";
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: userId,
+          type: eventType,
+          entityType: "milestone",
+          entityId: milestone.id,
+          metadata: {
+            projectId: existing.projectId,
+            projectName: existing.project.name,
+            milestoneName: existing.name,
+            status,
+            actorName
+          }
+        }
+      });
+      res.json(milestone);
     }
   );
 
@@ -1572,6 +1625,9 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       blockedReason,
       dueDate: dueDate ? new Date(dueDate) : undefined
     };
+    if (isDeveloperActor && normalizedStatus != null) {
+      data.assigneeId = userId;
+    }
 
     if (typeof title === "string") {
       const next = title.trim();
@@ -1606,7 +1662,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
 
     const task = await prisma.task.update({
       where: { id: taskId },
-      data
+      data,
+      include: { assignee: { select: { id: true, name: true, email: true } } }
     });
 
     const events: string[] = ["task.updated"];
@@ -1617,6 +1674,16 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       events.push("task.completed");
     }
 
+    const actorName = (await userDisplayLabel(prisma, userId)) ?? "Developer";
+    const eventMeta = {
+      status: task.status,
+      priority: task.priority,
+      taskTitle: existing.title,
+      projectId: existing.projectId,
+      projectName: existing.project.name,
+      actorName
+    };
+
     await prisma.eventLog.createMany({
       data: events.map((type) => ({
         orgId,
@@ -1624,7 +1691,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         type,
         entityType: "task",
         entityId: task.id,
-        metadata: { status: task.status, priority: task.priority }
+        metadata: eventMeta
       }))
     });
 
@@ -1729,7 +1796,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
 
       const milestone = await prisma.milestone.findFirst({
         where: { id, orgId, deletedAt: null },
-        include: { tasks: true }
+        include: { tasks: true, project: { select: { name: true } } }
       });
 
       if (!milestone) {
@@ -1753,6 +1820,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         }
       });
 
+      const actorName = (await userDisplayLabel(prisma, userId)) ?? "Director";
       await prisma.eventLog.create({
         data: {
           orgId,
@@ -1760,7 +1828,14 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           type: "milestone.completed",
           entityType: "milestone",
           entityId: id,
-          metadata: { completionNotes }
+          metadata: {
+            completionNotes,
+            milestoneName: milestone.name,
+            projectId: milestone.projectId,
+            projectName: milestone.project?.name,
+            status: "completed",
+            actorName
+          }
         }
       });
 
