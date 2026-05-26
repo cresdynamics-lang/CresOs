@@ -20,7 +20,18 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] }
+    ]
+  },
+  {
+    title: "Emil-AI",
+    items: [
+      { href: "/admin/email-automation", label: "Email Automation", roles: ["admin"] }
+    ]
+  },
+  {
+    title: "Tasks",
+    items: [
       { href: "/schedule", label: "Tasks", roles: [...ALL_APP_ROLE_KEYS] }
     ]
   },
@@ -619,7 +630,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [mobileNavOpen]);
 
   // Check if current page should be fullscreen
-  const isFullscreenPage = pathname === '/community';
+  const isFullscreenPage = pathname === '/community' || pathname.startsWith('/admin/email-automation');
 
   const shellNavProps = {
     pathname,

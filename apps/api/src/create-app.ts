@@ -22,6 +22,7 @@ import meetingRequestsRouter from "./modules/meeting-requests";
 import chatCommunityRouter from "./modules/chat-community";
 import salesRouter from "./modules/sales";
 import userRouter from "./modules/user";
+import emailAutomationRouter, { emailAutomationPublicRouter } from "./modules/email-automation";
 import { createAuthMiddleware } from "./modules/auth-middleware";
 
 /**
@@ -31,6 +32,8 @@ export function createApp(prisma: PrismaClient): express.Application {
   const app = express();
   app.use(cors());
   app.use(json());
+  // Twilio WhatsApp webhook sends application/x-www-form-urlencoded
+  app.use(express.urlencoded({ extended: false }));
 
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
@@ -65,6 +68,8 @@ export function createApp(prisma: PrismaClient): express.Application {
   });
 
   app.use("/auth", authRouter(prisma));
+  // Public webhook — must be before auth middleware (Twilio calls without Bearer token)
+  app.use("/email-automation", emailAutomationPublicRouter(prisma));
   app.use(createAuthMiddleware(prisma));
   app.use("/crm", crmRouter(prisma));
   app.use("/projects", projectsRouter(prisma));
@@ -84,6 +89,7 @@ export function createApp(prisma: PrismaClient): express.Application {
   app.use("/chat-community", chatCommunityRouter(prisma));
   app.use("/sales", salesRouter(prisma));
   app.use("/user", userRouter(prisma));
+  app.use("/email-automation", emailAutomationRouter(prisma));
 
   return app;
 }

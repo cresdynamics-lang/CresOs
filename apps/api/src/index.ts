@@ -9,6 +9,7 @@ import { scheduleDeveloperDailyDigest } from "./modules/developer-daily-digest";
 import { scheduleDailyOps } from "./modules/daily-reminders-ai-reports";
 import { scheduleDeveloperProgressReminders } from "./modules/developer-progress-reminders-scheduler";
 import { attachChatCommunityWs } from "./modules/chat-community-ws";
+import { scheduleEmailPipeline } from "./modules/email-automation";
 
 // Ensure local `.env` wins over inherited environment variables in dev.
 dotenv.config({
@@ -35,6 +36,7 @@ server.listen(PORT, () => {
   scheduleDeveloperDailyDigest(prisma);
   scheduleDeveloperProgressReminders(prisma);
   scheduleDailyOps(prisma);
+  scheduleEmailPipeline(prisma);
 });
 
 registerGracefulShutdown(server, prisma);

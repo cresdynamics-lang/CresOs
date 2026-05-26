@@ -80,6 +80,9 @@ model Org {
 
   projectManagementMonths ProjectManagementMonth[]
 
+  emailThreads          EmailThread[]
+  emailAutomationConfig EmailAutomationConfig?
+
   @@index([slug])
 }
 
@@ -1413,4 +1416,44 @@ model AdminAiReport {
 
   @@unique([orgId, dateKey])
   @@index([orgId, dateKey])
+}
+
+// ── Emil-AI Email Automation ──────────────────────────────────────────────────
+
+model EmailThread {
+  id            String   @id @default(cuid())
+  orgId         String
+  uid           String   // IMAP UID
+  messageId     String   // Email Message-ID header
+  fromEmail     String
+  fromName      String   @default("")
+  subject       String   @default("(no subject)")
+  body          String   @db.Text @default("")
+  receivedAt    DateTime @default(now())
+  draftReply    String?  @db.Text
+  revisionNotes String?  @db.Text
+  // status: pending_draft | awaiting_approval | editing | approved | sent | failed | ignored
+  status        String   @default("pending_draft")
+  // senderType: external (client/prospect → CEO tone) | internal (team member → Director tone)
+  senderType    String   @default("external")
+  // Twilio WhatsApp message SID for the most recent approval request
+  waMessageSid  String?
+  updatedAt     DateTime @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, uid])
+  @@index([orgId, status])
+  @@index([orgId, receivedAt])
+}
+
+model EmailAutomationConfig {
+  id           String   @id @default(cuid())
+  orgId        String   @unique
+  instructions String   @db.Text @default("")
+  isEnabled    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id])
 }

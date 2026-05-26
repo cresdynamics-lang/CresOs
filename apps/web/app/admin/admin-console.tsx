@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
+import { EmailAutomationConsole } from "./email-automation/email-automation-console";
 
-type TabKey = "users" | "departments" | "roles";
+type TabKey = "users" | "departments" | "roles" | "email-automation";
 
 function tabFromPathname(path: string | null): TabKey {
   if (!path) return "users";
   if (path.startsWith("/admin/org")) return "departments";
   if (path.startsWith("/admin/roles")) return "roles";
+  if (path.startsWith("/admin/email-automation")) return "email-automation";
   return "users";
 }
 
@@ -267,6 +269,7 @@ export function AdminConsole() {
         {subNavLink("/admin/users", "Users")}
         {subNavLink("/admin/org", "Departments")}
         {subNavLink("/admin/roles", "Roles")}
+        {subNavLink("/admin/email-automation", "Email Automation")}
       </nav>
 
       {tab === "users" && (
@@ -846,6 +849,8 @@ export function AdminConsole() {
           </ul>
         </div>
       )}
+
+      {tab === "email-automation" && <EmailAutomationConsole />}
     </section>
   );
 }
