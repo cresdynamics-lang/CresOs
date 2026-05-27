@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
+import { deliverSalesInvoiceEmail } from "../lib/invoice-email";
 import { logEmailSent } from "./admin-activity";
 
 /** Avoid Invalid Date from empty due-date strings (same as finance). */
@@ -292,23 +293,6 @@ export default function salesRouter(prisma: PrismaClient): Router {
               }
             });
 
-            if (clientEmail) {
-              const greeting = client.name ? `Hello ${client.name},` : "Hello,";
-              const body = `${greeting}\n\nInvoice ${invoice.number} has been issued.\nTotal: ${currency ?? "KES"} ${totalAmount.toFixed(2)}.\n\nThank you.`;
-              await tx.notification.create({
-                data: {
-                  orgId,
-                  channel: "email",
-                  to: clientEmail,
-                  subject: `Invoice ${invoice.number}`,
-                  body,
-                  status: "queued",
-                  type: "invoice.sent",
-                  tier: "financial"
-                }
-              });
-            }
-
             return invoice;
           },
           {
@@ -320,15 +304,25 @@ export default function salesRouter(prisma: PrismaClient): Router {
 
         if (clientEmail) {
           try {
-            await logEmailSent(prisma, {
+            const emailResult = await deliverSalesInvoiceEmail(prisma, {
               orgId,
+              invoiceId: result.id,
               to: clientEmail,
-              subject: `Invoice ${result.number}`,
-              body: `Invoice ${result.number} queued for ${clientEmail}.`,
-              type: "invoice.sent"
+              clientName: client.name
             });
+            if (emailResult.ok) {
+              await logEmailSent(prisma, {
+                orgId,
+                to: clientEmail,
+                subject: `Your invoice ${result.number} — Cres Dynamics`,
+                body: `Sales invoice ${result.number} sent with PDF to ${clientEmail}.`,
+                type: "invoice.sent.sales"
+              });
+            } else {
+              console.error("Sales invoice email failed:", emailResult.error);
+            }
           } catch (logErr) {
-            console.error("logEmailSent after sales invoice create:", logErr);
+            console.error("deliverSalesInvoiceEmail after sales invoice create:", logErr);
           }
         }
 

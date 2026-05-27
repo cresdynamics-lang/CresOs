@@ -42,6 +42,14 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     ]
   },
   {
+    title: "Mails",
+    items: [
+      { href: "/finance/messages", label: "Finance mail", roles: ["admin", "finance"] },
+      { href: "/sales/messages", label: "Sales mail", roles: ["admin", "sales"] },
+      { href: "/director/messages", label: "Director mail", roles: ["admin", "director_admin"] }
+    ]
+  },
+  {
     title: "Reports",
     items: [
       { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
@@ -194,6 +202,9 @@ function SidebarNavContent({
                   (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
                   (item.href === "/leads" && pathname.startsWith("/leads")) ||
                   (item.href === "/crm" && pathname.startsWith("/crm")) ||
+                  (item.href === "/finance/messages" && pathname.startsWith("/finance/messages")) ||
+                  (item.href === "/sales/messages" && pathname.startsWith("/sales/messages")) ||
+                  (item.href === "/director/messages" && pathname.startsWith("/director/messages")) ||
                   (item.href === "/community" && communityChatUnread > 0 && !onCommunity);
                 const badge = badgeForItem(item.href, item.label);
                 return (

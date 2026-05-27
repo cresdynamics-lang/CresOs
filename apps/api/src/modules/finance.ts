@@ -7,10 +7,12 @@ import { logAdminActivity, logEmailSent } from "./admin-activity";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { enforceApprovalConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
-import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
-import { billableMonthsUtc, ymKey } from "../lib/management-billing";
+import { generateInvoicePdfBuffer } from "../lib/invoice-pdf";
+import { deliverFinanceInvoiceEmail } from "../lib/invoice-email";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
+import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
+import { billableMonthsUtc, ymKey } from "../lib/management-billing";
 
 /** Avoid Invalid Date from empty due-date strings (breaks Prisma / Postgres). */
 function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
@@ -227,13 +229,6 @@ async function recordConfirmedInvoicePayment(
   );
 
   return { created: true, paymentId: payment.id, amount: remaining };
-}
-
-function buildInvoicePdfNotes(savedNotes: string | null | undefined): string {
-  const user = savedNotes?.trim() ?? "";
-  const standard =
-    "Late payments attract 2% monthly interest after the due date. For payment queries contact info@cresdynamics.com or +254 0708 805 496.";
-  return [user, standard].filter(Boolean).join("\n\n");
 }
 
 export default function financeRouter(prisma: PrismaClient): Router {
@@ -1194,23 +1189,6 @@ export default function financeRouter(prisma: PrismaClient): Router {
             }
           });
 
-          if (clientEmail) {
-            const greeting = client.name ? `Hello ${client.name},` : "Hello,";
-            const body = `${greeting}\n\nInvoice ${invoice.number} has been issued.\nTotal: ${invoice.currency} ${totalAmount.toFixed(2)}.\n\nThank you.`;
-            await tx.notification.create({
-              data: {
-                orgId,
-                channel: "email",
-                to: clientEmail,
-                subject: `Invoice ${invoice.number}`,
-                body,
-                status: "queued",
-                type: "invoice.sent",
-                tier: "financial"
-              }
-            });
-          }
-
           return invoice;
         },
           {
@@ -1222,15 +1200,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
         if (clientEmail) {
           try {
-            await logEmailSent(prisma, {
+            const emailResult = await deliverFinanceInvoiceEmail(prisma, {
               orgId,
+              invoiceId: result.id,
               to: clientEmail,
-              subject: `Invoice ${result.number}`,
-              body: `Invoice ${result.number} queued for ${clientEmail}.`,
-              type: "invoice.sent"
+              clientName: client.name
             });
+            if (emailResult.ok) {
+              await logEmailSent(prisma, {
+                orgId,
+                to: clientEmail,
+                subject: `Invoice ${result.number} from Cres Dynamics`,
+                body: `Invoice ${result.number} sent with PDF attachment to ${clientEmail}.`,
+                type: "invoice.sent"
+              });
+            } else {
+              console.error("Invoice email failed:", emailResult.error);
+            }
           } catch (logErr) {
-            console.error("logEmailSent after invoice create:", logErr);
+            console.error("deliverFinanceInvoiceEmail after invoice create:", logErr);
           }
         }
 
@@ -1254,7 +1242,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
           success: true,
           data: {
             invoice: invoiceJson,
-            downloadUrl: `/finance/invoices/${result.id}/pdf`
+            downloadUrl: `/finance/invoices/${result.id}/pdf`,
+            emailSent: Boolean(clientEmail)
           }
         });
       } catch (e: unknown) {
@@ -2602,22 +2591,6 @@ export default function financeRouter(prisma: PrismaClient): Router {
                 metadata: { projectId, year: y, month: mo, number: invoice.number }
               }
             });
-            if (clientEmail) {
-              const greeting = client?.name ? `Hello ${client.name},` : "Hello,";
-              const body = `${greeting}\n\nInvoice ${invoice.number} for management fee (${label}) has been issued.\nTotal: KES ${totalAmount.toFixed(2)}.\n\nThank you.`;
-              await tx.notification.create({
-                data: {
-                  orgId,
-                  channel: "email",
-                  to: clientEmail,
-                  subject: `Invoice ${invoice.number}`,
-                  body,
-                  status: "queued",
-                  type: "invoice.sent",
-                  tier: "financial"
-                }
-              });
-            }
             return invoice;
           },
           {
@@ -2626,6 +2599,31 @@ export default function financeRouter(prisma: PrismaClient): Router {
             timeout: 10000
           }
         );
+
+        if (clientEmail) {
+          try {
+            const emailResult = await deliverFinanceInvoiceEmail(prisma, {
+              orgId,
+              invoiceId: result.id,
+              to: clientEmail,
+              clientName: client?.name,
+              detailLine: `This invoice covers the management fee for ${label}.`
+            });
+            if (emailResult.ok) {
+              await logEmailSent(prisma, {
+                orgId,
+                to: clientEmail,
+                subject: `Invoice ${result.number} from Cres Dynamics`,
+                body: `Management fee invoice ${result.number} sent with PDF to ${clientEmail}.`,
+                type: "invoice.sent"
+              });
+            } else {
+              console.error("Management invoice email failed:", emailResult.error);
+            }
+          } catch (logErr) {
+            console.error("deliverFinanceInvoiceEmail after management-fee:", logErr);
+          }
+        }
 
         res.status(201).json({
           success: true,
@@ -2637,7 +2635,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
               projectId: result.projectId,
               clientId: result.clientId
             },
-            downloadUrl: `/finance/invoices/${result.id}/pdf`
+            downloadUrl: `/finance/invoices/${result.id}/pdf`,
+            emailSent: Boolean(clientEmail)
           }
         });
       } catch (e: unknown) {
@@ -3291,86 +3290,20 @@ export default function financeRouter(prisma: PrismaClient): Router {
         const invoiceIdStr = Array.isArray(invoiceId) ? invoiceId[0] : invoiceId;
         const orgId = req.auth!.orgId;
 
-        const invoice = await prisma.invoice.findFirst({
-          where: { id: invoiceIdStr, orgId, deletedAt: null },
-          include: {
-            client: { select: { name: true, email: true, phone: true } },
-            project: { select: { name: true } },
-            items: true
+        let pdfBuffer: Buffer;
+        let filename: string;
+        try {
+          ({ buffer: pdfBuffer, filename } = await generateInvoicePdfBuffer(prisma, orgId, invoiceIdStr));
+        } catch (e) {
+          if (e instanceof Error && e.message === "Invoice not found") {
+            return res.status(404).json({ error: "Invoice not found" });
           }
-        });
-
-        if (!invoice) {
-          return res.status(404).json({ error: "Invoice not found" });
+          throw e;
         }
 
-        // Generate PDF
-        const { PDFGenerator } = require("../services/invoice/pdf-generator");
-        const pdfGenerator = new PDFGenerator({
-          filename: `${invoice.number}.pdf`,
-          format: 'A4',
-          margin: { top: 40, right: 40, bottom: 40, left: 40 }
-        });
-
-        const pdfBuffer = await pdfGenerator.generatePDF({
-          invoice_number: invoice.number,
-          invoice_date: invoice.issueDate.toISOString().split('T')[0],
-          due_date: invoice.dueDate ? invoice.dueDate.toISOString().split('T')[0] : '',
-          status: invoice.status,
-          currency: invoice.currency,
-          client: {
-            id: invoice.clientId,
-            name: invoice.client.name,
-            email: invoice.client.email,
-            phone: invoice.client.phone
-          },
-          company: { ...INVOICE_PDF_COMPANY },
-          project: invoice.project ? {
-            id: invoice.projectId!,
-            name: invoice.project.name
-          } : undefined,
-          items: invoice.items.map((item) => {
-            const unit = Number(item.unitPrice);
-            const line = unit * item.quantity;
-            return {
-              id: item.id,
-              name: item.description,
-              description: item.description,
-              quantity: item.quantity,
-              unit_price: unit,
-              total_price: line,
-              type: "service" as const,
-              category: "general"
-            };
-          }),
-          summary: {
-            subtotal: Number(invoice.totalAmount),
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: Number(invoice.totalAmount),
-            balance_due: Number(invoice.totalAmount)
-          },
-          payment_terms: {
-            due_in_days: 7
-          },
-          notes: {
-            client_message: buildInvoicePdfNotes(invoice.notes)
-          },
-          automation: {
-            auto_reminders_enabled: true,
-            reminder_schedule: [3, 1],
-            late_fee_enabled: false
-          },
-          created_at: invoice.createdAt.toISOString(),
-          updated_at: invoice.updatedAt.toISOString(),
-          created_by: 'system',
-          organization_id: orgId
-        } as any);
-
-        // Set headers for PDF download
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${invoice.number}.pdf"`);
-        res.setHeader('Content-Length', pdfBuffer.length);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", pdfBuffer.length);
 
         res.send(pdfBuffer);
 

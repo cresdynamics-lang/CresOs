@@ -1,11 +1,24 @@
 import nodemailer from "nodemailer";
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
+import type { EmailChannel } from "./email-senders";
+import { getEmailSender } from "./email-senders";
+
 export type SmtpSendInput = {
   to: string;
   subject: string;
   text: string;
   html?: string | null;
   replyTo?: string | null;
+  from?: string | null;
+  /** Picks department From / Reply-To when `from` is not set. */
+  emailChannel?: EmailChannel;
+  attachments?: EmailAttachment[];
 };
 
 type SmtpConfig = {
@@ -63,13 +76,29 @@ export async function smtpSendMail(input: SmtpSendInput): Promise<{ ok: true; id
   if (!cfg) return { ok: false, error: "SMTP not configured" };
   try {
     const transporter = getTransport(cfg);
+    const sender = input.emailChannel ? getEmailSender(input.emailChannel) : null;
+    const fromHeader =
+      input.from?.trim() ||
+      sender?.from ||
+      `${cfg.fromName} <${cfg.fromAddress}>`;
+    const replyTo =
+      input.replyTo?.trim() || sender?.replyTo || undefined;
     const info = await transporter.sendMail({
-      from: `${cfg.fromName} <${cfg.fromAddress}>`,
+      from: fromHeader,
       to: input.to,
       subject: input.subject,
       text: input.text,
       ...(input.html ? { html: input.html } : {}),
-      ...(input.replyTo?.trim() ? { replyTo: input.replyTo.trim() } : {})
+      ...(replyTo ? { replyTo } : {}),
+      ...(input.attachments?.length
+        ? {
+            attachments: input.attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content,
+              contentType: a.contentType ?? "application/octet-stream"
+            }))
+          }
+        : {})
     });
     return { ok: true, id: typeof info.messageId === "string" ? info.messageId : undefined };
   } catch (e) {

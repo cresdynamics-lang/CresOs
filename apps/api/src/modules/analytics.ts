@@ -9,6 +9,36 @@ function toDateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function weekKey(d: Date): string {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - x.getDay());
+  return toDateKey(x);
+}
+
+function lastNWeekKeys(n: number): string[] {
+  const keys: string[] = [];
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay());
+  for (let i = n - 1; i >= 0; i--) {
+    const w = new Date(d);
+    w.setDate(w.getDate() - i * 7);
+    keys.push(toDateKey(w));
+  }
+  return keys;
+}
+
+function countByWeek<T>(rows: T[], getDate: (r: T) => Date, weeks = 8): { week: string; count: number }[] {
+  const keys = lastNWeekKeys(weeks);
+  const map = new Map(keys.map((k) => [k, 0]));
+  for (const r of rows) {
+    const k = weekKey(getDate(r));
+    if (map.has(k)) map.set(k, (map.get(k) ?? 0) + 1);
+  }
+  return keys.map((week) => ({ week, count: map.get(week) ?? 0 }));
+}
+
 async function reportStreakDays(prisma: PrismaClient, userId: string, kind: "sales" | "developer"): Promise<number> {
   const todayKey = toDateKey(new Date());
   const dates =
@@ -303,6 +333,267 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
     });
   });
 
+  // Director / analyst operational analytics (no finance metrics)
+  router.get(
+    "/director",
+    requireRoles([ROLE_KEYS.admin, ROLE_KEYS.director, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const fourteenDaysAgo = new Date(Date.now() - 14 * ONE_DAY_MS);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * ONE_DAY_MS);
+      const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+
+      const [
+        projects,
+        taskGroups,
+        tasks,
+        leads,
+        deals,
+        salesReportsMonth,
+        devReportsMonth,
+        salesReports90d,
+        devReports90d,
+        users,
+        taskCompletedEvents14d,
+        tasksByAssigneeActive,
+        handoffs30d,
+        projectsStale72h,
+        blockedTasksOld,
+        stalledDeals,
+        activeProjectsRecent
+      ] = await Promise.all([
+        prisma.project.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, name: true, type: true, status: true, approvalStatus: true, updatedAt: true, createdAt: true, endDate: true }
+        }),
+        prisma.task.groupBy({
+          by: ["projectId", "status"],
+          where: { orgId, deletedAt: null },
+          _count: { _all: true }
+        }),
+        prisma.task.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, status: true, dueDate: true, updatedAt: true, projectId: true }
+        }),
+        prisma.lead.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, status: true, approvalStatus: true, createdAt: true }
+        }),
+        prisma.deal.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, stage: true, createdAt: true, closeDate: true, updatedAt: true }
+        }),
+        prisma.salesReport.count({
+          where: { orgId, status: "submitted", submittedAt: { gte: startOfMonth } }
+        }),
+        prisma.developerReport.count({
+          where: { orgId, reportDate: { gte: startOfMonth } }
+        }),
+        prisma.salesReport.findMany({
+          where: { orgId, status: "submitted", submittedAt: { gte: thirtyDaysAgo, not: null } },
+          select: { submittedAt: true }
+        }),
+        prisma.developerReport.findMany({
+          where: { orgId, reportDate: { gte: thirtyDaysAgo } },
+          select: { reportDate: true }
+        }),
+        prisma.user.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, name: true, email: true }
+        }),
+        prisma.eventLog.findMany({
+          where: { orgId, type: "task.completed", createdAt: { gte: fourteenDaysAgo } },
+          select: { actorId: true }
+        }),
+        prisma.task.groupBy({
+          by: ["assigneeId"],
+          where: { orgId, deletedAt: null, status: { in: ["todo", "not_started", "in_progress", "waiting_response", "blocked"] } },
+          _count: { _all: true }
+        }),
+        prisma.projectHandoffRequest.count({
+          where: { orgId, status: "accepted", respondedAt: { gte: thirtyDaysAgo } }
+        }),
+        prisma.project.findMany({
+          where: { orgId, deletedAt: null, status: { in: ["active", "paused"] }, updatedAt: { lt: seventyTwoHoursAgo } },
+          select: { id: true, name: true, updatedAt: true }
+        }),
+        prisma.task.findMany({
+          where: { orgId, deletedAt: null, status: "blocked", updatedAt: { lt: seventyTwoHoursAgo } },
+          select: { id: true, title: true, projectId: true }
+        }),
+        prisma.deal.findMany({
+          where: { orgId, deletedAt: null, stage: { in: ["prospect", "proposal"] }, updatedAt: { lt: fourteenDaysAgo } },
+          select: { id: true, title: true, stage: true }
+        }),
+        prisma.project.findMany({
+          where: { orgId, deletedAt: null, status: { in: ["active", "planned"] } },
+          orderBy: { updatedAt: "desc" },
+          take: 12,
+          select: { id: true, name: true, status: true, approvalStatus: true, updatedAt: true }
+        })
+      ]);
+
+      const countsByProject: Record<string, { total: number; done: number }> = {};
+      for (const p of projects) countsByProject[p.id] = { total: 0, done: 0 };
+      for (const row of taskGroups) {
+        const pid = row.projectId as string;
+        if (!countsByProject[pid]) countsByProject[pid] = { total: 0, done: 0 };
+        countsByProject[pid].total += row._count._all;
+        if (String(row.status) === "done") countsByProject[pid].done += row._count._all;
+      }
+
+      const projectsByStatus: Record<string, number> = {};
+      for (const p of projects) {
+        const s = p.status ?? "unknown";
+        projectsByStatus[s] = (projectsByStatus[s] ?? 0) + 1;
+      }
+
+      const completionTop = projects
+        .map((p) => {
+          const c = countsByProject[p.id] ?? { total: 0, done: 0 };
+          return {
+            projectId: p.id,
+            name: p.name,
+            status: p.status,
+            completionRate: c.total > 0 ? c.done / c.total : 0,
+            totalTasks: c.total,
+            doneTasks: c.done
+          };
+        })
+        .filter((p) => p.totalTasks > 0)
+        .sort((a, b) => b.completionRate - a.completionRate)
+        .slice(0, 10);
+
+      const projectsMoving = activeProjectsRecent.map((p) => {
+        const c = countsByProject[p.id] ?? { total: 0, done: 0 };
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          approvalStatus: p.approvalStatus,
+          completionRate: c.total > 0 ? c.done / c.total : 0,
+          updatedAt: p.updatedAt.toISOString()
+        };
+      });
+
+      const leadsByStatus: Record<string, number> = {};
+      const leadsByApproval: Record<string, number> = {};
+      for (const l of leads) {
+        leadsByStatus[l.status ?? "unknown"] = (leadsByStatus[l.status] ?? 0) + 1;
+        const a = l.approvalStatus ?? "unknown";
+        leadsByApproval[a] = (leadsByApproval[a] ?? 0) + 1;
+      }
+
+      const dealsByStage: Record<string, number> = {};
+      for (const d of deals) {
+        dealsByStage[d.stage ?? "unknown"] = (dealsByStage[d.stage] ?? 0) + 1;
+      }
+      const dealsWon = deals.filter((d) => d.stage === "won").length;
+      const dealsLost = deals.filter((d) => d.stage === "lost").length;
+      const winRate = dealsWon + dealsLost > 0 ? dealsWon / (dealsWon + dealsLost) : 0;
+
+      const completedByDev: Record<string, number> = {};
+      for (const e of taskCompletedEvents14d) {
+        if (!e.actorId) continue;
+        completedByDev[e.actorId] = (completedByDev[e.actorId] ?? 0) + 1;
+      }
+      const developerVelocity = users
+        .map((u) => ({
+          userId: u.id,
+          name: u.name,
+          email: u.email,
+          tasksCompleted14d: completedByDev[u.id] ?? 0
+        }))
+        .sort((a, b) => b.tasksCompleted14d - a.tasksCompleted14d)
+        .slice(0, 12);
+
+      const activeByAssignee: Record<string, number> = {};
+      for (const row of tasksByAssigneeActive) {
+        const key = row.assigneeId ?? "unassigned";
+        activeByAssignee[key] = row._count._all;
+      }
+      const developerLoad = users
+        .map((u) => ({
+          userId: u.id,
+          name: u.name,
+          email: u.email,
+          activeTasks: activeByAssignee[u.id] ?? 0
+        }))
+        .sort((a, b) => b.activeTasks - a.activeTasks)
+        .slice(0, 12);
+
+      const reportStreaks = await Promise.all(
+        users.slice(0, 20).map(async (u) => ({
+          userId: u.id,
+          name: u.name,
+          email: u.email,
+          salesReportStreakDays: await reportStreakDays(prisma, u.id, "sales"),
+          developerReportStreakDays: await reportStreakDays(prisma, u.id, "developer")
+        }))
+      );
+
+      const overdueTasks = tasks.filter(
+        (t) => t.status !== "done" && t.dueDate && t.dueDate.getTime() < now.getTime()
+      ).length;
+      const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
+      const leadsThisMonth = leads.filter((l) => l.createdAt >= startOfMonth).length;
+
+      res.json({
+        overview: {
+          activeProjects: projects.filter((p) => ["active", "planned"].includes(p.status)).length,
+          overdueTasks,
+          blockedTasks,
+          leadsThisMonth,
+          dealsWon,
+          dealsLost,
+          winRate,
+          salesReportsThisMonth: salesReportsMonth,
+          developerReportsThisMonth: devReportsMonth,
+          handoffs30d: handoffs30d
+        },
+        projects: {
+          byStatus: Object.entries(projectsByStatus).map(([status, count]) => ({ status, count })),
+          completionTop,
+          createdByWeek: countByWeek(projects, (p) => p.createdAt),
+          moving: projectsMoving
+        },
+        leads: {
+          byStatus: Object.entries(leadsByStatus).map(([status, count]) => ({ status, count })),
+          byApproval: Object.entries(leadsByApproval).map(([approvalStatus, count]) => ({ approvalStatus, count })),
+          createdByWeek: countByWeek(leads, (l) => l.createdAt)
+        },
+        pipeline: {
+          dealsByStage: Object.entries(dealsByStage).map(([stage, count]) => ({ stage, count })),
+          wonLost: { won: dealsWon, lost: dealsLost }
+        },
+        team: {
+          developerVelocity,
+          developerLoad,
+          reportStreaks: reportStreaks.sort(
+            (a, b) =>
+              b.salesReportStreakDays +
+              b.developerReportStreakDays -
+              (a.salesReportStreakDays + a.developerReportStreakDays)
+          )
+        },
+        reports: {
+          salesByWeek: countByWeek(
+            salesReports90d.filter((r) => r.submittedAt),
+            (r) => r.submittedAt as Date
+          ),
+          developerByWeek: countByWeek(devReports90d, (r) => r.reportDate)
+        },
+        risks: {
+          staleProjects72h: projectsStale72h.length,
+          blockedTasks72h: blockedTasksOld.length,
+          stalledDeals14d: stalledDeals.length
+        }
+      });
+    }
+  );
+
   // Admin extended dashboard — operational analytics (aggregates + lists)
   router.get(
     "/admin-extended",
@@ -310,8 +601,6 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
       const fourteenDaysAgo = new Date(Date.now() - 14 * ONE_DAY_MS);
       const thirtyDaysAgo = new Date(Date.now() - 30 * ONE_DAY_MS);
@@ -321,12 +610,6 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
         projects,
         taskGroups,
         closedDeals,
-        approvalsDecided,
-        approvalsAllMonth,
-        invoicesOutstandingAgg,
-        paymentsCollectedAgg,
-        paymentsRolling,
-        expensesRolling,
         developerUsers,
         tasksByAssigneeActive,
         taskCompletedEvents14d,
@@ -354,30 +637,6 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
             closeDate: { not: null }
           },
           select: { createdAt: true, closeDate: true, stage: true }
-        }),
-        prisma.approval.findMany({
-          where: { orgId, status: { in: ["approved", "rejected", "cancelled"] }, decidedAt: { not: null } },
-          select: { id: true, entityType: true, status: true, reason: true, decisionNote: true, createdAt: true, decidedAt: true }
-        }),
-        prisma.approval.findMany({
-          where: { orgId, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
-          select: { id: true, status: true }
-        }),
-        prisma.invoice.aggregate({
-          where: { orgId, deletedAt: null, status: { in: ["sent", "partial", "overdue"] } },
-          _sum: { totalAmount: true }
-        }),
-        prisma.payment.aggregate({
-          where: { orgId, deletedAt: null, status: "confirmed" },
-          _sum: { amount: true }
-        }),
-        prisma.payment.findMany({
-          where: { orgId, deletedAt: null, status: "confirmed", receivedAt: { gte: ninetyDaysAgo } },
-          select: { receivedAt: true, amount: true }
-        }),
-        prisma.expense.findMany({
-          where: { orgId, deletedAt: null, status: { in: ["approved", "paid"] }, spentAt: { gte: ninetyDaysAgo } },
-          select: { spentAt: true, amount: true }
         }),
         prisma.user.findMany({
           where: { orgId, deletedAt: null },
@@ -466,54 +725,6 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
         .sort((a, b) => b.tasksCompleted14d - a.tasksCompleted14d)
         .slice(0, 25);
 
-      // Finance analytics
-      const decidedDurationsHrs = approvalsDecided
-        .filter((a) => a.decidedAt)
-        .map((a) => ((a.decidedAt as Date).getTime() - a.createdAt.getTime()) / (1000 * 60 * 60))
-        .filter((x) => Number.isFinite(x) && x >= 0)
-        .sort((a, b) => a - b);
-      const avgApprovalTurnaroundHours =
-        decidedDurationsHrs.length === 0 ? 0 : decidedDurationsHrs.reduce((s, x) => s + x, 0) / decidedDurationsHrs.length;
-      const p50ApprovalTurnaroundHours =
-        decidedDurationsHrs.length === 0 ? 0 : decidedDurationsHrs[Math.floor(decidedDurationsHrs.length * 0.5)];
-      const p90ApprovalTurnaroundHours =
-        decidedDurationsHrs.length === 0 ? 0 : decidedDurationsHrs[Math.floor(decidedDurationsHrs.length * 0.9)];
-
-      const declined = approvalsDecided.filter((a) => a.status === "rejected");
-      const decidedCount = approvalsDecided.length;
-      const declineRate = decidedCount > 0 ? declined.length / decidedCount : 0;
-      const declineReasons = new Map<string, number>();
-      for (const a of declined) {
-        const key = (a.decisionNote?.trim() || a.reason?.trim() || "No reason").slice(0, 140);
-        declineReasons.set(key, (declineReasons.get(key) ?? 0) + 1);
-      }
-      const topDeclineReasons = Array.from(declineReasons.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([reason, count]) => ({ reason, count }));
-
-      const outstandingVsCollected = {
-        outstandingInvoices: Number(invoicesOutstandingAgg._sum.totalAmount ?? 0),
-        collectedPayments: Number(paymentsCollectedAgg._sum.amount ?? 0)
-      };
-
-      function sumWindow(list: { at: Date; amount: any }[], start: Date, end: Date): number {
-        const s = start.getTime();
-        const e = end.getTime();
-        return list.reduce((acc, r) => {
-          const t = r.at.getTime();
-          if (t >= s && t < e) acc += Number(r.amount ?? 0);
-          return acc;
-        }, 0);
-      }
-      const payments = paymentsRolling.map((p) => ({ at: p.receivedAt, amount: p.amount }));
-      const expenses = expensesRolling.map((e) => ({ at: e.spentAt, amount: e.amount }));
-      const cashFlowTrend = [
-        { window: "7d", in: sumWindow(payments, new Date(Date.now() - 7 * ONE_DAY_MS), now), out: sumWindow(expenses, new Date(Date.now() - 7 * ONE_DAY_MS), now) },
-        { window: "30d", in: sumWindow(payments, new Date(Date.now() - 30 * ONE_DAY_MS), now), out: sumWindow(expenses, new Date(Date.now() - 30 * ONE_DAY_MS), now) },
-        { window: "90d", in: sumWindow(payments, new Date(Date.now() - 90 * ONE_DAY_MS), now), out: sumWindow(expenses, new Date(Date.now() - 90 * ONE_DAY_MS), now) }
-      ].map((w) => ({ ...w, net: w.in - w.out }));
-
       // Team analytics: active load and streaks
       const activeTasksByAssignee: Record<string, number> = {};
       for (const row of tasksByAssigneeActive) {
@@ -558,13 +769,6 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
           avgDaysToClose,
           moduleVelocityPerDeveloper,
           delayFrequencyByProjectType: delayedByType
-        },
-        financeAnalytics: {
-          approvalTurnaroundHours: { avg: avgApprovalTurnaroundHours, p50: p50ApprovalTurnaroundHours, p90: p90ApprovalTurnaroundHours },
-          declineRate,
-          topDeclineReasons,
-          outstandingVsCollected,
-          cashFlowTrend
         },
         teamAnalytics: {
           developerUtilisationSignals: perUserLoad.slice(0, 20),

@@ -8,6 +8,7 @@ type NavItem = { href: string; label: string; roles: string[]; match: "exact" | 
 
 const ITEMS: NavItem[] = [
   { href: "/sales", label: "Sales hub", roles: ["admin", "sales", "director_admin", "finance"], match: "exact" },
+  { href: "/sales/messages", label: "Mails", roles: ["admin", "sales"], match: "prefix" },
   { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"], match: "prefix" },
   { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"], match: "prefix" },
   { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"], match: "prefix" },

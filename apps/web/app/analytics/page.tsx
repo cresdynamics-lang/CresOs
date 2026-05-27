@@ -3,30 +3,76 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { formatMoney } from "../format-money";
 import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import {
+  HorizontalBarChart,
+  MiniLineTrend,
+  StatTile,
+  VerticalBarChart
+} from "../../components/analytics/chart-widgets";
 
-type CeoAnalytics = {
-  revenueHealth: {
-    revenueReceivedThisMonth: number;
-    outstandingInvoices: number;
-    overdueInvoiceCount: number;
-    expensesThisMonth: number;
-  };
-  projectHealth: {
+type DirectorAnalytics = {
+  overview: {
     activeProjects: number;
     overdueTasks: number;
     blockedTasks: number;
-    milestonesDone: number;
-    milestonesPending: number;
-  };
-  leadConversion: {
     leadsThisMonth: number;
     dealsWon: number;
     dealsLost: number;
     winRate: number;
-    avgTimeToCloseDays: number;
+    salesReportsThisMonth: number;
+    developerReportsThisMonth: number;
+    handoffs30d: number;
+  };
+  projects: {
+    byStatus: { status: string; count: number }[];
+    completionTop: {
+      projectId: string;
+      name: string;
+      status: string;
+      completionRate: number;
+      totalTasks: number;
+      doneTasks: number;
+    }[];
+    createdByWeek: { week: string; count: number }[];
+    moving: {
+      id: string;
+      name: string;
+      status: string;
+      approvalStatus: string | null;
+      completionRate: number;
+      updatedAt: string;
+    }[];
+  };
+  leads: {
+    byStatus: { status: string; count: number }[];
+    byApproval: { approvalStatus: string; count: number }[];
+    createdByWeek: { week: string; count: number }[];
+  };
+  pipeline: {
+    dealsByStage: { stage: string; count: number }[];
+    wonLost: { won: number; lost: number };
+  };
+  team: {
+    developerVelocity: { userId: string; name: string | null; email: string; tasksCompleted14d: number }[];
+    developerLoad: { userId: string; name: string | null; email: string; activeTasks: number }[];
+    reportStreaks: {
+      userId: string;
+      name: string | null;
+      email: string;
+      salesReportStreakDays: number;
+      developerReportStreakDays: number;
+    }[];
+  };
+  reports: {
+    salesByWeek: { week: string; count: number }[];
+    developerByWeek: { week: string; count: number }[];
+  };
+  risks: {
+    staleProjects72h: number;
+    blockedTasks72h: number;
+    stalledDeals14d: number;
   };
 };
 
@@ -45,13 +91,6 @@ type AdminExtendedAnalytics = {
     moduleVelocityPerDeveloper: { userId: string; name: string | null; email: string; tasksCompleted14d: number }[];
     delayFrequencyByProjectType: Record<string, number>;
   };
-  financeAnalytics: {
-    approvalTurnaroundHours: { avg: number; p50: number; p90: number };
-    declineRate: number;
-    topDeclineReasons: { reason: string; count: number }[];
-    outstandingVsCollected: { outstandingInvoices: number; collectedPayments: number };
-    cashFlowTrend: { window: string; in: number; out: number; net: number }[];
-  };
   teamAnalytics: {
     developerUtilisationSignals: { userId: string; name: string | null; email: string; activeTasks: number }[];
     swapHandoffFrequency30d: number;
@@ -60,120 +99,87 @@ type AdminExtendedAnalytics = {
       overloaded: { userId: string; name: string | null; email: string; activeTasks: number }[];
       underutilised: { userId: string; name: string | null; email: string; activeTasks: number }[];
     };
-    reportStreakPerUser: { userId: string; name: string | null; email: string; salesReportStreakDays: number; developerReportStreakDays: number }[];
+    reportStreakPerUser: {
+      userId: string;
+      name: string | null;
+      email: string;
+      salesReportStreakDays: number;
+      developerReportStreakDays: number;
+    }[];
   };
   riskAnalytics: {
     projectsNoUpdate72h: { id: string; name: string; updatedAt: string; status: string }[];
     blockedTasksAbove72h: { id: string; title: string; projectId: string; updatedAt: string }[];
-    stalledDeals14d: { id: string; title: string; stage: string; updatedAt: string; value: any }[];
+    stalledDeals14d: { id: string; title: string; stage: string; updatedAt: string; value: unknown }[];
     repeatSwapPatterns: { projectId: string; projectName: string; count90d: number }[];
   };
 };
 
-/** Admin-only: what the extended analytics API covers (shown as cards on the analytics page). */
-const ADMIN_ANALYTICS_SCOPE_GROUPS: {
-  key: string;
-  title: string;
-  titleClass: string;
-  borderClass: string;
-  items: string[];
-}[] = [
-  {
-    key: "project",
-    title: "Project analytics",
-    titleClass: "text-emerald-300",
-    borderClass: "border-l-emerald-500/60",
-    items: [
-      "Completion rates per project",
-      "Average days to close",
-      "Module velocity per developer",
-      "Delay frequency by project type"
-    ]
-  },
-  {
-    key: "finance",
-    title: "Finance analytics",
-    titleClass: "text-amber-300",
-    borderClass: "border-l-amber-500/60",
-    items: [
-      "Approval turnaround time",
-      "Decline rate and reasons",
-      "Outstanding vs collected",
-      "Cash flow trend (rolling windows)"
-    ]
-  },
-  {
-    key: "team",
-    title: "Team analytics",
-    titleClass: "text-sky-300",
-    borderClass: "border-l-sky-500/60",
-    items: [
-      "Developer utilisation signals",
-      "Swap / handoff frequency",
-      "Overload vs underutilised patterns",
-      "Report streak per user"
-    ]
-  },
-  {
-    key: "risk",
-    title: "Risk analytics",
-    titleClass: "text-rose-300",
-    borderClass: "border-l-rose-500/50",
-    items: ["Projects with no update in 72h+", "Blocked tasks above threshold"]
-  }
-];
+function formatWeekLabel(week: string): string {
+  const d = new Date(week + "T12:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function labelStatus(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function AnalyticsPage() {
   const router = useRouter();
   const { apiFetch, auth, hydrated } = useAuth();
-  const [data, setData] = useState<CeoAnalytics | null>(null);
+  const [director, setDirector] = useState<DirectorAnalytics | null>(null);
   const [adminExtended, setAdminExtended] = useState<AdminExtendedAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const isAdmin = auth.roleKeys.includes("admin");
+  const isFinanceOnly =
+    auth.roleKeys.includes("finance") &&
+    !auth.roleKeys.some((r) => ["admin", "director_admin", "analyst"].includes(r));
   const canAccessAnalytics = auth.roleKeys.some((r) =>
     ["admin", "director_admin", "finance", "analyst"].includes(r)
   );
-  const [adminSection, setAdminSection] = useState<"project" | "finance" | "team" | "risk">("project");
+  const showOperational = !isFinanceOnly;
 
+  const [adminSection, setAdminSection] = useState<"project" | "team" | "risk">("project");
   const adminSectionButtons = useMemo(
-    () =>
-      [
-        { key: "project" as const, label: "Project analytics" },
-        { key: "finance" as const, label: "Finance analytics" },
-        { key: "team" as const, label: "Team analytics" },
-        { key: "risk" as const, label: "Risk analytics" }
-      ],
+    () => [
+      { key: "project" as const, label: "Projects" },
+      { key: "team" as const, label: "Team & reports" },
+      { key: "risk" as const, label: "Risks" }
+    ],
     []
   );
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
-    if (!canAccessAnalytics) {
-      router.replace("/dashboard");
-    }
+    if (!canAccessAnalytics) router.replace("/dashboard");
   }, [hydrated, auth.accessToken, canAccessAnalytics, router]);
 
   useEffect(() => {
-    if (!canAccessAnalytics) return;
+    if (!canAccessAnalytics || !showOperational) {
+      setLoading(false);
+      return;
+    }
     async function load() {
+      setLoading(true);
       try {
-        const res = await apiFetch("/analytics/ceo");
-        if (!res.ok) return;
-        const json = (await res.json()) as CeoAnalytics;
-        setData(json);
+        const res = await apiFetch("/analytics/director");
+        if (res.ok) setDirector((await res.json()) as DirectorAnalytics);
       } catch {
         // ignore
+      } finally {
+        setLoading(false);
       }
     }
     void load();
-  }, [apiFetch, canAccessAnalytics]);
+  }, [apiFetch, canAccessAnalytics, showOperational]);
 
   useEffect(() => {
     if (!isAdmin) return;
     async function loadAdmin() {
       try {
         const res = await apiFetch("/analytics/admin-extended");
-        if (!res.ok) return;
-        setAdminExtended((await res.json()) as AdminExtendedAnalytics);
+        if (res.ok) setAdminExtended((await res.json()) as AdminExtendedAnalytics);
       } catch {
         // ignore
       }
@@ -189,555 +195,352 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (isFinanceOnly) {
+    return (
+      <section className="flex flex-col gap-4 text-sm text-slate-300">
+        <WorkspaceDashboardIntro
+          title="Analytics"
+          description="Operational analytics (projects, sales, developers, leads) live here for directors and analysts. Finance metrics are in the Finance workspace."
+          eyebrow="Insights"
+        />
+        <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-4 text-slate-400">
+          Open <strong className="text-slate-200">Finance</strong> from the sidebar for invoices, payments, and cash
+          flow.
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="flex flex-col gap-4 text-[11px] leading-snug text-slate-300 max-sm:gap-3 max-sm:text-[10px] sm:gap-6 sm:text-sm sm:leading-normal">
+    <section className="flex flex-col gap-4 text-[11px] leading-snug text-slate-300 max-sm:gap-3 sm:gap-6 sm:text-sm sm:leading-normal">
       <WorkspaceDashboardIntro
-        title="Analytics"
-        description="CEO-level signals across revenue, delivery, and pipeline. Aggregates only — no raw client PII in exports unless your role allows it."
+        title="Director analytics"
+        description="Delivery, sales pipeline, developer performance, and reporting — operational data only. No revenue or invoice metrics on this page."
         eyebrow="Insights"
       />
 
-      {isAdmin && (
+      {loading && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-4 text-slate-400">Loading analytics…</div>
+      )}
+
+      {director && (
         <>
-          <div>
-            <DashboardSectionLabel roleKeys={auth.roleKeys} tone="dashboard">
-              Admin analytics scope
-            </DashboardSectionLabel>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-              {ADMIN_ANALYTICS_SCOPE_GROUPS.map((g) => (
-                <div
-                  key={g.key}
-                  className={`rounded-xl border border-slate-700/70 border-l-4 bg-slate-900/45 p-2.5 shadow-sm sm:p-3 ${g.borderClass}`}
-                >
-                  <p className={`text-[10px] font-bold uppercase tracking-wide max-sm:leading-tight sm:text-xs ${g.titleClass}`}>
-                    {g.title}
-                  </p>
-                  <div className="mt-2 grid grid-cols-1 gap-1 sm:gap-1.5">
-                    {g.items.map((item) => (
-                      <div
-                        key={item}
-                        className="rounded-lg border border-slate-600/35 bg-slate-950/50 px-2 py-1.5 text-[10px] text-slate-400 max-sm:py-1 max-sm:leading-snug sm:text-xs sm:text-slate-400"
-                      >
-                        {item}
-                      </div>
-                    ))}
-                  </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
+            <StatTile label="Active projects" value={director.overview.activeProjects} tone="emerald" />
+            <StatTile label="Overdue tasks" value={director.overview.overdueTasks} tone="rose" />
+            <StatTile label="Blocked tasks" value={director.overview.blockedTasks} tone="amber" />
+            <StatTile label="Leads this month" value={director.overview.leadsThisMonth} tone="sky" />
+            <StatTile
+              label="Win rate"
+              value={`${(director.overview.winRate * 100).toFixed(0)}%`}
+              hint={`${director.overview.dealsWon} won · ${director.overview.dealsLost} lost`}
+              tone="violet"
+            />
+            <StatTile label="Sales reports (month)" value={director.overview.salesReportsThisMonth} tone="sky" />
+            <StatTile label="Dev reports (month)" value={director.overview.developerReportsThisMonth} tone="emerald" />
+            <StatTile label="Handoffs (30d)" value={director.overview.handoffs30d} tone="slate" />
+            <StatTile label="Stale projects (72h+)" value={director.risks.staleProjects72h} tone="amber" />
+            <StatTile label="Stalled deals (14d)" value={director.risks.stalledDeals14d} tone="rose" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Projects by status</h3>
+              <div className="mt-3">
+                <VerticalBarChart
+                  items={director.projects.byStatus.map((x) => ({
+                    label: labelStatus(x.status),
+                    value: x.count,
+                    color: "bg-emerald-500"
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">New projects (weekly)</h3>
+              <div className="mt-2">
+                <MiniLineTrend points={director.projects.createdByWeek.map((w) => w.count)} stroke="#34d399" />
+              </div>
+              <div className="mt-3">
+                <VerticalBarChart
+                  items={director.projects.createdByWeek.map((w) => ({
+                    label: formatWeekLabel(w.week),
+                    value: w.count,
+                    color: "bg-teal-500"
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Leads pipeline</h3>
+              <p className="mt-1 text-[10px] text-slate-500">By status</p>
+              <div className="mt-2">
+                <HorizontalBarChart
+                  items={director.leads.byStatus.map((x) => ({
+                    label: labelStatus(x.status),
+                    value: x.count,
+                    color: "bg-sky-500"
+                  }))}
+                />
+              </div>
+              <p className="mt-4 text-[10px] text-slate-500">Director approval</p>
+              <div className="mt-2">
+                <HorizontalBarChart
+                  items={director.leads.byApproval.map((x) => ({
+                    label: labelStatus(x.approvalStatus),
+                    value: x.count,
+                    color: "bg-violet-500"
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Deals by stage</h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  items={director.pipeline.dealsByStage.map((x) => ({
+                    label: labelStatus(x.stage),
+                    value: x.count,
+                    color: "bg-indigo-500"
+                  }))}
+                />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <StatTile label="Won" value={director.pipeline.wonLost.won} tone="emerald" />
+                <StatTile label="Lost" value={director.pipeline.wonLost.lost} tone="rose" />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Developer velocity (14d)</h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  items={director.team.developerVelocity.map((u) => ({
+                    label: u.name ?? u.email,
+                    value: u.tasksCompleted14d,
+                    color: "bg-cyan-500"
+                  }))}
+                  emptyLabel="No completed tasks logged yet"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Developer workload (active tasks)</h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  items={director.team.developerLoad.map((u) => ({
+                    label: u.name ?? u.email,
+                    value: u.activeTasks,
+                    color: "bg-amber-500"
+                  }))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Report submissions (weekly)</h3>
+              <p className="mt-1 text-[10px] text-slate-500">Sales vs developer reports</p>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-[10px] font-medium uppercase text-sky-400">Sales</p>
+                  <VerticalBarChart
+                    items={director.reports.salesByWeek.map((w) => ({
+                      label: formatWeekLabel(w.week),
+                      value: w.count,
+                      color: "bg-sky-500"
+                    }))}
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-600/80 bg-slate-900/35 p-2.5 sm:p-4">
-            <h3 className="text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:text-sm">
-              What Admin cannot see in analytics
-            </h3>
-            <p className="mt-1.5 text-[10px] text-slate-500 sm:mt-2 sm:text-xs">Hard exclusions (PII / commercial sensitivity):</p>
-            <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:mt-2 sm:gap-1.5">
-              {[
-                "Individual client names tied to revenue line items",
-                "Client contact details in CRM exports",
-                "Sales call transcripts and developer–client comms"
-              ].map((line) => (
-                <li
-                  key={line}
-                  className="rounded-lg border border-slate-700/50 bg-slate-950/40 px-2 py-1.5 text-[10px] text-slate-400 sm:text-xs"
-                >
-                  {line}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex flex-wrap gap-2 sm:mt-4 sm:gap-3">
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-2 py-1 text-[10px] text-slate-500 sm:px-3 sm:py-1.5 sm:text-xs">
-                Design the analytics charts ↗
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 px-2 py-1 text-[10px] text-slate-500 sm:px-3 sm:py-1.5 sm:text-xs">
-                Export logic ↗
-              </span>
-            </div>
-          </div>
-
-          {adminExtended && (
-            <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-2.5 sm:p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                <h3 className="text-xs font-semibold text-slate-200 max-sm:text-[10px] sm:text-sm">
-                  Admin extended analytics
-                </h3>
-                <div className="flex flex-wrap gap-1 sm:gap-2">
-                  {adminSectionButtons.map((b) => (
-                    <button
-                      key={b.key}
-                      type="button"
-                      onClick={() => setAdminSection(b.key)}
-                      className={
-                        adminSection === b.key
-                          ? "rounded-md bg-slate-600 px-2 py-1.5 text-[10px] text-white sm:px-3 sm:py-2 sm:text-sm"
-                          : "rounded-md border border-slate-600 px-2 py-1.5 text-[10px] text-slate-300 hover:bg-slate-800 sm:px-3 sm:py-2 sm:text-sm"
-                      }
-                    >
-                      {b.label}
-                    </button>
-                  ))}
+                <div>
+                  <p className="mb-2 text-[10px] font-medium uppercase text-emerald-400">Developers</p>
+                  <VerticalBarChart
+                    items={director.reports.developerByWeek.map((w) => ({
+                      label: formatWeekLabel(w.week),
+                      value: w.count,
+                      color: "bg-emerald-500"
+                    }))}
+                  />
                 </div>
               </div>
-
-              {adminSection === "project" && (
-                <div className="mt-3 sm:mt-4">
-                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
-                    Project analytics
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
-                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                        Completion rates per project
-                      </p>
-                      <div className="mt-2 overflow-x-auto">
-                        <table className="min-w-full text-left text-[10px] sm:text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-700 text-[9px] text-slate-500 sm:text-xs sm:text-slate-400">
-                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Project</th>
-                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Approval</th>
-                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Done/Total</th>
-                              <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Rate</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {adminExtended.projectAnalytics.completionRates.map((p) => (
-                              <tr key={p.projectId} className="border-b border-slate-800/80">
-                                <td className="py-1.5 pr-2 text-slate-200 max-sm:max-w-[7rem] max-sm:truncate sm:py-2 sm:pr-3">
-                                  {p.name}
-                                </td>
-                                <td className="py-1.5 pr-2 text-[10px] text-slate-400 sm:py-2 sm:pr-3 sm:text-xs">
-                                  {p.approvalStatus ?? "—"}
-                                </td>
-                                <td className="py-1.5 pr-2 text-slate-300 sm:py-2 sm:pr-3">
-                                  {p.doneTasks}/{p.totalTasks}
-                                </td>
-                                <td className="py-1.5 pr-2 text-slate-100 sm:py-2 sm:pr-3">
-                                  {(p.completionRate * 100).toFixed(0)}%
-                                </td>
-                              </tr>
-                            ))}
-                            {adminExtended.projectAnalytics.completionRates.length === 0 && (
-                              <tr>
-                                <td className="py-2 text-slate-500" colSpan={4}>
-                                  No projects yet.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Average days to close
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-slate-100 max-sm:text-base sm:mt-2 sm:text-2xl">
-                          {adminExtended.projectAnalytics.avgDaysToClose.toFixed(1)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Module velocity per developer (14d)
-                        </p>
-                        <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
-                          {adminExtended.projectAnalytics.moduleVelocityPerDeveloper.slice(0, 10).map((u) => (
-                            <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                              <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                              <span className="shrink-0 text-slate-100">{u.tasksCompleted14d}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Delay frequency by project type
-                        </p>
-                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                          {Object.entries(adminExtended.projectAnalytics.delayFrequencyByProjectType)
-                            .sort((a, b) => b[1] - a[1])
-                            .slice(0, 10)
-                            .map(([k, v]) => (
-                              <li key={k} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                                <span className="truncate text-slate-300">{k}</span>
-                                <span className="shrink-0 text-amber-300">{v}</span>
-                              </li>
-                            ))}
-                          {Object.keys(adminExtended.projectAnalytics.delayFrequencyByProjectType).length === 0 && (
-                            <li className="text-slate-500">No delays detected.</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {adminSection === "finance" && (
-                <div className="mt-3 sm:mt-4">
-                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
-                    Finance analytics
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
-                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Approval turnaround (hours)
-                        </p>
-                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="text-slate-400">Avg</span>
-                            <span className="text-slate-100">
-                              {adminExtended.financeAnalytics.approvalTurnaroundHours.avg.toFixed(1)}
-                            </span>
-                          </li>
-                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="text-slate-400">P50</span>
-                            <span className="text-slate-100">
-                              {adminExtended.financeAnalytics.approvalTurnaroundHours.p50.toFixed(1)}
-                            </span>
-                          </li>
-                          <li className="flex justify-between rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="text-slate-400">P90</span>
-                            <span className="text-slate-100">
-                              {adminExtended.financeAnalytics.approvalTurnaroundHours.p90.toFixed(1)}
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Decline rate
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-rose-300 max-sm:text-base sm:text-xl">
-                          {(adminExtended.financeAnalytics.declineRate * 100).toFixed(1)}%
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Top decline reasons
-                        </p>
-                        <ul className="mt-2 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                          {adminExtended.financeAnalytics.topDeclineReasons.slice(0, 10).map((r, i) => (
-                            <li key={i} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                              <span className="truncate text-slate-300">{r.reason}</span>
-                              <span className="shrink-0 text-slate-100">{r.count}</span>
-                            </li>
-                          ))}
-                          {adminExtended.financeAnalytics.topDeclineReasons.length === 0 && (
-                            <li className="text-slate-500">No declines recorded.</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Outstanding vs collected
-                        </p>
-                        <ul className="mt-2 space-y-1.5 text-[10px] text-slate-200 sm:text-sm">
-                          <li className="rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            Outstanding:{" "}
-                            <span className="text-amber-300">
-                              {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.outstandingInvoices)}
-                            </span>
-                          </li>
-                          <li className="rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            Collected:{" "}
-                            <span className="text-emerald-400">
-                              {formatMoney(adminExtended.financeAnalytics.outstandingVsCollected.collectedPayments)}
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Cash flow trend (rolling windows)
-                        </p>
-                        <div className="mt-2 overflow-x-auto">
-                          <table className="min-w-full text-left text-[10px] sm:text-sm">
-                            <thead>
-                              <tr className="border-b border-slate-700 text-[9px] text-slate-500 sm:text-xs sm:text-slate-400">
-                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Window</th>
-                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">In</th>
-                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Out</th>
-                                <th className="py-1.5 pr-2 sm:py-2 sm:pr-3">Net</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {adminExtended.financeAnalytics.cashFlowTrend.map((w) => (
-                                <tr key={w.window} className="border-b border-slate-800/80">
-                                  <td className="py-1.5 pr-2 text-slate-300 sm:py-2 sm:pr-3">{w.window}</td>
-                                  <td className="py-1.5 pr-2 text-emerald-300 sm:py-2 sm:pr-3">{formatMoney(w.in)}</td>
-                                  <td className="py-1.5 pr-2 text-amber-300 sm:py-2 sm:pr-3">{formatMoney(w.out)}</td>
-                                  <td
-                                    className={`py-1.5 pr-2 sm:py-2 sm:pr-3 ${
-                                      w.net >= 0 ? "text-emerald-400" : "text-rose-300"
-                                    }`}
-                                  >
-                                    {formatMoney(w.net)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {adminSection === "team" && (
-                <div className="mt-3 sm:mt-4">
-                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
-                    Team analytics
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
-                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                        Developer utilisation (active tasks)
-                      </p>
-                      <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-[10px] text-slate-200 sm:max-h-none sm:text-sm">
-                        {adminExtended.teamAnalytics.developerUtilisationSignals.slice(0, 15).map((u) => (
-                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                            <span className="shrink-0 text-slate-100">{u.activeTasks}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                        Swap / handoff frequency (30d, accepted)
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-sky-300 max-sm:text-base sm:text-xl">
-                        {adminExtended.teamAnalytics.swapHandoffFrequency30d}
-                      </p>
-                      <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                        Overload vs underutilised (median {adminExtended.teamAnalytics.overloadPatterns.medianActiveTasks}{" "}
-                        active tasks)
-                      </p>
-                      <p className="mt-2 text-[9px] font-semibold uppercase text-slate-500 sm:text-[10px]">Overloaded</p>
-                      <ul className="mt-1 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                        {adminExtended.teamAnalytics.overloadPatterns.overloaded.map((u) => (
-                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                            <span className="shrink-0 text-rose-300">{u.activeTasks}</span>
-                          </li>
-                        ))}
-                        {adminExtended.teamAnalytics.overloadPatterns.overloaded.length === 0 && (
-                          <li className="text-slate-500">None</li>
-                        )}
-                      </ul>
-                      <p className="mt-2 text-[9px] font-semibold uppercase text-slate-500 sm:text-[10px]">Underutilised</p>
-                      <ul className="mt-1 space-y-1 text-[10px] text-slate-200 sm:text-sm">
-                        {adminExtended.teamAnalytics.overloadPatterns.underutilised.map((u) => (
-                          <li key={u.userId} className="flex justify-between gap-2 rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                            <span className="shrink-0 text-amber-300">{u.activeTasks}</span>
-                          </li>
-                        ))}
-                        {adminExtended.teamAnalytics.overloadPatterns.underutilised.length === 0 && (
-                          <li className="text-slate-500">None</li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="mt-2 sm:mt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                      Report streak per user
-                    </p>
-                    <ul className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
-                      {adminExtended.teamAnalytics.reportStreakPerUser.slice(0, 12).map((u) => (
-                        <li
-                          key={u.userId}
-                          className="rounded-lg border border-slate-700/60 bg-slate-900/50 px-2 py-1.5 text-[10px] text-slate-200 sm:px-3 sm:py-2 sm:text-sm"
-                        >
-                          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-2">
-                            <span className="truncate text-slate-300">{u.name ?? u.email}</span>
-                            <span className="shrink-0 text-slate-100">
-                              Sales {u.salesReportStreakDays}d · Dev {u.developerReportStreakDays}d
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {adminSection === "risk" && (
-                <div className="mt-3 sm:mt-4">
-                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 max-sm:mb-1.5 sm:mb-3 sm:text-xs sm:text-slate-300">
-                    Risk analytics
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
-                    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                        Projects with no update in 72h+
-                      </p>
-                      <div className="mt-2 max-h-52 overflow-x-auto overflow-y-auto sm:max-h-none">
-                        <table className="w-full min-w-[16rem] text-left text-[10px] text-slate-200 sm:text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wide text-slate-500 sm:text-[10px]">
-                              <th className="py-1.5 pr-2 font-medium">Project</th>
-                              <th className="py-1.5 pl-2 text-right font-medium whitespace-nowrap">Last update</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {adminExtended.riskAnalytics.projectsNoUpdate72h.slice(0, 12).map((p) => (
-                              <tr key={p.id} className="border-b border-slate-800/80">
-                                <td className="max-w-[12rem] py-1.5 pr-2 break-words text-slate-300">{p.name}</td>
-                                <td className="whitespace-nowrap py-1.5 pl-2 text-right text-[9px] text-slate-500 sm:text-xs">
-                                  {new Date(p.updatedAt).toLocaleString()}
-                                </td>
-                              </tr>
-                            ))}
-                            {adminExtended.riskAnalytics.projectsNoUpdate72h.length === 0 && (
-                              <tr>
-                                <td colSpan={2} className="py-3 text-slate-500">
-                                  None
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:gap-3">
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Blocked tasks above threshold (72h)
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-amber-300 max-sm:text-base sm:text-xl">
-                          {adminExtended.riskAnalytics.blockedTasksAbove72h.length}
-                        </p>
-                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-[10px] text-slate-300 sm:max-h-40 sm:text-xs">
-                          {adminExtended.riskAnalytics.blockedTasksAbove72h.slice(0, 8).map((t) => (
-                            <li key={t.id} className="truncate rounded-md bg-slate-900/50 px-1.5 py-1 sm:px-2">
-                              {t.title}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Stalled deals (14d)
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-rose-300 max-sm:text-base sm:text-xl">
-                          {adminExtended.riskAnalytics.stalledDeals14d.length}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-2 sm:p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                          Repeat swap patterns (90d)
-                        </p>
-                        <div className="mt-2 overflow-x-auto">
-                          <table className="w-full min-w-[12rem] text-left text-[10px] text-slate-200 sm:text-sm">
-                            <thead>
-                              <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wide text-slate-500 sm:text-[10px]">
-                                <th className="py-1.5 pr-2 font-medium">Project</th>
-                                <th className="py-1.5 pl-2 text-right font-medium whitespace-nowrap">90d swaps</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {adminExtended.riskAnalytics.repeatSwapPatterns.slice(0, 12).map((r) => (
-                                <tr key={r.projectId} className="border-b border-slate-800/80">
-                                  <td className="max-w-[14rem] py-1.5 pr-2 break-words text-slate-300">{r.projectName}</td>
-                                  <td className="whitespace-nowrap py-1.5 pl-2 text-right text-slate-100">{r.count90d}</td>
-                                </tr>
-                              ))}
-                              {adminExtended.riskAnalytics.repeatSwapPatterns.length === 0 && (
-                                <tr>
-                                  <td colSpan={2} className="py-3 text-slate-500">
-                                    None
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-          )}
+
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+              <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Report streaks (performance)</h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  items={director.team.reportStreaks.slice(0, 10).map((u) => ({
+                    label: u.name ?? u.email,
+                    value: u.salesReportStreakDays + u.developerReportStreakDays,
+                    color: "bg-violet-500"
+                  }))}
+                  valueSuffix=" d"
+                  emptyLabel="No streak data"
+                />
+              </div>
+              <ul className="mt-3 max-h-36 space-y-1 overflow-y-auto text-[10px] text-slate-400 sm:text-xs">
+                {director.team.reportStreaks.slice(0, 8).map((u) => (
+                  <li key={u.userId} className="flex justify-between gap-2">
+                    <span className="truncate">{u.name ?? u.email}</span>
+                    <span className="shrink-0 text-slate-300">
+                      Sales {u.salesReportStreakDays}d · Dev {u.developerReportStreakDays}d
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">
+            <h3 className="text-xs font-semibold text-slate-200 sm:text-sm">Projects moving (recent activity)</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-[10px] sm:text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-500">
+                    <th className="py-2 pr-3">Project</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Progress</th>
+                    <th className="py-2 pr-3">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {director.projects.moving.map((p) => (
+                    <tr key={p.id} className="border-b border-slate-800/80">
+                      <td className="max-w-[10rem] truncate py-2 pr-3 text-slate-200">{p.name}</td>
+                      <td className="py-2 pr-3 text-slate-400">{labelStatus(p.status)}</td>
+                      <td className="py-2 pr-3 text-emerald-300">{(p.completionRate * 100).toFixed(0)}%</td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
+                        {new Date(p.updatedAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                  {director.projects.moving.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-3 text-slate-500">
+                        No active projects yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {director.projects.completionTop.length > 0 && (
+              <div className="mt-4 border-t border-slate-800 pt-4">
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Top completion rates</p>
+                <div className="mt-2">
+                  <HorizontalBarChart
+                    items={director.projects.completionTop.slice(0, 8).map((p) => ({
+                      label: p.name,
+                      value: Math.round(p.completionRate * 100),
+                      color: "bg-emerald-600"
+                    }))}
+                    valueSuffix="%"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {data && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
-              Revenue health
-            </p>
-            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
-              <li>
-                Revenue this month:{" "}
-                <span className="text-emerald-400">
-                  {formatMoney(data.revenueHealth.revenueReceivedThisMonth)}
-                </span>
-              </li>
-              <li>
-                Outstanding invoices:{" "}
-                <span className="text-amber-400">
-                  {formatMoney(data.revenueHealth.outstandingInvoices)}
-                </span>
-              </li>
-              <li>
-                Overdue invoices:{" "}
-                <span className="text-rose-400">
-                  {data.revenueHealth.overdueInvoiceCount}
-                </span>
-              </li>
-              <li>
-                Expenses this month:{" "}
-                {formatMoney(data.revenueHealth.expensesThisMonth)}
-              </li>
-            </ul>
+      {isAdmin && adminExtended && (
+        <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-2.5 sm:p-4">
+          <DashboardSectionLabel roleKeys={auth.roleKeys} tone="dashboard">
+            Admin detail tables
+          </DashboardSectionLabel>
+          <div className="mt-2 flex flex-wrap gap-1 sm:gap-2">
+            {adminSectionButtons.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => setAdminSection(b.key)}
+                className={
+                  adminSection === b.key
+                    ? "rounded-md bg-slate-600 px-2 py-1.5 text-[10px] text-white sm:px-3 sm:py-2 sm:text-sm"
+                    : "rounded-md border border-slate-600 px-2 py-1.5 text-[10px] text-slate-300 hover:bg-slate-800 sm:px-3 sm:py-2 sm:text-sm"
+                }
+              >
+                {b.label}
+              </button>
+            ))}
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
-              Project health
-            </p>
-            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
-              <li>Active projects: {data.projectHealth.activeProjects}</li>
-              <li>Overdue tasks: {data.projectHealth.overdueTasks}</li>
-              <li>Blocked tasks: {data.projectHealth.blockedTasks}</li>
-              <li>
-                Milestones done / pending:{" "}
-                {data.projectHealth.milestonesDone} /{" "}
-                {data.projectHealth.milestonesPending}
-              </li>
-            </ul>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 sm:p-4">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mb-2 sm:text-xs">
-              Lead conversion
-            </p>
-            <ul className="space-y-1 text-[10px] text-slate-200 sm:text-sm">
-              <li>Leads this month: {data.leadConversion.leadsThisMonth}</li>
-              <li>Deals won: {data.leadConversion.dealsWon}</li>
-              <li>Deals lost: {data.leadConversion.dealsLost}</li>
-              <li>
-                Win rate:{" "}
-                {(data.leadConversion.winRate * 100).toFixed(1)}%
-              </li>
-              <li>
-                Avg time to close:{" "}
-                {data.leadConversion.avgTimeToCloseDays.toFixed(1)} days
-              </li>
-            </ul>
-          </div>
-        </div>
-      )}
-      {!data && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-[10px] text-slate-400 sm:text-sm">
-          Loading analytics…
+
+          {adminSection === "project" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left text-[10px] sm:text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-500">
+                    <th className="py-2 pr-3">Project</th>
+                    <th className="py-2 pr-3">Tasks</th>
+                    <th className="py-2 pr-3">Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminExtended.projectAnalytics.completionRates.map((p) => (
+                    <tr key={p.projectId} className="border-b border-slate-800/80">
+                      <td className="py-2 pr-3 text-slate-200">{p.name}</td>
+                      <td className="py-2 pr-3 text-slate-400">
+                        {p.doneTasks}/{p.totalTasks}
+                      </td>
+                      <td className="py-2 pr-3">{(p.completionRate * 100).toFixed(0)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {adminSection === "team" && (
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Utilisation</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                  {adminExtended.teamAnalytics.developerUtilisationSignals.slice(0, 12).map((u) => (
+                    <li key={u.userId} className="flex justify-between">
+                      <span>{u.name ?? u.email}</span>
+                      <span>{u.activeTasks} active</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Report streaks</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                  {adminExtended.teamAnalytics.reportStreakPerUser.slice(0, 12).map((u) => (
+                    <li key={u.userId} className="flex justify-between gap-2">
+                      <span className="truncate">{u.name ?? u.email}</span>
+                      <span className="shrink-0">
+                        S {u.salesReportStreakDays}d · D {u.developerReportStreakDays}d
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {adminSection === "risk" && (
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <StatTile
+                label="Projects stale 72h+"
+                value={adminExtended.riskAnalytics.projectsNoUpdate72h.length}
+                tone="amber"
+              />
+              <StatTile
+                label="Blocked tasks 72h+"
+                value={adminExtended.riskAnalytics.blockedTasksAbove72h.length}
+                tone="rose"
+              />
+              <StatTile
+                label="Stalled deals"
+                value={adminExtended.riskAnalytics.stalledDeals14d.length}
+                tone="rose"
+              />
+            </div>
+          )}
         </div>
       )}
     </section>

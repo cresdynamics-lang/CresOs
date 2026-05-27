@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
-import { smtpSendMail } from "../lib/smtp-mailer";
+import { channelFromNotificationType, renderSalesBulkEmail } from "../lib/email-templates";
+import { sendInvoiceEmailToClient } from "../lib/invoice-email";
+import { sendOutboundEmail } from "../lib/resend";
 
 function toText(subject: string, body: string): string {
   const s = (subject ?? "").trim();
@@ -7,7 +9,7 @@ function toText(subject: string, body: string): string {
   return [s ? `${s}\n` : "", b].join("\n").trim();
 }
 
-function toHtml(subject: string, body: string): string {
+function plainHtml(subject: string, body: string): string {
   const esc = (x: string) =>
     x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const s = esc((subject ?? "").trim());
@@ -19,8 +21,7 @@ ${s ? `<h3 style="margin:0 0 12px 0">${s}</h3>` : ""}
 }
 
 /**
- * Deliver queued Notification emails via SMTP.
- * This is intentionally idempotent-ish: we only pick `status="queued"` rows.
+ * Deliver queued Notification emails (Resend when configured, else SMTP).
  */
 export async function processQueuedEmails(prisma: PrismaClient, orgId: string, limit: number = 25): Promise<void> {
   const take = Math.min(80, Math.max(1, limit));
@@ -30,6 +31,9 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
     take
   });
   if (rows.length === 0) return;
+
+  const org = await prisma.org.findUnique({ where: { id: orgId }, select: { name: true } });
+  const orgName = org?.name ?? "Cres Dynamics";
 
   for (const n of rows) {
     const to = (n.to ?? "").trim();
@@ -42,12 +46,43 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
     }
     const subject = (n.subject ?? "[CresOS] Notification").trim() || "[CresOS] Notification";
     const body = (n.body ?? "").trim();
-    const result = await smtpSendMail({
-      to,
-      subject,
-      text: toText(subject, body),
-      html: toHtml(subject, body)
-    });
+    const emailChannel = channelFromNotificationType(n.type);
+
+    let result;
+    const invoiceIdMatch = body.match(/^invoiceId:([a-z0-9]+)\n/i);
+
+    if (invoiceIdMatch && (n.type === "invoice.sent" || n.type === "invoice.sent.sales")) {
+      result = await sendInvoiceEmailToClient(prisma, {
+        orgId,
+        invoiceId: invoiceIdMatch[1],
+        to,
+        channel: n.type === "invoice.sent.sales" ? "sales" : "finance",
+        detailLine: body.replace(/^invoiceId:[^\n]+\n?/i, "").trim() || undefined
+      });
+    } else if (n.type === "crm.bulk_message") {
+      const { html, text } = renderSalesBulkEmail({
+        orgName,
+        subject,
+        bodyText: body,
+        recipientName: ""
+      });
+      result = await sendOutboundEmail({
+        to,
+        subject,
+        text,
+        html,
+        emailChannel: "sales"
+      });
+    } else {
+      result = await sendOutboundEmail({
+        to,
+        subject,
+        text: toText(subject, body),
+        html: plainHtml(subject, body),
+        emailChannel
+      });
+    }
+
     if (result.ok) {
       await prisma.notification.update({
         where: { id: n.id },
@@ -61,4 +96,3 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
     }
   }
 }
-

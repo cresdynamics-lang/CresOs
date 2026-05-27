@@ -25,6 +25,7 @@ type NavItem = {
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/finance", label: "Overview", shortLabel: "Overview", section: "overview", roles: ["admin", "finance", "analyst", "director_admin"] },
+  { href: "/finance/messages", label: "Mails", shortLabel: "Mails", section: "overview", roles: ["admin", "finance"] },
   { href: "/finance/invoices", label: "Invoices", section: "invoices", roles: ["admin", "finance", "analyst", "director_admin"] },
   { href: "/finance/payments", label: "Payments", section: "payments", roles: ["admin", "finance", "analyst", "director_admin"] },
   { href: "/finance/expenses", label: "Expenses", section: "expenses", roles: ["admin"] },
@@ -35,6 +36,7 @@ const ADMIN_NAV: NavItem[] = [
 
 const FINANCE_NAV: NavItem[] = [
   { href: "/finance", label: "Overview", shortLabel: "Overview", section: "overview", roles: ["finance"] },
+  { href: "/finance/messages", label: "Mails", shortLabel: "Mails", section: "overview", roles: ["finance"] },
   { href: "/finance/invoices", label: "Invoices", section: "invoices", roles: ["finance"] },
   { href: "/finance/payments", label: "Payments", section: "payments", roles: ["finance"] },
   { href: "/finance/expenses", label: "Expenses", section: "expenses", roles: ["finance"] },

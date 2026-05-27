@@ -53,6 +53,18 @@ Requires `DATABASE_URL`. Tests register users, finance flows, notification prefe
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR: Postgres service, `prisma migrate deploy`, API tests + build, web build + typecheck.
 
+## Email (Resend)
+
+Outbound mail uses **Resend** when `RESEND_API_KEY` is set in `apps/api/.env` (or the repo root `.env` for Docker).
+
+| Variable | Use |
+|----------|-----|
+| `RESEND_FROM_EMAIL` | Default / system mail |
+| `RESEND_FROM_EMAIL_FINANCE` | Finance invoices — `finance-noreply@cresdynamics.com` |
+| `RESEND_FROM_EMAIL_SALES` | Sales invoices & CRM bulk — `sales-noreply@cresdynamics.com` |
+
+Add each sender in Resend under the verified `cresdynamics.com` domain. SMTP is only used as a fallback when Resend is not configured.
+
 ## AI (Groq)
 
 Optional. Set `GROQ_API_KEY` in `apps/api/.env` for:

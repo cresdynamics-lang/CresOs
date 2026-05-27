@@ -34,7 +34,8 @@
 import { Router } from "express";
 import type { PrismaClient } from "@prisma/client";
 import Groq from "groq-sdk";
-import nodemailer from "nodemailer";
+import { sendOutboundEmail } from "../lib/resend";
+import { resolveSenderGreeting } from "../lib/sender-greeting";
 import https from "https";
 import http from "http";
 import type { Request, Response, NextFunction } from "express";
@@ -296,6 +297,13 @@ async function draftEmailReply(params: {
   revisionNotes?: string | null;
   customInstructions: string;
 }): Promise<string> {
+  const greeting = resolveSenderGreeting({
+    fromName: params.fromName,
+    fromEmail: params.fromEmail,
+    subject: params.subject,
+    body: params.body,
+  });
+
   const groq = getGroqClient();
   if (!groq) throw new Error("GROQ_API_KEY not configured");
 
@@ -343,13 +351,21 @@ ${baseInstructions}${websiteBlock}${serviceMatchNote}
 
 IMPORTANT RULES:
 - Write ONLY the email reply body. Do not include subject lines, "To:", "From:", or any metadata.
-- Start directly with the greeting (e.g. "Hi [Name]," or "Dear [Name],").
+- Start directly with a greeting using the sender's first name exactly as specified below (e.g. "Hi ${greeting.greetingName}," or "Dear ${greeting.greetingName},"). Do not use a different name or a generic greeting if a name is provided.
 - If the email mentions or contains attachments/documents, acknowledge them naturally in your reply.
 - Do not add any preamble, meta-commentary, or explanation of what you are doing.`;
+
+  const greetingSourceNote =
+    greeting.source === "subject"
+      ? "Name taken from the email subject line."
+      : greeting.source === "signoff"
+        ? "Name taken from the sender's sign-off (e.g. Regards, Yours faithfully)."
+        : "Name taken from the email From header (display name).";
 
   const userPrompt = `Incoming email:
 - From: ${params.fromName ? `${params.fromName} <${params.fromEmail}>` : params.fromEmail}
 - Subject: ${params.subject}
+- Resolved sender name for greeting: ${greeting.fullName} → use first name "${greeting.greetingName}" (${greetingSourceNote})
 - Body:
 ${params.body}${revisionBlock}`;
 
@@ -485,45 +501,17 @@ async function sendEmailReply(params: {
   body: string;
   originalMessageId?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const host = (process.env.MAIL_HOST || "").trim();
-  const port = parseInt(process.env.MAIL_PORT || "465", 10);
-  const user = (process.env.MAIL_USERNAME || "").trim();
-  const pass = process.env.MAIL_PASSWORD || "";
-  const fromAddress = (process.env.MAIL_FROM_ADDRESS || user).trim();
-  const fromName = (process.env.MAIL_FROM_NAME || "Cres Dynamics").trim();
-  const secure = port === 465 || process.env.MAIL_SECURE === "true";
-
-  if (!host || !user || !pass || !fromAddress) {
-    return { ok: false, error: "SMTP not configured (MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM_ADDRESS required)" };
-  }
-
-  const transport = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
   const subject = params.subject.startsWith("Re:") ? params.subject : `Re: ${params.subject}`;
   const htmlBody = params.body.replace(/\n/g, "<br>");
   const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.6;">${htmlBody}</body></html>`;
-
-  const mailOptions: nodemailer.SendMailOptions = {
-    from: `${fromName} <${fromAddress}>`,
-    to: params.toName ? `${params.toName} <${params.toEmail}>` : params.toEmail,
-    subject,
-    text: params.body,
-    html,
-  };
-
-  if (params.originalMessageId) {
-    mailOptions.inReplyTo = params.originalMessageId;
-    mailOptions.references = params.originalMessageId;
-  }
-
-  try {
-    await transport.sendMail(mailOptions);
+  const to = params.toName ? `${params.toName} <${params.toEmail}>` : params.toEmail;
+  const result = await sendOutboundEmail({ to, subject, text: params.body, html });
+  if (result.ok) {
     console.info(`[email-automation] Reply sent to ${params.toEmail} — ${subject}`);
     return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[email-automation] SMTP send failed to ${params.toEmail}:`, msg);
-    return { ok: false, error: msg };
   }
+  console.error(`[email-automation] Send failed to ${params.toEmail}:`, result.error);
+  return { ok: false, error: result.error };
 }
 
 // ── IMAP email fetching ───────────────────────────────────────────────────────
@@ -546,7 +534,12 @@ function formatAttachmentBlock(attachments: Array<{ filename: string; contentTyp
 async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<number> {
   const imapHost = (process.env.IMAP_HOST || process.env.MAIL_HOST || "").trim();
   const imapPort = parseInt(process.env.IMAP_PORT || "993", 10);
-  const imapUser = (process.env.IMAP_USER || process.env.MAIL_USERNAME || "").trim();
+  const imapUser = (
+    process.env.IMAP_USER ||
+    process.env.IMAP_USERNAME ||
+    process.env.MAIL_USERNAME ||
+    ""
+  ).trim();
   const imapPass = process.env.IMAP_PASSWORD || process.env.MAIL_PASSWORD || "";
   const imapSecure =
     process.env.IMAP_SECURE !== "false" && (imapPort === 993 || process.env.IMAP_SECURE === "true");
@@ -783,7 +776,15 @@ export async function runEmailPipeline(prisma: PrismaClient): Promise<void> {
       });
 
       await dispatchDraft({ ...thread, draftReply: draft }, prisma);
-      console.info(`[email-automation] Draft dispatched for thread from ${thread.fromEmail}`);
+      const g = resolveSenderGreeting({
+        fromName: thread.fromName,
+        fromEmail: thread.fromEmail,
+        subject: thread.subject,
+        body: thread.body,
+      });
+      console.info(
+        `[email-automation] Draft dispatched for ${thread.fromEmail} — greeting "${g.greetingName}" (from ${g.source})`
+      );
     } catch (err) {
       console.error(`[email-automation] Pipeline error for thread ${thread.id}:`, err);
       await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "failed" } });
@@ -1097,10 +1098,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     try {
       const newEmails = await fetchNewEmails(orgId, prisma);
-      // Also run the draft pipeline immediately after a manual poll
-      if (newEmails > 0) {
-        runEmailPipeline(prisma).catch(console.error);
-      }
+      await runEmailPipeline(prisma);
       res.json({ ok: true, newEmails });
     } catch (err) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
