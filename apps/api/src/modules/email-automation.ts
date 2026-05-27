@@ -26,7 +26,7 @@
  *   COMPANY_DOMAIN             (default: cresdynamics.com)
  *   GROQ_EMAIL_MODEL           (default: llama-3.3-70b-versatile)
  *   EMAIL_AUTOMATION_ORG_ID    (defaults to first org in DB)
- *   EMAIL_AUTOMATION_POLL_INTERVAL  (seconds, default 60)
+ *   EMAIL_AUTOMATION_POLL_INTERVAL  (seconds, default 10)
  *   EMAIL_AUTOMATION_ENABLED   (default true)
  *   WEBSITE_CRAWL_URL          (default: https://www.cresdynamics.com)
  */
@@ -35,6 +35,7 @@ import { Router } from "express";
 import type { PrismaClient } from "@prisma/client";
 import Groq from "groq-sdk";
 import { sendOutboundEmail } from "../lib/resend";
+import { resolveGroqModel } from "../lib/groq-model";
 import { resolveSenderGreeting } from "../lib/sender-greeting";
 import https from "https";
 import http from "http";
@@ -307,10 +308,11 @@ async function draftEmailReply(params: {
   const groq = getGroqClient();
   if (!groq) throw new Error("GROQ_API_KEY not configured");
 
-  const model =
-    process.env.GROQ_EMAIL_MODEL?.trim() ||
-    process.env.GROQ_DIRECTOR_MODEL?.trim() ||
-    "llama-3.3-70b-versatile";
+  const model = resolveGroqModel(
+    process.env.GROQ_EMAIL_MODEL,
+    process.env.GROQ_DIRECTOR_MODEL,
+    process.env.GROQ_REMINDER_MODEL
+  );
 
   const baseInstructions =
     params.customInstructions.trim() ||
@@ -806,7 +808,7 @@ async function resolveOrgId(prisma: PrismaClient): Promise<string | null> {
 export function scheduleEmailPipeline(prisma: PrismaClient): void {
   if (process.env.EMAIL_AUTOMATION_ENABLED === "false") return;
 
-  const interval = parseInt(process.env.EMAIL_AUTOMATION_POLL_INTERVAL || "60", 10) * 1000;
+  const interval = parseInt(process.env.EMAIL_AUTOMATION_POLL_INTERVAL || "10", 10) * 1000;
   setTimeout(() => runEmailPipeline(prisma).catch(console.error), 5000);
   setInterval(() => runEmailPipeline(prisma).catch(console.error), interval);
   console.info(`[email-automation] Scheduler started — polling every ${interval / 1000}s`);

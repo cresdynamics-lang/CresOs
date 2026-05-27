@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import type { PrismaClient } from "@prisma/client";
+import { resolveGroqModel } from "../lib/groq-model";
 import {
   DIRECTOR_BRIEFING_SYSTEM,
   DIRECTOR_REPLY_SYSTEM,
@@ -15,10 +16,10 @@ import { listPlatformActionsForZonedDay } from "./director-platform-summary";
 const AUTO_REPLY_ENABLED = process.env.DIRECTOR_AI_AUTO_REPLY !== "false";
 const BRIEFING_GROQ_ENABLED = process.env.DIRECTOR_AI_BRIEFING_GROQ !== "false";
 
-const GROQ_MODEL =
-  process.env.GROQ_DIRECTOR_MODEL?.trim() ||
-  process.env.GROQ_REMINDER_MODEL?.trim() ||
-  "llama-3.1-8b-instant";
+const GROQ_MODEL = resolveGroqModel(
+  process.env.GROQ_DIRECTOR_MODEL,
+  process.env.GROQ_REMINDER_MODEL
+);
 
 const MARKED = "Marked reviewed. ✓";
 

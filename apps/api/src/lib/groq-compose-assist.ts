@@ -1,9 +1,10 @@
 import Groq from "groq-sdk";
+import { resolveGroqModel } from "./groq-model";
 
-const GROQ_MODEL =
-  process.env.GROQ_REMINDER_MODEL?.trim() ||
-  process.env.GROQ_DIRECTOR_MODEL?.trim() ||
-  "llama-3.1-8b-instant";
+const GROQ_MODEL = resolveGroqModel(
+  process.env.GROQ_REMINDER_MODEL,
+  process.env.GROQ_DIRECTOR_MODEL
+);
 
 let groqClient: Groq | null = null;
 let groqKey: string | null = null;
