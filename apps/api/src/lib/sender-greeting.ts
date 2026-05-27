@@ -96,9 +96,36 @@ function cleanSubject(subject: string): string {
 /**
  * 1) Name explicitly in subject (Hi/Dear Name, dash suffix, or From header name appearing in subject).
  */
+const SUBJECT_NOT_NAMES = new Set([
+  "sir",
+  "madam",
+  "previous",
+  "conversation",
+  "follow",
+  "update",
+  "request",
+  "search",
+  "growth",
+  "invoice",
+  "payment",
+  "meeting",
+  "project",
+  "demo",
+  "product",
+  "hello",
+  "congrats",
+]);
+
 export function extractNameFromSubject(subject: string, fromName: string): string | null {
   const sub = cleanSubject(subject);
   if (!sub) return null;
+
+  const trailingName = sub.match(/(?:^|[\s—–\-|])\s*([A-Z][\p{L}'.\-]{2,24})\s*$/u);
+  if (trailingName?.[1]) {
+    const n = normalizePersonName(trailingName[1]);
+    const first = n?.split(/\s+/)[0]?.toLowerCase() ?? "";
+    if (n && !SUBJECT_NOT_NAMES.has(first)) return n;
+  }
 
   const hiDear = sub.match(/\b(?:hi|hello|dear)\s+([A-Z][\p{L}'.\-]+(?:\s+[A-Z][\p{L}'.\-]+)?)/iu);
   if (hiDear?.[1]) {
@@ -128,7 +155,8 @@ export function extractNameFromSubject(subject: string, fromName: string): strin
   const dashSuffix = sub.match(/(?:^|[\s—–\-|])\s*([A-Z][\p{L}'.\-]{1,24}(?:\s+[A-Z][\p{L}'.\-]{1,24})?)\s*$/u);
   if (dashSuffix?.[1]) {
     const n = normalizePersonName(dashSuffix[1]);
-    if (n && !/^(search|growth|update|invoice|payment|meeting|project)$/i.test(n.split(/\s+/)[0])) {
+    const first = n?.split(/\s+/)[0]?.toLowerCase() ?? "";
+    if (n && !SUBJECT_NOT_NAMES.has(first)) {
       return n;
     }
   }
