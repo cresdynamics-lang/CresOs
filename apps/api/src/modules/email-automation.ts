@@ -354,15 +354,16 @@ ${baseInstructions}${websiteBlock}${serviceMatchNote}
 IMPORTANT RULES:
 - Write ONLY the email reply body. Do not include subject lines, "To:", "From:", or any metadata.
 - Start directly with a greeting using the sender's first name exactly as specified below (e.g. "Hi ${greeting.greetingName}," or "Dear ${greeting.greetingName},"). Do not use a different name or a generic greeting if a name is provided.
+- Think and respond like a CEO who is diagnosing business problems, clarifying goals, and guiding the sender toward practical next steps.
+- Be detailed enough to show understanding of the sender's context and propose a clear solution path based on Cres Dynamics services.
+- Keep confidence high but avoid hype; tie recommendations to websites, CresOS/ERP, AI automation, operations systems, and finance platforms where relevant.
 - If the email mentions or contains attachments/documents, acknowledge them naturally in your reply.
 - Do not add any preamble, meta-commentary, or explanation of what you are doing.`;
 
   const greetingSourceNote =
-    greeting.source === "subject"
-      ? "Name taken from the email subject line."
-      : greeting.source === "signoff"
-        ? "Name taken from the sender's sign-off (e.g. Regards, Yours faithfully)."
-        : "Name taken from the email From header (display name).";
+    greeting.source === "signoff"
+      ? "Name taken from the sender's sign-off (e.g. Regards, Yours faithfully)."
+      : "Name taken from the email From header (display name/email identity).";
 
   const userPrompt = `Incoming email:
 - From: ${params.fromName ? `${params.fromName} <${params.fromEmail}>` : params.fromEmail}

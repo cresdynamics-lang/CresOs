@@ -1,8 +1,8 @@
 /**
- * Resolve how to greet an email sender: subject → sign-off → From display name.
+ * Resolve how to greet an email sender: sign-off → From display name/email.
  */
 
-export type GreetingNameSource = "subject" | "signoff" | "from_header";
+export type GreetingNameSource = "signoff" | "from_header";
 
 export type ResolvedGreeting = {
   /** First name (or single name) to use in "Hi {greetingName}," */
@@ -82,90 +82,8 @@ export function firstNameForGreeting(fullName: string): string {
   return trimmed.split(/\s+/)[0];
 }
 
-/** Strip Re:/Fwd: chains from subject. */
-function cleanSubject(subject: string): string {
-  let s = subject.trim();
-  for (let i = 0; i < 8; i++) {
-    const next = s.replace(/^\s*(?:re|fw|fwd)\s*:\s*/i, "").trim();
-    if (next === s) break;
-    s = next;
-  }
-  return s;
-}
-
 /**
- * 1) Name explicitly in subject (Hi/Dear Name, dash suffix, or From header name appearing in subject).
- */
-const SUBJECT_NOT_NAMES = new Set([
-  "sir",
-  "madam",
-  "previous",
-  "conversation",
-  "follow",
-  "update",
-  "request",
-  "search",
-  "growth",
-  "invoice",
-  "payment",
-  "meeting",
-  "project",
-  "demo",
-  "product",
-  "hello",
-  "congrats",
-]);
-
-export function extractNameFromSubject(subject: string, fromName: string): string | null {
-  const sub = cleanSubject(subject);
-  if (!sub) return null;
-
-  const trailingName = sub.match(/(?:^|[\s—–\-|])\s*([A-Z][\p{L}'.\-]{2,24})\s*$/u);
-  if (trailingName?.[1]) {
-    const n = normalizePersonName(trailingName[1]);
-    const first = n?.split(/\s+/)[0]?.toLowerCase() ?? "";
-    if (n && !SUBJECT_NOT_NAMES.has(first)) return n;
-  }
-
-  const hiDear = sub.match(/\b(?:hi|hello|dear)\s+([A-Z][\p{L}'.\-]+(?:\s+[A-Z][\p{L}'.\-]+)?)/iu);
-  if (hiDear?.[1]) {
-    const n = normalizePersonName(hiDear[1]);
-    if (n) return n;
-  }
-
-  const fromLine = sub.match(/\bfrom\s+([A-Z][\p{L}'.\-]+(?:\s+[A-Z][\p{L}'.\-]+)?)/iu);
-  if (fromLine?.[1]) {
-    const n = normalizePersonName(fromLine[1]);
-    if (n) return n;
-  }
-
-  const headerName = normalizePersonName(fromName);
-  if (headerName) {
-    const subLower = sub.toLowerCase();
-    const fullLower = headerName.toLowerCase();
-    if (subLower.includes(fullLower)) return headerName;
-
-    const parts = headerName.split(/\s+/).filter((p) => p.length >= 3);
-    for (const part of parts) {
-      const re = new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-      if (re.test(sub)) return headerName;
-    }
-  }
-
-  const dashSuffix = sub.match(/(?:^|[\s—–\-|])\s*([A-Z][\p{L}'.\-]{1,24}(?:\s+[A-Z][\p{L}'.\-]{1,24})?)\s*$/u);
-  if (dashSuffix?.[1]) {
-    const n = normalizePersonName(dashSuffix[1]);
-    const first = n?.split(/\s+/)[0]?.toLowerCase() ?? "";
-    if (n && !SUBJECT_NOT_NAMES.has(first)) {
-      return n;
-    }
-  }
-
-  return null;
-}
-
-/**
- * 2) Name after sign-off lines (Regards, Yours faithfully, etc.) in the message body.
+ * 1) Name after sign-off lines (Regards, Yours faithfully, etc.) in the message body.
  */
 export function extractNameFromSignoff(body: string): string | null {
   const main = (body.split("ATTACHMENTS RECEIVED:")[0] ?? body).trim();
@@ -190,7 +108,7 @@ export function extractNameFromSignoff(body: string): string | null {
 }
 
 /**
- * Resolve greeting name: subject → sign-off → From header display name.
+ * Resolve greeting name: sign-off → From header display name.
  */
 export function resolveSenderGreeting(params: {
   fromName: string;
@@ -198,15 +116,6 @@ export function resolveSenderGreeting(params: {
   subject: string;
   body: string;
 }): ResolvedGreeting {
-  const fromSubject = extractNameFromSubject(params.subject, params.fromName);
-  if (fromSubject) {
-    return {
-      greetingName: firstNameForGreeting(fromSubject),
-      fullName: fromSubject,
-      source: "subject",
-    };
-  }
-
   const fromSignoff = extractNameFromSignoff(params.body);
   if (fromSignoff) {
     return {
