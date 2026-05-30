@@ -572,6 +572,11 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
     logger: false,
   });
 
+  // Prevent unhandled ImapFlow socket errors from crashing the API process.
+  client.on("error", (err: Error) => {
+    console.error("[email-automation] IMAP client error (non-fatal):", err.message);
+  });
+
   let count = 0;
   try {
     await client.connect();
@@ -670,9 +675,14 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
     } finally {
       lock.release();
     }
-    await client.logout();
   } catch (err) {
     console.error("[email-automation] IMAP fetch error:", err);
+  } finally {
+    try {
+      await client.logout();
+    } catch {
+      /* connection may already be closed */
+    }
   }
 
   return count;
