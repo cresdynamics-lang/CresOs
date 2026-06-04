@@ -35,6 +35,13 @@ export async function deleteOrgUserHard(
 
     await tx.developerDailyDigestSent.deleteMany({ where: { orgId, userId } });
     await tx.dailyReminderSent.deleteMany({ where: { orgId, userId } });
+    await tx.developerReminderSnooze.deleteMany({ where: { orgId, userId } });
+    await tx.developerProgressReminderSent.deleteMany({ where: { orgId, userId } });
+
+    await tx.user.updateMany({
+      where: { orgId, reportsToDirectorId: userId },
+      data: { reportsToDirectorId: null }
+    });
 
     const chatProfile = await tx.chatUser.findUnique({ where: { userId } });
     if (chatProfile) {
@@ -191,6 +198,20 @@ export async function deleteOrgUserHard(
       data: { recipientId: null }
     });
 
+    await tx.expense.updateMany({
+      where: { orgId, beneficiaryUserId: userId },
+      data: { beneficiaryUserId: null }
+    });
+    await tx.expense.updateMany({
+      where: { orgId, developerAcknowledgedById: userId },
+      data: { developerAcknowledgedById: null }
+    });
+
+    await tx.projectManagementMonth.updateMany({
+      where: { orgId, markedByUserId: userId },
+      data: { markedByUserId: null }
+    });
+
     await tx.approval.updateMany({
       where: { orgId, requesterId: userId },
       data: { requesterId: null }
@@ -247,6 +268,15 @@ export async function deleteOrgUserHard(
       data: { submittedById: reassignToUserId }
     });
     await tx.developerReport.updateMany({
+      where: { orgId, reviewedById: userId },
+      data: { reviewedById: null }
+    });
+
+    await tx.directorReport.updateMany({
+      where: { orgId, submittedById: userId },
+      data: { submittedById: reassignToUserId }
+    });
+    await tx.directorReport.updateMany({
       where: { orgId, reviewedById: userId },
       data: { reviewedById: null }
     });

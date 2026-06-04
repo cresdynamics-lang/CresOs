@@ -1774,8 +1774,9 @@ export default function adminRouter(prisma: PrismaClient): Router {
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("admin DELETE /users/:id hard delete failed", e);
+        const detail = e instanceof Error ? e.message : String(e);
         res.status(500).json({
-          error: "Could not delete user. The account may still be linked to data. Check server logs."
+          error: `Could not delete user: ${detail}`
         });
         return;
       }

@@ -222,7 +222,13 @@ export function AdminConsole() {
   }
 
   async function deleteUser(u: UserRow) {
-    if (!confirm(`Remove ${u.email} from this organisation? They will lose access.`)) return;
+    if (
+      !confirm(
+        `Permanently delete ${u.email}? Their account and access will be removed entirely. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
     setDeletingId(u.id);
     try {
       const res = await apiFetch(`/admin/users/${u.id}`, { method: "DELETE" });
