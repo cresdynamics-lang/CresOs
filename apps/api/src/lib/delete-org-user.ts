@@ -113,7 +113,7 @@ export async function deleteOrgUserHard(
     }
 
     await tx.$executeRaw`
-      UPDATE "Task"
+      UPDATE "TaskComment"
       SET "mentionedUserIds" = array_remove("mentionedUserIds", ${userId})
       WHERE "orgId" = ${orgId}
         AND ${userId} = ANY("mentionedUserIds")
