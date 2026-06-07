@@ -16,6 +16,12 @@ import {
   scheduleDescriptionForRoles,
   SCHEDULE_PAGE_EYEBROW
 } from "../../lib/schedule-access";
+import {
+  formatNairobiDateTime,
+  formatNairobiNow,
+  nairobiDatetimeLocalToIso,
+  toNairobiDatetimeLocalValue
+} from "../../lib/nairobi-datetime";
 
 type ScheduleItem = {
   id: string;
@@ -95,7 +101,13 @@ export default function SchedulePage() {
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
+  const [nairobiNow, setNairobiNow] = useState(() => formatNairobiNow());
   const notifiedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const id = setInterval(() => setNairobiNow(formatNairobiNow()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -150,7 +162,7 @@ export default function SchedulePage() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const scheduledAt = form.scheduledAt || new Date().toISOString().slice(0, 16);
+    const scheduledAt = form.scheduledAt || toNairobiDatetimeLocalValue(new Date());
     setSubmitting(true);
     try {
       const res = await apiFetch("/schedule", {
@@ -159,7 +171,7 @@ export default function SchedulePage() {
         body: JSON.stringify({
           title: form.title.trim(),
           type: form.type,
-          scheduledAt: new Date(scheduledAt).toISOString(),
+          scheduledAt: nairobiDatetimeLocalToIso(scheduledAt),
           notes: form.notes.trim() || undefined,
           reminderMinutesBefore: form.reminderMinutesBefore === "" ? null : form.reminderMinutesBefore
         })
@@ -251,6 +263,11 @@ export default function SchedulePage() {
           </p>
         </div>
       )}
+
+      <p className="text-xs text-slate-500">
+        All schedule times use <span className="font-medium text-slate-400">Nairobi (EAT)</span>. Now:{" "}
+        <span className="font-medium text-sky-400/90">{nairobiNow}</span>
+      </p>
 
       <CrmSectionPanel title="Review period" tone="sky" description="Pick the window you want to review and stay accountable.">
         <WorkspaceFilterPills
@@ -369,13 +386,7 @@ export default function SchedulePage() {
                           <p className="mt-1 text-xs text-slate-400">
                             <span className="font-medium text-slate-300">{meta.label}</span>
                             {" · "}
-                            {new Date(item.scheduledAt).toLocaleString(undefined, {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}
+                            {formatNairobiDateTime(item.scheduledAt)}
                             {item.reminderMinutesBefore != null && (
                               <span className="ml-1.5 text-violet-400">
                                 · Reminder {item.reminderMinutesBefore} min before
@@ -467,7 +478,7 @@ export default function SchedulePage() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">When</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">When (Nairobi)</span>
                   <input
                     type="datetime-local"
                     value={form.scheduledAt}

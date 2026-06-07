@@ -16,6 +16,7 @@ import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
 import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
 import {
   DeveloperDashboardSections,
   type DeveloperProgressReminder
@@ -1633,7 +1634,7 @@ export default function DashboardPage() {
                       <Link href={`/leads/${d.lead.id}`} className="text-brand hover:underline">
                         {d.lead.title}
                       </Link>
-                      <span className="ml-1 text-slate-400">{new Date(d.scheduledAt).toLocaleTimeString()}</span>
+                      <span className="ml-1 text-slate-400">{formatNairobiDateTime(d.scheduledAt)}</span>
                     </li>
                   ))}
                 </ul>
@@ -1650,7 +1651,7 @@ export default function DashboardPage() {
                       <Link href={`/leads/${m.lead.id}`} className="text-brand hover:underline">
                         {m.lead.title}
                       </Link>
-                      <span className="ml-1 text-slate-400">{new Date(m.scheduledAt).toLocaleString()}</span>
+                      <span className="ml-1 text-slate-400">{formatNairobiDateTime(m.scheduledAt)}</span>
                     </li>
                   ))}
                 </ul>
@@ -1667,7 +1668,7 @@ export default function DashboardPage() {
                       <Link href={`/leads/${c.lead.id}`} className="text-brand hover:underline">
                         {c.lead.title}
                       </Link>
-                      <span className="ml-1 text-slate-400">{new Date(c.scheduledAt).toLocaleString()}</span>
+                      <span className="ml-1 text-slate-400">{formatNairobiDateTime(c.scheduledAt)}</span>
                     </li>
                   ))}
                 </ul>

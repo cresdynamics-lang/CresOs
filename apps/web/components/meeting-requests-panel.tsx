@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../app/auth-context";
+import {
+  formatNairobiDateTime,
+  nairobiDatetimeLocalToIso,
+  toNairobiDatetimeLocalValue
+} from "../lib/nairobi-datetime";
 
 function toLocalDatetimeValue(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return toNairobiDatetimeLocalValue(iso);
 }
 
 export type MeetingRequestRow = {
@@ -82,7 +83,7 @@ export function MeetingRequestsPanel({ embedded }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reason: form.reason.trim(),
-          scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined
+          scheduledAt: form.scheduledAt ? nairobiDatetimeLocalToIso(form.scheduledAt) : undefined
         })
       });
       if (res.ok) {
@@ -111,7 +112,7 @@ export function MeetingRequestsPanel({ embedded }: Props) {
         responseNote: state.note.trim() || undefined
       };
       if (state.status === "approved" && state.scheduledAt) {
-        payload.scheduledAt = new Date(state.scheduledAt).toISOString();
+        payload.scheduledAt = nairobiDatetimeLocalToIso(state.scheduledAt);
       }
       const res = await apiFetch(`/meeting-requests/${id}/respond`, {
         method: "PATCH",
@@ -150,7 +151,7 @@ export function MeetingRequestsPanel({ embedded }: Props) {
         body: JSON.stringify({
           responseNote: f.responseNote.trim() || undefined,
           adminComment: f.adminComment.trim() || undefined,
-          scheduledAt: f.scheduledAt ? new Date(f.scheduledAt).toISOString() : null
+          scheduledAt: f.scheduledAt ? nairobiDatetimeLocalToIso(f.scheduledAt) : null
         })
       });
       if (res.ok) {
@@ -269,7 +270,7 @@ export function MeetingRequestsPanel({ embedded }: Props) {
                 <p className="whitespace-pre-wrap text-sm text-slate-200">{req.reason}</p>
                 {req.scheduledAt && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Scheduled / preferred: {new Date(req.scheduledAt).toLocaleString()}
+                    Scheduled / preferred: {formatNairobiDateTime(req.scheduledAt)}
                   </p>
                 )}
                 {req.respondedBy && (

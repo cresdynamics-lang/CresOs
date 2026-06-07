@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
+import { formatNairobiDateTime } from "../../../lib/nairobi-datetime";
 
 type Comment = { id: string; content: string; createdAt: string; author: { name: string | null; email: string } };
 type FollowUp = {
@@ -527,7 +528,7 @@ export default function LeadDetailPage() {
                   className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm"
                 >
                   <span className="font-medium capitalize text-slate-200">{f.type}</span>
-                  <span className="text-slate-400">{new Date(f.scheduledAt).toLocaleString()}</span>
+                  <span className="text-slate-400">{formatNairobiDateTime(f.scheduledAt)}</span>
                   {(f.name || f.business) && (
                     <span className="text-slate-400">{[f.name, f.business].filter(Boolean).join(" · ")}</span>
                   )}

@@ -2,40 +2,35 @@
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ROLE_KEYS } from "./auth-middleware";
-import { generateUserReminderEmail } from "./ai-reminders";
 import { generateDirectorBriefingGroq } from "./director-ai-automation";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp, notifyDirectors } from "./director-notifications";
 import { assertZonedTz, getUtcRangeForZonedDate, getZonedDateKey } from "./org-zoned-day";
 import { listPlatformActionsForZonedDay } from "./director-platform-summary";
+import {
+  getZonedHourMinute,
+  getZonedWeekday,
+  NAIROBI_TZ
+} from "../lib/nairobi-datetime";
+import { buildPersonalizedReportReminder } from "../lib/report-reminder-copy";
 
-const TZ = process.env.DAILY_OPS_TZ?.trim() || "Africa/Nairobi";
-const REMINDER_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_REMINDER_HOUR ?? 18)));
+const TZ = process.env.DAILY_OPS_TZ?.trim() || NAIROBI_TZ;
+/** Inclusive start hour (Nairobi). Default 18 = 6pm. */
+const REMINDER_START_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_REMINDER_START_HOUR ?? 18)));
+/** Exclusive end hour (Nairobi). Default 20 = window ends before 8pm. */
+const REMINDER_END_HOUR = Math.min(24, Math.max(REMINDER_START_HOUR + 1, Number(process.env.DAILY_OPS_REMINDER_END_HOUR ?? 20)));
 /** Default 19:00 (7pm) org timezone — Director end-of-day briefing + AI digest. */
 const AI_REPORT_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 19)));
 const ENABLED = process.env.DAILY_OPS_ENABLED !== "false";
 
-function getZonedHourMinute(d: Date, tz: string): { hour: number; minute: number } {
-  const f = new Intl.DateTimeFormat("en-GB", {
-    timeZone: assertZonedTz(tz),
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false
-  });
-  const parts = f.formatToParts(d);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-  return { hour, minute };
-}
-
-async function ensureUserReminder(
+async function ensurePersonalizedReportReminder(
   prisma: PrismaClient,
   orgId: string,
   user: { id: string; name: string | null; email: string; notificationEmail: string | null },
   dateKey: string,
-  kind: string,
-  fallbackSubject: string,
-  fallbackBody: string
+  kind: "sales_report_6pm" | "developer_report_6pm",
+  role: "sales" | "developer",
+  now: Date
 ): Promise<void> {
   const { count: reserved } = await prisma.dailyReminderSent.createMany({
     data: [{ orgId, userId: user.id, dateKey, kind }],
@@ -43,15 +38,15 @@ async function ensureUserReminder(
   });
   if (reserved === 0) return;
 
-  const ai = await generateUserReminderEmail({
-    reminderType: kind,
-    title: fallbackSubject,
-    context: fallbackBody,
-    dueOrScheduled: `${TZ} ${dateKey} ${String(REMINDER_HOUR).padStart(2, "0")}:00`
+  const { subject, body } = buildPersonalizedReportReminder({
+    role,
+    userId: user.id,
+    dateKey,
+    userName: user.name,
+    userEmail: user.email,
+    now,
+    tz: TZ
   });
-
-  const subject = ai?.subject?.trim() || fallbackSubject;
-  const body = ai?.body?.trim() || fallbackBody;
 
   const email = (user.notificationEmail ?? user.email ?? "").trim();
 
@@ -69,28 +64,28 @@ async function ensureUserReminder(
   });
 
   if (email) {
-    const emailSubject = `Reminder: ${subject}`;
     await prisma.notification.create({
       data: {
         orgId,
         channel: "email",
         to: email,
-        subject: emailSubject,
+        subject,
         body,
         status: "queued",
         type: kind,
         tier: "execution"
       }
     });
-    await logEmailSent(prisma, { orgId, to: email, subject: emailSubject, body, type: kind });
+    await logEmailSent(prisma, { orgId, to: email, subject, body, type: kind });
   }
 }
 
-async function send6pmRemindersForOrg(
+async function sendReportRemindersForOrg(
   prisma: PrismaClient,
   orgId: string,
   dateKey: string,
-  range: { start: Date; end: Date }
+  range: { start: Date; end: Date },
+  now: Date
 ): Promise<void> {
   const [salesRole, developerRole] = await Promise.all([
     prisma.role.findFirst({ where: { orgId, key: ROLE_KEYS.sales }, select: { id: true } }),
@@ -141,14 +136,14 @@ async function send6pmRemindersForOrg(
     });
     if (submitted) continue;
 
-    await ensureUserReminder(
+    await ensurePersonalizedReportReminder(
       prisma,
       orgId,
       u,
       dateKey,
       "sales_report_6pm",
-      "Submit your sales report",
-      `Please submit your sales report for ${dateKey} so leadership has a complete record.`
+      "sales",
+      now
     );
   }
 
@@ -161,27 +156,16 @@ async function send6pmRemindersForOrg(
       },
       select: { id: true }
     });
+    if (submittedReport) continue;
 
-    if (!submittedReport) {
-      await ensureUserReminder(
-        prisma,
-        orgId,
-        u,
-        dateKey,
-        "developer_report_6pm",
-        "Submit your developer report",
-        `Please submit your developer daily report for ${dateKey} (what worked, blockers, needs attention, etc.).`
-      );
-    }
-
-    await ensureUserReminder(
+    await ensurePersonalizedReportReminder(
       prisma,
       orgId,
       u,
       dateKey,
-      "developer_git_push_6pm",
-      "Push your work and update CresOS",
-      `Before end of day (${dateKey}), push your work (if applicable) and ensure your tasks/status are updated in CresOS.`
+      "developer_report_6pm",
+      "developer",
+      now
     );
   }
 }
@@ -272,8 +256,13 @@ async function run8pmAiReportForOrg(prisma: PrismaClient, orgId: string, orgName
   }
 }
 
+function inReportReminderWindow(hour: number): boolean {
+  return hour >= REMINDER_START_HOUR && hour < REMINDER_END_HOUR;
+}
+
 /**
- * Runs once per process; checks every minute for 18:00 and 20:00 Africa/Nairobi.
+ * Runs once per process; checks every minute for report reminders (Mon–Sat, 6pm–8pm Nairobi)
+ * and director AI digest at configured hour.
  */
 export function scheduleDailyOps(prisma: PrismaClient): void {
   if (!ENABLED) {
@@ -282,36 +271,31 @@ export function scheduleDailyOps(prisma: PrismaClient): void {
     return;
   }
 
-  let lastTickKey = "";
+  let lastAiTickKey = "";
 
   const tick = async () => {
     try {
       const now = new Date();
       const dateKey = getZonedDateKey(now, TZ);
       const { hour, minute } = getZonedHourMinute(now, TZ);
-      if (minute !== 0) return;
+      const weekday = getZonedWeekday(now, TZ);
 
       const orgs = await prisma.org.findMany({
         where: { deletedAt: null },
         select: { id: true, name: true }
       });
 
-      if (hour === REMINDER_HOUR) {
-        const tickKey = `${dateKey}T${hour}:${minute}:reminders`;
-        if (tickKey === lastTickKey) return;
-        lastTickKey = tickKey;
-
+      if (weekday !== 0 && inReportReminderWindow(hour)) {
         const range = await getUtcRangeForZonedDate(prisma, dateKey, TZ);
         for (const org of orgs) {
-          await send6pmRemindersForOrg(prisma, org.id, dateKey, range);
+          await sendReportRemindersForOrg(prisma, org.id, dateKey, range, now);
         }
-        return;
       }
 
-      if (hour === AI_REPORT_HOUR) {
+      if (minute === 0 && hour === AI_REPORT_HOUR) {
         const tickKey = `${dateKey}T${hour}:${minute}:ai`;
-        if (tickKey === lastTickKey) return;
-        lastTickKey = tickKey;
+        if (tickKey === lastAiTickKey) return;
+        lastAiTickKey = tickKey;
 
         const range = await getUtcRangeForZonedDate(prisma, dateKey, TZ);
         for (const org of orgs) {
@@ -327,5 +311,7 @@ export function scheduleDailyOps(prisma: PrismaClient): void {
   void tick();
   setInterval(() => void tick(), 60_000);
   // eslint-disable-next-line no-console
-  console.info(`[daily-ops] Scheduled (${TZ}, reminders ${REMINDER_HOUR}:00, ai ${AI_REPORT_HOUR}:00)`);
+  console.info(
+    `[daily-ops] Scheduled (${TZ}, report reminders Mon–Sat ${REMINDER_START_HOUR}:00–${REMINDER_END_HOUR}:00, ai ${AI_REPORT_HOUR}:00)`
+  );
 }
