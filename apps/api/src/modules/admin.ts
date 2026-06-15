@@ -15,6 +15,29 @@ import { mergeCapabilityFlags } from "../lib/user-capabilities";
 
 const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
 
+async function resolveReportsToDirectorId(
+  prisma: PrismaClient,
+  orgId: string,
+  reportsToDirectorId: string | null | undefined,
+  forUserId?: string
+): Promise<{ value: string | null } | { error: string }> {
+  if (reportsToDirectorId === null || reportsToDirectorId === undefined || reportsToDirectorId === "") {
+    return { value: null };
+  }
+  const director = await prisma.user.findFirst({
+    where: { id: reportsToDirectorId, orgId, deletedAt: null },
+    include: { roles: { include: { role: true } } }
+  });
+  const isDirector = director?.roles.some((r) => r.role.key === ROLE_KEYS.director);
+  if (!isDirector) {
+    return { error: "reportsToDirectorId must be a user with the director role" };
+  }
+  if (forUserId && reportsToDirectorId === forUserId) {
+    return { error: "A user cannot report to themselves" };
+  }
+  return { value: reportsToDirectorId };
+}
+
 export default function adminRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
@@ -683,11 +706,12 @@ export default function adminRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
-      const { email, name, password, roleId } = req.body as {
+      const { email, name, password, roleId, reportsToDirectorId } = req.body as {
         email?: string;
         name?: string;
         password?: string;
         roleId?: string;
+        reportsToDirectorId?: string | null;
       };
       if (!email?.trim() || !password) {
         res.status(400).json({ error: "email and password are required" });
@@ -709,6 +733,15 @@ export default function adminRouter(prisma: PrismaClient): Router {
         const role = roleId
           ? await prisma.role.findFirst({ where: { id: roleId, orgId } })
           : null;
+        let directorId: string | null = null;
+        if (reportsToDirectorId !== undefined && reportsToDirectorId !== null && reportsToDirectorId !== "") {
+          const resolved = await resolveReportsToDirectorId(prisma, orgId, reportsToDirectorId);
+          if ("error" in resolved) {
+            res.status(400).json({ error: resolved.error });
+            return;
+          }
+          directorId = resolved.value;
+        }
         const passwordHash = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
           data: {
@@ -717,7 +750,8 @@ export default function adminRouter(prisma: PrismaClient): Router {
             passwordHash,
             orgId,
             phoneNumbers: [],
-            workEmails: []
+            workEmails: [],
+            reportsToDirectorId: directorId
           }
         });
         if (role) {
@@ -1618,24 +1652,12 @@ export default function adminRouter(prisma: PrismaClient): Router {
       if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
       if (body.notificationEmail !== undefined) data.notificationEmail = body.notificationEmail?.trim() || null;
       if (body.reportsToDirectorId !== undefined) {
-        if (body.reportsToDirectorId === null || body.reportsToDirectorId === "") {
-          data.reportsToDirectorId = null;
-        } else {
-          const director = await prisma.user.findFirst({
-            where: { id: body.reportsToDirectorId, orgId, deletedAt: null },
-            include: { roles: { include: { role: true } } }
-          });
-          const isDirector = director?.roles.some((r) => r.role.key === ROLE_KEYS.director);
-          if (!isDirector) {
-            res.status(400).json({ error: "reportsToDirectorId must be a user with the director role" });
-            return;
-          }
-          if (body.reportsToDirectorId === id) {
-            res.status(400).json({ error: "A user cannot report to themselves" });
-            return;
-          }
-          data.reportsToDirectorId = body.reportsToDirectorId;
+        const resolved = await resolveReportsToDirectorId(prisma, orgId, body.reportsToDirectorId, id);
+        if ("error" in resolved) {
+          res.status(400).json({ error: resolved.error });
+          return;
         }
+        data.reportsToDirectorId = resolved.value;
       }
       if (body.capabilityFlags !== undefined) {
         data.capabilityFlags = mergeCapabilityFlags(user.capabilityFlags, body.capabilityFlags);

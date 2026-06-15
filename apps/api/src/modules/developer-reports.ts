@@ -4,7 +4,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { notifyDirectors } from "./director-notifications";
-import { getDirectorTeamMemberIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
+import { getDirectorReportSubmitterIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
 import { queueAutoDirectorReplyForDeveloperReport } from "./director-ai-automation";
 
 const LEADERSHIP_APPEND_SEP =
@@ -53,8 +53,8 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
       if (isAdminRole(roleKeys)) {
         where = { orgId };
       } else if (isDirectorOnly(roleKeys)) {
-        const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
-        where = { orgId, submittedById: { in: teamIds } };
+        const scoped = await getDirectorReportSubmitterIds(prisma, orgId, userId, ROLE_KEYS.developer);
+        where = scoped ? { orgId, submittedById: { in: scoped } } : { orgId };
       }
 
       const list = await prisma.developerReport.findMany({

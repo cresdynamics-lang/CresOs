@@ -4,7 +4,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { getDirectorAndAdminUserIds, notifyDirectors } from "./director-notifications";
-import { getDirectorTeamMemberIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
+import { getDirectorReportSubmitterIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
 import { queueAutoDirectorReplyForSalesReport } from "./director-ai-automation";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -92,8 +92,10 @@ export default function reportsRouter(prisma: PrismaClient): Router {
         status: "submitted"
       };
       if (isDirectorOnly(roleKeys)) {
-        const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
-        reportWhere = { orgId, status: "submitted", submittedById: { in: teamIds } };
+        const scoped = await getDirectorReportSubmitterIds(prisma, orgId, userId, ROLE_KEYS.sales);
+        if (scoped) {
+          reportWhere = { orgId, status: "submitted", submittedById: { in: scoped } };
+        }
       } else if (!isAdminRole(roleKeys)) {
         reportWhere = { orgId, status: "submitted", submittedById: userId };
       }
@@ -155,8 +157,10 @@ export default function reportsRouter(prisma: PrismaClient): Router {
           status: "submitted"
         };
         if (isDirectorOnly(roleKeys)) {
-          const teamIds = await getDirectorTeamMemberIds(prisma, orgId, userId);
-          where = { orgId, status: "submitted", submittedById: { in: teamIds } };
+          const scoped = await getDirectorReportSubmitterIds(prisma, orgId, userId, ROLE_KEYS.sales);
+          if (scoped) {
+            where = { orgId, status: "submitted", submittedById: { in: scoped } };
+          }
         }
         const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
         const list = await prisma.salesReport.findMany({

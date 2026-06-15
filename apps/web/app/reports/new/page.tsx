@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
@@ -12,6 +12,27 @@ export default function NewReportPage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [directorLabel, setDirectorLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/account/me");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          reportsToDirector?: { name: string | null; email: string } | null;
+        };
+        const d = data.reportsToDirector;
+        if (d) setDirectorLabel(d.name?.trim() || d.email);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch]);
   const handleCreate = async (andSubmit: boolean) => {
     if (!title.trim() || !body.trim()) {
       setError("Title and activities are required.");
@@ -57,7 +78,17 @@ export default function NewReportPage() {
       <div className="shell border-cres-border bg-cres-surface/70">
         <h2 className="mb-2 text-lg font-semibold text-cres-text">Create report</h2>
         <p className="text-sm text-cres-text-muted">
-          Describe the activities you’ve done. You can save as draft or submit for director review. When you submit, the server records the exact time (UTC) — directors see it in-app and in email, even if they were offline when you sent it.
+          Describe the activities you’ve done. You can save as draft or submit for director review.
+          {directorLabel ? (
+            <>
+              {" "}
+              When you submit, your report goes to <strong className="font-medium text-cres-text">{directorLabel}</strong>{" "}
+              for review.
+            </>
+          ) : (
+            " When you submit, directors see it in-app and in email."
+          )}{" "}
+          The server records the exact time (Nairobi) when you submit.
         </p>
       </div>
 

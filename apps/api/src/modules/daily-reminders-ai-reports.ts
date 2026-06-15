@@ -23,10 +23,18 @@ const REMINDER_END_HOUR = Math.min(24, Math.max(REMINDER_START_HOUR + 1, Number(
 const AI_REPORT_HOUR = Math.min(23, Math.max(0, Number(process.env.DAILY_OPS_AI_REPORT_HOUR ?? 19)));
 const ENABLED = process.env.DAILY_OPS_ENABLED !== "false";
 
+type ReportReminderUser = {
+  id: string;
+  name: string | null;
+  email: string;
+  notificationEmail: string | null;
+  reportsToDirector?: { name: string | null; email: string } | null;
+};
+
 async function ensurePersonalizedReportReminder(
   prisma: PrismaClient,
   orgId: string,
-  user: { id: string; name: string | null; email: string; notificationEmail: string | null },
+  user: ReportReminderUser,
   dateKey: string,
   kind: "sales_report_6pm" | "developer_report_6pm",
   role: "sales" | "developer",
@@ -38,12 +46,15 @@ async function ensurePersonalizedReportReminder(
   });
   if (reserved === 0) return;
 
+  const directorName =
+    user.reportsToDirector?.name?.trim() || user.reportsToDirector?.email?.trim() || null;
   const { subject, body } = buildPersonalizedReportReminder({
     role,
     userId: user.id,
     dateKey,
     userName: user.name,
     userEmail: user.email,
+    directorName,
     now,
     tz: TZ
   });
@@ -113,13 +124,25 @@ async function sendReportRemindersForOrg(
     salesUserIds.length
       ? prisma.user.findMany({
           where: { id: { in: salesUserIds }, deletedAt: null },
-          select: { id: true, name: true, email: true, notificationEmail: true }
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            notificationEmail: true,
+            reportsToDirector: { select: { name: true, email: true } }
+          }
         })
       : Promise.resolve([]),
     developerUserIds.length
       ? prisma.user.findMany({
           where: { id: { in: developerUserIds }, deletedAt: null },
-          select: { id: true, name: true, email: true, notificationEmail: true }
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            notificationEmail: true,
+            reportsToDirector: { select: { name: true, email: true } }
+          }
         })
       : Promise.resolve([])
   ]);

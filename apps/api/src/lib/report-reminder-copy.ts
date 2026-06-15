@@ -78,8 +78,16 @@ const DEV_BY_DAY: Record<number, string[]> = {
   ]
 };
 
-function fillTemplate(template: string, name: string, dateLabel: string): string {
-  return template.replace(/\{name\}/g, name).replace(/\{date\}/g, dateLabel);
+function fillTemplate(template: string, name: string, dateLabel: string, director: string): string {
+  return template
+    .replace(/\{name\}/g, name)
+    .replace(/\{date\}/g, dateLabel)
+    .replace(/\{director\}/g, director);
+}
+
+function directorReminderPhrase(directorName: string | null | undefined): string {
+  const label = directorName?.trim();
+  return label ? ` Submit to ${label} for review on CresOS.` : "";
 }
 
 export function buildPersonalizedReportReminder(opts: {
@@ -88,6 +96,7 @@ export function buildPersonalizedReportReminder(opts: {
   dateKey: string;
   userName: string | null;
   userEmail: string;
+  directorName?: string | null;
   now: Date;
   tz?: string;
 }): { subject: string; body: string } {
@@ -103,15 +112,18 @@ export function buildPersonalizedReportReminder(opts: {
       ? ["Hi {name}, please submit today's sales report on CresOS for {date}."]
       : ["Hi {name}, please submit today's developer report on CresOS for {date}."]);
 
+  const directorLabel = opts.directorName?.trim() ?? "";
   const variant = pickVariant(`${opts.userId}:${opts.dateKey}:${opts.role}`, templates.length);
-  const body = fillTemplate(templates[variant], name, dateLabel);
+  const body =
+    fillTemplate(templates[variant], name, dateLabel, directorLabel) + directorReminderPhrase(directorLabel);
 
+  const directorSubject = directorLabel ? ` — submit to ${directorLabel}` : "";
   const subject =
     opts.role === "sales"
       ? weekday === 5
-        ? `${name}, today's sales report`
-        : `Sales update for ${dateLabel.split(",")[0] ?? "today"}`
-      : `${name}, today's dev report`;
+        ? `${name}, today's sales report${directorSubject}`
+        : `Sales update for ${dateLabel.split(",")[0] ?? "today"}${directorSubject}`
+      : `${name}, today's dev report${directorSubject}`;
 
   return { subject, body };
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { CrmActionLink, CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
 
 type Report = {
   id: string;
@@ -35,6 +36,7 @@ export default function ReportsPage() {
   const { apiFetch, auth } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [overdue, setOverdue] = useState<OverdueItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const isLeadership = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
   const isSalesOnly =
     auth.roleKeys.includes("sales") &&
@@ -42,18 +44,24 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function load() {
+      setLoadError(null);
       try {
         const [listRes, alarmRes] = await Promise.all([apiFetch("/reports"), apiFetch("/reports/alarms/overdue")]);
         if (listRes.ok) {
           const data = (await listRes.json()) as Report[];
           setReports(data);
+        } else {
+          const err = (await listRes.json().catch(() => ({}))) as { error?: string; message?: string };
+          setLoadError(err.message ?? err.error ?? `Could not load reports (${listRes.status})`);
+          setReports([]);
         }
         if (alarmRes.ok) {
           const data = (await alarmRes.json()) as { overdue: OverdueItem[] };
           setOverdue(data.overdue ?? []);
         }
       } catch {
-        // ignore
+        setLoadError("Could not reach the server. Check your connection and try again.");
+        setReports([]);
       }
     }
     void load();
@@ -99,6 +107,12 @@ export default function ReportsPage() {
           </>
         }
       />
+
+      {loadError && (
+        <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
+          {loadError}
+        </div>
+      )}
 
       {!isLeadership && overdue.length > 0 && (
         <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
@@ -234,10 +248,10 @@ export default function ReportsPage() {
                         {r.remarks?.trim() ? r.remarks.trim().slice(0, 80) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
-                        {r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "—"}
+                        {r.submittedAt ? formatNairobiDateTime(r.submittedAt) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
-                        {new Date(r.createdAt).toLocaleString()}
+                        {formatNairobiDateTime(r.createdAt)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right">
                         <CrmActionLink href={`/reports/${r.id}`}>Review</CrmActionLink>

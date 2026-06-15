@@ -38,7 +38,13 @@ async function ensureReportSubmissionReminder(
 ): Promise<void> {
   const profile = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true, notificationEmail: true, name: true, currentFocusUpdatedAt: true }
+    select: {
+      email: true,
+      notificationEmail: true,
+      name: true,
+      currentFocusUpdatedAt: true,
+      reportsToDirector: { select: { name: true, email: true } }
+    }
   });
   const email = profile?.notificationEmail?.trim() || profile?.email?.trim() || userEmail;
   if (profile?.currentFocusUpdatedAt && Date.now() - profile.currentFocusUpdatedAt.getTime() < TWELVE_HOURS_MS) {
@@ -59,9 +65,13 @@ async function ensureReportSubmissionReminder(
   });
   if (recent) return;
 
-  const subject = "Submit your report";
-  const body =
-    "It's been 12+ hours since your last report (and no current-focus update in the last 12 hours). Submit a report on the dashboard to keep your streak and stay on track.";
+  const directorLabel =
+    profile?.reportsToDirector?.name?.trim() || profile?.reportsToDirector?.email?.trim() || null;
+  const submitTarget = directorLabel
+    ? `Submit to ${directorLabel} for review on CresOS`
+    : "Submit a report on the dashboard on CresOS";
+  const subject = directorLabel ? `Submit your report to ${directorLabel}` : "Submit your report";
+  const body = `It's been 12+ hours since your last report (and no current-focus update in the last 12 hours). ${submitTarget} to keep your streak and stay on track.`;
   const emailSubject = `Reminder: ${subject}`;
   await prisma.$transaction([
     prisma.notification.create({

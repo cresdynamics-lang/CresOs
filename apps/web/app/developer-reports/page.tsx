@@ -4,6 +4,16 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth-context";
 import { CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { formatNairobiDate, formatNairobiDateTime } from "../../lib/nairobi-datetime";
+
+function reportPreview(report: DeveloperReport): string {
+  const parts = [report.whatWorked, report.blockers, report.needsAttention, report.implemented]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  const flat = parts.join(" · ");
+  if (!flat) return "—";
+  return flat.length > 140 ? `${flat.slice(0, 140)}…` : flat;
+}
 
 type DeveloperReport = {
   id: string;
@@ -42,6 +52,7 @@ function totalFormChars(form: Record<(typeof FIELDS)[number]["key"], string>): n
 export default function DeveloperReportsPage() {
   const { apiFetch, auth } = useAuth();
   const [list, setList] = useState<DeveloperReport[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     reportDate: todayDateString(),
@@ -62,15 +73,45 @@ export default function DeveloperReportsPage() {
   const isDevSelfView = isDeveloper && !isDirector;
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [viewId, setViewId] = useState<string | null>(null);
+  const [directorLabel, setDirectorLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isDevSelfView) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/account/me");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          reportsToDirector?: { name: string | null; email: string } | null;
+        };
+        const d = data.reportsToDirector;
+        if (d) setDirectorLabel(d.name?.trim() || d.email);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, isDevSelfView]);
 
   const viewReport = viewId ? list.find((r) => r.id === viewId) ?? null : null;
   const directorReviewReport = editingReviewId ? list.find((r) => r.id === editingReviewId) ?? null : null;
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const res = await apiFetch("/developer-reports");
-      if (res.ok) setList((await res.json()) as DeveloperReport[]);
+      if (res.ok) {
+        setList((await res.json()) as DeveloperReport[]);
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        setLoadError(err.message ?? err.error ?? `Could not load reports (${res.status})`);
+        setList([]);
+      }
     } catch {
+      setLoadError("Could not reach the server. Check your connection and try again.");
       setList([]);
     }
   }, [apiFetch]);
@@ -177,7 +218,9 @@ export default function DeveloperReportsPage() {
         description={
           isDirector
             ? "View reports from developers. Each entry shows when it was filed and last updated on the server — useful even if you were not online when it was submitted."
-            : "Daily standard: cover the sections with enough detail (at least 60 characters total). Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day)."
+            : directorLabel
+              ? `Daily standard: cover the sections with enough detail (at least 60 characters total). Submit to ${directorLabel} for review. Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day).`
+              : "Daily standard: cover the sections with enough detail (at least 60 characters total). Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day)."
         }
         eyebrow={isDirector ? "Director" : "Developer reports"}
         brandLead="Operating system for growth"
@@ -198,6 +241,12 @@ export default function DeveloperReportsPage() {
           ) : undefined
         }
       />
+
+      {loadError && (
+        <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
+          {loadError}
+        </div>
+      )}
 
       <CrmSectionPanel
         title={isDirector ? "All developer reports" : "My report history"}
@@ -230,6 +279,7 @@ export default function DeveloperReportsPage() {
               <CrmTableHead>
                 <th className="px-3 py-2.5 font-medium">Date</th>
                 {isDirector && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
+                {isDirector && <th className="px-3 py-2.5 font-medium">Summary</th>}
                 <th className="px-3 py-2.5 font-medium">Status</th>
                 <th className="px-3 py-2.5 font-medium">Remarks</th>
                 <th className="px-3 py-2.5 font-medium">Filed</th>
@@ -250,11 +300,16 @@ export default function DeveloperReportsPage() {
                     <Fragment key={report.id}>
                       <tr className="border-b border-slate-800">
                         <td className="py-2 pr-3 text-slate-200">
-                          {new Date(report.reportDate).toLocaleDateString()}
+                          {formatNairobiDate(report.reportDate)}
                         </td>
                         {isDirector && (
                           <td className="py-2 pr-3 text-xs text-slate-400">
                             {report.submittedBy ? report.submittedBy.name ?? report.submittedBy.email : "—"}
+                          </td>
+                        )}
+                        {isDirector && (
+                          <td className="max-w-[14rem] py-2 pr-3 text-xs text-slate-400" title={reportPreview(report)}>
+                            {reportPreview(report)}
                           </td>
                         )}
                         <td className="py-2 pr-3 text-xs">
@@ -264,7 +319,7 @@ export default function DeveloperReportsPage() {
                           {report.remarks?.trim() ? report.remarks.trim().slice(0, 80) : "—"}
                         </td>
                         <td className="py-2 pr-3 text-xs text-slate-500">
-                          {new Date(report.createdAt).toLocaleString()}
+                          {formatNairobiDateTime(report.createdAt)}
                         </td>
                         {(isDirector || isDevSelfView) && (
                           <td className="py-2 text-right">
@@ -279,6 +334,17 @@ export default function DeveloperReportsPage() {
                                 </button>
                               )}
                               {isDevSelfView && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedIds((p) => ({ ...p, [report.id]: !Boolean(p[report.id]) }))
+                                  }
+                                  className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                                >
+                                  {isExpanded ? "Hide" : "Expand"}
+                                </button>
+                              )}
+                              {isDirector && (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -309,9 +375,9 @@ export default function DeveloperReportsPage() {
                         )}
                       </tr>
 
-                      {isDevSelfView && isExpanded && (
+                      {(isDevSelfView || isDirector) && isExpanded && (
                         <tr className="border-b border-slate-800 bg-slate-900/30">
-                          <td colSpan={isDirector ? 6 : 5} className="px-2 py-2 sm:px-3 sm:py-3">
+                          <td colSpan={isDirector ? 7 : 5} className="px-2 py-2 sm:px-3 sm:py-3">
                             <div className="grid gap-3 md:grid-cols-2">
                               <div>
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Director review</p>

@@ -70,6 +70,7 @@ export function AdminConsole() {
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRoleId, setNewUserRoleId] = useState("");
+  const [newUserDirectorId, setNewUserDirectorId] = useState("");
 
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState("");
@@ -302,7 +303,8 @@ export function AdminConsole() {
                       email: newUserEmail.trim(),
                       name: newUserName.trim() || undefined,
                       password: newUserPassword,
-                      roleId: newUserRoleId || undefined
+                      roleId: newUserRoleId || undefined,
+                      reportsToDirectorId: newUserDirectorId || null
                     })
                   });
                   const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -314,6 +316,7 @@ export function AdminConsole() {
                   setNewUserName("");
                   setNewUserPassword("");
                   setNewUserRoleId("");
+                  setNewUserDirectorId("");
                   await loadUsersWithRoles();
                 } catch (err) {
                   setCreateUserError(err instanceof Error ? err.message : "Network error");
@@ -365,6 +368,19 @@ export function AdminConsole() {
                   </option>
                 ))}
               </select>
+              <select
+                value={newUserDirectorId}
+                onChange={(e) => setNewUserDirectorId(e.target.value)}
+                className="w-full min-w-0 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200 sm:w-auto sm:min-w-[10rem] sm:text-sm"
+                title="Assign sales/developer reports to this director"
+              >
+                <option value="">Assign director (optional)</option>
+                {directors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name ?? d.email}
+                  </option>
+                ))}
+              </select>
               <button
                 type="submit"
                 disabled={createUserBusy}
@@ -391,6 +407,9 @@ export function AdminConsole() {
                           <p className="truncate font-medium text-slate-100">{u.name ?? "—"}</p>
                           <p className="mt-0.5 break-all text-slate-400">{u.email}</p>
                           <p className="mt-1 text-slate-500">Status: {u.status}</p>
+                          <p className="mt-1 text-slate-500">
+                            Director: {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
+                          </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <button
@@ -478,6 +497,7 @@ export function AdminConsole() {
                         <th className="pb-2 pr-3">Name</th>
                         <th className="pb-2 pr-3">Email</th>
                         <th className="pb-2 pr-3">Status</th>
+                        <th className="pb-2 pr-3">Director</th>
                         <th className="pb-2 pr-3">Roles</th>
                         <th className="pb-2"></th>
                       </tr>
@@ -490,6 +510,9 @@ export function AdminConsole() {
                             {u.email}
                           </td>
                           <td className="py-2 pr-3 text-slate-300">{u.status}</td>
+                          <td className="py-2 pr-3 text-slate-300">
+                            {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
+                          </td>
                           <td className="py-2 pr-3">
                             <div className="flex flex-wrap gap-1">
                               {(u.roles ?? []).map((ur) => (

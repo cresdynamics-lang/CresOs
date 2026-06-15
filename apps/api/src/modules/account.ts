@@ -28,7 +28,10 @@ export default function accountRouter(prisma: PrismaClient): Router {
         status: true,
         profilePicture: true,
         capabilityFlags: true,
-        reportsToDirectorId: true
+        reportsToDirectorId: true,
+        reportsToDirector: {
+          select: { id: true, name: true, email: true }
+        }
       }
     });
     if (!user) return res.status(404).json({ error: "User not found" });

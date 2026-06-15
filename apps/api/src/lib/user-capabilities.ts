@@ -78,3 +78,35 @@ export async function getDirectorTeamMemberIds(
   });
   return rows.map((r) => r.id);
 }
+
+/** Org users with a given role key (sales, developer, …). */
+export async function getOrgUserIdsWithRole(
+  prisma: { userRole: { findMany: (args: object) => Promise<{ userId: string }[]> } },
+  orgId: string,
+  roleKey: string
+): Promise<string[]> {
+  const rows = await prisma.userRole.findMany({
+    where: { role: { orgId, key: roleKey }, user: { deletedAt: null } },
+    select: { userId: true }
+  });
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
+/**
+ * Directors see their assigned team first; if none assigned, all org submitters for that role.
+ * Admins see the whole org (no submittedById filter).
+ */
+export async function getDirectorReportSubmitterIds(
+  prisma: {
+    user: { findMany: (args: object) => Promise<{ id: string }[]> };
+    userRole: { findMany: (args: object) => Promise<{ userId: string }[]> };
+  },
+  orgId: string,
+  directorId: string,
+  submitterRoleKey: string
+): Promise<string[] | null> {
+  const teamIds = await getDirectorTeamMemberIds(prisma, orgId, directorId);
+  if (teamIds.length > 0) return teamIds;
+  const roleIds = await getOrgUserIdsWithRole(prisma, orgId, submitterRoleKey);
+  return roleIds.length > 0 ? roleIds : null;
+}
