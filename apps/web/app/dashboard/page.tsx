@@ -1191,15 +1191,10 @@ export default function DashboardPage() {
         <DeveloperDashboardSections
           apiFetch={apiFetch}
           onRefreshAttention={() => void loadSummaryAndAttention()}
-          tasksOverdue={tasksOverdue}
-          tasksDueSoon={tasksDueSoon}
           developerReportStreak={developerReportStreak}
-          messagesCount={messagesCount}
-          projectsNeedingReview={projectsNeedingReview}
-          handoffCount={handoffRequests.length}
-          progressReminders={attention?.developerProgressReminders ?? []}
           overdueTasks={overdueTasks}
-          attentionMessages={attention?.messages ?? []}
+          notifications={attention?.notifications ?? []}
+          progressReminders={attention?.developerProgressReminders ?? []}
         />
       )}
 

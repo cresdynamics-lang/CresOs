@@ -1,13 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { emitDataRefresh } from "../app/data-refresh";
-import { CrmSectionPanel } from "./crm/crm-section";
-import { DashboardSectionLabel } from "./dashboard-welcome-banner";
-import { StatCard, StatCardGrid } from "./stat-card";
-import { WorkspaceHubCard } from "./workspace-hub-card";
-import type { StatTone } from "./stat-card";
+import type { SidebarSection } from "./community/community-types";
 
 export type DeveloperProgressReminder = {
   reminderKey: string;
@@ -43,51 +38,804 @@ type AnalyticsPayload = {
   refreshedAt?: string;
 };
 
-const NAV_HUB: { href: string; title: string; description: string; tone: StatTone; icon: string }[] = [
-  {
-    href: "/schedule",
-    title: "Tasks",
-    description: "Meetings, calls, reports, and deadlines — review by day, week, month, or quarter.",
-    tone: "sky",
-    icon: "◷"
-  },
-  {
-    href: "/projects",
-    title: "Projects",
-    description: "Delivery boards, tasks, milestones, and handoffs on your assignments.",
-    tone: "emerald",
-    icon: "◆"
-  },
-  {
-    href: "/developer-reports",
-    title: "Reports",
-    description: "Daily and activity reports — locked history stays read-only after submit.",
-    tone: "violet",
-    icon: "◇"
-  },
-  {
-    href: "/community",
-    title: "Community",
-    description: "Workspace chat, updates, and team coordination.",
-    tone: "sky",
-    icon: "◎"
+export interface OnlineUser {
+  id: string;
+  name: string;
+  roles?: { key: string; name: string }[];
+  status: "online" | "busy" | "away" | "offline";
+  isOnline: boolean;
+  avatar?: string | null;
+}
+
+interface DeveloperReport {
+  id: string;
+  reportDate: string;
+  reviewStatus?: string;
+  remarks?: string | null;
+  createdAt: string;
+}
+
+// ----------------------------------------------------
+// Reusable Card Frame Component
+// ----------------------------------------------------
+interface CardFrameProps {
+  title: string;
+  icon: React.ReactNode;
+  actions?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function CardFrame({ title, icon, actions, footer, children, className = "" }: CardFrameProps) {
+  return (
+    <div className={`flex flex-col rounded-2xl border border-slate-800 bg-slate-900/25 p-5 shadow-xl transition-all duration-300 hover:border-slate-700/60 min-h-[19rem] ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5 mb-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-slate-400 shrink-0">{icon}</span>
+          <h3 className="text-sm font-semibold tracking-wide text-slate-100 uppercase truncate">{title}</h3>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">{actions}</div>
+      </div>
+      {/* Body */}
+      <div className="flex-1 min-h-0 flex flex-col justify-between">
+        {children}
+      </div>
+      {/* Footer */}
+      {footer && (
+        <div className="mt-4 border-t border-slate-800/60 pt-3 flex items-center justify-between">
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helper to format Date: 22-JUN-2026
+function formatAnnouncementDate(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return "";
   }
-];
+}
 
-const DUTY_HUB = NAV_HUB;
+// Helper to calculate weekdays in current month (Required reports count)
+function getWeekdaysInCurrentMonth(): number {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let weekdays = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      weekdays++;
+    }
+  }
+  return weekdays;
+}
 
-const SNOOZE_PRESETS = [
-  { key: "5m", label: "5 min" },
-  { key: "15m", label: "15 min" },
-  { key: "20m", label: "20 min" },
-  { key: "30m", label: "30 min" },
-  { key: "1h", label: "1 hour" },
-  { key: "2h", label: "2 hours" },
-  { key: "5h", label: "5 hours" },
-  { key: "12h", label: "12 hours" },
-  { key: "tomorrow", label: "Tomorrow" }
-] as const;
+// ----------------------------------------------------
+// Card 1: Team Directory Card
+// ----------------------------------------------------
+type Category = "developer" | "sales" | "finance" | "admin" | "all";
 
+function TeamDirectoryCard({ apiFetch }: { apiFetch: (url: string) => Promise<Response> }) {
+  const [users, setUsers] = useState<OnlineUser[]>([]);
+  const [filter, setFilter] = useState<Category>("developer");
+  const [loading, setLoading] = useState(true);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await apiFetch("/chat-community/online-users");
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data?.data?.onlineUsers || []);
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (filter === "all") return true;
+      const keys = u.roles?.map((r) => r.key) || [];
+      if (filter === "developer") return keys.includes("developer");
+      if (filter === "sales") return keys.includes("sales");
+      if (filter === "finance") return keys.includes("finance") || keys.includes("director_finance");
+      if (filter === "admin") return keys.includes("admin") || keys.includes("director_admin");
+      return false;
+    });
+  }, [users, filter]);
+
+  const statusColors = {
+    online: "bg-emerald-500 shadow-emerald-500/50",
+    busy: "bg-rose-500 shadow-rose-500/50",
+    away: "bg-amber-500 shadow-amber-500/50",
+    offline: "bg-slate-600 shadow-slate-600/50"
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.split(" ").filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  };
+
+  const categories: { key: Category; label: string }[] = [
+    { key: "developer", label: "Devs" },
+    { key: "sales", label: "Sales" },
+    { key: "finance", label: "Finance" },
+    { key: "admin", label: "Admin" },
+    { key: "all", label: "All" }
+  ];
+
+  return (
+    <CardFrame
+      title="Team Directory"
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      }
+      actions={
+        <button onClick={fetchUsers} className="text-slate-500 hover:text-slate-300 p-1" title="Refresh">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.283 8H18" />
+          </svg>
+        </button>
+      }
+    >
+      <div className="flex flex-col h-full min-h-0">
+        {/* Category Tabs */}
+        <div className="flex flex-wrap gap-1 mb-3.5 pb-2 border-b border-slate-800/40">
+          {categories.map((cat) => (
+            <button
+              key={cat.key}
+              onClick={() => setFilter(cat.key)}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all duration-200 ${
+                filter === cat.key
+                  ? "bg-violet-500/20 border border-violet-500/40 text-violet-300"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent"
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Directory List */}
+        <div className="flex-1 overflow-y-auto max-h-[14rem] pr-1 space-y-2">
+          {loading ? (
+            <p className="text-xs text-slate-500 text-center py-6">Loading roster…</p>
+          ) : filteredUsers.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-6">No members in this category.</p>
+          ) : (
+            filteredUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center justify-between gap-3 p-2 rounded-xl border border-slate-800/40 bg-slate-950/20 hover:border-slate-800 hover:bg-slate-950/40 transition-all"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="relative w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700/50">
+                    {getInitials(user.name)}
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-slate-950 shadow-sm ${statusColors[user.status || "offline"]}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-200 truncate">{user.name}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide truncate">
+                      {user.roles?.[0]?.name || "Team Member"}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/community"
+                  className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-1 text-[11px] font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all shrink-0"
+                >
+                  Chat
+                </Link>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Card 2: Dev Report Visualization Card
+// ----------------------------------------------------
+function DevReportVisualizationCard({
+  apiFetch,
+  developerReportStreak
+}: {
+  apiFetch: (url: string) => Promise<Response>;
+  developerReportStreak: number;
+}) {
+  const [reports, setReports] = useState<DeveloperReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchReports = useCallback(async () => {
+    try {
+      const response = await apiFetch("/developer-reports");
+      if (response.ok) {
+        setReports((await response.json()) as DeveloperReport[]);
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  // Compute Current Month Stats
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`; // YYYY-MM
+
+  const loggedReportsThisMonth = reports.filter((r) => r.reportDate.startsWith(currentMonthKey)).length;
+  const requiredReportsThisMonth = getWeekdaysInCurrentMonth();
+  const progressPercent = Math.min(
+    100,
+    requiredReportsThisMonth > 0 ? Math.round((loggedReportsThisMonth / requiredReportsThisMonth) * 100) : 0
+  );
+
+  // Generate last 30 calendar days list for Streak contribution grid
+  const last30Days = useMemo(() => {
+    const list = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(now.getDate() - i);
+      const dateString = d.toISOString().slice(0, 10);
+      const report = reports.find((r) => r.reportDate === dateString);
+      list.push({
+        date: dateString,
+        hasReport: !!report,
+        status: report?.reviewStatus || "none"
+      });
+    }
+    return list;
+  }, [reports]);
+
+  return (
+    <CardFrame
+      title="Report Compliance"
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      }
+      actions={
+        <button onClick={fetchReports} className="text-slate-500 hover:text-slate-300 p-1" title="Refresh">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.283 8H18" />
+          </svg>
+        </button>
+      }
+    >
+      <div className="flex flex-col justify-between h-full space-y-4">
+        {/* Metric Overview */}
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-2xl font-bold tracking-tight text-slate-100">
+              {loggedReportsThisMonth} <span className="text-xs font-normal text-slate-500">/ {requiredReportsThisMonth} required</span>
+            </p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-1">Logged reports this cycle</p>
+          </div>
+          {developerReportStreak > 0 && (
+            <div className="text-right">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
+                🔥 {developerReportStreak} day streak
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        <div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-violet-600 to-sky-600 transition-all duration-700 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1.5 text-[10px] text-slate-500 font-semibold uppercase">
+            <span>{progressPercent}% Complete</span>
+            <span>Billing Month</span>
+          </div>
+        </div>
+
+        {/* GitHub-style Contribution Grid */}
+        <div>
+          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">Submission Heatmap (Past 30 Days)</p>
+          <div className="flex flex-wrap gap-1.5 pb-2">
+            {loading ? (
+              <div className="h-6 w-full flex items-center justify-center text-xs text-slate-600">Syncing history…</div>
+            ) : (
+              last30Days.map((day) => {
+                let colorClass = "bg-slate-800/60 border border-slate-700/30 hover:border-slate-600";
+                if (day.hasReport) {
+                  if (day.status === "checked") colorClass = "bg-emerald-500 hover:bg-emerald-400 border border-emerald-600";
+                  else if (day.status === "viewed") colorClass = "bg-sky-500 hover:bg-sky-400 border border-sky-600";
+                  else colorClass = "bg-violet-600 hover:bg-violet-500 border border-violet-700";
+                }
+                return (
+                  <div
+                    key={day.date}
+                    className={`w-3.5 h-3.5 rounded-md transition-all ${colorClass}`}
+                    title={`${day.date}: ${day.hasReport ? `Logged (${day.status})` : "No Report Submitted"}`}
+                  />
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Card 3: Top 5 Notifications (Announcement Style)
+// ----------------------------------------------------
+interface AnnouncementItem {
+  id: string;
+  subject: string | null;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+function AnnouncementCard({
+  notifications,
+  onRefresh
+}: {
+  notifications: AnnouncementItem[];
+  onRefresh: () => void;
+}) {
+  const topNotifications = notifications.slice(0, 5);
+
+  return (
+    <CardFrame
+      title="Announcement"
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+        </svg>
+      }
+      actions={
+        <button onClick={onRefresh} className="text-slate-500 hover:text-slate-300 p-1" title="Refresh">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.283 8H18" />
+          </svg>
+        </button>
+      }
+    >
+      <div className="flex flex-col h-full min-h-0">
+        <div className="flex-1 overflow-y-auto max-h-[14rem] space-y-1">
+          {topNotifications.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-10">No recent announcements.</p>
+          ) : (
+            topNotifications.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-start justify-between gap-3 border-b border-slate-800/50 py-2.5 last:border-0 hover:bg-slate-900/10 px-1 rounded-lg"
+              >
+                <div className="min-w-0 pr-2">
+                  <p className="text-xs font-semibold text-sky-400 hover:underline leading-relaxed line-clamp-2 cursor-pointer">
+                    {item.subject || item.body.slice(0, 60)}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
+                    BY SYSTEM
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tabular-nums">
+                    {formatAnnouncementDate(item.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Card 4: Active Project Context Card
+// ----------------------------------------------------
+function ActiveProjectCard({ apiFetch }: { apiFetch: (url: string) => Promise<Response> }) {
+  const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
+  const [focus, setFocus] = useState<{ projectId?: string | null; note?: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cfRes, aRes] = await Promise.all([
+        apiFetch("/user/current-focus"),
+        apiFetch("/dashboard/developer-analytics")
+      ]);
+
+      if (cfRes.ok) {
+        const j = await cfRes.json();
+        setFocus(j.data || null);
+      }
+      if (aRes.ok) {
+        const j = await aRes.json();
+        setAnalytics(j.data || null);
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const activeProject = useMemo(() => {
+    if (!analytics) return null;
+    if (focus?.projectId) {
+      return analytics.projects.find((p) => p.id === focus.projectId) || analytics.projects[0] || null;
+    }
+    return analytics.projects[0] || null;
+  }, [analytics, focus]);
+
+  return (
+    <CardFrame
+      title={activeProject ? `Current Project: ${activeProject.name}` : "Current Project"}
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      }
+      actions={
+        <button onClick={loadData} className="text-slate-500 hover:text-slate-300 p-1" title="Refresh">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.283 8H18" />
+          </svg>
+        </button>
+      }
+      footer={
+        activeProject ? (
+          <Link
+            href={`/projects/${activeProject.id}`}
+            className="w-full text-center rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 hover:from-violet-500 hover:to-sky-500 py-2 text-xs font-semibold text-white shadow-lg shadow-violet-950/20 transition-all shrink-0"
+          >
+            Open Project Board
+          </Link>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col justify-between h-full space-y-4">
+        {loading ? (
+          <p className="text-xs text-slate-500 text-center py-10">Syncing project board…</p>
+        ) : !activeProject ? (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-xs text-slate-400">No active project selected today.</p>
+            <Link
+              href="/dashboard"
+              className="inline-block text-xs font-semibold text-violet-400 hover:underline"
+            >
+              Select focus project below →
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Horizontal progress bar */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase">Overall Completion</span>
+                <span className="text-xs font-bold text-slate-200">{activeProject.progressPercent}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-700 ease-out"
+                  style={{ width: `${activeProject.progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Key stats grid */}
+            <div className="grid grid-cols-3 gap-2.5 text-center mt-2">
+              <div className="p-2 border border-slate-800 bg-slate-950/25 rounded-xl">
+                <p className="text-lg font-bold text-slate-200">{activeProject.overdueTasks}</p>
+                <p className="text-[9px] text-slate-500 font-semibold uppercase mt-0.5">Open Tasks</p>
+              </div>
+              <div className="p-2 border border-slate-800 bg-slate-950/25 rounded-xl">
+                <p className="text-lg font-bold text-slate-200">{activeProject.pendingMilestones}</p>
+                <p className="text-[9px] text-slate-500 font-semibold uppercase mt-0.5">Pending Miles</p>
+              </div>
+              <div className="p-2 border border-slate-800 bg-slate-950/25 rounded-xl">
+                <p className="text-lg font-bold text-rose-400">{activeProject.blockedTasks}</p>
+                <p className="text-[9px] text-slate-500 font-semibold uppercase mt-0.5">Blockers</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Card 5: Today's Execution Queue ("Up Next")
+// ----------------------------------------------------
+interface ExecutionTask {
+  id: string;
+  title: string;
+  projectId: string;
+  dueDate: string;
+}
+
+function ExecutionQueueCard({ overdueTasks }: { overdueTasks: ExecutionTask[] }) {
+  const [checkedIds, setCheckedIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    // Sync with localStorage to keep checked state persistent for the day
+    const key = `cresos-tasks-checked-${new Date().toISOString().slice(0, 10)}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        setCheckedIds(JSON.parse(saved));
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, []);
+
+  const toggleCheck = (id: string) => {
+    setCheckedIds((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      const key = `cresos-tasks-checked-${new Date().toISOString().slice(0, 10)}`;
+      localStorage.setItem(key, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const tasksToShow = overdueTasks.slice(0, 4);
+
+  return (
+    <CardFrame
+      title="Today's Tasks"
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      }
+    >
+      <div className="flex flex-col h-full min-h-0 justify-between">
+        <div className="flex-1 overflow-y-auto max-h-[14rem] space-y-2.5">
+          {tasksToShow.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-xs text-slate-500">No overdue or pending tasks assigned.</p>
+              <p className="text-[10px] text-emerald-400 mt-1">✓ You are completely on track today!</p>
+            </div>
+          ) : (
+            tasksToShow.map((task) => {
+              const isChecked = !!checkedIds[task.id];
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => toggleCheck(task.id)}
+                  className={`flex items-start gap-3 p-3 rounded-xl border border-slate-800/40 bg-slate-950/20 hover:border-slate-800 hover:bg-slate-950/40 cursor-pointer select-none transition-all ${
+                    isChecked ? "opacity-60 bg-slate-900/10" : ""
+                  }`}
+                >
+                  <div className="pt-0.5 shrink-0">
+                    <div
+                      className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                        isChecked
+                          ? "bg-violet-600 border-violet-500"
+                          : "border-slate-600 bg-slate-950 hover:border-slate-400"
+                      }`}
+                    >
+                      {isChecked && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <p
+                      className={`text-xs font-semibold text-slate-200 leading-snug transition-all ${
+                        isChecked ? "line-through text-slate-500" : ""
+                      }`}
+                    >
+                      {task.title}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Card 6: Quick Actions (The Utility Belt)
+// ----------------------------------------------------
+function QuickActionsCard() {
+  return (
+    <CardFrame
+      title="Quick Actions"
+      icon={
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3 h-full">
+        {/* Submit Daily Report */}
+        <Link
+          href="/developer-reports"
+          className="flex flex-col items-center justify-center text-center p-3 border border-slate-800 bg-slate-950/20 hover:border-violet-500/50 hover:bg-violet-950/10 rounded-xl transition-all group gap-2"
+        >
+          <div className="p-2 rounded-lg bg-slate-800 text-slate-300 group-hover:bg-violet-500/20 group-hover:text-violet-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-300 group-hover:text-white">Submit Report</span>
+        </Link>
+
+        {/* Request Leave */}
+        <Link
+          href="/developer-reports"
+          className="flex flex-col items-center justify-center text-center p-3 border border-slate-800 bg-slate-950/20 hover:border-sky-500/50 hover:bg-sky-950/10 rounded-xl transition-all group gap-2"
+        >
+          <div className="p-2 rounded-lg bg-slate-800 text-slate-300 group-hover:bg-sky-500/20 group-hover:text-sky-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-300 group-hover:text-white">Request Leave</span>
+        </Link>
+
+        {/* Log Time */}
+        <Link
+          href="/developer-reports"
+          className="flex flex-col items-center justify-center text-center p-3 border border-slate-800 bg-slate-950/20 hover:border-emerald-500/50 hover:bg-emerald-950/10 rounded-xl transition-all group gap-2"
+        >
+          <div className="p-2 rounded-lg bg-slate-800 text-slate-300 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-300 group-hover:text-white">Log Time</span>
+        </Link>
+
+        {/* IT Support */}
+        <Link
+          href="/community"
+          className="flex flex-col items-center justify-center text-center p-3 border border-slate-800 bg-slate-950/20 hover:border-amber-500/50 hover:bg-amber-950/10 rounded-xl transition-all group gap-2"
+        >
+          <div className="p-2 rounded-lg bg-slate-800 text-slate-300 group-hover:bg-amber-500/20 group-hover:text-amber-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-300 group-hover:text-white">IT Support</span>
+        </Link>
+      </div>
+    </CardFrame>
+  );
+}
+
+// ----------------------------------------------------
+// Main DeveloperDashboardSections Component
+// ----------------------------------------------------
+export function DeveloperDashboardSections({
+  apiFetch,
+  onRefreshAttention,
+  developerReportStreak,
+  overdueTasks,
+  notifications,
+  progressReminders
+}: {
+  apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
+  onRefreshAttention: () => void;
+  developerReportStreak: number;
+  overdueTasks: ExecutionTask[];
+  notifications: AnnouncementItem[];
+  progressReminders: DeveloperProgressReminder[];
+}) {
+  const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
+  const visibleReminders = progressReminders.filter((r) => !dismissedReminders.has(r.reminderKey));
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Reminders banner */}
+      {visibleReminders.length > 0 && (
+        <div className="space-y-3">
+          {visibleReminders.map((r) => (
+            <div
+              key={r.reminderKey}
+              className={`rounded-2xl border p-4 sm:p-5 ${
+                r.severity === "warning"
+                  ? "border-amber-500/50 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950"
+                  : "border-violet-500/40 bg-gradient-to-br from-violet-950/40 via-slate-950/90 to-slate-950"
+              }`}
+            >
+              <p className="font-display text-base font-bold text-slate-100">{r.subject}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-300">{r.body}</p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDismissedReminders((s) => new Set(s).add(r.reminderKey))}
+                  className="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                >
+                  Dismiss Reminder
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Grid of the 6 core components */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Card 1: Team Directory */}
+        <TeamDirectoryCard apiFetch={apiFetch} />
+
+        {/* Card 2: Report Streak / Compliance */}
+        <DevReportVisualizationCard apiFetch={apiFetch} developerReportStreak={developerReportStreak} />
+
+        {/* Card 3: Top 5 Announcements / Notifications */}
+        <AnnouncementCard notifications={notifications} onRefresh={onRefreshAttention} />
+
+        {/* Card 4: Active Project Context */}
+        <ActiveProjectCard apiFetch={apiFetch} />
+
+        {/* Card 5: Today's Tasks Execution Queue */}
+        <ExecutionQueueCard overdueTasks={overdueTasks} />
+
+        {/* Card 6: Quick Actions Utility Belt */}
+        <QuickActionsCard />
+      </div>
+
+      {/* Today's Focus Setter */}
+      <div className="w-full">
+        <CurrentFocusPanelStyled apiFetch={apiFetch} />
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------
+// Today's Focus Panel Component (Styled from original)
+// ----------------------------------------------------
 function CurrentFocusPanelStyled({
   apiFetch
 }: {
@@ -105,21 +853,22 @@ function CurrentFocusPanelStyled({
     setLoading(true);
     setError(null);
     try {
-      const [cfRes, pRes] = await Promise.all([apiFetch("/user/current-focus"), apiFetch("/projects")]);
+      const [cfRes, pRes] = await Promise.all([
+        apiFetch("/user/current-focus"),
+        apiFetch("/projects")
+      ]);
       if (cfRes.ok) {
-        const j = (await cfRes.json()) as {
-          data?: { projectId?: string | null; note?: string | null; updatedAt?: string | null };
-        };
+        const j = await cfRes.json();
         const d = j.data;
-        setProjectId(d?.projectId ?? "");
-        setNote(d?.note ?? "");
-        setUpdatedAt(d?.updatedAt ?? null);
+        setProjectId(d?.projectId || "");
+        setNote(d?.note || "");
+        setUpdatedAt(d?.updatedAt || null);
       }
       if (pRes.ok) {
-        const list = (await pRes.json()) as { id: string; name: string }[];
+        const list = await pRes.json();
         setProjects(Array.isArray(list) ? list.map((p) => ({ id: p.id, name: p.name })) : []);
       }
-    } catch {
+    } catch (e) {
       setError("Could not load focus settings");
     } finally {
       setLoading(false);
@@ -139,13 +888,14 @@ function CurrentFocusPanelStyled({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: projectId || null, note: note.trim() || null })
       });
-      const j = (await res.json().catch(() => ({}))) as { error?: string; data?: { updatedAt?: string } };
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(j.error ?? "Save failed");
+        setError(j.error || "Save failed");
         return;
       }
       if (j.data?.updatedAt) setUpdatedAt(j.data.updatedAt);
-      emitDataRefresh();
+    } catch (e) {
+      // ignore
     } finally {
       setSaving(false);
     }
@@ -153,489 +903,60 @@ function CurrentFocusPanelStyled({
 
   if (loading) {
     return (
-      <CrmSectionPanel title="Today's project focus" tone="emerald">
-        <p className="text-sm text-slate-400">Loading current focus…</p>
-      </CrmSectionPanel>
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5">
+        <p className="text-xs text-slate-500">Loading focus panel…</p>
+      </div>
     );
   }
 
   return (
-    <CrmSectionPanel
-      title="Today's project focus"
-      tone="emerald"
-      description="Choose the project you are mainly working on so admin and director see it on the strategic overview. Developers: an approved project you are assigned to."
-    >
-      {error && <p className="mb-3 text-sm text-rose-400">{error}</p>}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-          Project
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-emerald-800/50 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
-          >
-            <option value="">— No project selected —</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-[2] flex-col gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-          Short note (optional)
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. finishing API integration"
-            className="w-full min-w-0 rounded-xl border border-emerald-800/50 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="w-full shrink-0 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50 sm:w-auto"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
-      {updatedAt && (
-        <p className="mt-3 text-xs text-slate-500">Last updated: {new Date(updatedAt).toLocaleString()}</p>
-      )}
-    </CrmSectionPanel>
-  );
-}
-
-function ProgressReminderBanner({
-  reminder,
-  apiFetch,
-  onSnoozed
-}: {
-  reminder: DeveloperProgressReminder;
-  apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
-  onSnoozed: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [phrase, setPhrase] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function snooze(preset?: string) {
-    setBusy(true);
-    try {
-      const res = await apiFetch("/dashboard/developer-reminders/snooze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reminderKey: reminder.reminderKey,
-          preset,
-          phrase: preset ? undefined : phrase.trim() || undefined
-        })
-      });
-      if (res.ok) onSnoozed(reminder.reminderKey);
-    } finally {
-      setBusy(false);
-      setOpen(false);
-    }
-  }
-
-  const border =
-    reminder.severity === "warning"
-      ? "border-amber-500/50 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950"
-      : "border-violet-500/40 bg-gradient-to-br from-violet-950/40 via-slate-950/90 to-slate-950";
-
-  return (
-    <div className={`rounded-2xl border p-4 sm:p-5 ${border}`}>
-      <p className="font-display text-base font-bold text-slate-100">{reminder.subject}</p>
-      <p className="mt-2 text-sm leading-relaxed text-slate-300">{reminder.body}</p>
-      {reminder.projectId && (
-        <Link
-          href={`/projects/${reminder.projectId}`}
-          className="mt-2 inline-block text-sm font-medium text-sky-400 hover:underline"
-        >
-          Open {reminder.projectName ?? "project"} →
-        </Link>
-      )}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-        >
-          Remind me later
-        </button>
-        {open &&
-          SNOOZE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              disabled={busy}
-              onClick={() => void snooze(p.key)}
-              className="rounded-lg border border-violet-600/40 bg-violet-950/40 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-900/50 disabled:opacity-50"
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-5 shadow-lg">
+      <div className="flex flex-col gap-4">
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">Set Today's Project Focus</h4>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Select the project you are working on today so it displays in your Active Project Context and keeps your team updated.
+          </p>
+        </div>
+        {error && <p className="text-xs text-rose-400">{error}</p>}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Project Focus
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-xs text-slate-100 focus:border-violet-500/50 outline-none"
             >
-              {p.label}
-            </button>
-          ))}
-      </div>
-      {open && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input
-            type="text"
-            value={phrase}
-            onChange={(e) => setPhrase(e.target.value)}
-            placeholder='e.g. "remind me in 20 minutes" or "Monday"'
-            className="min-w-[12rem] flex-1 rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-sm text-slate-100"
-          />
+              <option value="">— No project selected —</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-[2] flex-col gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Short focus note (optional)
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. implementing direct chat UI"
+              className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-violet-500/50 outline-none"
+            />
+          </label>
           <button
             type="button"
-            disabled={busy || !phrase.trim()}
-            onClick={() => void snooze()}
-            className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+            onClick={() => void save()}
+            disabled={saving}
+            className="w-full shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg hover:bg-violet-500 disabled:opacity-50 sm:w-auto"
           >
-            Snooze
+            {saving ? "Saving…" : "Update Focus"}
           </button>
         </div>
-      )}
-      <p className="mt-2 text-[0.65rem] text-slate-500">
-        Snoozing notifies your assigned director that you postponed this nudge.
-      </p>
-    </div>
-  );
-}
-
-export function DeveloperDashboardSections({
-  apiFetch,
-  onRefreshAttention,
-  tasksOverdue,
-  tasksDueSoon,
-  developerReportStreak,
-  messagesCount,
-  projectsNeedingReview,
-  handoffCount,
-  progressReminders,
-  overdueTasks,
-  attentionMessages
-}: {
-  apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
-  onRefreshAttention: () => void;
-  tasksOverdue: number;
-  tasksDueSoon: number;
-  developerReportStreak: number;
-  messagesCount: number;
-  projectsNeedingReview: { id: string; name: string }[];
-  handoffCount: number;
-  progressReminders: DeveloperProgressReminder[];
-  overdueTasks: { id: string; title: string; projectId: string; dueDate: string }[];
-  attentionMessages: { id: string; reportId: string; content: string; askedAt: string }[];
-}) {
-  const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
-  const [analyticsError, setAnalyticsError] = useState(false);
-  const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
-
-  const loadAnalytics = useCallback(async () => {
-    try {
-      const res = await apiFetch("/dashboard/developer-analytics");
-      if (!res.ok) {
-        setAnalyticsError(true);
-        return;
-      }
-      const j = (await res.json()) as { data?: AnalyticsPayload };
-      if (j.data) {
-        setAnalytics(j.data);
-        setAnalyticsError(false);
-      }
-    } catch {
-      setAnalyticsError(true);
-    }
-  }, [apiFetch]);
-
-  useEffect(() => {
-    void loadAnalytics();
-    const id = setInterval(() => void loadAnalytics(), 45_000);
-    return () => clearInterval(id);
-  }, [loadAnalytics]);
-
-  const visibleReminders = progressReminders.filter((r) => !dismissedReminders.has(r.reminderKey));
-
-  return (
-    <div className="flex flex-col gap-5">
-      {visibleReminders.length > 0 && (
-        <div className="space-y-3">
-          <DashboardSectionLabel roleKeys={["developer"]}>Progress reminders</DashboardSectionLabel>
-          {visibleReminders.map((r) => (
-            <ProgressReminderBanner
-              key={r.reminderKey}
-              reminder={r}
-              apiFetch={apiFetch}
-              onSnoozed={(key) => setDismissedReminders((s) => new Set(s).add(key))}
-            />
-          ))}
-        </div>
-      )}
-
-      <CrmSectionPanel
-        title="Live project analytics"
-        tone="violet"
-        description="Refreshes every 45 seconds from your assigned projects — task completion, milestones, and stale delivery signals."
-        action={
-          <button
-            type="button"
-            onClick={() => void loadAnalytics()}
-            className="rounded-lg border border-violet-600/40 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-950/50"
-          >
-            Refresh now
-          </button>
-        }
-      >
-        {analyticsError && !analytics && (
-          <p className="text-sm text-rose-300">Could not load project analytics.</p>
+        {updatedAt && (
+          <p className="text-[10px] text-slate-500">Last updated: {new Date(updatedAt).toLocaleString()}</p>
         )}
-        {analytics && (
-          <>
-            <StatCardGrid>
-              <StatCard label="Assigned" value={analytics.totals.assigned} tone="sky" />
-              <StatCard label="Avg progress" value={`${analytics.totals.avgProgress}%`} tone="violet" />
-              <StatCard label="Overdue tasks" value={analytics.totals.overdue} tone="rose" />
-              <StatCard label="Blocked" value={analytics.totals.blocked} tone="amber" />
-            </StatCardGrid>
-            {analytics.refreshedAt && (
-              <p className="mt-2 text-xs text-slate-500">
-                Last sync: {new Date(analytics.refreshedAt).toLocaleTimeString()}
-              </p>
-            )}
-            {analytics.projects.length > 0 && (
-              <div className="mt-4 -mx-1 overflow-x-auto rounded-xl border border-violet-900/40 sm:mx-0">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-violet-900/50 text-[0.65rem] uppercase tracking-wide text-violet-300/80">
-                      <th className="px-3 py-2 font-medium">Project</th>
-                      <th className="px-3 py-2 font-medium">Progress</th>
-                      <th className="px-3 py-2 font-medium">Tasks</th>
-                      <th className="px-3 py-2 font-medium">Milestones</th>
-                      <th className="px-3 py-2 text-right font-medium">Open</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analytics.projects.map((p) => (
-                      <tr key={p.id} className="border-b border-slate-800/80 text-slate-200">
-                        <td className="px-3 py-2.5">
-                          <span className="font-medium text-slate-100">{p.name}</span>
-                          {p.stale && (
-                            <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[0.65rem] text-amber-300">
-                              Stale {p.hoursSinceUpdate}h
-                            </span>
-                          )}
-                          {p.untasked && (
-                            <span className="ml-2 rounded-full bg-rose-500/20 px-2 py-0.5 text-[0.65rem] text-rose-300">
-                              No tasks
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-800">
-                              <div
-                                className="h-full rounded-full bg-violet-500 transition-all duration-500"
-                                style={{ width: `${p.progressPercent}%` }}
-                              />
-                            </div>
-                            <span className="tabular-nums text-xs text-slate-400">{p.progressPercent}%</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-slate-400">
-                          {p.doneTasks}/{p.taskCount || p.projectTaskCount} done
-                          {p.overdueTasks > 0 && (
-                            <span className="ml-1 text-rose-300">· {p.overdueTasks} overdue</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-slate-400">
-                          {p.pendingMilestones} pending
-                          {p.overdueMilestones > 0 && (
-                            <span className="text-amber-300"> · {p.overdueMilestones} overdue</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                          <Link
-                            href={`/projects/${p.id}`}
-                            className="rounded-lg border border-violet-500/50 bg-violet-600/80 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500"
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </CrmSectionPanel>
-
-      <div>
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <DashboardSectionLabel roleKeys={["developer"]}>Navigate</DashboardSectionLabel>
-          <button
-            type="button"
-            onClick={onRefreshAttention}
-            className="w-fit rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            Refresh alerts
-          </button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {NAV_HUB.map((c) => (
-            <WorkspaceHubCard
-              key={c.href}
-              href={c.href}
-              title={c.title}
-              description={c.description}
-              action="Open section"
-              tone={c.tone}
-              icon={c.icon}
-            />
-          ))}
-        </div>
-      </div>
-
-      <CrmSectionPanel
-        title="Developer overview"
-        tone="sky"
-        description="Your queue at a glance — tasks, reports, and projects needing attention."
-      >
-        <StatCardGrid>
-          <Link href="/projects" className="block h-full min-h-[5.5rem]">
-            <StatCard
-              label="Tasks overdue"
-              value={tasksOverdue}
-              hint={tasksDueSoon > 0 ? `${tasksDueSoon} due soon` : "On track"}
-              tone="rose"
-            />
-          </Link>
-          <Link href="/developer-reports" className="block h-full min-h-[5.5rem]">
-            <StatCard label="Messages" value={messagesCount} hint="Need a reply" tone="sky" />
-          </Link>
-          <Link href="/developer-reports" className="block h-full min-h-[5.5rem]">
-            <StatCard
-              label="Report streak"
-              value={developerReportStreak}
-              hint="Consecutive days"
-              tone="emerald"
-            />
-          </Link>
-          <Link href="/projects" className="block h-full min-h-[5.5rem]">
-            <StatCard
-              label="Projects"
-              value={projectsNeedingReview.length + handoffCount}
-              hint="Need attention"
-              tone="amber"
-            />
-          </Link>
-        </StatCardGrid>
-
-        {(overdueTasks.length > 0 || attentionMessages.length > 0) && (
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {overdueTasks.length > 0 && (
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Overdue tasks</p>
-                <ul className="space-y-2 text-sm">
-                  {overdueTasks.slice(0, 4).map((t) => (
-                    <li key={t.id} className="rounded-xl border border-rose-900/40 bg-slate-950/50 px-3 py-2">
-                      <Link href={`/projects/${t.projectId}`} className="text-rose-200 hover:underline">
-                        {t.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link
-            href="/developer-reports"
-            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
-          >
-            Submit report →
-          </Link>
-          <Link
-            href="/community"
-            className="rounded-xl border border-slate-600 bg-slate-950/40 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-900/50"
-          >
-            Community →
-          </Link>
-        </div>
-      </CrmSectionPanel>
-
-      <CrmSectionPanel
-        title="Your work history (read-only)"
-        tone="sky"
-        description="Past submissions stay on record for visibility; you cannot edit or delete locked entries. You can still file new daily or activity reports from the pages below."
-      >
-        <Link
-          href="/developer-reports"
-          className="inline-flex rounded-xl border border-sky-500/40 bg-sky-600/20 px-5 py-2.5 text-sm font-semibold text-sky-200 hover:bg-sky-600/30"
-        >
-          Developer reports →
-        </Link>
-      </CrmSectionPanel>
-
-      {projectsNeedingReview.length > 0 && (
-        <CrmSectionPanel
-          title="Projects awaiting your review"
-          tone="amber"
-          description={`Review and add tasks for ${projectsNeedingReview.length} project(s) assigned to you.`}
-        >
-          <div className="overflow-x-auto rounded-xl border border-amber-900/40">
-            <table className="min-w-full text-left text-sm text-slate-200">
-              <thead>
-                <tr className="border-b border-amber-900/50 text-xs uppercase tracking-wide text-amber-300/80">
-                  <th className="px-3 py-2 font-medium">Project</th>
-                  <th className="px-3 py-2 text-right font-medium">Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projectsNeedingReview.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-800/80 last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-slate-100">{p.name}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                      <Link
-                        href={`/projects/${p.id}`}
-                        className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500"
-                      >
-                        Review
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CrmSectionPanel>
-      )}
-
-      <CurrentFocusPanelStyled apiFetch={apiFetch} />
-
-      <div>
-        <DashboardSectionLabel roleKeys={["developer"]}>Your duties</DashboardSectionLabel>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          {DUTY_HUB.map((c) => (
-            <WorkspaceHubCard
-              key={`duty-${c.href}`}
-              href={c.href}
-              title={c.title}
-              description={c.description}
-              action="Open"
-              tone={c.tone}
-              icon={c.icon}
-            />
-          ))}
-        </div>
-        <p className="mt-6 text-center font-label text-xs tracking-[0.2em] text-slate-500">
-          CresOS · Operating system for growth
-        </p>
       </div>
     </div>
   );
