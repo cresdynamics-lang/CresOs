@@ -61,7 +61,7 @@ export async function sendInvoiceEmailToClient(
     ]
   });
 
-  return result.ok ? { ...result, invoiceNumber: pdf.number } : result;
+  return { ...result, invoiceNumber: pdf.number };
 }
 
 /** Finance invoice: PDF + branded template from finance-noreply@cresdynamics.com */
