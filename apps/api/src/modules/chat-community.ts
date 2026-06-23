@@ -10,6 +10,7 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { requireRoles, ALL_APP_ROLE_KEYS, ROLE_KEYS } from "./auth-middleware";
+import { sendOutboundEmail } from "../lib/resend";
 import multer from "multer";
 import os from "os";
 import path from "path";
@@ -129,6 +130,141 @@ async function refreshConversationLastMessage(prisma: PrismaClient, conversation
   });
 }
 
+function escapeHtml(s: string): string {
+  return (s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function sendChatMessageEmailNotification(
+  prisma: PrismaClient,
+  orgId: string,
+  senderId: string,
+  conversationId: string,
+  messageContent: string
+): Promise<void> {
+  try {
+    const conv = await prisma.conversation.findFirst({
+      where: { id: conversationId, orgId }
+    });
+    if (!conv) return;
+
+    const sender = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: { name: true, email: true }
+    });
+    if (!sender) return;
+    const senderName = sender.name?.trim() || sender.email || "Someone";
+
+    const recipientIds = conv.participants.filter((id) => id !== senderId);
+    if (recipientIds.length === 0) return;
+
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: recipientIds } },
+      select: { name: true, email: true }
+    });
+
+    const isDm = conv.type === "direct";
+    const channelName = conv.name?.trim() || "a channel";
+
+    const titleText = isDm
+      ? `${senderName} sent you a message`
+      : `${senderName} sent a message in ${channelName}`;
+
+    const subject = isDm
+      ? `New message from ${senderName}`
+      : `New message in ${channelName}`;
+
+    const preview = messageContent.length > 140 ? `${messageContent.slice(0, 140)}...` : messageContent;
+    const escapedPreview = escapeHtml(preview).replace(/\n/g, "<br/>");
+    const plainTextBody = `Hi,\n\n${titleText}\n\n"${preview}"\n\nReply in CresOS by visiting http://localhost:3000/community`;
+
+    const htmlBody = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      color: #2c3e50;
+      max-width: 580px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .greeting {
+      font-size: 16px;
+      font-weight: 500;
+      color: #111111;
+      margin-bottom: 24px;
+    }
+    .notification-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #6264a7;
+      margin-bottom: 12px;
+      margin-top: 24px;
+    }
+    .message-box {
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      padding: 16px 20px;
+      font-size: 14px;
+      color: #242424;
+      margin-bottom: 24px;
+      border: 1px solid #f0f0f0;
+    }
+    .cta-button {
+      background-color: #6264a7;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 10px 24px;
+      border-radius: 4px;
+      display: inline-block;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="greeting">Hi,</div>
+  
+  <div class="notification-title">
+    ${escapeHtml(titleText)}
+  </div>
+  
+  <div class="message-box">
+    ${escapedPreview}
+  </div>
+  
+  <div style="margin-top: 24px;">
+    <a href="http://localhost:3000/community" class="cta-button">
+      Reply in Teams
+    </a>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    for (const r of recipients) {
+      if (!r.email || !r.email.includes("@")) continue;
+      await sendOutboundEmail({
+        to: r.email,
+        subject,
+        text: plainTextBody,
+        html: htmlBody,
+        emailChannel: "default"
+      });
+    }
+  } catch (error) {
+    console.error("Error sending chat email notification:", error);
+  }
+}
+
 export default function chatCommunityRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
@@ -230,6 +366,8 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
               updatedAt: new Date()
             }
           });
+
+          void sendChatMessageEmailNotification(prisma, orgId, userId, conv.id, content);
 
           results.push({
             recipientUserId: recipientId,
@@ -1226,6 +1364,8 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
           }
         });
 
+        void sendChatMessageEmailNotification(prisma, orgId, userId, conversationId, displayContent);
+
         const message = {
           id: created.id,
           conversationId: created.conversationId,
@@ -1507,6 +1647,16 @@ export default function chatCommunityRouter(prisma: PrismaClient): Router {
             unreadCounts: unreadNext
           }
         });
+
+        if (createdMessages.length > 0) {
+          void sendChatMessageEmailNotification(
+            prisma,
+            orgId,
+            userId,
+            conversationId,
+            createdMessages[createdMessages.length - 1]!.content
+          );
+        }
 
         const senderName = sender ? displayNameOrEmail(sender.name, "") : "User";
         const messages = createdMessages.map((created) => ({
