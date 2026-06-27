@@ -198,6 +198,7 @@ model User {
   salesReportsSubmitted        SalesReport[]
   salesReportsReviewed         SalesReport[]                @relation("SalesReportReviewedBy")
   salesReportComments          SalesReportComment[]
+  developerReportComments      DeveloperReportComment[]
   developerReportsSubmitted    DeveloperReport[]
   developerReportsReviewed     DeveloperReport[]            @relation("DeveloperReportReviewedBy")
   directorReportsSubmitted     DirectorReport[]
@@ -1383,10 +1384,30 @@ model DeveloperReport {
   org         Org  @relation(fields: [orgId], references: [id])
   submittedBy User @relation(fields: [submittedById], references: [id])
   reviewedBy  User? @relation("DeveloperReportReviewedBy", fields: [reviewedById], references: [id])
+  comments    DeveloperReportComment[]
 
   @@index([orgId, submittedById])
   @@index([orgId, reportDate])
   @@index([orgId, reviewStatus])
+}
+
+model DeveloperReportComment {
+  id        String   @id @default(cuid())
+  reportId  String
+  authorId  String
+  kind      String // question, comment, response
+  parentId  String?
+  content   String
+  source    String?
+  createdAt DateTime @default(now())
+
+  report  DeveloperReport          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author  User                     @relation(fields: [authorId], references: [id])
+  parent  DeveloperReportComment?  @relation("DevCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies DeveloperReportComment[] @relation("DevCommentReplies")
+
+  @@index([reportId])
+  @@index([parentId])
 }
 
 model DailyReminderSent {

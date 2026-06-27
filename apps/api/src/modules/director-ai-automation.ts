@@ -812,17 +812,36 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
 
 async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportId: string): Promise<void> {
   // If Groq is not configured, do not write canned remarks.
-  // Only generate remarks when the AI provider is actually available.
+  // Only generate replies when the AI provider is actually available.
   if (!getGroq()) return;
 
   const report = await prisma.developerReport.findUnique({
     where: { id: reportId },
-    include: { submittedBy: { select: { name: true, email: true } } }
+    include: {
+      submittedBy: { select: { name: true, email: true } },
+      comments: {
+        include: {
+          author: { select: { name: true, email: true } },
+          replies: { include: { author: { select: { name: true, email: true } } }, orderBy: { createdAt: "asc" } }
+        },
+        orderBy: { createdAt: "asc" }
+      }
+    }
   });
   if (!report) return;
-
-  if (report.remarks?.trim()) return;
   if (report.reviewStatus === "checked") return;
+
+  const leadershipIds = await getDirectorAndAdminUserIds(prisma, report.orgId);
+  if (leadershipIds.length === 0) return;
+
+  const existingLeadershipComment = await prisma.developerReportComment.findFirst({
+    where: {
+      reportId,
+      authorId: { in: leadershipIds },
+      createdAt: { gte: report.createdAt }
+    }
+  });
+  if (existingLeadershipComment) return;
 
   const authorId = await pickDirectorAuthorId(prisma, report.orgId);
   if (!authorId) return;
@@ -1022,6 +1041,29 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
       : "Milestones due in next 7 days (not completed): none found."
   ].join("\n");
   const deliveryContext = await buildUserDeliveryContext(prisma, report.orgId, devId);
+  const reportPlain = [
+    report.whatWorked,
+    report.blockers,
+    report.needsAttention,
+    report.implemented,
+    report.pending,
+    report.nextPlan
+  ]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean)
+    .join("\n");
+  const threadContext = (report.comments ?? [])
+    .filter((c) => !c.parentId)
+    .map((c) => {
+      const who = c.author?.name?.trim() || c.author?.email || c.authorId;
+      const head = `[${c.createdAt.toISOString()}] ${who} (${c.kind}${c.source ? `, source=${c.source}` : ""}): ${c.content}`;
+      const replies = (c.replies ?? []).map((r) => {
+        const rWho = r.author?.name?.trim() || r.author?.email || r.authorId;
+        return `  ↳ [${r.createdAt.toISOString()}] ${rWho} (${r.kind}${r.source ? `, source=${r.source}` : ""}): ${r.content}`;
+      });
+      return [head, ...replies].join("\n");
+    })
+    .join("\n\n");
 
   const userMsg = buildDirectorReplyUserDeveloper({
     teamMemberName,
@@ -1033,13 +1075,13 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
     pending: report.pending,
     nextPlan: report.nextPlan,
     platformContext: [platformContext, "", deliveryContext].filter(Boolean).join("\n"),
-    previousReports
+    previousReports,
+    threadContext
   });
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
   const normalized = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
-  const qCount = countQuestions(normalized);
   const hasRiskSignals = overdueTasks.length > 0 || milestonesOverdue.length > 0 || countsDay.blocked > 0;
   const minQuestions = hasRiskSignals ? 3 : 2;
   const suggestedQuestions: string[] = [];
@@ -1047,6 +1089,22 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
   const overdue2 = overdueTasks.find((t) => t.project?.name && t.project?.name !== overdue1?.project?.name) ?? null;
   const msOver1 = milestonesOverdue[0] ?? null;
   const dueSoon1 = dueSoonTasks[0] ?? null;
+
+  const taskMentionedInText = (text: string, title: string): boolean => {
+    if (!title || title.length < 3) return false;
+    const lower = text.toLowerCase();
+    if (lower.includes(title.toLowerCase())) return true;
+    const words = title.split(/\s+/).filter((w) => w.length >= 4);
+    return words.some((w) => lower.includes(w.toLowerCase()));
+  };
+
+  for (const t of tasksDay.slice(0, 10)) {
+    if (suggestedQuestions.length >= 4) break;
+    if (!taskMentionedInText(reportPlain, t.title)) continue;
+    suggestedQuestions.push(
+      `You mentioned "${t.title}" on ${t.project?.name ?? "Project"} — what is the current status and what remains before it is done?`
+    );
+  }
 
   if (overdue1?.title) {
     suggestedQuestions.push(
@@ -1075,20 +1133,38 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
     suggestedQuestions.push("Which dependency or stakeholder is currently slowing you down, and what’s the fastest way we can remove it?");
   }
 
-  const remarks =
-    qCount >= minQuestions
-      ? normalized
-      : injectQuestionsBeforeMarked(normalized, suggestedQuestions.slice(0, minQuestions - qCount));
+  const { commentBody, questions } = buildSalesAiQuestions(normalized, suggestedQuestions, minQuestions);
 
-  await prisma.developerReport.update({
-    where: { id: reportId },
-    data: {
-      remarks,
-      reviewStatus: "viewed",
-      reviewedAt: new Date(),
-      reviewedById: authorId
-    }
-  });
+  await prisma.$transaction([
+    prisma.developerReportComment.create({
+      data: {
+        reportId,
+        authorId,
+        kind: "comment",
+        content: commentBody,
+        source: "ai_auto"
+      }
+    }),
+    ...questions.map((q) =>
+      prisma.developerReportComment.create({
+        data: {
+          reportId,
+          authorId,
+          kind: "question",
+          content: q.slice(0, 4000),
+          source: "ai_auto"
+        }
+      })
+    ),
+    prisma.developerReport.update({
+      where: { id: reportId },
+      data: {
+        reviewStatus: "viewed",
+        reviewedAt: new Date(),
+        reviewedById: authorId
+      }
+    })
+  ]);
 }
 
 async function listRoleMembers(

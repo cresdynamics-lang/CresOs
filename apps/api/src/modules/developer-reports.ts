@@ -3,9 +3,12 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
-import { notifyDirectors } from "./director-notifications";
+import { notifyDirectors, getDirectorAndAdminUserIds } from "./director-notifications";
 import { getDirectorReportSubmitterIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
 import { queueAutoDirectorReplyForDeveloperReport } from "./director-ai-automation";
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const MARKED_REVIEWED_LINE = "Marked reviewed. ✓";
 
 const LEADERSHIP_APPEND_SEP =
   "\n\n────────────────────────\nDirector / Admin note\n────────────────────────\n\n";
@@ -57,13 +60,40 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         where = scoped ? { orgId, submittedById: { in: scoped } } : { orgId };
       }
 
+      const leadershipIds = isLeadership ? await getDirectorAndAdminUserIds(prisma, orgId) : [];
+
       const list = await prisma.developerReport.findMany({
         where,
         orderBy: { reportDate: "desc" },
         include: isLeadership
-          ? { submittedBy: { select: { id: true, name: true, email: true } } }
+          ? {
+              submittedBy: { select: { id: true, name: true, email: true } },
+              comments: {
+                where: { parentId: null },
+                select: { authorId: true, source: true, content: true, createdAt: true }
+              }
+            }
           : undefined
       });
+
+      if (isLeadership) {
+        const mapped = list.map((r) => {
+          const { comments, ...rest } = r;
+          const filedAtMs = r.createdAt ? new Date(r.createdAt).getTime() : 0;
+          const hasAiLeadershipReply = (comments ?? []).some(
+            (c) =>
+              c.source === "ai_auto" ||
+              (leadershipIds.includes(c.authorId) &&
+                typeof c.content === "string" &&
+                c.content.includes(MARKED_REVIEWED_LINE) &&
+                filedAtMs > 0 &&
+                new Date(c.createdAt).getTime() >= filedAtMs)
+          );
+          return { ...rest, hasAiLeadershipReply };
+        });
+        return res.json(mapped);
+      }
+
       res.json(list);
     }
   );
@@ -143,6 +173,64 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
     }
   );
 
+  // Developer: overdue unanswered questions (alarm) — must be before /:id
+  router.get(
+    "/alarms/overdue",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const roleKeys = req.auth!.roleKeys;
+
+      let reportWhere: { orgId: string; submittedById?: string | { in: string[] } } = { orgId };
+      if (isDirectorOnly(roleKeys)) {
+        const scoped = await getDirectorReportSubmitterIds(prisma, orgId, userId, ROLE_KEYS.developer);
+        if (scoped) reportWhere = { orgId, submittedById: { in: scoped } };
+      } else if (!isAdminRole(roleKeys)) {
+        reportWhere = { orgId, submittedById: userId };
+      }
+
+      const reports = await prisma.developerReport.findMany({
+        where: reportWhere,
+        select: { id: true, reportDate: true }
+      });
+      const reportIds = reports.map((r) => r.id);
+      const reportDateById = new Map(reports.map((r) => [r.id, r.reportDate]));
+
+      const questions = await prisma.developerReportComment.findMany({
+        where: { reportId: { in: reportIds }, kind: "question", parentId: null },
+        orderBy: { createdAt: "asc" }
+      });
+
+      const withReplies = await Promise.all(
+        questions.map(async (q) => {
+          const reply = await prisma.developerReportComment.findFirst({
+            where: { parentId: q.id }
+          });
+          const askedAt = q.createdAt.getTime();
+          const deadline = askedAt + TWENTY_FOUR_HOURS_MS;
+          const now = Date.now();
+          const overdue = !reply && now > deadline;
+          const rd = reportDateById.get(q.reportId);
+          const reportTitle = rd ? rd.toISOString().slice(0, 10) : "Developer report";
+          return {
+            id: q.id,
+            reportId: q.reportId,
+            reportTitle,
+            content: q.content,
+            askedAt: q.createdAt,
+            deadline: new Date(deadline),
+            answeredAt: reply?.createdAt ?? null,
+            overdue
+          };
+        })
+      );
+
+      const overdueOnly = withReplies.filter((x) => x.overdue);
+      res.json({ overdue: overdueOnly, all: withReplies });
+    }
+  );
+
   // Get one (developer: own; director: any)
   router.get(
     "/:id",
@@ -155,7 +243,16 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
 
       const report = await prisma.developerReport.findFirst({
         where: isDirector ? { id, orgId } : { id, orgId, submittedById: userId },
-        include: { submittedBy: { select: { id: true, name: true, email: true } } }
+        include: {
+          submittedBy: { select: { id: true, name: true, email: true } },
+          comments: {
+            include: {
+              author: { select: { id: true, email: true, name: true } },
+              replies: { include: { author: { select: { id: true, email: true, name: true } } } }
+            },
+            orderBy: { createdAt: "asc" }
+          }
+        }
       });
       if (!report) {
         res.status(404).json({ error: "Report not found" });
@@ -203,11 +300,23 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
 
       const effectiveRemarks = ((nextRemarks !== undefined ? nextRemarks : existing.remarks) ?? "").trim();
       if (reviewStatus === "checked" && effectiveRemarks.length === 0) {
-        res.status(400).json({
-          error:
-            "Remarks are required to mark a report as checked (add a director note, or append to existing remarks)."
-        });
-        return;
+        const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
+        const threadOk =
+          (await prisma.developerReportComment.count({
+            where: {
+              reportId: id,
+              parentId: null,
+              authorId: { in: leadershipIds },
+              createdAt: { gte: existing.createdAt }
+            }
+          })) > 0;
+        if (!threadOk) {
+          res.status(400).json({
+            error:
+              "Add remarks on the report, append a director note, or leave an existing leadership comment on this submission before marking checked."
+          });
+          return;
+        }
       }
 
       const updated = await prisma.developerReport.update({
@@ -221,6 +330,95 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         include: { submittedBy: { select: { id: true, name: true, email: true } } }
       });
       res.json(updated);
+    }
+  );
+
+  // Director: add comment or question. Developer: add response (body: { parentId, content })
+  router.post(
+    "/:id/comments",
+    requireRoles([ROLE_KEYS.developer, ROLE_KEYS.director, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const { id } = req.params;
+      const { kind, content, parentId } = req.body as {
+        kind?: string;
+        content?: string;
+        parentId?: string;
+      };
+
+      if (!content || !content.trim()) {
+        res.status(400).json({ error: "Content is required" });
+        return;
+      }
+
+      const report = await prisma.developerReport.findFirst({
+        where: { id, orgId },
+        include: { comments: true }
+      });
+      if (!report) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+
+      const isDirector = req.auth!.roleKeys.some((k) =>
+        [ROLE_KEYS.director, ROLE_KEYS.admin].includes(k)
+      );
+
+      if (parentId) {
+        if (isDirector) {
+          res.status(400).json({ error: "Director cannot add response to a question" });
+          return;
+        }
+        const parent = await prisma.developerReportComment.findFirst({
+          where: { id: parentId, reportId: id }
+        });
+        if (!parent || parent.kind !== "question") {
+          res.status(400).json({ error: "Invalid question to respond to" });
+          return;
+        }
+        if (report.submittedById !== userId) {
+          res.status(403).json({ error: "Only report author can respond" });
+          return;
+        }
+        const comment = await prisma.developerReportComment.create({
+          data: {
+            reportId: id,
+            authorId: userId,
+            kind: "response",
+            parentId,
+            content: content.trim()
+          },
+          include: { author: { select: { id: true, email: true, name: true } } }
+        });
+        const authorName = comment.author?.name || comment.author?.email || "Developer";
+        const dayKey = report.reportDate.toISOString().slice(0, 10);
+        await notifyDirectors(
+          prisma,
+          orgId,
+          "Developer report response received",
+          `Developer report for ${dayKey}: ${authorName} responded to a director question.`
+        );
+        res.status(201).json(comment);
+        return;
+      }
+
+      if (isDirector) {
+        const k = kind === "question" ? "question" : "comment";
+        const comment = await prisma.developerReportComment.create({
+          data: {
+            reportId: id,
+            authorId: userId,
+            kind: k,
+            content: content.trim()
+          },
+          include: { author: { select: { id: true, email: true, name: true } } }
+        });
+        res.status(201).json(comment);
+        return;
+      }
+
+      res.status(403).json({ error: "Only director can add comments or questions" });
     }
   );
 

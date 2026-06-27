@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "../auth-context";
-import { CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
+import { CrmActionLink, CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { formatNairobiDate, formatNairobiDateTime } from "../../lib/nairobi-datetime";
 
@@ -28,7 +29,18 @@ type DeveloperReport = {
   updatedAt: string;
   reviewStatus?: string;
   remarks?: string | null;
+  hasAiLeadershipReply?: boolean;
   submittedBy?: { id: string; name: string | null; email: string };
+};
+
+type OverdueItem = {
+  id: string;
+  reportId: string;
+  reportTitle: string;
+  content: string;
+  askedAt: string;
+  deadline: string;
+  overdue: boolean;
 };
 
 const FIELDS = [
@@ -52,6 +64,7 @@ function totalFormChars(form: Record<(typeof FIELDS)[number]["key"], string>): n
 export default function DeveloperReportsPage() {
   const { apiFetch, auth } = useAuth();
   const [list, setList] = useState<DeveloperReport[]>([]);
+  const [overdue, setOverdue] = useState<OverdueItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -66,13 +79,7 @@ export default function DeveloperReportsPage() {
   const [submitting, setSubmitting] = useState(false);
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
   const isDeveloper = auth.roleKeys.includes("developer");
-  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
-  const [reviewAppend, setReviewAppend] = useState("");
-  const [replaceWholeReview, setReplaceWholeReview] = useState(false);
-  const replacePrefilledRef = useRef(false);
   const isDevSelfView = isDeveloper && !isDirector;
-  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
-  const [viewId, setViewId] = useState<string | null>(null);
   const [directorLabel, setDirectorLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,19 +103,23 @@ export default function DeveloperReportsPage() {
     };
   }, [apiFetch, isDevSelfView]);
 
-  const viewReport = viewId ? list.find((r) => r.id === viewId) ?? null : null;
-  const directorReviewReport = editingReviewId ? list.find((r) => r.id === editingReviewId) ?? null : null;
-
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const res = await apiFetch("/developer-reports");
-      if (res.ok) {
-        setList((await res.json()) as DeveloperReport[]);
+      const [listRes, alarmRes] = await Promise.all([
+        apiFetch("/developer-reports"),
+        apiFetch("/developer-reports/alarms/overdue")
+      ]);
+      if (listRes.ok) {
+        setList((await listRes.json()) as DeveloperReport[]);
       } else {
-        const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-        setLoadError(err.message ?? err.error ?? `Could not load reports (${res.status})`);
+        const err = (await listRes.json().catch(() => ({}))) as { error?: string; message?: string };
+        setLoadError(err.message ?? err.error ?? `Could not load reports (${listRes.status})`);
         setList([]);
+      }
+      if (alarmRes.ok) {
+        const data = (await alarmRes.json()) as { overdue: OverdueItem[] };
+        setOverdue(data.overdue ?? []);
       }
     } catch {
       setLoadError("Could not reach the server. Check your connection and try again.");
@@ -119,58 +130,6 @@ export default function DeveloperReportsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!replaceWholeReview) {
-      replacePrefilledRef.current = false;
-      return;
-    }
-    if (!directorReviewReport) return;
-    if (!replacePrefilledRef.current) {
-      setReviewAppend(directorReviewReport.remarks ?? "");
-      replacePrefilledRef.current = true;
-    }
-  }, [replaceWholeReview, directorReviewReport]);
-
-  const updateReview = async (id: string, reviewStatus: "viewed" | "checked") => {
-    const append = !replaceWholeReview;
-    const trimmed = reviewAppend.trim();
-    const existingRemarks = (directorReviewReport?.remarks ?? "").trim();
-    if (reviewStatus === "checked" && append && !trimmed && !existingRemarks) {
-      alert("Add a director note (appended) or use “Replace entire remarks” with full text before marking checked.");
-      return;
-    }
-    if (reviewStatus === "checked" && !append && !trimmed) {
-      alert("Enter the full remarks text before marking checked when replacing.");
-      return;
-    }
-    try {
-      const body = append
-        ? {
-            reviewStatus,
-            remarks: trimmed || undefined,
-            appendRemarks: Boolean(trimmed)
-          }
-        : { reviewStatus, remarks: trimmed || undefined, appendRemarks: false };
-      const res = await apiFetch(`/developer-reports/${id}/review`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      if (res.ok) {
-        setEditingReviewId(null);
-        setReviewAppend("");
-        setReplaceWholeReview(false);
-        replacePrefilledRef.current = false;
-        await load();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error ?? "Failed to update review status");
-      }
-    } catch {
-      // ignore
-    }
-  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -248,6 +207,25 @@ export default function DeveloperReportsPage() {
         </div>
       )}
 
+      {isDevSelfView && overdue.length > 0 && (
+        <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
+          <p className="font-semibold text-amber-200">
+            Alarm: {overdue.length} director question{overdue.length === 1 ? "" : "s"} not answered within 24 hours
+          </p>
+          <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
+            {overdue.slice(0, 5).map((o) => (
+              <li key={o.id}>
+                <Link href={`/developer-reports/${o.reportId}`} className="text-amber-300 hover:underline">
+                  Report {o.reportTitle}
+                </Link>
+                {" — answer by deadline"}
+              </li>
+            ))}
+            {overdue.length > 5 && <li className="text-slate-500">… and {overdue.length - 5} more</li>}
+          </ul>
+        </div>
+      )}
+
       <CrmSectionPanel
         title={isDirector ? "All developer reports" : "My report history"}
         tone="violet"
@@ -281,13 +259,12 @@ export default function DeveloperReportsPage() {
                 {isDirector && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
                 {isDirector && <th className="px-3 py-2.5 font-medium">Summary</th>}
                 <th className="px-3 py-2.5 font-medium">Status</th>
-                <th className="px-3 py-2.5 font-medium">Remarks</th>
+                {isDirector && <th className="px-3 py-2.5 font-medium">AI reply</th>}
                 <th className="px-3 py-2.5 font-medium">Filed</th>
-                {(isDirector || isDevSelfView) && <th className="px-3 py-2.5 text-right font-medium">Action</th>}
+                <th className="px-3 py-2.5 text-right font-medium">Action</th>
               </CrmTableHead>
               <tbody>
                 {list.map((report) => {
-                  const isExpanded = Boolean(expandedIds[report.id]);
                   const status = report.reviewStatus ?? "pending";
                   const badgeClass =
                     status === "checked"
@@ -297,114 +274,41 @@ export default function DeveloperReportsPage() {
                         : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200";
 
                   return (
-                    <Fragment key={report.id}>
-                      <tr className="border-b border-slate-800">
-                        <td className="py-2 pr-3 text-slate-200">
+                    <tr key={report.id} className="border-b border-slate-800">
+                      <td className="py-2 pr-3 text-slate-200">
+                        <Link href={`/developer-reports/${report.id}`} className="text-violet-300 hover:underline">
                           {formatNairobiDate(report.reportDate)}
-                        </td>
-                        {isDirector && (
-                          <td className="py-2 pr-3 text-xs text-slate-400">
-                            {report.submittedBy ? report.submittedBy.name ?? report.submittedBy.email : "—"}
-                          </td>
-                        )}
-                        {isDirector && (
-                          <td className="max-w-[14rem] py-2 pr-3 text-xs text-slate-400" title={reportPreview(report)}>
-                            {reportPreview(report)}
-                          </td>
-                        )}
-                        <td className="py-2 pr-3 text-xs">
-                          <span className={badgeClass}>{status}</span>
-                        </td>
+                        </Link>
+                      </td>
+                      {isDirector && (
                         <td className="py-2 pr-3 text-xs text-slate-400">
-                          {report.remarks?.trim() ? report.remarks.trim().slice(0, 80) : "—"}
+                          {report.submittedBy ? report.submittedBy.name ?? report.submittedBy.email : "—"}
                         </td>
-                        <td className="py-2 pr-3 text-xs text-slate-500">
-                          {formatNairobiDateTime(report.createdAt)}
-                        </td>
-                        {(isDirector || isDevSelfView) && (
-                          <td className="py-2 text-right">
-                            <div className="flex justify-end gap-2">
-                              {isDevSelfView && (
-                                <button
-                                  type="button"
-                                  onClick={() => setViewId(report.id)}
-                                  className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                                >
-                                  View
-                                </button>
-                              )}
-                              {isDevSelfView && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedIds((p) => ({ ...p, [report.id]: !Boolean(p[report.id]) }))
-                                  }
-                                  className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                                >
-                                  {isExpanded ? "Hide" : "Expand"}
-                                </button>
-                              )}
-                              {isDirector && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedIds((p) => ({ ...p, [report.id]: !Boolean(p[report.id]) }))
-                                  }
-                                  className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                                >
-                                  {isExpanded ? "Hide" : "Expand"}
-                                </button>
-                              )}
-                              {isDirector && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingReviewId(report.id);
-                                    setReviewAppend("");
-                                    setReplaceWholeReview(false);
-                                    replacePrefilledRef.current = false;
-                                    setViewId(report.id);
-                                  }}
-                                  className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                                >
-                                  Review
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-
-                      {(isDevSelfView || isDirector) && isExpanded && (
-                        <tr className="border-b border-slate-800 bg-slate-900/30">
-                          <td colSpan={isDirector ? 7 : 5} className="px-2 py-2 sm:px-3 sm:py-3">
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Director review</p>
-                                <p className="mt-1 text-xs text-slate-200 sm:text-sm">
-                                  Status: <span className={badgeClass}>{status}</span>
-                                </p>
-                                <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Remarks</p>
-                                <p className="mt-1 whitespace-pre-wrap text-xs text-slate-200 sm:text-sm">
-                                  {report.remarks?.trim() ? report.remarks.trim() : "—"}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Report details</p>
-                                {FIELDS.map(({ key, label }) => (
-                                  <div key={`${report.id}-${key}`} className="mt-2">
-                                    <p className="text-[11px] text-slate-400 sm:text-xs">{label}</p>
-                                    <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-200 sm:text-sm">
-                                      {(report as any)[key]?.trim?.() ? (report as any)[key].trim() : "—"}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
                       )}
-                    </Fragment>
+                      {isDirector && (
+                        <td className="max-w-[14rem] py-2 pr-3 text-xs text-slate-400" title={reportPreview(report)}>
+                          {reportPreview(report)}
+                        </td>
+                      )}
+                      <td className="py-2 pr-3 text-xs">
+                        <span className={badgeClass}>{status}</span>
+                      </td>
+                      {isDirector && (
+                        <td className="py-2 pr-3 text-xs text-slate-400">
+                          {report.hasAiLeadershipReply ? (
+                            <span className="text-emerald-300">Yes</span>
+                          ) : (
+                            <span className="text-slate-500">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-2 pr-3 text-xs text-slate-500">
+                        {formatNairobiDateTime(report.createdAt)}
+                      </td>
+                      <td className="py-2 text-right">
+                        <CrmActionLink href={`/developer-reports/${report.id}`}>Open</CrmActionLink>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -412,15 +316,6 @@ export default function DeveloperReportsPage() {
           </CrmDataTable>
         )}
         </div>
-
-        {isDevSelfView && list.some((r) => (r.reviewStatus ?? "pending") !== "pending" || Boolean(r.remarks?.trim())) && (
-          <div className="mt-4 shrink-0 rounded-xl border border-violet-500/25 bg-violet-950/20 p-4">
-            <p className="text-sm font-medium text-violet-200">Director review notes</p>
-            <p className="mt-1 text-xs text-slate-400">
-              When leadership marks a report as viewed/checked, remarks appear here and in the table.
-            </p>
-          </div>
-        )}
       </CrmSectionPanel>
 
       {showForm && isDeveloper && (
@@ -473,152 +368,6 @@ export default function DeveloperReportsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {isDevSelfView && viewReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 sm:px-4">
-          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-3 sm:p-5">
-            <div className="flex items-start justify-between gap-3 sm:gap-4">
-              <div>
-                <p className="text-[11px] text-slate-500 sm:text-xs">Developer report</p>
-                <h3 className="mt-1 text-base font-semibold text-slate-100 sm:text-lg">
-                  {new Date(viewReport.reportDate).toLocaleDateString()}
-                </h3>
-                <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Filed {new Date(viewReport.createdAt).toLocaleString()}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewId(null)}
-                className="rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-900 sm:px-3 sm:py-2 sm:text-sm"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:mt-4 sm:p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Director review</p>
-              <div className="mt-2 text-xs text-slate-200 sm:text-sm">
-                Status: <span className="ml-2">{viewReport.reviewStatus ?? "pending"}</span>
-              </div>
-              <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Remarks</p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-slate-200 sm:text-sm">
-                {viewReport.remarks?.trim() ? viewReport.remarks.trim() : "—"}
-              </p>
-            </div>
-
-            <div className="mt-3 grid gap-2 sm:mt-4 sm:gap-3">
-              {FIELDS.map(({ key, label }) => (
-                <div key={`${viewReport.id}-modal-${key}`} className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 sm:p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-xs text-slate-200 sm:text-sm">
-                    {(viewReport as any)[key]?.trim?.() ? (viewReport as any)[key].trim() : "—"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isDirector && directorReviewReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 sm:px-4">
-          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-3 sm:p-5">
-            <div className="flex items-start justify-between gap-3 sm:gap-4">
-              <div>
-                <p className="text-[11px] text-slate-500 sm:text-xs">Developer report — Review</p>
-                <h3 className="mt-1 text-base font-semibold text-slate-100 sm:text-lg">
-                  {new Date(directorReviewReport.reportDate).toLocaleDateString()}
-                </h3>
-                <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                  Filed {new Date(directorReviewReport.createdAt).toLocaleString()}
-                  {directorReviewReport.submittedBy
-                    ? ` · By ${directorReviewReport.submittedBy.name ?? directorReviewReport.submittedBy.email}`
-                    : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingReviewId(null);
-                  setViewId(null);
-                  setReviewAppend("");
-                  setReplaceWholeReview(false);
-                  replacePrefilledRef.current = false;
-                }}
-                className="rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-900 sm:px-3 sm:py-2 sm:text-sm"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:mt-4 sm:p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Review</p>
-              <div className="mt-2 text-xs text-slate-200 sm:text-sm">
-                Current status: <span className="ml-2">{directorReviewReport.reviewStatus ?? "pending"}</span>
-              </div>
-              <div className="mt-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                  Current remarks (includes any automated reply)
-                </p>
-                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-slate-800 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 sm:text-sm">
-                  {directorReviewReport.remarks?.trim() ? directorReviewReport.remarks.trim() : "— None yet —"}
-                </p>
-              </div>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-slate-300 sm:text-sm">
-                <input
-                  type="checkbox"
-                  checked={replaceWholeReview}
-                  onChange={(e) => setReplaceWholeReview(e.target.checked)}
-                  className="rounded border-slate-600"
-                />
-                Replace entire remarks (overwrites; use to correct the full note)
-              </label>
-              <label className="mt-3 block">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-                  {replaceWholeReview ? "Full remarks" : "Add director / admin note (appended)"}
-                </span>
-                <textarea
-                  value={reviewAppend}
-                  onChange={(e) => setReviewAppend(e.target.value)}
-                  rows={4}
-                  className="mt-2 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
-                  placeholder={
-                    replaceWholeReview
-                      ? "Edit the complete remarks shown to the developer…"
-                      : "Type a note to append below the existing remarks…"
-                  }
-                />
-              </label>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void updateReview(directorReviewReport.id, "viewed")}
-                  className="rounded border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-800 sm:px-3 sm:py-2 sm:text-sm"
-                >
-                  Mark viewed
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void updateReview(directorReviewReport.id, "checked")}
-                  className="rounded bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 sm:px-3 sm:py-2 sm:text-sm"
-                >
-                  Mark checked
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-2 sm:mt-4 sm:gap-3">
-              {FIELDS.map(({ key, label }) => (
-                <div key={`${directorReviewReport.id}-director-modal-${key}`} className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 sm:p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-xs text-slate-200 sm:text-sm">
-                    {(directorReviewReport as any)[key]?.trim?.() ? (directorReviewReport as any)[key].trim() : "—"}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}

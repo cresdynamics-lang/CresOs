@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
+import { financeNeu } from "../../components/finance/finance-theme";
 
 export type FinanceSection =
   | "overview"
@@ -74,10 +75,8 @@ export function FinanceNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={[
-              "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-lg px-3 py-2.5 text-sm font-medium transition-colors sm:min-h-0 sm:py-2",
-              active
-                ? "bg-slate-600 text-white shadow-sm"
-                : "border border-slate-600 text-slate-300 hover:bg-slate-800 active:bg-slate-700"
+              "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-xl px-3 py-2.5 text-sm font-medium transition-all sm:min-h-0 sm:py-2",
+              active ? financeNeu.navActive : financeNeu.navIdle
             ].join(" ")}
           >
             <span className="whitespace-nowrap sm:hidden">{item.shortLabel ?? item.label}</span>

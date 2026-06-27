@@ -141,6 +141,7 @@ export function buildDirectorReplyUserDeveloper(payload: {
   nextPlan: string | null;
   platformContext?: string;
   previousReports?: string;
+  threadContext?: string;
 }): string {
   const blockers = payload.blockers?.trim() || "None stated.";
   return [
@@ -154,6 +155,7 @@ export function buildDirectorReplyUserDeveloper(payload: {
     `Blockers: ${blockers}`,
     `CresOS platform context (tasks/milestones/projects):\n${payload.platformContext?.trim() ? payload.platformContext.trim() : "None provided."}`,
     `Previous reports (most recent first; same person; for comparison):\n${payload.previousReports?.trim() ? payload.previousReports.trim() : "None provided."}`,
+    `Existing thread on this report:\n${payload.threadContext?.trim() ? payload.threadContext.trim() : "None yet."}`,
     "",
     "Read this report and respond as the Director. Follow the system rules exactly."
   ].join("\n");

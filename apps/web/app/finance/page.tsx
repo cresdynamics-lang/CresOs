@@ -6,7 +6,7 @@ import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { StatCard, StatCardGrid } from "../../components/stat-card";
+import { FinanceStatCard, FinanceStatGrid } from "../../components/finance/finance-ui";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
@@ -1038,28 +1038,26 @@ export default function FinancePage() {
       )}
 
       {canSeeMoneyStats && section === "overview" && (
-        <StatCardGrid>
-          <StatCard
+        <FinanceStatGrid>
+          <FinanceStatCard
             label="Revenue (period)"
             value={report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
             hint="Confirmed payments this month (UTC)"
             tone="emerald"
           />
-          <StatCard
+          <FinanceStatCard
             label="Outstanding"
             value={report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
             hint="Unpaid invoice / project balance"
             tone="amber"
           />
-          <StatCard
+          <FinanceStatCard
             label="Net flow"
             value={report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
             hint="Inflows minus outflows (UTC month)"
-            tone={
-              !report ? "brand" : report.cashFlow.netThisMonth >= 0 ? "emerald" : "rose"
-            }
+            tone={!report ? "brand" : report.cashFlow.netThisMonth >= 0 ? "emerald" : "rose"}
           />
-          <StatCard
+          <FinanceStatCard
             label="Pending requests"
             value={reportLoading ? "…" : report?.pending?.total ?? pendingFinanceApprovalCount}
             hint={
@@ -1069,7 +1067,7 @@ export default function FinancePage() {
             }
             tone="violet"
           />
-        </StatCardGrid>
+        </FinanceStatGrid>
       )}
 
       {isAdmin && section === "overview" && (

@@ -57,3 +57,68 @@ html.theme-light .shell {
   }
 }
 
+/* Finance workspace — dark neumorphism */
+.finance-neu {
+  --finance-neu-bg: #0b0f14;
+  --finance-neu-surface: #121820;
+  --finance-neu-inset: #0e1319;
+  --finance-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --finance-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.finance-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--finance-neu-raised);
+}
+
+.finance-neu input:not([type="checkbox"]):not([type="radio"]),
+.finance-neu select,
+.finance-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: #0e1319;
+  color: #f1f5f9;
+  box-shadow: var(--finance-neu-inset-shadow);
+}
+
+.finance-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.finance-neu select:focus,
+.finance-neu textarea:focus {
+  border-color: rgba(16, 185, 129, 0.3);
+  outline: none;
+  box-shadow: var(--finance-neu-inset-shadow), 0 0 0 2px rgba(16, 185, 129, 0.15);
+}
+
+.finance-neu li[class*="border-slate-800"],
+.finance-neu [class*="bg-slate-900/60"],
+.finance-neu [class*="bg-slate-900/30"] {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: #10161e !important;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4), -2px -2px 8px rgba(255, 255, 255, 0.03);
+}
+
+.finance-neu table {
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.finance-neu button[class*="bg-emerald-600"],
+.finance-neu button[class*="bg-amber-600"],
+.finance-neu button[class*="bg-sky-600"] {
+  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.45), -2px -2px 8px rgba(16, 185, 129, 0.12);
+}
+
+.finance-neu button[class*="border-slate-600"],
+.finance-neu button[class*="border-slate-700"] {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  background-color: #121820 !important;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.35), -2px -2px 8px rgba(255, 255, 255, 0.03);
+}
+
+.finance-neu [class*="bg-slate-950/40"],
+.finance-neu [class*="bg-slate-900/40"] {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: #0e1319 !important;
+  box-shadow: inset 3px 3px 10px rgba(0, 0, 0, 0.4), inset -2px -2px 8px rgba(255, 255, 255, 0.02);
+}
+
