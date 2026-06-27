@@ -211,16 +211,45 @@ async function buildUserDeliveryContext(prisma: PrismaClient, orgId: string, use
   ].join("\n");
 }
 
+function findTitlesMentionedInReport<T extends { title: string }>(body: string, items: T[]): T[] {
+  const lower = body.toLowerCase();
+  const matched: T[] = [];
+  for (const item of items) {
+    const title = item.title.trim();
+    if (title.length < 3) continue;
+    if (lower.includes(title.toLowerCase())) {
+      matched.push(item);
+      continue;
+    }
+    const words = title.split(/\s+/).filter((w) => w.length >= 4);
+    if (words.some((w) => lower.includes(w.toLowerCase()))) {
+      matched.push(item);
+    }
+  }
+  return [...new Map(matched.map((m) => [m.title.toLowerCase(), m])).values()];
+}
+
+function titleMentionedInReport(body: string, title: string): boolean {
+  return findTitlesMentionedInReport(body, [{ title }]).length > 0;
+}
+
 async function buildSalesPipelineContext(
   prisma: PrismaClient,
   orgId: string,
-  userId: string
-): Promise<{ text: string; hasRiskSignals: boolean; suggestedQuestions: string[] }> {
+  userId: string,
+  reportBody = ""
+): Promise<{
+  text: string;
+  recentActivitiesText: string;
+  hasRiskSignals: boolean;
+  suggestedQuestions: string[];
+}> {
   const now = new Date();
   const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const activitySince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const [deals, leads, followUpsSoon] = await Promise.all([
+  const [deals, leads, followUpsSoon, leadActivities, dealActivities, followUpsRecent] = await Promise.all([
     prisma.deal.findMany({
       where: { orgId, ownerId: userId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
@@ -245,6 +274,46 @@ async function buildSalesPipelineContext(
     prisma.leadFollowUp.findMany({
       where: { orgId, assignedToId: userId, scheduledAt: { gte: now, lte: next7 } },
       orderBy: { scheduledAt: "asc" },
+      take: 6,
+      select: {
+        type: true,
+        scheduledAt: true,
+        lead: { select: { title: true, status: true } }
+      }
+    }),
+    prisma.leadActivity.findMany({
+      where: {
+        orgId,
+        occurredAt: { gte: activitySince },
+        lead: { ownerId: userId, deletedAt: null }
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 12,
+      select: {
+        type: true,
+        summary: true,
+        occurredAt: true,
+        lead: { select: { title: true, status: true } }
+      }
+    }),
+    prisma.dealActivity.findMany({
+      where: {
+        orgId,
+        occurredAt: { gte: activitySince },
+        deal: { ownerId: userId, deletedAt: null }
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 12,
+      select: {
+        type: true,
+        summary: true,
+        occurredAt: true,
+        deal: { select: { title: true, stage: true } }
+      }
+    }),
+    prisma.leadFollowUp.findMany({
+      where: { orgId, assignedToId: userId, scheduledAt: { gte: activitySince, lt: now } },
+      orderBy: { scheduledAt: "desc" },
       take: 6,
       select: {
         type: true,
@@ -286,7 +355,42 @@ async function buildSalesPipelineContext(
         .join("\n")
     : "No follow-ups scheduled in next 7 days.";
 
-  const topDeal = deals[0] ?? null;
+  const leadActivityLines = leadActivities.length
+    ? leadActivities
+        .map(
+          (a) =>
+            `- ${fmtDate(a.occurredAt)} ${a.type} — ${a.lead.title} (${a.lead.status}): ${a.summary.slice(0, 120)}`
+        )
+        .join("\n")
+    : "No lead activities logged in last 7 days.";
+
+  const dealActivityLines = dealActivities.length
+    ? dealActivities
+        .map(
+          (a) =>
+            `- ${fmtDate(a.occurredAt)} ${a.type} — ${a.deal.title} (stage=${a.deal.stage}): ${a.summary.slice(0, 120)}`
+        )
+        .join("\n")
+    : "No deal activities logged in last 7 days.";
+
+  const recentActivitiesText = [
+    "Recent sales activities in CresOS (last 7 days):",
+    "Lead activities:",
+    leadActivityLines,
+    "",
+    "Deal activities:",
+    dealActivityLines,
+    "",
+    "Completed follow-ups (last 7 days):",
+    followUpsRecent.length
+      ? followUpsRecent
+          .map((f) => `- ${fmtDate(f.scheduledAt)} ${f.type} — ${f.lead?.title ?? "Lead"}`)
+          .join("\n")
+      : "None recorded."
+  ].join("\n");
+
+  const mentionedLeads = reportBody ? findTitlesMentionedInReport(reportBody, leads) : [];
+  const mentionedDeals = reportBody ? findTitlesMentionedInReport(reportBody, deals) : [];
   const secondDeal = deals[1] ?? null;
   const topLead = leads[0] ?? null;
   const secondLead = leads[1] ?? null;
@@ -294,22 +398,69 @@ async function buildSalesPipelineContext(
   const topStaleLead = staleLeads[0] ?? null;
 
   const suggestedQuestions: string[] = [];
-  if (topDeal?.title) {
+
+  for (const lead of mentionedLeads.slice(0, 2)) {
     suggestedQuestions.push(
-      `On "${topDeal.title}" (stage=${topDeal.stage}), what is the next action and decision timeline you’re driving this week?`
+      `In today's activities you mentioned "${lead.title}" — what was the outcome of your latest touch and what is the exact next action with a date?`
     );
   }
-  if (topStaleDeal?.title && topStaleDeal.title !== topDeal?.title) {
+  for (const deal of mentionedDeals.slice(0, 2)) {
+    if (suggestedQuestions.length >= 4) break;
     suggestedQuestions.push(
-      `"${topStaleDeal.title}" looks stale in CresOS (no update 7d+). What specifically is blocking movement, and what’s the fastest next step?`
+      `On "${deal.title}" (stage=${deal.stage}) which you referenced today — what moved forward and when is the decision expected?`
     );
   }
-  if (topStaleLead?.title) {
+
+  for (const act of leadActivities.slice(0, 6)) {
+    if (suggestedQuestions.length >= 4) break;
+    const title = act.lead.title;
+    const inReport = reportBody && titleMentionedInReport(reportBody, title);
+    if (inReport) {
+      suggestedQuestions.push(
+        `You wrote about "${title}" today — the CRM also shows a ${act.type} on ${fmtDate(act.occurredAt)} ("${act.summary.slice(0, 80)}"). What was the result and what's next?`
+      );
+    } else {
+      suggestedQuestions.push(
+        `CresOS logs a ${act.type} on "${title}" (${fmtDate(act.occurredAt)}) but it wasn't in today's report — what happened and what's your follow-up plan?`
+      );
+    }
+  }
+
+  for (const act of dealActivities.slice(0, 4)) {
+    if (suggestedQuestions.length >= 4) break;
+    const title = act.deal.title;
+    if (reportBody && titleMentionedInReport(reportBody, title)) continue;
     suggestedQuestions.push(
-      `"${topStaleLead.title}" is marked stale (no update 7d+). When is the next contact scheduled, and what’s your message/offer angle?`
+      `On deal "${title}" (stage=${act.deal.stage}), CresOS shows a recent ${act.type} on ${fmtDate(act.occurredAt)} — what was the outcome and next step?`
     );
   }
-  if (topLead?.title && topLead.title !== topStaleLead?.title) {
+
+  for (const f of followUpsSoon.slice(0, 2)) {
+    if (suggestedQuestions.length >= 4) break;
+    const title = f.lead?.title;
+    if (!title) continue;
+    suggestedQuestions.push(
+      `You have a ${f.type} scheduled with "${title}" on ${fmtDate(f.scheduledAt)} — is it confirmed and what's the goal for that meeting?`
+    );
+  }
+
+  const topDeal = deals[0] ?? null;
+  if (topDeal?.title && suggestedQuestions.length < 4) {
+    suggestedQuestions.push(
+      `On "${topDeal.title}" (stage=${topDeal.stage}), what is the next action and decision timeline you're driving this week?`
+    );
+  }
+  if (topStaleDeal?.title && topStaleDeal.title !== topDeal?.title && suggestedQuestions.length < 4) {
+    suggestedQuestions.push(
+      `"${topStaleDeal.title}" looks stale in CresOS (no update 7d+). What specifically is blocking movement, and what's the fastest next step?`
+    );
+  }
+  if (topStaleLead?.title && suggestedQuestions.length < 4) {
+    suggestedQuestions.push(
+      `"${topStaleLead.title}" is marked stale (no update 7d+). When is the next contact scheduled, and what's your message/offer angle?`
+    );
+  }
+  if (topLead?.title && topLead.title !== topStaleLead?.title && suggestedQuestions.length < 4) {
     suggestedQuestions.push(
       `On "${topLead.title}" (status=${topLead.status}), what’s the exact next milestone to move it forward (call/meeting/proposal) and by what date?`
     );
@@ -339,7 +490,9 @@ async function buildSalesPipelineContext(
 
   const hasRiskSignals = staleDeals.length > 0 || staleLeads.length > 0;
 
-  return { text, hasRiskSignals, suggestedQuestions };
+  const dedupedQuestions = [...new Map(suggestedQuestions.map((q) => [q.toLowerCase(), q])).values()].slice(0, 6);
+
+  return { text, recentActivitiesText, hasRiskSignals, suggestedQuestions: dedupedQuestions };
 }
 
 async function groqPlainText(system: string, user: string, maxTokens: number, temperature: number): Promise<string | null> {
@@ -438,7 +591,9 @@ function buildSalesAiQuestions(
   const seen = new Set<string>();
   const questions: string[] = [];
 
-  for (const q of extractQuestionSentences(aiText)) {
+  // Activity/pipeline questions first — grounded in today's report + CRM log.
+  for (const q of suggestedQuestions) {
+    if (questions.length >= 4) break;
     const n = normalizeQuestion(q);
     const key = n.toLowerCase();
     if (!n || seen.has(key)) continue;
@@ -446,13 +601,23 @@ function buildSalesAiQuestions(
     questions.push(n);
   }
 
-  for (const q of suggestedQuestions) {
-    if (questions.length >= minQuestions) break;
+  for (const q of extractQuestionSentences(aiText)) {
+    if (questions.length >= 4) break;
     const n = normalizeQuestion(q);
     const key = n.toLowerCase();
     if (!n || seen.has(key)) continue;
     seen.add(key);
     questions.push(n);
+  }
+
+  while (questions.length < minQuestions && suggestedQuestions.length > questions.length) {
+    const next = suggestedQuestions[questions.length];
+    if (!next) break;
+    const n = normalizeQuestion(next);
+    if (!seen.has(n.toLowerCase())) {
+      seen.add(n.toLowerCase());
+      questions.push(n);
+    } else break;
   }
 
   return { commentBody, questions: questions.slice(0, 4) };
@@ -560,7 +725,7 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
   const deliveryContext = await buildUserDeliveryContext(prisma, report.orgId, report.submittedById);
-  const pipelineContext = await buildSalesPipelineContext(prisma, report.orgId, report.submittedById);
+  const pipelineContext = await buildSalesPipelineContext(prisma, report.orgId, report.submittedById, report.body);
   const prev = await prisma.salesReport.findMany({
     where: {
       orgId: report.orgId,
@@ -599,6 +764,7 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
     submittedAtIso: report.submittedAt.toISOString(),
     threadContext,
     previousReports,
+    recentActivities: pipelineContext.recentActivitiesText,
     platformContext: [deliveryContext, "", pipelineContext.text].filter(Boolean).join("\n")
   });
 

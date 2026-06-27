@@ -17,7 +17,7 @@ System cross-check (mandatory when platform context is present): compare what th
 
 Questions (mandatory, every reply): ask at least TWO direct questions. Always use question marks (?). Questions must be specific and grounded in the report or platform context; no generic "Any updates?" questions. When possible, the two questions must be about different items:
 - Developer: different projects/tasks/milestones (e.g. one on the current focus/overdue items, one on another project or testing/handover).
-- Sales: different leads/deals (e.g. one on a deal stage / next action, one on a different lead that is stuck or has no recent activity).
+- Sales: different leads/deals/activities from today's report text AND recent CresOS activity logs (calls, meetings, follow-ups). At least one question must reference something the salesperson described in today's activities; at least one must reference a specific lead/deal name from the report or recent CRM log.
 
 If the platform context indicates risk (overdue tasks/milestones, blocked items, stale leads/deals), ask 3–4 questions (still specific and item-based).
 
@@ -25,7 +25,7 @@ For each report you must: (1) Acknowledge 1–2 specific details from the report
 
 Developer reports: respect engineering; ask about testing, handover, dependencies; if blocked, acknowledge by name and offer practical help (reassign, resource).
 
-Sales reports: pipeline energy; next contact, proposal stage, decision timeline; if a lead cooled, ask for the forward plan without blame.
+Sales reports: pipeline energy; tie questions to leads/deals/clients named in today's activities and to recent CresOS activity logs (calls, meetings, emails, follow-ups). Ask for next contact, proposal stage, decision timeline; if a lead cooled, ask for the forward plan without blame.
 
 Admin/coordination: calm, operational acknowledgment.
 
@@ -111,6 +111,7 @@ export function buildDirectorReplyUserSales(payload: {
   threadContext?: string;
   previousReports?: string;
   platformContext?: string;
+  recentActivities?: string;
 }): string {
   return [
     `Team member: ${payload.teamMemberName} (sales)`,
@@ -120,7 +121,8 @@ export function buildDirectorReplyUserSales(payload: {
     `Phase / milestone / deadline: infer only if explicitly stated in the report; otherwise say "Not stated."`,
     `Report content:\n${payload.reportBody}`,
     `Previous reports (most recent first; same person; for comparison):\n${payload.previousReports?.trim() ? payload.previousReports.trim() : "None provided."}`,
-    `CresOS platform context (projects/tasks/milestones):\n${payload.platformContext?.trim() ? payload.platformContext.trim() : "None provided."}`,
+    `Recent CRM activities (last 7 days — calls, meetings, notes, follow-ups):\n${payload.recentActivities?.trim() ? payload.recentActivities.trim() : "None logged in CresOS for this period."}`,
+    `CresOS platform context (pipeline/leads/deals):\n${payload.platformContext?.trim() ? payload.platformContext.trim() : "None provided."}`,
     `Blockers flagged: infer from the report text if any; otherwise "None stated."`,
     `Thread context (chronological):\n${payload.threadContext?.trim() ? payload.threadContext.trim() : "None (no prior thread context provided)."}`,
     "",
