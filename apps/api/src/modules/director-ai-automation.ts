@@ -386,6 +386,78 @@ function countQuestions(text: string): number {
   return (text.match(/\?/g) ?? []).length;
 }
 
+/** Pull question sentences out of AI reply text (excludes the Marked reviewed line). */
+function extractQuestionSentences(text: string): string[] {
+  const withoutMarked = text.replace(MARKED, "").trim();
+  const matches = withoutMarked.match(/[^.!?\n]+(?:\?+)/g) ?? [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of matches) {
+    const q = raw.trim().replace(/\?+$/, "?");
+    if (q.length < 12) continue;
+    const key = q.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
+/** Remove question sentences from the narrative comment; keep Marked reviewed footer. */
+function stripQuestionSentences(text: string): string {
+  const withMarked = ensureMarkedReviewed(text.trim());
+  const idx = withMarked.lastIndexOf(MARKED);
+  const beforeMarked = idx === -1 ? withMarked : withMarked.slice(0, idx).trimEnd();
+  const afterMarked = idx === -1 ? "" : withMarked.slice(idx).trimStart();
+
+  let body = beforeMarked
+    .replace(/[^.!?\n]+(?:\?+)/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!body || body.length < 20) {
+    body =
+      "Thanks for the update — I have reviewed your report. Please answer the questions below so we can stay aligned on pipeline and next actions.";
+  }
+
+  return afterMarked ? `${body}\n\n${afterMarked}` : ensureMarkedReviewed(body);
+}
+
+function normalizeQuestion(q: string): string {
+  const t = q.trim();
+  if (!t) return "";
+  return t.endsWith("?") ? t : `${t}?`;
+}
+
+function buildSalesAiQuestions(
+  aiText: string,
+  suggestedQuestions: string[],
+  minQuestions: number
+): { commentBody: string; questions: string[] } {
+  const commentBody = stripQuestionSentences(aiText);
+  const seen = new Set<string>();
+  const questions: string[] = [];
+
+  for (const q of extractQuestionSentences(aiText)) {
+    const n = normalizeQuestion(q);
+    const key = n.toLowerCase();
+    if (!n || seen.has(key)) continue;
+    seen.add(key);
+    questions.push(n);
+  }
+
+  for (const q of suggestedQuestions) {
+    if (questions.length >= minQuestions) break;
+    const n = normalizeQuestion(q);
+    const key = n.toLowerCase();
+    if (!n || seen.has(key)) continue;
+    seen.add(key);
+    questions.push(n);
+  }
+
+  return { commentBody, questions: questions.slice(0, 4) };
+}
+
 function injectQuestionsBeforeMarked(text: string, questions: string[]): string {
   const q = questions
     .map((x) => x.trim())
@@ -533,12 +605,12 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
   if (!raw) return;
   const normalized = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
-  const qCount = countQuestions(normalized);
   const minQuestions = pipelineContext.hasRiskSignals ? 3 : 2;
-  const content =
-    qCount >= minQuestions
-      ? normalized
-      : injectQuestionsBeforeMarked(normalized, pipelineContext.suggestedQuestions.slice(0, minQuestions - qCount));
+  const { commentBody, questions } = buildSalesAiQuestions(
+    normalized,
+    pipelineContext.suggestedQuestions,
+    minQuestions
+  );
 
   await prisma.$transaction([
     prisma.salesReportComment.create({
@@ -546,10 +618,21 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
         reportId,
         authorId,
         kind: "comment",
-        content,
+        content: commentBody,
         source: "ai_auto"
       }
     }),
+    ...questions.map((q) =>
+      prisma.salesReportComment.create({
+        data: {
+          reportId,
+          authorId,
+          kind: "question",
+          content: q.slice(0, 4000),
+          source: "ai_auto"
+        }
+      })
+    ),
     prisma.salesReport.update({
       where: { id: reportId },
       data: {
