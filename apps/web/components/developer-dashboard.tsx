@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import type { SidebarSection } from "./community/community-types";
+import { devGlass } from "./developer/developer-glass-theme";
 
 export type DeveloperProgressReminder = {
   reminderKey: string;
@@ -69,9 +70,9 @@ interface CardFrameProps {
 
 function CardFrame({ title, icon, actions, footer, children, className = "" }: CardFrameProps) {
   return (
-    <div className={`flex flex-col rounded-2xl border border-slate-800 bg-slate-900/25 p-5 shadow-xl transition-all duration-300 hover:border-slate-700/60 min-h-[19rem] ${className}`}>
+    <div className={`flex flex-col ${devGlass.card} p-5 min-h-[19rem] ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5 mb-4">
+      <div className={`flex items-center justify-between border-b ${devGlass.divider} pb-3.5 mb-4`}>
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-slate-400 shrink-0">{icon}</span>
           <h3 className="text-sm font-semibold tracking-wide text-slate-100 uppercase truncate">{title}</h3>
@@ -782,11 +783,7 @@ export function DeveloperDashboardSections({
           {visibleReminders.map((r) => (
             <div
               key={r.reminderKey}
-              className={`rounded-2xl border p-4 sm:p-5 ${
-                r.severity === "warning"
-                  ? "border-amber-500/50 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950"
-                  : "border-violet-500/40 bg-gradient-to-br from-violet-950/40 via-slate-950/90 to-slate-950"
-              }`}
+              className={r.severity === "warning" ? devGlass.alertWarning : devGlass.alertInfo}
             >
               <p className="font-display text-base font-bold text-slate-100">{r.subject}</p>
               <p className="mt-2 text-sm leading-relaxed text-slate-300">{r.body}</p>
@@ -794,7 +791,7 @@ export function DeveloperDashboardSections({
                 <button
                   type="button"
                   onClick={() => setDismissedReminders((s) => new Set(s).add(r.reminderKey))}
-                  className="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                  className={devGlass.btnGhost}
                 >
                   Dismiss Reminder
                 </button>
@@ -903,14 +900,14 @@ function CurrentFocusPanelStyled({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5">
+      <div className={`${devGlass.panelInset} p-5`}>
         <p className="text-xs text-slate-500">Loading focus panel…</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-5 shadow-lg">
+    <div className={`${devGlass.card} p-5`}>
       <div className="flex flex-col gap-4">
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">Set Today's Project Focus</h4>
@@ -925,7 +922,7 @@ function CurrentFocusPanelStyled({
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-xs text-slate-100 focus:border-violet-500/50 outline-none"
+              className={devGlass.input}
             >
               <option value="">— No project selected —</option>
               {projects.map((p) => (
@@ -942,14 +939,14 @@ function CurrentFocusPanelStyled({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. implementing direct chat UI"
-              className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-violet-500/50 outline-none"
+              className={`${devGlass.input} text-xs`}
             />
           </label>
           <button
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="w-full shrink-0 rounded-xl bg-violet-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg hover:bg-violet-500 disabled:opacity-50 sm:w-auto"
+            className={`w-full shrink-0 sm:w-auto ${devGlass.btnPrimary} disabled:opacity-50`}
           >
             {saving ? "Saving…" : "Update Focus"}
           </button>

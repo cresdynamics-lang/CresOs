@@ -87,6 +87,39 @@ export function FinanceStatGrid({ children }: { children: ReactNode }) {
   return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
 }
 
+export function FinanceStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-white/[0.06] pb-6 sm:grid-cols-4 ${className}`.trim()}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function FinanceStatInline({
+  label,
+  value,
+  hint,
+  tone = "emerald",
+  className = ""
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: StatTone;
+  className?: string;
+}) {
+  const s = statToneClass[tone];
+  return (
+    <div className={`min-w-0 ${className}`.trim()}>
+      <p className={`text-[10px] font-semibold uppercase tracking-wide ${s.label}`}>{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
+      {hint ? <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
+    </div>
+  );
+}
+
 export function FinanceNeuListRow({
   children,
   className = ""

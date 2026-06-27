@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { financeNeu } from "../../components/finance/finance-theme";
-import { FinanceNav } from "./finance-nav";
+import { FinanceNav, FinanceSideNav } from "./finance-nav";
 
 export function FinanceLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -21,7 +21,9 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
 
   if (!hydrated || !auth.accessToken) {
     return (
-      <div className={`${financeNeu.shell} text-sm text-slate-400`}>Loading finance…</div>
+      <div className={`${financeNeu.workspace} finance-fullscreen flex h-full items-center justify-center text-sm text-slate-400`}>
+        Loading finance…
+      </div>
     );
   }
 
@@ -29,25 +31,32 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
 
   return (
     <div
-      className={`${financeNeu.workspace} ${financeNeu.canvas} flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] flex-col gap-4`}
+      className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
     >
-      <div className={`${financeNeu.shell} shrink-0`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">
-              Finance workspace
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-200">Money in, money out, invoices & ledger</p>
-          </div>
-          <FinanceNav />
+      <aside className="hidden w-[13.5rem] shrink-0 flex-col border-r border-white/[0.04] bg-[#0e1319]/80 md:flex">
+        <div className="border-b border-white/[0.04] px-4 py-4">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/90">
+            Finance
+          </p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <FinanceSideNav />
         </div>
         {isAdmin && (
-          <p className="mt-3 rounded-xl border border-white/[0.04] bg-[#0e1319] px-3 py-2 text-xs text-slate-500 shadow-[inset_2px_2px_6px_rgba(0,0,0,0.35)]">
-            Admin: view and record payments; invoice creation is handled by Finance and Sales.
+          <p className="m-2 rounded-lg border border-white/[0.04] bg-[#0e1319] px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+            Admin: record payments and view ledger. Invoice creation stays with Finance and Sales.
           </p>
         )}
+      </aside>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-white/[0.04] bg-[#0e1319]/60 px-2 py-2 md:hidden">
+          <FinanceNav />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          {children}
+        </div>
       </div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

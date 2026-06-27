@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DeveloperReportsLayoutClient } from "./developer-reports-layout-client";
 
 export const metadata: Metadata = {
   title: "Developer Reports | Cres Dynamics - Team Performance Reports",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function DeveloperReportsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <DeveloperReportsLayoutClient>{children}</DeveloperReportsLayoutClient>;
 }

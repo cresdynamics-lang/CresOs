@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { ROLE_KEYS } from "./auth-middleware";
 import { logAdminActivity } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
+import { resolveClientPortalLogin } from "../lib/client-portal-login";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const JWT_EXPIRES_IN = "1h";
@@ -187,7 +188,7 @@ export default function authRouter(prisma: PrismaClient): Router {
     }
 
     try {
-      const user = await prisma.user.findFirst({
+      let user = await prisma.user.findFirst({
         where: {
           email: { equals: emailNorm, mode: "insensitive" },
           deletedAt: null
@@ -198,17 +199,21 @@ export default function authRouter(prisma: PrismaClient): Router {
         }
       });
 
-      if (!user || !user.passwordHash) {
-        res.status(400).json({
-          error: "Invalid credentials",
-          hint: "Check the email and password. On a new database, register a workspace first."
-        });
-        return;
+      let authenticated = false;
+      if (user?.passwordHash) {
+        authenticated = await bcrypt.compare(password, user.passwordHash);
       }
 
-      const valid = await bcrypt.compare(password, user.passwordHash);
-      if (!valid) {
-        if (user.orgId) {
+      if (!authenticated) {
+        const portalUser = await resolveClientPortalLogin(prisma, emailNorm, password);
+        if (portalUser) {
+          user = portalUser;
+          authenticated = true;
+        }
+      }
+
+      if (!user || !authenticated) {
+        if (user?.orgId) {
           await prisma.adminAlert.create({
             data: {
               orgId: user.orgId,
@@ -220,7 +225,7 @@ export default function authRouter(prisma: PrismaClient): Router {
         }
         res.status(400).json({
           error: "Invalid credentials",
-          hint: "Check the email and password. On a new database, register a workspace first."
+          hint: "Check the email and password. Clients: use your email and password as FirstName+project number (e.g. Charles13)."
         });
         return;
       }

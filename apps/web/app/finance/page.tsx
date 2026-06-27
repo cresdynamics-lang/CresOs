@@ -6,7 +6,8 @@ import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { FinanceStatCard, FinanceStatGrid } from "../../components/finance/finance-ui";
+import { FinanceStatInline, FinanceStatRow } from "../../components/finance/finance-ui";
+import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
@@ -1019,13 +1020,34 @@ export default function FinancePage() {
   const pageMeta = FINANCE_PAGE_TITLES[section];
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-4">
-      <WorkspaceDashboardIntro
-        title={pageMeta.title}
-        description={pageMeta.description}
-        eyebrow="Finance"
-        showWelcomeBanner={section === "overview"}
-      />
+    <section className="flex min-h-0 flex-1 flex-col gap-6">
+      {section === "overview" ? (
+        <WorkspaceDashboardIntro
+          title={pageMeta.title}
+          description={pageMeta.description}
+          eyebrow="Finance"
+          showWelcomeBanner
+          welcomeChildren={
+            <>
+              <DashboardSectionLabel roleKeys={auth.roleKeys}>
+                Today&apos;s priorities (your queue)
+              </DashboardSectionLabel>
+              <p className="font-body text-sm leading-relaxed text-slate-400">
+                Use <span className="font-medium text-emerald-400/90">Finance mail</span> and the sections below for
+                live data.
+              </p>
+            </>
+          }
+        />
+      ) : (
+        <div>
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">Finance</p>
+          <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{pageMeta.title}</h1>
+          {pageMeta.description ? (
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{pageMeta.description}</p>
+          ) : null}
+        </div>
+      )}
 
 
       {!canSeeMoneyStats && section === "overview" && (
@@ -1038,26 +1060,26 @@ export default function FinancePage() {
       )}
 
       {canSeeMoneyStats && section === "overview" && (
-        <FinanceStatGrid>
-          <FinanceStatCard
+        <FinanceStatRow>
+          <FinanceStatInline
             label="Revenue (period)"
             value={report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
             hint="Confirmed payments this month (UTC)"
             tone="emerald"
           />
-          <FinanceStatCard
+          <FinanceStatInline
             label="Outstanding"
             value={report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
             hint="Unpaid invoice / project balance"
             tone="amber"
           />
-          <FinanceStatCard
+          <FinanceStatInline
             label="Net flow"
             value={report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
             hint="Inflows minus outflows (UTC month)"
             tone={!report ? "brand" : report.cashFlow.netThisMonth >= 0 ? "emerald" : "rose"}
           />
-          <FinanceStatCard
+          <FinanceStatInline
             label="Pending requests"
             value={reportLoading ? "…" : report?.pending?.total ?? pendingFinanceApprovalCount}
             hint={
@@ -1067,7 +1089,7 @@ export default function FinancePage() {
             }
             tone="violet"
           />
-        </FinanceStatGrid>
+        </FinanceStatRow>
       )}
 
       {isAdmin && section === "overview" && (

@@ -122,3 +122,92 @@ html.theme-light .shell {
   box-shadow: inset 3px 3px 10px rgba(0, 0, 0, 0.4), inset -2px -2px 8px rgba(255, 255, 255, 0.02);
 }
 
+.finance-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.finance-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
+/* Developer liquid glass workspace */
+.developer-glass {
+  --dev-glass-bg: #080b12;
+  --dev-glass-border: rgba(255, 255, 255, 0.1);
+  --dev-glass-surface: rgba(255, 255, 255, 0.06);
+  color-scheme: dark;
+}
+
+.developer-glass .shell {
+  border-color: var(--dev-glass-border);
+  background: var(--dev-glass-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.developer-glass input:not([type="checkbox"]):not([type="radio"]),
+.developer-glass select,
+.developer-glass textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.developer-glass input:not([type="checkbox"]):not([type="radio"]):focus,
+.developer-glass select:focus,
+.developer-glass textarea:focus {
+  border-color: rgba(139, 92, 246, 0.4);
+  outline: none;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.developer-glass li[class*="border-slate-800"],
+.developer-glass [class*="bg-slate-900/60"],
+.developer-glass [class*="bg-slate-900/30"],
+.developer-glass [class*="bg-slate-950/20"],
+.developer-glass [class*="bg-slate-950/40"],
+.developer-glass [class*="bg-slate-900/40"],
+.developer-glass [class*="bg-cres-surface"],
+.developer-glass [class*="bg-cres-card"] {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.developer-glass table {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.developer-glass tr[class*="border-slate-800"],
+.developer-glass tr[class*="border-b"] {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.developer-glass button[class*="border-slate-600"],
+.developer-glass button[class*="border-slate-700"],
+.developer-glass button[class*="border-cres-border"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.developer-glass [class*="from-violet-500/10"],
+.developer-glass [class*="from-violet-950"] {
+  backdrop-filter: blur(20px);
+}
+
+.developer-glass [class*="border-dashed"] {
+  border-color: rgba(139, 92, 246, 0.25) !important;
+  background: rgba(139, 92, 246, 0.06) !important;
+}
+

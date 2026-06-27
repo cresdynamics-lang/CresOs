@@ -16,11 +16,14 @@ type NavSection = {
   items: { href: string; label: string; roles: string[] }[];
 };
 
+const HAMBURGER_NAV_ROLES = ["admin", "director_admin", "finance", "client"] as const;
+
 const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] }
+      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/client", label: "My projects", roles: ["client"] }
     ]
   },
   {
@@ -655,11 +658,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const hideTopHeader = isFullscreenPage && isFullscreen;
   const isSettingsRoute = pathname.startsWith("/settings");
+  const isWorkspaceFullBleed = pathname.startsWith("/finance") || pathname.startsWith("/client");
+  const useHamburgerOnlyNav = roles.some((r) =>
+    (HAMBURGER_NAV_ROLES as readonly string[]).includes(r)
+  );
 
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${isFullscreenPage && isFullscreen ? "bg-slate-950" : ""}`}>
       {mobileNavOpen && !(isFullscreenPage && isFullscreen) && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className={`fixed inset-0 z-40 ${useHamburgerOnlyNav ? "" : "lg:hidden"}`}>
           <button
             type="button"
             aria-label="Close menu"
@@ -679,9 +686,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <aside
-        className={`group/hover-nav hidden w-[4.25rem] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 transition-[width] duration-200 ease-out hover:w-64 lg:flex ${
-          isFullscreenPage && isFullscreen ? "!hidden" : ""
-        }`}
+        className={`group/hover-nav hidden w-[4.25rem] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 transition-[width] duration-200 ease-out hover:w-64 ${
+          useHamburgerOnlyNav ? "lg:hidden" : "lg:flex"
+        } ${isFullscreenPage && isFullscreen ? "!hidden" : ""}`}
       >
         <SidebarNavContent {...shellNavProps} />
       </aside>
@@ -704,7 +711,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 lg:hidden"
+              className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 ${
+                useHamburgerOnlyNav ? "flex" : "lg:hidden"
+              }`}
               aria-label="Open menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
@@ -756,12 +765,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : "flex max-lg:pt-0 flex-col overflow-hidden lg:pt-0"
                 : isSettingsRoute
                   ? "flex min-h-0 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
-                  : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
+                  : isWorkspaceFullBleed
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
+                    : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
             }`}
           >
             {children}
           </div>
-          {!(isFullscreenPage && hideTopHeader) && !isSettingsRoute && <AppSiteFooter />}
+          {!(isFullscreenPage && hideTopHeader) && !isSettingsRoute && !isWorkspaceFullBleed && <AppSiteFooter />}
         </div>
       </main>
     </div>

@@ -21,6 +21,8 @@ import {
   DeveloperDashboardSections,
   type DeveloperProgressReminder
 } from "../../components/developer-dashboard";
+import { DeveloperGlassCanvas } from "../../components/developer/developer-glass-ui";
+import { devGlass } from "../../components/developer/developer-glass-theme";
 
 type Summary = {
   leadsThisWeek: number;
@@ -1155,47 +1157,48 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isDeveloper && hydrated && auth.accessToken && pendingDevPaymentAck.length > 0 && (
-        <div className="rounded-2xl border border-amber-600/50 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-4 sm:px-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
-            Confirm developer payments (finance)
-          </p>
-          <p className="mt-1 text-xs text-amber-100/90">
-            Finance recorded a payment to you — confirm so the ledger stays aligned.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {pendingDevPaymentAck.map((row) => (
-              <li
-                key={row.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-800/60 bg-slate-950/40 px-3 py-2"
-              >
-                <span className="text-slate-100">
-                  {formatMoney(Number(row.amount))}
-                  {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
-                  {row.description?.trim() || "Developer payment"} · {new Date(row.spentAt).toLocaleDateString()}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void acknowledgeDevPayment(row.id)}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
-                >
-                  Confirm receipt
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {isDeveloper && hydrated && auth.accessToken && (
-        <DeveloperDashboardSections
-          apiFetch={apiFetch}
-          onRefreshAttention={() => void loadSummaryAndAttention()}
-          developerReportStreak={developerReportStreak}
-          overdueTasks={overdueTasks}
-          notifications={attention?.notifications ?? []}
-          progressReminders={attention?.developerProgressReminders ?? []}
-        />
+        <DeveloperGlassCanvas className="rounded-3xl p-1 sm:p-2">
+          {pendingDevPaymentAck.length > 0 && (
+            <div className={`mb-6 ${devGlass.alertWarning}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+                Confirm developer payments (finance)
+              </p>
+              <p className="mt-1 text-xs text-amber-100/90">
+                Finance recorded a payment to you — confirm so the ledger stays aligned.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {pendingDevPaymentAck.map((row) => (
+                  <li
+                    key={row.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 ${devGlass.listRow}`}
+                  >
+                    <span className="text-slate-100">
+                      {formatMoney(Number(row.amount))}
+                      {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
+                      {row.description?.trim() || "Developer payment"} · {new Date(row.spentAt).toLocaleDateString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void acknowledgeDevPayment(row.id)}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+                    >
+                      Confirm receipt
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <DeveloperDashboardSections
+            apiFetch={apiFetch}
+            onRefreshAttention={() => void loadSummaryAndAttention()}
+            developerReportStreak={developerReportStreak}
+            overdueTasks={overdueTasks}
+            notifications={attention?.notifications ?? []}
+            progressReminders={attention?.developerProgressReminders ?? []}
+          />
+        </DeveloperGlassCanvas>
       )}
 
       {navCards.length > 0 && !isDeveloper && (

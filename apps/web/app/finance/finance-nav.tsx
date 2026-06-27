@@ -20,7 +20,6 @@ type NavItem = {
   label: string;
   shortLabel?: string;
   section: FinanceSection;
-  /** Show if user has any of these roles */
   roles: string[];
 };
 
@@ -46,7 +45,7 @@ const FINANCE_NAV: NavItem[] = [
   { href: "/finance/ledger", label: "All transactions", shortLabel: "Ledger", section: "ledger", roles: ["finance"] }
 ];
 
-function navForRoles(roleKeys: string[]): NavItem[] {
+export function navForRoles(roleKeys: string[]): NavItem[] {
   const isAdmin = roleKeys.includes("admin");
   const isFinance = roleKeys.includes("finance");
   if (isAdmin) return ADMIN_NAV;
@@ -54,7 +53,7 @@ function navForRoles(roleKeys: string[]): NavItem[] {
   return ADMIN_NAV.filter((item) => item.roles.some((r) => roleKeys.includes(r)));
 }
 
-export function FinanceNav() {
+function FinanceNavLinks({ vertical = false }: { vertical?: boolean }) {
   const pathname = usePathname();
   const { auth } = useAuth();
   const items = navForRoles(auth.roleKeys);
@@ -62,7 +61,11 @@ export function FinanceNav() {
   return (
     <nav
       aria-label="Finance sections"
-      className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:snap-none sm:pb-0 [&::-webkit-scrollbar]:hidden"
+      className={
+        vertical
+          ? "flex flex-col gap-0.5 px-2 py-2"
+          : "flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:snap-none sm:pb-0 [&::-webkit-scrollbar]:hidden"
+      }
     >
       {items.map((item) => {
         const active =
@@ -75,12 +78,16 @@ export function FinanceNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={[
-              "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-xl px-3 py-2.5 text-sm font-medium transition-all sm:min-h-0 sm:py-2",
+              vertical
+                ? "min-h-[44px] rounded-lg px-3 py-2.5 text-sm font-medium transition-all touch-manipulation lg:min-h-0"
+                : "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-xl px-3 py-2.5 text-sm font-medium transition-all sm:min-h-0 sm:py-2",
               active ? financeNeu.navActive : financeNeu.navIdle
             ].join(" ")}
           >
-            <span className="whitespace-nowrap sm:hidden">{item.shortLabel ?? item.label}</span>
-            <span className="hidden whitespace-nowrap sm:inline">{item.label}</span>
+            <span className={vertical ? "whitespace-nowrap" : "whitespace-nowrap sm:hidden"}>
+              {vertical ? item.label : item.shortLabel ?? item.label}
+            </span>
+            {!vertical && <span className="hidden whitespace-nowrap sm:inline">{item.label}</span>}
           </Link>
         );
       })}
@@ -88,11 +95,18 @@ export function FinanceNav() {
   );
 }
 
+export function FinanceNav() {
+  return <FinanceNavLinks />;
+}
+
+export function FinanceSideNav() {
+  return <FinanceNavLinks vertical />;
+}
+
 export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; description: string }> = {
   overview: {
-    title: "Finance overview",
-    description:
-      "Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES)."
+    title: "Finance",
+    description: "Invoices, payments, expenses, and payouts in one place. All amounts in Kenyan Shillings (KES)."
   },
   invoices: {
     title: "Invoices",

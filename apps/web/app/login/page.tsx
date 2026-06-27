@@ -49,7 +49,12 @@ export default function LoginPage() {
         orgName: org?.name ?? null,
         orgSlug: org?.slug ?? null
       });
-      router.push("/dashboard");
+      const isClientOnly =
+        roleKeys.includes("client") &&
+        !roleKeys.some((r: string) =>
+          ["admin", "director_admin", "finance", "sales", "developer", "analyst"].includes(r)
+        );
+      router.push(isClientOnly ? "/client" : "/dashboard");
     } catch (err) {
       const msg =
         err instanceof TypeError && err.message === "Failed to fetch"
@@ -108,6 +113,10 @@ export default function LoginPage() {
                   required
                 />
               </label>
+              <p className="text-xs text-cres-muted">
+                Clients: sign in with your email and password as{" "}
+                <span className="text-cres-text-muted">FirstName+project number</span> (e.g. Charles13).
+              </p>
               {error && (
                 <p className="text-sm text-rose-400" role="alert">
                   {error}

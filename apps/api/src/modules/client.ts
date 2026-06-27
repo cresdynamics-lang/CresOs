@@ -45,7 +45,39 @@ export default function clientRouter(prisma: PrismaClient): Router {
         orderBy: { createdAt: "desc" }
       });
 
-      res.json(projects);
+      const enriched = await Promise.all(
+        projects.map(async (project) => {
+          const [taskCount, doneTasks, milestones] = await Promise.all([
+            prisma.task.count({
+              where: { projectId: project.id, orgId, deletedAt: null }
+            }),
+            prisma.task.count({
+              where: { projectId: project.id, orgId, deletedAt: null, status: "done" }
+            }),
+            prisma.milestone.findMany({
+              where: { projectId: project.id, orgId, deletedAt: null },
+              orderBy: { dueDate: "asc" },
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                dueDate: true
+              }
+            })
+          ]);
+          const progressPercent =
+            taskCount > 0 ? Math.round((doneTasks / taskCount) * 100) : project.status === "completed" ? 100 : 0;
+          return {
+            ...project,
+            taskCount,
+            doneTasks,
+            progressPercent,
+            milestones
+          };
+        })
+      );
+
+      res.json(enriched);
     }
   );
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { CrmActionLink, CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
+import { devGlass } from "../../components/developer/developer-glass-theme";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { formatNairobiDate, formatNairobiDateTime } from "../../lib/nairobi-datetime";
 
@@ -208,7 +209,7 @@ export default function DeveloperReportsPage() {
       )}
 
       {isDevSelfView && overdue.length > 0 && (
-        <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
+        <div className={`shrink-0 ${devGlass.alertWarning} px-4 py-3 sm:px-5`}>
           <p className="font-semibold text-amber-200">
             Alarm: {overdue.length} director question{overdue.length === 1 ? "" : "s"} not answered within 24 hours
           </p>
