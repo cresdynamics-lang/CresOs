@@ -346,6 +346,7 @@ export default function FinancePage() {
   const [ledgerRows, setLedgerRows] = useState<LedgerRow[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<
     { id: string; name: string; clientId?: string | null; client?: { id: string; name: string } | null }[]
@@ -813,6 +814,7 @@ export default function FinancePage() {
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentSubmitError(null);
+    setPaymentNotice(null);
     const source = paymentForm.source.trim();
     const account = paymentForm.account.trim();
     const reference = paymentForm.reference.trim();
@@ -847,12 +849,19 @@ export default function FinancePage() {
           });
       const raw = (await res.json().catch(() => null)) as {
         payment?: { id: string; status?: string };
+        receiptEmail?: { sent?: boolean; to?: string; skipped?: boolean; reason?: string; error?: string };
         error?: string;
         message?: string;
       } | null;
       if (!res.ok) {
         setPaymentSubmitError(raw?.message || raw?.error || `Could not save payment (${res.status}).`);
         return;
+      }
+      const isCreate = !paymentForm.paymentId;
+      if (isCreate && raw?.receiptEmail?.sent && raw.receiptEmail.to) {
+        setPaymentNotice(`Payment recorded. Receipt emailed to ${raw.receiptEmail.to}.`);
+      } else if (isCreate && raw?.message) {
+        setPaymentNotice(raw.message);
       }
       setPaymentForm(defaultPaymentForm());
       setShowPaymentModal(false);
@@ -880,6 +889,7 @@ export default function FinancePage() {
       receivedAt: localDatetimeValue(new Date(p.receivedAt))
     });
     setPaymentSubmitError(null);
+    setPaymentNotice(null);
     setPaymentModalMode("edit");
     setShowPaymentModal(true);
   };
@@ -1047,6 +1057,7 @@ export default function FinancePage() {
               type="button"
               onClick={() => {
                 setPaymentSubmitError(null);
+    setPaymentNotice(null);
                 setPaymentForm(defaultPaymentForm());
                 setPaymentModalMode("create");
                 setShowPaymentModal(true);
@@ -1059,6 +1070,12 @@ export default function FinancePage() {
         </div>
       )}
 
+
+      {paymentNotice && section === "payments" ? (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+          {paymentNotice}
+        </div>
+      ) : null}
 
       {!canSeeMoneyStats && section === "overview" && (
         <div className="shell border border-slate-600/80 bg-slate-900/50 text-sm text-slate-400">
@@ -2106,6 +2123,7 @@ export default function FinancePage() {
           setShowPaymentModal(false);
           setPaymentModalMode("create");
           setPaymentSubmitError(null);
+    setPaymentNotice(null);
         }}
         form={paymentForm}
         setForm={setPaymentForm}

@@ -11,7 +11,7 @@ import { generateInvoicePdfBuffer } from "../lib/invoice-pdf";
 import { deliverFinanceInvoiceEmail } from "../lib/invoice-email";
 import {
   notifyAdminsExpenseCreated,
-  runPaymentConfirmedNotifications
+  sendPaymentReceiptToClient
 } from "../lib/finance-workflow";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
@@ -1588,13 +1588,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         });
 
-        runPaymentConfirmedNotifications(prisma, orgId, payment.id);
-
         payment =
           (await prisma.payment.findUnique({
             where: { id: payment.id },
             include: { invoice: { include: { project: { select: { id: true, name: true } } } } }
           })) ?? payment;
+
+        const receiptEmail = await sendPaymentReceiptToClient(prisma, orgId, payment.id);
 
         const paidAmount =
           payment.invoiceId != null
@@ -1604,6 +1604,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         res.status(201).json({
           success: true,
           payment,
+          receiptEmail,
           invoiceApplied: linkedInvoice
             ? {
                 id: linkedInvoice.id,
@@ -1959,11 +1960,12 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }
       });
 
-      runPaymentConfirmedNotifications(prisma, orgId, id);
+      const receiptEmail = await sendPaymentReceiptToClient(prisma, orgId, id);
 
       res.json({
         success: true,
         payment: updated,
+        receiptEmail,
         invoiceApplied: linkedInv
           ? {
               id: linkedInv.id,
@@ -2744,7 +2746,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }
       });
 
-      let paymentRecorded: { paymentId?: string; amount?: number } | null = null;
+      let paymentRecorded: { paymentId?: string; amount?: number; receiptEmail?: Awaited<ReturnType<typeof sendPaymentReceiptToClient>> } | null = null;
       if (isPaid && row.invoiceId) {
         paymentRecorded = await prisma.$transaction(async (tx) => {
           const result = await recordConfirmedInvoicePayment(tx, orgId, userId, row.invoiceId!, {
@@ -2754,7 +2756,11 @@ export default function financeRouter(prisma: PrismaClient): Router {
           return result.created ? { paymentId: result.paymentId, amount: result.amount } : null;
         });
         if (paymentRecorded?.paymentId) {
-          runPaymentConfirmedNotifications(prisma, orgId, paymentRecorded.paymentId);
+          paymentRecorded.receiptEmail = await sendPaymentReceiptToClient(
+            prisma,
+            orgId,
+            paymentRecorded.paymentId
+          );
         }
       }
 

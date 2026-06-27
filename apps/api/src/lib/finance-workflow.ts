@@ -255,15 +255,15 @@ export async function notifyAdminsExpenseCreated(
   }
 }
 
-/** Email client when a payment is confirmed — includes project progress when linked. */
-export async function deliverPaymentConfirmationEmail(
+/** Email payment receipt to client automatically when a payment is confirmed. */
+export async function deliverPaymentReceiptToClient(
   prisma: PrismaClient,
   params: { orgId: string; paymentId: string }
-): Promise<SendResult & { skipped?: boolean; reason?: string }> {
+): Promise<SendResult & { skipped?: boolean; reason?: string; to?: string }> {
   const dedupe = await prisma.notification.findFirst({
     where: {
       orgId: params.orgId,
-      type: "payment.confirmed.client",
+      type: { in: ["payment.receipt.client", "payment.confirmed.client"] },
       body: { startsWith: `paymentId:${params.paymentId}` },
       status: "sent"
     },
@@ -277,31 +277,56 @@ export async function deliverPaymentConfirmationEmail(
       invoice: {
         include: {
           client: { select: { id: true, name: true, email: true } },
-          project: { select: { id: true, name: true } }
+          project: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              client: { select: { id: true, name: true, email: true } }
+            }
+          }
         }
       }
     }
   });
   if (!payment) return { ok: false, error: "Payment not found or not confirmed" };
 
-  const clientEmail = payment.invoice?.client?.email?.trim();
+  const clientEmail =
+    payment.invoice?.client?.email?.trim() ||
+    payment.invoice?.project?.client?.email?.trim() ||
+    payment.invoice?.project?.email?.trim() ||
+    "";
   if (!clientEmail) return { ok: true, skipped: true, reason: "no_client_email" };
 
   const amount = Number(payment.amount).toFixed(2);
   const currency = payment.currency ?? "KES";
   const projectId = payment.invoice?.projectId ?? payment.invoice?.project?.id ?? null;
+  const receivedLabel = payment.receivedAt.toLocaleString("en-KE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Africa/Nairobi"
+  });
 
   let progress: ProjectProgressSnapshot | null = null;
   if (projectId) {
     progress = await loadProjectProgressSnapshot(prisma, params.orgId, projectId);
   }
 
+  const clientName =
+    payment.invoice?.client?.name?.trim() ||
+    payment.invoice?.project?.client?.name?.trim() ||
+    payment.source?.trim() ||
+    null;
+
   const { subject, html, text } = renderPaymentConfirmationEmail({
-    clientName: payment.invoice?.client?.name,
+    clientName,
     amount,
     currency,
     invoiceNumber: payment.invoice?.number ?? null,
     paymentReference: payment.reference ?? payment.mpesaRef ?? null,
+    receivedAt: receivedLabel,
+    paidBy: payment.source,
+    account: payment.account,
     projectName: progress?.projectName ?? payment.invoice?.project?.name ?? null,
     progressPercent: progress?.progressPercent,
     taskSummary: progress ? `${progress.doneTasks}/${progress.taskCount} tasks done` : null,
@@ -323,11 +348,11 @@ export async function deliverPaymentConfirmationEmail(
       channel: "email",
       to: clientEmail,
       subject,
-      body: `paymentId:${params.paymentId}\nPayment confirmation for ${amount} ${currency}.`,
+      body: `paymentId:${params.paymentId}\nPayment receipt for ${amount} ${currency}.`,
       status: result.ok ? "sent" : "failed",
       error: result.ok ? null : result.error.slice(0, 900),
       sentAt: new Date(),
-      type: "payment.confirmed.client",
+      type: "payment.receipt.client",
       tier: "financial"
     }
   });
@@ -337,21 +362,45 @@ export async function deliverPaymentConfirmationEmail(
       orgId: params.orgId,
       to: clientEmail,
       subject,
-      body: `Payment ${params.paymentId} confirmation sent with project progress.`,
-      type: "payment.confirmed.client"
+      body: `Payment receipt ${params.paymentId} emailed to client with project progress.`,
+      type: "payment.receipt.client"
     });
+  } else {
+    console.error("[finance-workflow] payment receipt email failed:", result.error);
   }
 
-  return result;
+  return result.ok ? { ...result, to: clientEmail } : result;
 }
 
-/** Fire-and-forget side effects after payment confirmation (client email). */
+/** @deprecated alias */
+export const deliverPaymentConfirmationEmail = deliverPaymentReceiptToClient;
+
+/** Send client receipt after payment confirmation — awaited for reliable delivery. */
+export async function sendPaymentReceiptToClient(
+  prisma: PrismaClient,
+  orgId: string,
+  paymentId: string
+): Promise<{ sent: boolean; to?: string; skipped?: boolean; reason?: string; error?: string }> {
+  try {
+    const result = await deliverPaymentReceiptToClient(prisma, { orgId, paymentId });
+    if (result.skipped) {
+      return { sent: false, skipped: true, reason: result.reason, to: result.to };
+    }
+    if (result.ok) {
+      return { sent: true, to: result.to };
+    }
+    return { sent: false, error: result.error };
+  } catch (err) {
+    console.error("[finance-workflow] sendPaymentReceiptToClient:", err);
+    return { sent: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Fire-and-forget wrapper (prefer sendPaymentReceiptToClient when recording payments). */
 export function runPaymentConfirmedNotifications(
   prisma: PrismaClient,
   orgId: string,
   paymentId: string
 ): void {
-  void deliverPaymentConfirmationEmail(prisma, { orgId, paymentId }).catch((err) => {
-    console.error("[finance-workflow] payment confirmation email:", err);
-  });
+  void sendPaymentReceiptToClient(prisma, orgId, paymentId);
 }

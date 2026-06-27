@@ -283,6 +283,9 @@ export type PaymentConfirmationEmailInput = {
   currency: string;
   invoiceNumber?: string | null;
   paymentReference?: string | null;
+  receivedAt?: string | null;
+  paidBy?: string | null;
+  account?: string | null;
   projectName?: string | null;
   progressPercent?: number;
   taskSummary?: string | null;
@@ -298,19 +301,35 @@ export function renderPaymentConfirmationEmail(input: PaymentConfirmationEmailIn
   const greeting = input.clientName?.trim() ? `Hello ${input.clientName.trim()},` : "Hello,";
   const amount = `${input.currency} ${input.amount}`;
   const subject = input.invoiceNumber
-    ? `Payment received — Invoice ${input.invoiceNumber}`
-    : "Payment received — thank you";
+    ? `Payment receipt — Invoice ${input.invoiceNumber} — ${amount}`
+    : `Payment receipt — ${amount}`;
 
   const intro =
-    `Thank you — we have <strong>confirmed your payment</strong> of <strong>${escapeHtml(amount)}</strong>` +
+    `This is your official <strong>payment receipt</strong>. We have recorded your payment of ` +
+    `<strong>${escapeHtml(amount)}</strong>` +
     (input.invoiceNumber
-      ? ` for invoice <strong>${escapeHtml(input.invoiceNumber)}</strong>.`
+      ? ` against invoice <strong>${escapeHtml(input.invoiceNumber)}</strong>.`
       : ".");
 
   const detailParts: string[] = [];
+  if (input.receivedAt?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Date & time:</strong> ${escapeHtml(input.receivedAt.trim())}</p>`
+    );
+  }
   if (input.paymentReference?.trim()) {
     detailParts.push(
-      `<p style="margin:0 0 8px;"><strong>Reference:</strong> ${escapeHtml(input.paymentReference.trim())}</p>`
+      `<p style="margin:0 0 8px;"><strong>Transaction reference:</strong> ${escapeHtml(input.paymentReference.trim())}</p>`
+    );
+  }
+  if (input.paidBy?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Received from:</strong> ${escapeHtml(input.paidBy.trim())}</p>`
+    );
+  }
+  if (input.account?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Settled on account:</strong> ${escapeHtml(input.account.trim())}</p>`
     );
   }
   if (input.projectName?.trim()) {
@@ -337,22 +356,26 @@ export function renderPaymentConfirmationEmail(input: PaymentConfirmationEmailIn
   }
 
   const { html, text } = layout("finance", {
-    preheader: `Payment of ${amount} confirmed` + (input.projectName ? ` — ${input.projectName}` : ""),
-    headline: "Payment confirmed",
+    preheader: `Receipt for ${amount}` + (input.projectName ? ` — ${input.projectName}` : ""),
+    headline: "Payment receipt",
     greeting,
     introHtml: intro,
-    highlight: { label: "Amount received", value: amount },
+    highlight: { label: "Amount paid", value: amount },
     detailHtml: detailParts.length ? detailParts.join("") : undefined,
     attachmentNote: null,
-    footerHtml: `Track live progress anytime in your client portal. Questions? Reply to this email or contact <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>.`
+    footerHtml: `Please keep this email as your receipt. Track live project progress in your client portal. Questions? Reply to this email or contact <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>.`
   });
 
   const textLines = [
     greeting,
     "",
-    `Payment confirmed: ${amount}`,
+    "PAYMENT RECEIPT",
+    `Amount paid: ${amount}`,
+    input.receivedAt ? `Date: ${input.receivedAt}` : "",
     input.invoiceNumber ? `Invoice: ${input.invoiceNumber}` : "",
     input.paymentReference ? `Reference: ${input.paymentReference}` : "",
+    input.paidBy ? `Received from: ${input.paidBy}` : "",
+    input.account ? `Account: ${input.account}` : "",
     input.projectName ? `Project: ${input.projectName}` : "",
     input.progressPercent != null ? `Progress: ${input.progressPercent}%` : "",
     "",
