@@ -11,8 +11,7 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
   const { auth, hydrated } = useAuth();
   const canAccessFinance =
     auth.canSeeFinance === true ||
-    auth.roleKeys.some((r) => ["admin", "finance", "analyst"].includes(r));
-  const isAdmin = auth.roleKeys.includes("admin");
+    auth.roleKeys.some((r) => ["admin", "finance", "analyst", "director_admin"].includes(r));
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -31,20 +30,18 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
 
   return (
     <div className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}>
-      <aside className="hidden w-[13.5rem] shrink-0 flex-col border-r border-white/[0.04] bg-[#0e1319]/80 md:flex">
+      <aside className="hidden w-[15rem] shrink-0 flex-col border-r border-white/[0.04] bg-[#0e1319]/80 md:flex">
         <div className="border-b border-white/[0.04] px-4 py-4">
           <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/90">
             Finance
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            Overview, records, projects &amp; approvals
           </p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <FinanceSideNav />
         </div>
-        {isAdmin && (
-          <p className="m-2 rounded-lg border border-white/[0.04] bg-[#0e1319] px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-            Admin: record payments and view ledger. Invoice creation stays with Finance and Sales.
-          </p>
-        )}
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

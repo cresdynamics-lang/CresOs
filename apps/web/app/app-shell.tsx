@@ -12,69 +12,55 @@ import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
 
 type NavSection = {
   title: string;
-  items: { href: string; label: string; roles: string[] }[];
+  items: { href: string; label: string; roles: string[]; icon?: string }[];
 };
 
 
 const SIDEBAR_SECTIONS: NavSection[] = [
   {
-    title: "Overview",
+    title: "Home",
     items: [
-      { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
-      { href: "/developer", label: "Developer", roles: ["developer"] },
-      { href: "/client", label: "My projects", roles: ["client"] }
+      { href: "/dashboard", label: "Dashboard", icon: "D", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/developer", label: "Developer", icon: "Dv", roles: ["developer"] },
+      { href: "/client", label: "My projects", icon: "P", roles: ["client"] }
     ]
   },
   {
-    title: "Emil-AI",
+    title: "Work",
     items: [
-      { href: "/admin/email-automation", label: "Email Automation", roles: ["admin"] }
+      { href: "/schedule", label: "Tasks", icon: "T", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/community", label: "Community", icon: "C", roles: [...ALL_APP_ROLE_KEYS] }
     ]
   },
   {
-    title: "Tasks",
+    title: "Mail",
     items: [
-      { href: "/schedule", label: "Tasks", roles: [...ALL_APP_ROLE_KEYS] }
-    ]
-  },
-  {
-    title: "Community",
-    items: [
-      { href: "/community", label: "Community", roles: [...ALL_APP_ROLE_KEYS] }
-    ]
-  },
-  {
-    title: "Mails",
-    items: [
-      { href: "/finance/messages", label: "Finance mail", roles: ["admin", "finance"] },
-      { href: "/sales/messages", label: "Sales mail", roles: ["admin", "sales"] },
-      { href: "/director/messages", label: "Director mail", roles: ["admin", "director_admin"] }
-    ]
-  },
-  {
-    title: "Reports",
-    items: [
-      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
-      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] },
-      { href: "/director-reports", label: "Director → Admin", roles: ["admin", "director_admin"] }
+      { href: "/finance/messages", label: "Finance mail", icon: "F", roles: ["admin", "finance"] },
+      { href: "/sales/messages", label: "Sales mail", icon: "S", roles: ["admin", "sales"] },
+      { href: "/director/messages", label: "Director mail", icon: "Dr", roles: ["admin", "director_admin"] }
     ]
   },
   {
     title: "Sales",
     items: [
-      { href: "/sales", label: "Sales hub", roles: ["admin", "sales", "director_admin", "finance"] },
-      { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"] },
-      { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"] },
-      { href: "/crm", label: "CRM", roles: ["admin", "sales", "director_admin", "finance"] }
+      { href: "/sales", label: "Sales hub", icon: "S", roles: ["admin", "sales", "director_admin", "finance"] },
+      { href: "/leads", label: "Leads", icon: "L", roles: ["admin", "director_admin", "sales", "finance"] },
+      { href: "/crm", label: "CRM", icon: "C", roles: ["admin", "sales", "director_admin", "finance"] }
     ]
   },
   {
     title: "Delivery",
     items: [
-      { href: "/projects", label: "Projects", roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"] },
+      {
+        href: "/projects",
+        label: "Projects",
+        icon: "P",
+        roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"]
+      },
       {
         href: "/projects/management",
-        label: "Projects on management",
+        label: "Managed projects",
+        icon: "M",
         roles: ["admin", "director_finance", "finance"]
       }
     ]
@@ -82,18 +68,28 @@ const SIDEBAR_SECTIONS: NavSection[] = [
   {
     title: "Finance",
     items: [
-      { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst", "director_finance"] },
-      { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] }
+      { href: "/finance", label: "Finance hub", icon: "F", roles: ["admin", "finance", "analyst", "director_finance"] },
+      { href: "/approvals", label: "Approvals", icon: "A", roles: ["admin", "director_admin", "finance"] }
     ]
   },
   {
     title: "Insights",
+    items: [{ href: "/analytics", label: "Analytics", icon: "A", roles: ["admin", "director_admin", "finance", "analyst"] }]
+  },
+  {
+    title: "Reports",
     items: [
-      { href: "/analytics", label: "Analytics", roles: ["admin", "director_admin", "finance", "analyst"] }
+      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
+      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] },
+      { href: "/director-reports", label: "Director reports", roles: ["admin", "director_admin"] }
     ]
   },
   {
-    title: "Administration",
+    title: "Emil-AI",
+    items: [{ href: "/admin/email-automation", label: "Email automation", roles: ["admin"] }]
+  },
+  {
+    title: "Admin",
     items: [
       { href: "/admin/users", label: "Users", roles: ["admin"] },
       { href: "/admin/org", label: "Departments", roles: ["admin"] },
@@ -115,7 +111,7 @@ function roleLabel(key: string): string {
   return labels[key] ?? key;
 }
 
-type ShellNavItem = { href: string; label: string; roles: string[] };
+type ShellNavItem = { href: string; label: string; roles: string[]; icon?: string };
 type ShellNavSection = { title: string; items: ShellNavItem[] };
 
 const navLabelReveal =
@@ -200,6 +196,7 @@ function SidebarNavContent({
                 const onCommunity = pathname.startsWith("/community");
                 const isActive =
                   pathname === item.href ||
+                  (item.href === "/finance" && pathname.startsWith("/finance")) ||
                   (item.href === "/reports" && pathname.startsWith("/reports")) ||
                   (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
                   (item.href === "/leads" && pathname.startsWith("/leads")) ||
@@ -221,8 +218,8 @@ function SidebarNavContent({
                         : "text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-800"
                     }`}
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800/90 text-xs font-semibold">
-                      {item.label.charAt(0)}
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800/90 text-[10px] font-bold tracking-tight text-slate-200">
+                      {item.icon ?? item.label.charAt(0)}
                     </span>
                     <span className={labelClass}>{item.label}</span>
                     {badge ? (

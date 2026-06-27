@@ -205,6 +205,7 @@ const FINANCE_ALIGNMENT_RULES = [
 
 function pathnameToSection(pathname: string): FinanceSection {
   if (pathname === "/finance" || pathname === "/finance/") return "overview";
+  if (pathname.startsWith("/finance/messages")) return "messages";
   if (pathname.startsWith("/finance/invoices")) return "invoices";
   if (pathname.startsWith("/finance/payments")) return "payments";
   if (pathname.startsWith("/finance/expenses")) return "expenses";
