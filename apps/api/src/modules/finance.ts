@@ -9,6 +9,10 @@ import { enforceApprovalConflicts } from "./conflict-engine";
 import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
 import { generateInvoicePdfBuffer } from "../lib/invoice-pdf";
 import { deliverFinanceInvoiceEmail } from "../lib/invoice-email";
+import {
+  notifyAdminsExpenseCreated,
+  runPaymentConfirmedNotifications
+} from "../lib/finance-workflow";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
@@ -1474,6 +1478,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         });
 
+        runPaymentConfirmedNotifications(prisma, orgId, payment.id);
+
         payment =
           (await prisma.payment.findUnique({
             where: { id: payment.id },
@@ -1685,6 +1691,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }
       });
 
+      runPaymentConfirmedNotifications(prisma, orgId, id);
+
       res.json({
         success: true,
         payment: updated,
@@ -1862,6 +1870,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         });
       }
+
+      void notifyAdminsExpenseCreated(prisma, {
+        orgId,
+        expenseId: expense.id,
+        category,
+        amount: Number(amount),
+        currency: currency ?? "KES",
+        description: description ?? null,
+        spentAt: new Date(spentAt),
+        recordedByUserId: userId
+      }).catch((err) => console.error("[finance] expense admin notify:", err));
 
       res.status(201).json(expense);
     }
@@ -2466,6 +2485,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
           });
           return result.created ? { paymentId: result.paymentId, amount: result.amount } : null;
         });
+        if (paymentRecorded?.paymentId) {
+          runPaymentConfirmedNotifications(prisma, orgId, paymentRecorded.paymentId);
+        }
       }
 
       res.json({

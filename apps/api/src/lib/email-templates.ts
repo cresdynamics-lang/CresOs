@@ -41,6 +41,8 @@ function layout(
     detailHtml?: string;
     ctaLabel?: string;
     footerHtml?: string;
+    /** null hides the mid attachment note; undefined keeps invoice default */
+    attachmentNote?: string | null;
   }
 ): { html: string; text: string } {
   const b = BRAND[channel];
@@ -62,6 +64,22 @@ function layout(
 
   const detailBlock = opts.detailHtml
     ? `<tr><td style="padding:8px 28px 0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;color:#334155;line-height:1.6;">${opts.detailHtml}</td></tr>`
+    : "";
+
+  const attachmentDefault =
+    "Your invoice is attached as a <strong>PDF</strong>. Please review payment details inside the document.";
+  const attachmentText =
+    opts.attachmentNote === null
+      ? ""
+      : opts.attachmentNote === undefined
+        ? attachmentDefault
+        : opts.attachmentNote;
+  const attachmentBlock = attachmentText
+    ? `<tr>
+            <td style="padding:22px 28px 8px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#475569;line-height:1.6;">
+              ${attachmentText}
+            </td>
+          </tr>`
     : "";
 
   const html = `<!DOCTYPE html>
@@ -96,11 +114,7 @@ function layout(
           </tr>
           ${highlightBlock}
           ${detailBlock}
-          <tr>
-            <td style="padding:22px 28px 8px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#475569;line-height:1.6;">
-              Your invoice is attached as a <strong>PDF</strong>. Please review payment details inside the document.
-            </td>
-          </tr>
+          ${attachmentBlock}
           <tr>
             <td style="padding:8px 28px 28px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px;color:#64748b;line-height:1.55;">
               ${opts.footerHtml ?? `Questions? Reply to this email or contact <a href="mailto:info@cresdynamics.com" style="color:${b.accent};">info@cresdynamics.com</a>.`}
@@ -124,7 +138,9 @@ function layout(
     opts.preheader.replace(/<[^>]+>/g, ""),
     opts.highlight ? `${opts.highlight.label}: ${opts.highlight.value}` : "",
     "",
-    "Your invoice PDF is attached to this email.",
+    opts.attachmentNote === null
+      ? ""
+      : opts.attachmentNote ?? "Your invoice PDF is attached to this email.",
     "",
     "Cres Dynamics"
   ].filter(Boolean);
@@ -207,6 +223,142 @@ export function renderSalesBulkEmail(opts: {
 export function channelFromNotificationType(type: string): EmailChannel {
   if (type.startsWith("invoice.") && type.includes("sales")) return "sales";
   if (type === "invoice.sent" || type === "invoice.management_fee") return "finance";
+  if (type.startsWith("expense.") || type.startsWith("payment.")) return "finance";
   if (type === "crm.bulk_message") return "sales";
   return "default";
+}
+
+export type ExpenseAdminEmailInput = {
+  category: string;
+  amount: string;
+  currency: string;
+  description?: string | null;
+  spentAt: string;
+  recordedBy?: string | null;
+  approvalUrl?: string;
+};
+
+export function renderExpenseAdminEmail(input: ExpenseAdminEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const amount = `${input.currency} ${input.amount}`;
+  const subject = `[CresOS Finance] Expense pending approval — ${amount}`;
+  const detailParts = [
+    `<p style="margin:0 0 8px;"><strong>Category:</strong> ${escapeHtml(input.category)}</p>`,
+    `<p style="margin:0 0 8px;"><strong>Date:</strong> ${escapeHtml(input.spentAt)}</p>`
+  ];
+  if (input.description?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Description:</strong> ${escapeHtml(input.description.trim())}</p>`
+    );
+  }
+  if (input.recordedBy?.trim()) {
+    detailParts.push(
+      `<p style="margin:0;"><strong>Recorded by:</strong> ${escapeHtml(input.recordedBy.trim())}</p>`
+    );
+  }
+
+  const { html, text } = layout("finance", {
+    preheader: `New expense ${amount} awaiting your approval`,
+    headline: "Expense pending approval",
+    greeting: "Hello Admin,",
+    introHtml:
+      "A new expense was recorded in Finance and is <strong>awaiting your approval</strong>. Please review it in CresOS.",
+    highlight: { label: "Amount", value: amount },
+    detailHtml: detailParts.join(""),
+    attachmentNote: null,
+    footerHtml: input.approvalUrl
+      ? `Review in CresOS: <a href="${escapeHtml(input.approvalUrl)}" style="color:#0f766e;">Open approvals</a> · <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>`
+      : `Review pending expenses under Finance → Expenses in CresOS. Questions? <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>.`
+  });
+
+  return { subject, html, text };
+}
+
+export type PaymentConfirmationEmailInput = {
+  clientName?: string | null;
+  amount: string;
+  currency: string;
+  invoiceNumber?: string | null;
+  paymentReference?: string | null;
+  projectName?: string | null;
+  progressPercent?: number;
+  taskSummary?: string | null;
+  milestonesHtml?: string;
+  nextStepsHtml?: string;
+};
+
+export function renderPaymentConfirmationEmail(input: PaymentConfirmationEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const greeting = input.clientName?.trim() ? `Hello ${input.clientName.trim()},` : "Hello,";
+  const amount = `${input.currency} ${input.amount}`;
+  const subject = input.invoiceNumber
+    ? `Payment received — Invoice ${input.invoiceNumber}`
+    : "Payment received — thank you";
+
+  const intro =
+    `Thank you — we have <strong>confirmed your payment</strong> of <strong>${escapeHtml(amount)}</strong>` +
+    (input.invoiceNumber
+      ? ` for invoice <strong>${escapeHtml(input.invoiceNumber)}</strong>.`
+      : ".");
+
+  const detailParts: string[] = [];
+  if (input.paymentReference?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Reference:</strong> ${escapeHtml(input.paymentReference.trim())}</p>`
+    );
+  }
+  if (input.projectName?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Project:</strong> ${escapeHtml(input.projectName.trim())}</p>`
+    );
+  }
+  if (input.progressPercent != null) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Overall progress:</strong> ${input.progressPercent}%` +
+        (input.taskSummary ? ` (${escapeHtml(input.taskSummary)})` : "") +
+        `</p>`
+    );
+  }
+  if (input.milestonesHtml) {
+    detailParts.push(
+      `<p style="margin:12px 0 6px;font-weight:600;color:#0f172a;">Timeline & milestones</p>${input.milestonesHtml}`
+    );
+  }
+  if (input.nextStepsHtml) {
+    detailParts.push(
+      `<p style="margin:12px 0 6px;font-weight:600;color:#0f172a;">Next remaining steps</p>${input.nextStepsHtml}`
+    );
+  }
+
+  const { html, text } = layout("finance", {
+    preheader: `Payment of ${amount} confirmed` + (input.projectName ? ` — ${input.projectName}` : ""),
+    headline: "Payment confirmed",
+    greeting,
+    introHtml: intro,
+    highlight: { label: "Amount received", value: amount },
+    detailHtml: detailParts.length ? detailParts.join("") : undefined,
+    attachmentNote: null,
+    footerHtml: `Track live progress anytime in your client portal. Questions? Reply to this email or contact <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>.`
+  });
+
+  const textLines = [
+    greeting,
+    "",
+    `Payment confirmed: ${amount}`,
+    input.invoiceNumber ? `Invoice: ${input.invoiceNumber}` : "",
+    input.paymentReference ? `Reference: ${input.paymentReference}` : "",
+    input.projectName ? `Project: ${input.projectName}` : "",
+    input.progressPercent != null ? `Progress: ${input.progressPercent}%` : "",
+    "",
+    "Thank you for your payment.",
+    "Cres Dynamics"
+  ].filter(Boolean);
+
+  return { subject, html, text: textLines.join("\n") };
 }
