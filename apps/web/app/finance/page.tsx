@@ -6,11 +6,13 @@ import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { FinanceStatInline, FinanceStatRow } from "../../components/finance/finance-ui";
+import { FinanceStatInline, FinanceStatRow, FinanceFlatTable, FinanceFlatTableHead, FinanceFlatTableBody, FinanceFlatTableRow, FinanceFlatTh, FinanceFlatTd, FinanceStatusLabel, FinanceTextAction } from "../../components/finance/finance-ui";
+import { financeNeu } from "../../components/finance/finance-theme";
 import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
+import { PaymentCreateModal, type PaymentFormState } from "./payment-create-modal";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
 
 type Invoice = {
@@ -57,7 +59,11 @@ type Payment = {
   receivedAt: string;
   status: string;
   invoiceId: string | null;
-  invoice?: { projectId: string | null; project: { id: string; name: string } | null } | null;
+  invoice?: {
+    number?: string;
+    projectId: string | null;
+    project: { id: string; name: string } | null;
+  } | null;
 };
 
 type ClientDue = {
@@ -69,6 +75,31 @@ type ClientDue = {
   reminderDayOfMonth: number | null;
   lastReminderAt: string | null;
 };
+
+function localDatetimeValue(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function inferPaymentMethod(account: string, source: string): string {
+  const text = `${account} ${source}`.toLowerCase();
+  if (text.includes("mpesa") || text.includes("m-pesa")) return "mpesa";
+  if (text.includes("cash")) return "cash";
+  if (text.includes("card")) return "card";
+  return "bank";
+}
+
+function defaultPaymentForm(): PaymentFormState {
+  return {
+    projectId: "",
+    invoiceId: "",
+    amount: "",
+    source: "",
+    account: "",
+    reference: "",
+    receivedAt: localDatetimeValue()
+  };
+}
 
 const EXPENSE_CATEGORIES = [
   "salaries",
@@ -300,38 +331,8 @@ export default function FinancePage() {
     toolOrServiceName: string;
     subscriptionValidUntil: string;
   } | null>(null);
-  const [paymentForm, setPaymentForm] = useState<{
-    projectId: string;
-    method: string;
-    amount: string;
-    receivedAt: string;
-    notes: string;
-    source: string;
-    invoiceId: string;
-    account: string;
-    reference: string;
-    howToProceed: string;
-    confirmNow: boolean;
-  }>({
-    projectId: "",
-    method: "mpesa",
-    amount: "",
-    receivedAt: new Date().toISOString().slice(0, 10),
-    notes: "",
-    source: "",
-    invoiceId: "",
-    account: "",
-    reference: "",
-    howToProceed: "",
-    confirmNow: true
-  });
-  const [confirmPaymentId, setConfirmPaymentId] = useState<string | null>(null);
-  const [confirmForm, setConfirmForm] = useState<{ source: string; account: string; reference: string; howToProceed: string }>({
-    source: "",
-    account: "",
-    reference: "",
-    howToProceed: ""
-  });
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState>(defaultPaymentForm);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [reminderDayEdit, setReminderDayEdit] = useState<{ clientId: string; day: number | null } | null>(null);
   /** Expense/payout entity ids that have a pending Approval row (from DB). */
   const [pendingApprovalIds, setPendingApprovalIds] = useState<Set<string>>(new Set());
@@ -467,7 +468,13 @@ export default function FinancePage() {
             receivedAt: p.receivedAt,
             status: p.status ?? "pending",
             invoiceId: p.invoiceId ?? null,
-            invoice: p.invoice ?? null
+            invoice: p.invoice
+              ? {
+                  number: p.invoice.number ?? undefined,
+                  projectId: p.invoice.projectId ?? null,
+                  project: p.invoice.project ?? null
+                }
+              : null
           }))
         );
       }
@@ -791,33 +798,33 @@ export default function FinancePage() {
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentSubmitError(null);
-    if (!paymentForm.amount || !paymentForm.receivedAt) return;
-    const hasConfirmFields =
-      Boolean(paymentForm.source.trim() && paymentForm.account.trim() && paymentForm.reference.trim());
-    if (paymentForm.confirmNow && !hasConfirmFields) return;
+    const source = paymentForm.source.trim();
+    const account = paymentForm.account.trim();
+    const reference = paymentForm.reference.trim();
+    if (!paymentForm.amount || !paymentForm.receivedAt || !paymentForm.invoiceId) return;
+    if (!source || !account || !reference) {
+      setPaymentSubmitError("Received from, account, and transaction reference are required.");
+      return;
+    }
+    const method = inferPaymentMethod(account, source);
     try {
       const res = await apiFetch("/finance/payments", {
         method: "POST",
         body: JSON.stringify({
-          method: paymentForm.method,
+          method,
           amount: paymentForm.amount,
           currency: "KES",
           receivedAt: paymentForm.receivedAt,
-          notes: paymentForm.notes || undefined,
-          source: paymentForm.source || undefined,
-          account: paymentForm.account.trim() || undefined,
-          howToProceed: paymentForm.howToProceed.trim() || undefined,
-          invoiceId: paymentForm.invoiceId || undefined,
-          reference: paymentForm.reference.trim() || undefined,
-          mpesaRef:
-            paymentForm.method === "mpesa" && paymentForm.reference.trim()
-              ? paymentForm.reference.trim()
-              : undefined
+          source,
+          account,
+          reference,
+          invoiceId: paymentForm.invoiceId,
+          mpesaRef: method === "mpesa" ? reference : undefined,
+          confirm: true
         })
       });
       const raw = (await res.json().catch(() => null)) as {
-        id?: string;
-        status?: string;
+        payment?: { id: string; status?: string };
         error?: string;
         message?: string;
       } | null;
@@ -825,57 +832,14 @@ export default function FinancePage() {
         setPaymentSubmitError(raw?.message || raw?.error || `Could not save payment (${res.status}).`);
         return;
       }
-      const createdId = raw && typeof raw === "object" && "id" in raw ? String(raw.id) : undefined;
-      const alreadyConfirmed = raw?.status === "confirmed";
-      if (paymentForm.confirmNow && createdId && !alreadyConfirmed && hasConfirmFields) {
-        const confRes = await apiFetch(`/finance/payments/${createdId}/confirm`, {
-          method: "POST",
-          body: JSON.stringify({
-            source: paymentForm.source.trim(),
-            account: paymentForm.account.trim(),
-            reference: paymentForm.reference.trim(),
-            howToProceed: paymentForm.howToProceed.trim() || undefined
-          })
-        });
-        const confBody = (await confRes.json().catch(() => null)) as { error?: string } | null;
-        if (!confRes.ok) {
-          setPaymentSubmitError(
-            confBody?.error ||
-              "Payment was saved as pending but confirmation failed. Open the payment and confirm, or fix the issue."
-          );
-          await loadData();
-          if (canSeeMoneyStats) await fetchReport();
-          emitDataRefresh();
-          return;
-        }
-      }
-      setPaymentForm((f) => ({
-        ...f,
-        amount: "",
-        notes: "",
-        source: "",
-        account: "",
-        reference: "",
-        howToProceed: "",
-        invoiceId: "",
-        projectId: ""
-      }));
+      setPaymentForm(defaultPaymentForm());
+      setShowPaymentModal(false);
       await loadData();
       if (canSeeMoneyStats) await fetchReport();
       emitDataRefresh();
     } catch {
       setPaymentSubmitError("Network error — payment may not have been saved.");
     }
-  };
-
-  const openConfirmPayment = (p: Payment) => {
-    setConfirmPaymentId(p.id);
-    setConfirmForm({
-      source: p.source ?? "",
-      account: p.account ?? "",
-      reference: p.reference ?? "",
-      howToProceed: p.howToProceed ?? ""
-    });
   };
 
   const deleteInvoice = async (id: string) => {
@@ -897,28 +861,6 @@ export default function FinancePage() {
     try {
       const res = await apiFetch(`/finance/payments/${id}`, { method: "DELETE" });
       if (res.ok) {
-        await loadData();
-        if (canSeeMoneyStats) await fetchReport();
-        emitDataRefresh();
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const submitConfirmPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!confirmPaymentId) return;
-    const { source, account, reference, howToProceed } = confirmForm;
-    if (!source.trim() || !account.trim() || !reference.trim()) return;
-    try {
-      const res = await apiFetch(`/finance/payments/${confirmPaymentId}/confirm`, {
-        method: "POST",
-        body: JSON.stringify({ source: source.trim(), account: account.trim(), reference: reference.trim(), howToProceed: howToProceed.trim() || undefined })
-      });
-      if (res.ok) {
-        setConfirmPaymentId(null);
-        setConfirmForm({ source: "", account: "", reference: "", howToProceed: "" });
         await loadData();
         if (canSeeMoneyStats) await fetchReport();
         emitDataRefresh();
@@ -1041,12 +983,36 @@ export default function FinancePage() {
           }
         />
       ) : (
-        <div>
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">Finance</p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{pageMeta.title}</h1>
-          {pageMeta.description ? (
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{pageMeta.description}</p>
-          ) : null}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
+          <div className="min-w-0">
+            <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">Finance</p>
+            <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{pageMeta.title}</h1>
+            {pageMeta.description ? (
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{pageMeta.description}</p>
+            ) : null}
+          </div>
+          {section === "invoices" && canCreateInvoice && (isFinance || isAdmin) && clients.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInvoiceModal(true)}
+              className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation`}
+            >
+              New invoice
+            </button>
+          )}
+          {section === "payments" && canRecordPayments && projects.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentSubmitError(null);
+                setPaymentForm(defaultPaymentForm());
+                setShowPaymentModal(true);
+              }}
+              className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation`}
+            >
+              New payment
+            </button>
+          )}
         </div>
       )}
 
@@ -1538,278 +1504,129 @@ export default function FinancePage() {
       )}
 
       {section === "invoices" && (
-        <div className="shell flex min-h-0 flex-1 flex-col">
-          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              Invoices (for work done — link to project for clarity)
-            </p>
-            {canCreateInvoice && isFinance && clients.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowInvoiceModal(true)}
-                className="min-h-[44px] touch-manipulation rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-              >
-                New invoice
-              </button>
-            )}
-          </div>
-          <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto text-sm">
+        <FinanceFlatTable>
+          <FinanceFlatTableHead>
+            <FinanceFlatTh>Invoice</FinanceFlatTh>
+            <FinanceFlatTh>Status</FinanceFlatTh>
+            <FinanceFlatTh>Project</FinanceFlatTh>
+            <FinanceFlatTh align="right">Amount</FinanceFlatTh>
+            <FinanceFlatTh align="right">Actions</FinanceFlatTh>
+          </FinanceFlatTableHead>
+          <FinanceFlatTableBody>
             {invoices.map((inv) => (
-              <li
-                key={inv.id}
-                className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-              >
-                <div>
-                  <p className="text-slate-100">{inv.number}</p>
-                  <p className="text-xs text-slate-400 capitalize">{inv.status}</p>
-                  {inv.project && (
-                    <p className="text-xs text-sky-400">For project: {inv.project.name}</p>
+              <FinanceFlatTableRow key={inv.id}>
+                <FinanceFlatTd>
+                  <span className="font-medium text-slate-100">{inv.number}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <FinanceStatusLabel status={inv.status} />
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  {inv.project ? (
+                    <span className="text-sky-400/90">{inv.project.name}</span>
+                  ) : (
+                    <span className="text-slate-500">—</span>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-emerald-400">{formatMoney(inv.totalAmount)}</span>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void downloadWithAuth(`/finance/invoices/${inv.id}/pdf`, `${inv.number}.pdf`);
-                    }}
-                    className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                  >
-                    Download PDF
-                  </a>
-                  {isFinance && (
-                    <button
-                      type="button"
-                      onClick={() => void deleteInvoice(inv.id)}
-                      className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  <span className="font-medium tabular-nums text-emerald-400">{formatMoney(inv.totalAmount)}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                    <FinanceTextAction
+                      onClick={() => void downloadWithAuth(`/finance/invoices/${inv.id}/pdf`, `${inv.number}.pdf`)}
                     >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </li>
+                      Download PDF
+                    </FinanceTextAction>
+                    {isFinance && (
+                      <FinanceTextAction tone="danger" onClick={() => void deleteInvoice(inv.id)}>
+                        Delete
+                      </FinanceTextAction>
+                    )}
+                  </div>
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
             ))}
             {invoices.length === 0 && (
-              <li className="text-sm text-slate-400">No invoices yet.</li>
+              <FinanceFlatTableRow>
+                <FinanceFlatTd className="py-8 text-slate-500" colSpan={5}>
+                  No invoices yet.
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
             )}
-          </ul>
-        </div>
+          </FinanceFlatTableBody>
+        </FinanceFlatTable>
       )}
 
       {section === "payments" && (
-        <div className="shell flex min-h-0 flex-1 flex-col">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Payments received — fill source, transaction code, and account to confirm in one step, or save pending and confirm later
-          </p>
-          <ul className="space-y-2 text-sm">
+        <FinanceFlatTable>
+          <FinanceFlatTableHead>
+            <FinanceFlatTh>When</FinanceFlatTh>
+            <FinanceFlatTh>Invoice</FinanceFlatTh>
+            <FinanceFlatTh>Project</FinanceFlatTh>
+            <FinanceFlatTh align="right">Amount</FinanceFlatTh>
+            <FinanceFlatTh>Received from</FinanceFlatTh>
+            <FinanceFlatTh>Account</FinanceFlatTh>
+            <FinanceFlatTh>Reference</FinanceFlatTh>
+            <FinanceFlatTh>Status</FinanceFlatTh>
+            <FinanceFlatTh align="right">Actions</FinanceFlatTh>
+          </FinanceFlatTableHead>
+          <FinanceFlatTableBody>
             {payments.map((p) => (
-              <li
-                key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="capitalize text-slate-100">{p.method} · {formatMoney(p.amount)}</p>
-                  <p className="text-xs text-slate-400">
-                    {new Date(p.receivedAt).toLocaleDateString()} · {p.status}
-                  </p>
-                  {p.invoice?.project && (
-                    <p className="text-xs text-sky-400">For project: {p.invoice.project.name}</p>
+              <FinanceFlatTableRow key={p.id}>
+                <FinanceFlatTd>
+                  <span className="whitespace-nowrap text-slate-300">
+                    {new Date(p.receivedAt).toLocaleString(undefined, {
+                      dateStyle: "short",
+                      timeStyle: "short"
+                    })}
+                  </span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="font-medium text-slate-100">{p.invoice?.number ?? "—"}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  {p.invoice?.project ? (
+                    <span className="text-sky-400/90">{p.invoice.project.name}</span>
+                  ) : (
+                    <span className="text-slate-500">—</span>
                   )}
-                  {(p.source || p.status === "confirmed") && (
-                    <>
-                      {p.source && <p className="text-xs text-slate-300">Source: {p.source}</p>}
-                      {p.status === "confirmed" && (
-                        <>
-                          {p.reference && <p className="text-xs text-slate-300">Tx code: {p.reference}</p>}
-                          {p.account && <p className="text-xs text-slate-300">Account: {p.account}</p>}
-                          {p.howToProceed && <p className="text-xs text-slate-400">Proceed: {p.howToProceed}</p>}
-                        </>
-                      )}
-                    </>
-                  )}
-                  {p.notes && <p className="text-xs text-slate-500">{p.notes}</p>}
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-emerald-400">{formatMoney(p.amount)}</span>
-                  {p.status === "pending" && canRecordPayments && (
-                    <button
-                      type="button"
-                      onClick={() => void deletePayment(p.id)}
-                      className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
-                    >
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  <span className="font-medium tabular-nums text-emerald-400">{formatMoney(p.amount)}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="text-slate-300">{p.source ?? "—"}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="text-slate-400">{p.account ?? "—"}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="font-mono text-xs text-slate-400">{p.reference ?? "—"}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <FinanceStatusLabel status={p.status} />
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  {p.status === "pending" && canRecordPayments ? (
+                    <FinanceTextAction tone="danger" onClick={() => void deletePayment(p.id)}>
                       Delete
-                    </button>
+                    </FinanceTextAction>
+                  ) : (
+                    <span className="text-xs text-slate-600">—</span>
                   )}
-                  {p.status === "pending" && canRecordPayments && (
-                    confirmPaymentId === p.id ? (
-                      <form onSubmit={submitConfirmPayment} className="mt-2 flex flex-col gap-1 rounded border border-slate-600 bg-slate-800/80 p-2">
-                        <input
-                          type="text"
-                          placeholder="Where from (source)"
-                          value={confirmForm.source}
-                          onChange={(e) => setConfirmForm((f) => ({ ...f, source: e.target.value }))}
-                          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                          required
-                        />
-                        <input
-                          type="text"
-                          placeholder="Transaction code / receipt ref"
-                          value={confirmForm.reference}
-                          onChange={(e) => setConfirmForm((f) => ({ ...f, reference: e.target.value }))}
-                          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                          required
-                        />
-                        <input
-                          type="text"
-                          placeholder="Which account it landed in"
-                          value={confirmForm.account}
-                          onChange={(e) => setConfirmForm((f) => ({ ...f, account: e.target.value }))}
-                          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                          required
-                        />
-                        <input
-                          type="text"
-                          placeholder="How to proceed (e.g. allocate to INV-001)"
-                          value={confirmForm.howToProceed}
-                          onChange={(e) => setConfirmForm((f) => ({ ...f, howToProceed: e.target.value }))}
-                          className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                        />
-                        <div className="flex gap-1">
-                          <button type="submit" className="rounded bg-emerald-600 px-2 py-1 text-xs text-white">Confirm</button>
-                          <button type="button" onClick={() => setConfirmPaymentId(null)} className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300">Cancel</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openConfirmPayment(p)}
-                        className="rounded border border-amber-600 px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30"
-                      >
-                        Confirm (add source, tx code, account)
-                      </button>
-                    )
-                  )}
-                </div>
-              </li>
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
             ))}
             {payments.length === 0 && (
-              <li className="text-sm text-slate-400">No payments yet.</li>
+              <FinanceFlatTableRow>
+                <FinanceFlatTd className="py-8 text-slate-500" colSpan={9}>
+                  No payments yet. Use New payment to record one.
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
             )}
-          </ul>
-          {canRecordPayments && (
-            <form onSubmit={submitPayment} className="mt-3 flex flex-col gap-2 border-t border-slate-700 pt-3">
-              {paymentSubmitError && (
-                <p className="rounded border border-rose-700/80 bg-rose-950/40 px-2 py-1 text-xs text-rose-200">
-                  {paymentSubmitError}
-                </p>
-              )}
-              <p className="text-xs text-slate-400">Record payment — choose project, then invoice (deducts from project)</p>
-              <select
-                value={paymentForm.projectId}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, projectId: e.target.value, invoiceId: "" }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              >
-                <option value="">Select project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <select
-                value={paymentForm.invoiceId}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, invoiceId: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              >
-                <option value="">No invoice</option>
-                {(paymentForm.projectId
-                  ? invoices.filter((inv) => inv.projectId === paymentForm.projectId)
-                  : invoices
-                ).map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.number} {inv.project ? `— ${inv.project.name}` : ""}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Payment source (where from)"
-                value={paymentForm.source}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, source: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <div className="grid gap-2 md:grid-cols-2">
-                <input
-                  type="text"
-                  placeholder="Transaction code / receipt ref"
-                  value={paymentForm.reference}
-                  onChange={(e) => setPaymentForm((f) => ({ ...f, reference: e.target.value }))}
-                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Which account it landed in"
-                  value={paymentForm.account}
-                  onChange={(e) => setPaymentForm((f) => ({ ...f, account: e.target.value }))}
-                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="How to proceed (optional)"
-                value={paymentForm.howToProceed}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, howToProceed: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <select
-                value={paymentForm.method}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              >
-                <option value="bank">Bank</option>
-                <option value="card">Card</option>
-                <option value="mpesa">M-Pesa</option>
-                <option value="cash">Cash</option>
-              </select>
-              <input
-                type="number"
-                placeholder="Amount (KES)"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              />
-              <input
-                type="date"
-                value={paymentForm.receivedAt}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, receivedAt: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-              />
-              <input
-                type="text"
-                placeholder="Notes (e.g. ref, comment)"
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <label className="flex items-center gap-2 text-xs text-slate-400">
-                <input
-                  type="checkbox"
-                  checked={paymentForm.confirmNow}
-                  onChange={(e) => setPaymentForm((f) => ({ ...f, confirmNow: e.target.checked }))}
-                />
-                Also confirm via second step if not auto-confirmed (same fields required)
-              </label>
-              <p className="text-[11px] text-slate-500">
-                If source, account, and transaction reference are all filled, the server confirms immediately — no extra step.
-              </p>
-              <button
-                type="submit"
-                className="rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500"
-              >
-                Record payment
-              </button>
-            </form>
-          )}
-        </div>
+          </FinanceFlatTableBody>
+        </FinanceFlatTable>
       )}
 
       {section === "expenses" && (
@@ -2231,6 +2048,19 @@ export default function FinancePage() {
         submitError={invoiceSubmitError}
         onSubmit={submitInvoice}
         emptyLine={emptyInvoiceLine}
+      />
+      <PaymentCreateModal
+        open={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setPaymentSubmitError(null);
+        }}
+        form={paymentForm}
+        setForm={setPaymentForm}
+        projects={projects}
+        invoices={invoices}
+        submitError={paymentSubmitError}
+        onSubmit={submitPayment}
       />
     </section>
   );

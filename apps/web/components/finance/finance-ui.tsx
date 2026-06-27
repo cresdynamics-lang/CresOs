@@ -130,4 +130,130 @@ export function FinanceNeuListRow({
   return <li className={`${financeNeu.listRow} ${className}`.trim()}>{children}</li>;
 }
 
+/** Flat full-bleed data table — no card shells per row. */
+export function FinanceFlatTable({
+  children,
+  className = ""
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 overflow-x-auto ${className}`.trim()}>
+      <table className="w-full min-w-[52rem] border-collapse text-left text-sm">{children}</table>
+    </div>
+  );
+}
+
+export function FinanceFlatTableHead({ children }: { children: ReactNode }) {
+  return (
+    <thead>
+      <tr className="border-b border-white/[0.06] text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        {children}
+      </tr>
+    </thead>
+  );
+}
+
+export function FinanceFlatTableBody({ children }: { children: ReactNode }) {
+  return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>;
+}
+
+export function FinanceFlatTableRow({
+  children,
+  className = ""
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <tr className={`text-slate-200 ${className}`.trim()}>{children}</tr>;
+}
+
+export function FinanceFlatTh({
+  children,
+  align = "left",
+  className = ""
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <th
+      className={`py-2.5 pr-4 font-medium last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
+    >
+      {children}
+    </th>
+  );
+}
+
+export function FinanceFlatTd({
+  children,
+  align = "left",
+  className = "",
+  colSpan
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+  colSpan?: number;
+}) {
+  return (
+    <td
+      colSpan={colSpan}
+      className={`py-3 pr-4 align-middle last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
+    >
+      {children}
+    </td>
+  );
+}
+
+const statusTone: Record<string, string> = {
+  sent: "text-sky-400",
+  paid: "text-emerald-400",
+  partial: "text-amber-400",
+  draft: "text-slate-400",
+  overdue: "text-rose-400"
+};
+
+export function FinanceStatusLabel({ status }: { status: string }) {
+  const tone = statusTone[status.toLowerCase()] ?? "text-slate-400";
+  return <span className={`text-xs font-medium capitalize ${tone}`}>{status.replace(/_/g, " ")}</span>;
+}
+
+export function FinanceTextAction({
+  children,
+  onClick,
+  href,
+  tone = "default",
+  className = ""
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  href?: string;
+  tone?: "default" | "danger";
+  className?: string;
+}) {
+  const cls =
+    tone === "danger"
+      ? "text-rose-400 hover:text-rose-300"
+      : "text-slate-400 hover:text-emerald-400";
+  if (href) {
+    return (
+      <a href={href} className={`text-xs font-medium transition-colors ${cls} ${className}`.trim()}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-xs font-medium transition-colors ${cls} ${className}`.trim()}
+    >
+      {children}
+    </button>
+  );
+}
+
 export { financeNeu };

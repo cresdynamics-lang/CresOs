@@ -110,11 +110,13 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
   },
   invoices: {
     title: "Invoices",
-    description: "View and download invoices linked to projects. Create new invoices with the button above."
+    description:
+      "View and download invoices linked to projects. Invoices are tied to projects for clarity — create new ones with New invoice."
   },
   payments: {
     title: "Payments",
-    description: "Record and confirm payments; match to invoices for cash flow and project received amounts."
+    description:
+      "Payments received against projects and invoices. Use New payment to record — clients are emailed a confirmation with project progress."
   },
   expenses: {
     title: "Expenses",
