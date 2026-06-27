@@ -235,6 +235,10 @@ export type ExpenseAdminEmailInput = {
   description?: string | null;
   spentAt: string;
   recordedBy?: string | null;
+  source?: string | null;
+  transactionCode?: string | null;
+  account?: string | null;
+  paymentMethod?: string | null;
   approvalUrl?: string;
 };
 
@@ -256,7 +260,27 @@ export function renderExpenseAdminEmail(input: ExpenseAdminEmailInput): {
   }
   if (input.recordedBy?.trim()) {
     detailParts.push(
-      `<p style="margin:0;"><strong>Recorded by:</strong> ${escapeHtml(input.recordedBy.trim())}</p>`
+      `<p style="margin:0 0 8px;"><strong>Recorded by:</strong> ${escapeHtml(input.recordedBy.trim())}</p>`
+    );
+  }
+  if (input.source?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Vendor:</strong> ${escapeHtml(input.source.trim())}</p>`
+    );
+  }
+  if (input.transactionCode?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Receipt / ref:</strong> ${escapeHtml(input.transactionCode.trim())}</p>`
+    );
+  }
+  if (input.account?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Account:</strong> ${escapeHtml(input.account.trim())}</p>`
+    );
+  }
+  if (input.paymentMethod?.trim()) {
+    detailParts.push(
+      `<p style="margin:0;"><strong>Paid via:</strong> ${escapeHtml(input.paymentMethod.trim())}</p>`
     );
   }
 
@@ -380,6 +404,100 @@ export function renderPaymentConfirmationEmail(input: PaymentConfirmationEmailIn
     input.progressPercent != null ? `Progress: ${input.progressPercent}%` : "",
     "",
     "Thank you for your payment.",
+    "Cres Dynamics"
+  ].filter(Boolean);
+
+  return { subject, html, text: textLines.join("\n") };
+}
+
+export type ExpenseBeneficiaryReceiptEmailInput = {
+  recipientName?: string | null;
+  amount: string;
+  currency: string;
+  category: string;
+  description?: string | null;
+  spentAt: string;
+  source?: string | null;
+  transactionCode?: string | null;
+  account?: string | null;
+  paymentMethod?: string | null;
+  receiptNumber: string;
+  status: string;
+};
+
+export function renderExpenseBeneficiaryReceiptEmail(input: ExpenseBeneficiaryReceiptEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const greeting = input.recipientName?.trim() ? `Hello ${input.recipientName.trim()},` : "Hello,";
+  const amount = `${input.currency} ${input.amount}`;
+  const subject = `Expense receipt — ${amount}`;
+  const categoryLabel = input.category.replace(/_/g, " ");
+
+  const detailParts: string[] = [
+    `<p style="margin:0 0 8px;"><strong>Receipt #:</strong> ${escapeHtml(input.receiptNumber)}</p>`,
+    `<p style="margin:0 0 8px;"><strong>Category:</strong> ${escapeHtml(categoryLabel)}</p>`,
+    `<p style="margin:0 0 8px;"><strong>Date:</strong> ${escapeHtml(input.spentAt)}</p>`
+  ];
+  if (input.description?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Description:</strong> ${escapeHtml(input.description.trim())}</p>`
+    );
+  }
+  if (input.source?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Vendor:</strong> ${escapeHtml(input.source.trim())}</p>`
+    );
+  }
+  if (input.transactionCode?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Transaction ref:</strong> ${escapeHtml(input.transactionCode.trim())}</p>`
+    );
+  }
+  if (input.account?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Account:</strong> ${escapeHtml(input.account.trim())}</p>`
+    );
+  }
+  if (input.paymentMethod?.trim()) {
+    detailParts.push(
+      `<p style="margin:0 0 8px;"><strong>Paid via:</strong> ${escapeHtml(input.paymentMethod.trim())}</p>`
+    );
+  }
+  detailParts.push(
+    `<p style="margin:0;"><strong>Status:</strong> ${escapeHtml(input.status.replace(/_/g, " "))} — pending admin approval</p>`
+  );
+
+  const { html, text } = layout("finance", {
+    preheader: `Expense receipt ${amount}`,
+    headline: "Expense receipt",
+    greeting,
+    introHtml:
+      `This is your official <strong>expense receipt</strong> for <strong>${escapeHtml(amount)}</strong>. ` +
+      `A PDF copy is attached. This expense is recorded and pending admin approval.`,
+    highlight: { label: "Amount", value: amount },
+    detailHtml: detailParts.join(""),
+    attachmentNote: "Your expense receipt PDF is attached to this email.",
+    footerHtml: `Keep this receipt for your records. Questions? Contact <a href="mailto:info@cresdynamics.com" style="color:#0f766e;">info@cresdynamics.com</a>.`
+  });
+
+  const textLines = [
+    greeting,
+    "",
+    "EXPENSE RECEIPT",
+    `Receipt #: ${input.receiptNumber}`,
+    `Amount: ${amount}`,
+    `Category: ${categoryLabel}`,
+    `Date: ${input.spentAt}`,
+    input.description ? `Description: ${input.description}` : "",
+    input.source ? `Vendor: ${input.source}` : "",
+    input.transactionCode ? `Reference: ${input.transactionCode}` : "",
+    input.account ? `Account: ${input.account}` : "",
+    input.paymentMethod ? `Paid via: ${input.paymentMethod}` : "",
+    `Status: ${input.status} — pending admin approval`,
+    "",
+    "PDF receipt attached.",
     "Cres Dynamics"
   ].filter(Boolean);
 

@@ -13,6 +13,7 @@ import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-in
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
 import { PaymentCreateModal, type PaymentFormState } from "./payment-create-modal";
+import { ExpenseCreateModal, defaultExpenseForm, type ExpenseFormState, EXPENSE_CATEGORIES } from "./expense-create-modal";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
 
 type Invoice = {
@@ -104,19 +105,6 @@ function defaultPaymentForm(): PaymentFormState {
     receivedAt: localDatetimeValue()
   };
 }
-
-const EXPENSE_CATEGORIES = [
-  "salaries",
-  "transport",
-  "tools",
-  "developer_payment",
-  "apis",
-  "hostings",
-  "domains",
-  "renewals",
-  "apis_per_project",
-  "other"
-] as const;
 
 const PURPOSE_CODES = [
   { value: "meeting_client", label: "Client meeting" },
@@ -284,39 +272,10 @@ export default function FinancePage() {
     managementMonths: string;
   }>({ allocated: "", received: "", managementMonthlyAmount: "", managementMonths: "" });
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>("all");
-  const [expenseForm, setExpenseForm] = useState<{
-    category: string;
-    description: string;
-    notes: string;
-    amount: string;
-    spentAt: string;
-    source: string;
-    transactionCode: string;
-    account: string;
-    paymentMethod: string;
-    beneficiaryUserId: string;
-    expenseSubtype: string;
-    purposeCode: string;
-    purposeDetail: string;
-    toolOrServiceName: string;
-    subscriptionValidUntil: string;
-  }>({
-    category: "other",
-    description: "",
-    notes: "",
-    amount: "",
-    spentAt: new Date().toISOString().slice(0, 10),
-    source: "",
-    transactionCode: "",
-    account: "",
-    paymentMethod: "bank",
-    beneficiaryUserId: "",
-    expenseSubtype: "",
-    purposeCode: "",
-    purposeDetail: "",
-    toolOrServiceName: "",
-    subscriptionValidUntil: ""
-  });
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(defaultExpenseForm);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseSubmitError, setExpenseSubmitError] = useState<string | null>(null);
+  const [expenseNotice, setExpenseNotice] = useState<string | null>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editExpenseForm, setEditExpenseForm] = useState<{
     category: string;
@@ -613,48 +572,53 @@ export default function FinancePage() {
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseForm.amount || !expenseForm.spentAt) return;
+    setExpenseSubmitError(null);
+    if (!expenseForm.amount || !expenseForm.spentAt || !expenseForm.beneficiaryUserId) return;
+    if (!expenseForm.source.trim() || !expenseForm.transactionCode.trim() || !expenseForm.account.trim()) {
+      setExpenseSubmitError("Vendor, receipt code, and account are required.");
+      return;
+    }
     try {
       const res = await apiFetch("/finance/expenses", {
         method: "POST",
         body: JSON.stringify({
           category: expenseForm.category,
-          description: expenseForm.description || undefined,
-          notes: expenseForm.notes || undefined,
+          description: expenseForm.description.trim() || undefined,
           amount: expenseForm.amount,
           spentAt: expenseForm.spentAt,
-          source: expenseForm.source || undefined,
-          transactionCode: expenseForm.transactionCode || undefined,
-          account: expenseForm.account || undefined,
-          paymentMethod: expenseForm.paymentMethod || undefined,
-          beneficiaryUserId: expenseForm.beneficiaryUserId || undefined,
-          expenseSubtype: expenseForm.expenseSubtype || undefined,
-          purposeCode: expenseForm.purposeCode || undefined,
-          purposeDetail: expenseForm.purposeDetail || undefined,
-          toolOrServiceName: expenseForm.toolOrServiceName || undefined,
-          subscriptionValidUntil: expenseForm.subscriptionValidUntil || undefined
+          source: expenseForm.source.trim(),
+          transactionCode: expenseForm.transactionCode.trim(),
+          account: expenseForm.account.trim(),
+          paymentMethod: expenseForm.paymentMethod,
+          beneficiaryUserId: expenseForm.beneficiaryUserId,
+          toolOrServiceName: expenseForm.toolOrServiceName.trim() || undefined
         })
       });
-      if (res.ok) {
-        setExpenseForm((f) => ({
-          ...f,
-          description: "",
-          notes: "",
-          amount: "",
-          source: "",
-          transactionCode: "",
-          account: "",
-          beneficiaryUserId: "",
-          expenseSubtype: "",
-          purposeCode: "",
-          purposeDetail: "",
-          toolOrServiceName: "",
-          subscriptionValidUntil: ""
-        }));
-        loadData();
+      const raw = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+        adminEmail?: { sent?: boolean; adminCount?: number };
+        receiptEmail?: { sent?: boolean; to?: string; skipped?: boolean; reason?: string };
+      } | null;
+      if (!res.ok) {
+        setExpenseSubmitError(raw?.message || raw?.error || `Could not record expense (${res.status}).`);
+        return;
       }
+      setExpenseForm(defaultExpenseForm());
+      setShowExpenseModal(false);
+      const parts: string[] = ["Expense recorded."];
+      if (raw?.receiptEmail?.sent && raw.receiptEmail.to) {
+        parts.push(`Receipt emailed to ${raw.receiptEmail.to}.`);
+      }
+      if (raw?.adminEmail?.sent) {
+        parts.push("Admins notified for approval.");
+      }
+      setExpenseNotice(parts.join(" "));
+      await loadData();
+      if (canSeeMoneyStats) await fetchReport();
+      emitDataRefresh();
     } catch {
-      // ignore
+      setExpenseSubmitError("Network error — expense may not have been saved.");
     }
   };
 
@@ -1057,7 +1021,7 @@ export default function FinancePage() {
               type="button"
               onClick={() => {
                 setPaymentSubmitError(null);
-    setPaymentNotice(null);
+                setPaymentNotice(null);
                 setPaymentForm(defaultPaymentForm());
                 setPaymentModalMode("create");
                 setShowPaymentModal(true);
@@ -1067,6 +1031,20 @@ export default function FinancePage() {
               New payment
             </button>
           )}
+          {section === "expenses" && (isFinance || isAdmin) && (
+            <button
+              type="button"
+              onClick={() => {
+                setExpenseSubmitError(null);
+                setExpenseNotice(null);
+                setExpenseForm(defaultExpenseForm());
+                setShowExpenseModal(true);
+              }}
+              className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation !bg-amber-700 hover:!bg-amber-600`}
+            >
+              New expense
+            </button>
+          )}
         </div>
       )}
 
@@ -1074,6 +1052,12 @@ export default function FinancePage() {
       {paymentNotice && section === "payments" ? (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
           {paymentNotice}
+        </div>
+      ) : null}
+
+      {expenseNotice && section === "expenses" ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+          {expenseNotice}
         </div>
       ) : null}
 
@@ -1698,151 +1682,100 @@ export default function FinancePage() {
 
       {section === "expenses" && (
         <>
-        <div className="shell flex min-h-0 flex-1 flex-col">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              Expenses (need admin approval) — where from, receipt code, which account, how paid
-            </p>
-            <select
-              value={expenseCategoryFilter}
-              onChange={(e) => setExpenseCategoryFilter(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-            >
-              <option value="all">All categories</option>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c.replace(/_/g, " ")}
-                </option>
-              ))}
-              {categories.filter((c) => !EXPENSE_CATEGORIES.includes(c as typeof EXPENSE_CATEGORIES[number])).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <p className="mb-2 text-xs text-slate-500">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">
             Total {expenseCategoryFilter === "all" ? "" : `(${expenseCategoryFilter}) `} (all statuses):{" "}
             {formatMoney(expensesTotal)}
-            <span className="block text-slate-400">
-              In period-style totals (approved/paid only): {formatMoney(expensesApprovedInFilter)}
+            <span className="ml-2 text-slate-400">
+              Approved/paid: {formatMoney(expensesApprovedInFilter)}
             </span>
           </p>
-          <ul className="space-y-2 text-sm">
-            {filteredExpenses.map((exp) => (
-              <li
-                key={exp.id}
-                className="flex flex-wrap items-center justify-between gap-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <span className="font-medium text-slate-100">{exp.category.replace(/_/g, " ")}</span>
-                  {exp.description && (
-                    <p className="truncate text-xs text-slate-400">{exp.description}</p>
-                  )}
-                  {exp.source && <p className="text-xs text-slate-300">From: {exp.source}</p>}
-                  {exp.transactionCode && <p className="text-xs text-slate-300">Receipt/tx: {exp.transactionCode}</p>}
-                  {exp.account && <p className="text-xs text-slate-300">Account: {exp.account}</p>}
-                  {exp.paymentMethod && <p className="text-xs text-slate-300">Paid via: {exp.paymentMethod}</p>}
-                  {exp.notes && (
-                    <p className="text-xs text-slate-500">Note: {exp.notes}</p>
-                  )}
-                  {exp.beneficiary && (
-                    <p className="text-xs text-sky-300">
-                      Attributed to: {(exp.beneficiary.name || exp.beneficiary.email).trim()}
-                    </p>
-                  )}
-                  {exp.purposeCode && (
-                    <p className="text-xs text-slate-400">
-                      Purpose:{" "}
-                      {PURPOSE_CODES.find((x) => x.value === exp.purposeCode)?.label ?? exp.purposeCode}
-                      {exp.purposeDetail ? ` — ${exp.purposeDetail}` : ""}
-                    </p>
-                  )}
-                  {exp.toolOrServiceName && (
-                    <p className="text-xs text-slate-400">
-                      Tool/service: {exp.toolOrServiceName}
-                      {exp.subscriptionValidUntil
-                        ? ` · valid until ${new Date(exp.subscriptionValidUntil).toLocaleDateString()}`
-                        : ""}
-                    </p>
-                  )}
-                  {exp.category === "developer_payment" && (
-                    <p className="text-xs text-amber-300">
-                      Developer acknowledgment:{" "}
-                      {exp.developerAcknowledgedAt
-                        ? `Confirmed ${new Date(exp.developerAcknowledgedAt).toLocaleDateString()}`
-                        : "Awaiting developer confirmation"}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-500">
-                    {new Date(exp.spentAt).toLocaleDateString()} · {exp.status}
-                    {exp.status === "pending" && " — needs admin approval"}
-                  </p>
-                  {isFinance && exp.status === "pending" && (
-                    pendingApprovalIds.has(exp.id) ? (
-                      <p className="text-xs text-amber-400">Pending admin approval</p>
-                    ) : (
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void downloadWithAuth(`/finance/expenses/${exp.id}/receipt/pdf`, `expense-${exp.id}.pdf`)}
-                          className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
-                        >
-                          Download receipt
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => submitForApproval("expense", exp.id)}
-                          className="rounded border border-amber-600 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-900/30"
-                        >
-                          Submit for admin approval
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => startEditExpense(exp)}
-                          className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteExpense(exp.id)}
-                          className="rounded border border-rose-700 px-2 py-0.5 text-xs text-rose-300 hover:bg-rose-950/40"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )
-                  )}
-                  {(!isFinance || exp.status !== "pending") && (
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void downloadWithAuth(`/finance/expenses/${exp.id}/receipt/pdf`, `expense-${exp.id}.pdf`)}
-                        className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
-                      >
-                        Download receipt
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <span className="text-amber-400">{formatMoney(exp.amount)}</span>
-              </li>
+          <select
+            value={expenseCategoryFilter}
+            onChange={(e) => setExpenseCategoryFilter(e.target.value)}
+            className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
+          >
+            <option value="all">All categories</option>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c.replace(/_/g, " ")}
+              </option>
             ))}
-            {filteredExpenses.length === 0 && (
-              <li className="text-sm text-slate-400">
-                {expenses.length === 0 ? "No expenses yet." : "No expenses in this category."}
-              </li>
-            )}
-          </ul>
+            {categories.filter((c) => !EXPENSE_CATEGORIES.includes(c as typeof EXPENSE_CATEGORIES[number])).map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
-        {isFinance && (
-          <div className="shell">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Add expense (where from, receipt code, which account, how paid) — needs admin approval
+        <FinanceFlatTable>
+          <FinanceFlatTableHead>
+            <FinanceFlatTh>Date</FinanceFlatTh>
+            <FinanceFlatTh>Category</FinanceFlatTh>
+            <FinanceFlatTh>Description</FinanceFlatTh>
+            <FinanceFlatTh>Vendor</FinanceFlatTh>
+            <FinanceFlatTh>Beneficiary</FinanceFlatTh>
+            <FinanceFlatTh>Amount</FinanceFlatTh>
+            <FinanceFlatTh>Status</FinanceFlatTh>
+            <FinanceFlatTh align="right">Actions</FinanceFlatTh>
+          </FinanceFlatTableHead>
+          <FinanceFlatTableBody>
+            {filteredExpenses.map((exp) => (
+              <FinanceFlatTableRow key={exp.id}>
+                <FinanceFlatTd>{new Date(exp.spentAt).toLocaleDateString()}</FinanceFlatTd>
+                <FinanceFlatTd>{exp.category.replace(/_/g, " ")}</FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="line-clamp-2">{exp.description || "—"}</span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>{exp.source || "—"}</FinanceFlatTd>
+                <FinanceFlatTd>
+                  {exp.beneficiary ? (exp.beneficiary.name || exp.beneficiary.email).trim() : "—"}
+                </FinanceFlatTd>
+                <FinanceFlatTd className="text-amber-400">{formatMoney(exp.amount)}</FinanceFlatTd>
+                <FinanceFlatTd>
+                  <FinanceStatusLabel status={exp.status} />
+                  {pendingApprovalIds.has(exp.id) ? (
+                    <span className="mt-0.5 block text-[10px] text-amber-400">Awaiting admin</span>
+                  ) : null}
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <FinanceTextAction
+                      onClick={() =>
+                        void downloadWithAuth(`/finance/expenses/${exp.id}/receipt/pdf`, `expense-${exp.id}.pdf`)
+                      }
+                    >
+                      Receipt
+                    </FinanceTextAction>
+                    {isFinance && exp.status === "pending" ? (
+                      <>
+                        <FinanceTextAction onClick={() => startEditExpense(exp)}>Edit</FinanceTextAction>
+                        <FinanceTextAction tone="danger" onClick={() => deleteExpense(exp.id)}>
+                          Delete
+                        </FinanceTextAction>
+                      </>
+                    ) : null}
+                  </div>
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
+            ))}
+            {filteredExpenses.length === 0 ? (
+              <FinanceFlatTableRow>
+                <FinanceFlatTd colSpan={8} className="text-center text-slate-400">
+                  {expenses.length === 0 ? "No expenses yet." : "No expenses in this category."}
+                </FinanceFlatTd>
+              </FinanceFlatTableRow>
+            ) : null}
+          </FinanceFlatTableBody>
+        </FinanceFlatTable>
+
+        {isFinance && editingExpenseId && editExpenseForm ? (
+          <div className="shell mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Edit pending expense
             </p>
-            <form onSubmit={submitExpense} className="flex flex-col gap-2">
+            <div className="grid gap-2 md:grid-cols-2">
               <select
-                value={expenseForm.category}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))}
+                value={editExpenseForm.category}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, category: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
               >
                 {EXPENSE_CATEGORIES.map((c) => (
@@ -1850,36 +1783,21 @@ export default function FinancePage() {
                 ))}
               </select>
               <input
-                type="text"
-                placeholder="Description (e.g. AWS Jan)"
-                value={expenseForm.description}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                type="number"
+                placeholder="Amount (KES)"
+                value={editExpenseForm.amount}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, amount: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
               />
               <input
-                type="text"
-                placeholder="Where from (vendor/supplier)"
-                value={expenseForm.source}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, source: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <input
-                type="text"
-                placeholder="Receipt / transaction code"
-                value={expenseForm.transactionCode}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, transactionCode: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              <input
-                type="text"
-                placeholder="Which account paid from"
-                value={expenseForm.account}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, account: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                type="date"
+                value={editExpenseForm.spentAt}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, spentAt: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
               />
               <select
-                value={expenseForm.paymentMethod}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+                value={editExpenseForm.paymentMethod}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, paymentMethod: e.target.value }))}
                 className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
               >
                 <option value="bank">Bank</option>
@@ -1887,219 +1805,65 @@ export default function FinancePage() {
                 <option value="mpesa">M-Pesa</option>
                 <option value="cash">Cash</option>
               </select>
-              <textarea
-                placeholder="Notes / comment"
-                value={expenseForm.notes}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))}
-                className="min-h-[48px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+            </div>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <input
+                type="text"
+                placeholder="Description"
+                value={editExpenseForm.description}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, description: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
               />
-              <p className="text-[11px] text-slate-500">
-                Transport / tools / paying a developer: attribute who, purpose, and tools subscription where relevant.
-              </p>
+              <input
+                type="text"
+                placeholder="Vendor"
+                value={editExpenseForm.source}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, source: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+              <input
+                type="text"
+                placeholder="Receipt / transaction code"
+                value={editExpenseForm.transactionCode}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, transactionCode: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
+              <input
+                type="text"
+                placeholder="Account"
+                value={editExpenseForm.account}
+                onChange={(e) => setEditExpenseForm((f) => ({ ...f!, account: e.target.value }))}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+              />
               <select
-                value={expenseForm.beneficiaryUserId}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, beneficiaryUserId: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                value={editExpenseForm.beneficiaryUserId}
+                onChange={(e) =>
+                  setEditExpenseForm((f) => ({ ...f!, beneficiaryUserId: e.target.value }))
+                }
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 md:col-span-2"
               >
-                <option value="">Who used / who is paid (optional)</option>
+                <option value="">Beneficiary</option>
                 {expenseOrgUsers.map((u) => (
                   <option key={u.id} value={u.id}>
                     {(u.name || u.email).trim()}
                   </option>
                 ))}
               </select>
-              <select
-                value={expenseForm.purposeCode}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, purposeCode: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-              >
-                <option value="">Purpose / context</option>
-                {PURPOSE_CODES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Detail (e.g. client name, meeting notes)"
-                value={expenseForm.purposeDetail}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, purposeDetail: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-              />
-              {(expenseForm.category === "tools" || expenseForm.category === "apis") && (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Tool or service name"
-                    value={expenseForm.toolOrServiceName}
-                    onChange={(e) => setExpenseForm((f) => ({ ...f, toolOrServiceName: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <input
-                    type="date"
-                    title="Subscription valid until"
-                    value={expenseForm.subscriptionValidUntil}
-                    onChange={(e) =>
-                      setExpenseForm((f) => ({ ...f, subscriptionValidUntil: e.target.value }))
-                    }
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  />
-                </>
-              )}
-              <input
-                type="number"
-                placeholder="Amount (KES)"
-                value={expenseForm.amount}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, amount: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-              />
-              <input
-                type="date"
-                value={expenseForm.spentAt}
-                onChange={(e) => setExpenseForm((f) => ({ ...f, spentAt: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
-                type="submit"
-                className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
+                type="button"
+                onClick={() => void saveEditExpense()}
+                className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
               >
-                Record expense (then submit for admin approval)
+                Save changes
               </button>
-            </form>
-
-            {editingExpenseId && editExpenseForm && (
-              <div className="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Edit pending expense
-                </p>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <select
-                    value={editExpenseForm.category}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, category: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  >
-                    {EXPENSE_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="Amount (KES)"
-                    value={editExpenseForm.amount}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, amount: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  />
-                  <input
-                    type="date"
-                    value={editExpenseForm.spentAt}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, spentAt: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  />
-                  <select
-                    value={editExpenseForm.paymentMethod}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, paymentMethod: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  >
-                    <option value="bank">Bank</option>
-                    <option value="card">Card</option>
-                    <option value="mpesa">M-Pesa</option>
-                    <option value="cash">Cash</option>
-                  </select>
-                </div>
-                <div className="mt-2 grid gap-2">
-                  <input
-                    type="text"
-                    placeholder="Description"
-                    value={editExpenseForm.description}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, description: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Where from (vendor/supplier)"
-                    value={editExpenseForm.source}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, source: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Receipt / transaction code"
-                    value={editExpenseForm.transactionCode}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, transactionCode: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Which account paid from"
-                    value={editExpenseForm.account}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, account: e.target.value }))}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <textarea
-                    placeholder="Notes / comment"
-                    value={editExpenseForm.notes}
-                    onChange={(e) => setEditExpenseForm((f) => ({ ...f!, notes: e.target.value }))}
-                    className="min-h-[48px] rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                  <select
-                    value={editExpenseForm.beneficiaryUserId}
-                    onChange={(e) =>
-                      setEditExpenseForm((f) => ({ ...f!, beneficiaryUserId: e.target.value }))
-                    }
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  >
-                    <option value="">Who used / who is paid</option>
-                    {expenseOrgUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {(u.name || u.email).trim()}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={editExpenseForm.purposeCode}
-                    onChange={(e) =>
-                      setEditExpenseForm((f) => ({ ...f!, purposeCode: e.target.value }))
-                    }
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
-                  >
-                    <option value="">Purpose</option>
-                    {PURPOSE_CODES.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Purpose detail"
-                    value={editExpenseForm.purposeDetail}
-                    onChange={(e) =>
-                      setEditExpenseForm((f) => ({ ...f!, purposeDetail: e.target.value }))
-                    }
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
-                  />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void saveEditExpense()}
-                    className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
-                  >
-                    Save changes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEditExpense}
-                    className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+              <button type="button" onClick={cancelEditExpense} className={`${financeNeu.btnGhost}`}>
+                Cancel
+              </button>
+            </div>
           </div>
-        )}
+        ) : null}
         </>
       )}
       <InvoiceCreateModal
@@ -2123,7 +1887,7 @@ export default function FinancePage() {
           setShowPaymentModal(false);
           setPaymentModalMode("create");
           setPaymentSubmitError(null);
-    setPaymentNotice(null);
+          setPaymentNotice(null);
         }}
         form={paymentForm}
         setForm={setPaymentForm}
@@ -2132,6 +1896,18 @@ export default function FinancePage() {
         invoices={invoices}
         submitError={paymentSubmitError}
         onSubmit={submitPayment}
+      />
+      <ExpenseCreateModal
+        open={showExpenseModal}
+        onClose={() => {
+          setShowExpenseModal(false);
+          setExpenseSubmitError(null);
+        }}
+        form={expenseForm}
+        setForm={setExpenseForm}
+        orgUsers={expenseOrgUsers}
+        submitError={expenseSubmitError}
+        onSubmit={submitExpense}
       />
     </section>
   );

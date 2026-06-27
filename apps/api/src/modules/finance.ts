@@ -10,7 +10,8 @@ import { CRES_DYNAMICS_PDF_COMPANY } from "../lib/company-pdf";
 import { generateInvoicePdfBuffer } from "../lib/invoice-pdf";
 import { deliverFinanceInvoiceEmail } from "../lib/invoice-email";
 import {
-  notifyAdminsExpenseCreated,
+  sendExpenseAdminApprovalRequest,
+  sendExpenseReceiptToBeneficiary,
   sendPaymentReceiptToClient
 } from "../lib/finance-workflow";
 
@@ -2064,7 +2065,18 @@ export default function financeRouter(prisma: PrismaClient): Router {
       };
 
       if (!category || !amount || !spentAt) {
-        res.status(400).json({ error: "Missing fields" });
+        res.status(400).json({ error: "Missing fields", message: "Category, amount, and date are required." });
+        return;
+      }
+
+      const sourceTrim = (source ?? "").trim();
+      const transactionCodeTrim = (transactionCode ?? "").trim();
+      const accountTrim = (account ?? "").trim();
+      if (!sourceTrim || !transactionCodeTrim || !accountTrim) {
+        res.status(400).json({
+          error: "Missing fields",
+          message: "Vendor, receipt/transaction code, and account are required."
+        });
         return;
       }
 
@@ -2072,9 +2084,19 @@ export default function financeRouter(prisma: PrismaClient): Router {
       if (beneficiaryUserId && String(beneficiaryUserId).trim()) {
         const u = await prisma.user.findFirst({
           where: { id: String(beneficiaryUserId).trim(), orgId, deletedAt: null },
-          select: { id: true }
+          select: { id: true, email: true }
         });
-        benefId = u?.id ?? null;
+        if (!u) {
+          res.status(400).json({ error: "Beneficiary not found" });
+          return;
+        }
+        benefId = u.id;
+      } else {
+        res.status(400).json({
+          error: "Missing beneficiary",
+          message: "Select who this expense is for — receipt is emailed to them automatically."
+        });
+        return;
       }
 
       const expense = await prisma.expense.create({
@@ -2083,9 +2105,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
           category,
           description: description ?? null,
           notes: notes ?? null,
-          source: source ?? null,
-          transactionCode: transactionCode ?? null,
-          account: account ?? null,
+          source: sourceTrim || null,
+          transactionCode: transactionCodeTrim || null,
+          account: accountTrim || null,
           paymentMethod: paymentMethod ?? null,
           amount: new Prisma.Decimal(amount),
           currency: currency ?? "KES",
@@ -2141,7 +2163,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         });
       }
 
-      void notifyAdminsExpenseCreated(prisma, {
+      const adminEmail = await sendExpenseAdminApprovalRequest(prisma, {
         orgId,
         expenseId: expense.id,
         category,
@@ -2149,10 +2171,25 @@ export default function financeRouter(prisma: PrismaClient): Router {
         currency: currency ?? "KES",
         description: description ?? null,
         spentAt: new Date(spentAt),
-        recordedByUserId: userId
-      }).catch((err) => console.error("[finance] expense admin notify:", err));
+        recordedByUserId: userId,
+        source: sourceTrim,
+        transactionCode: transactionCodeTrim,
+        account: accountTrim,
+        paymentMethod: paymentMethod ?? null
+      });
 
-      res.status(201).json(expense);
+      const receiptEmail = await sendExpenseReceiptToBeneficiary(prisma, {
+        orgId,
+        expenseId: expense.id
+      });
+
+      res.status(201).json({
+        success: true,
+        expense,
+        adminEmail,
+        receiptEmail,
+        message: "Expense recorded — admin notified for approval and receipt emailed to beneficiary."
+      });
     }
   );
 

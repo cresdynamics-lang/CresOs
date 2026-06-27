@@ -1,11 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
 import {
   renderExpenseAdminEmail,
+  renderExpenseBeneficiaryReceiptEmail,
   renderPaymentConfirmationEmail
 } from "./email-templates";
 import { sendOutboundEmail, type SendResult } from "./resend";
 import { getAdminUsers, notifyAdminsInApp } from "../modules/director-notifications";
 import { logEmailSent } from "../modules/admin-activity";
+import { generateExpenseReceiptPdf } from "../services/finance/expense-receipt-pdf";
+import { CRES_DYNAMICS_PDF_COMPANY } from "./company-pdf";
 
 export type ProjectProgressSnapshot = {
   projectId: string;
@@ -162,8 +165,8 @@ function nextStepsListHtml(steps: ProjectProgressSnapshot["nextSteps"]): string 
   return `<ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.55;">${items}</ul>`;
 }
 
-/** Notify admins (in-app + email) when finance records a new expense. */
-export async function notifyAdminsExpenseCreated(
+/** Email admins to approve a newly recorded expense. */
+export async function sendExpenseAdminApprovalRequest(
   prisma: PrismaClient,
   params: {
     orgId: string;
@@ -174,8 +177,23 @@ export async function notifyAdminsExpenseCreated(
     description?: string | null;
     spentAt: Date;
     recordedByUserId?: string | null;
+    source?: string | null;
+    transactionCode?: string | null;
+    account?: string | null;
+    paymentMethod?: string | null;
   }
-): Promise<void> {
+): Promise<{ sent: boolean; adminCount?: number; skipped?: boolean; reason?: string; error?: string }> {
+  const dedupe = await prisma.notification.findFirst({
+    where: {
+      orgId: params.orgId,
+      type: "expense.recorded.admin",
+      body: { startsWith: `expenseId:${params.expenseId}` },
+      status: "sent"
+    },
+    select: { id: true }
+  });
+  if (dedupe) return { sent: false, skipped: true, reason: "already_sent" };
+
   const amountStr = params.amount.toFixed(2);
   const spentLabel = params.spentAt.toISOString().split("T")[0] ?? params.spentAt.toLocaleDateString();
 
@@ -194,6 +212,8 @@ export async function notifyAdminsExpenseCreated(
     `Amount: ${params.currency} ${amountStr}\n` +
     `Date: ${spentLabel}\n` +
     (params.description?.trim() ? `Description: ${params.description.trim()}\n` : "") +
+    (params.source?.trim() ? `Vendor: ${params.source.trim()}\n` : "") +
+    (params.transactionCode?.trim() ? `Receipt/ref: ${params.transactionCode.trim()}\n` : "") +
     (recordedBy ? `Recorded by: ${recordedBy}\n` : "") +
     `\nReview under Finance → Expenses / Approvals in CresOS.`;
 
@@ -203,7 +223,7 @@ export async function notifyAdminsExpenseCreated(
   });
 
   const admins = await getAdminUsers(prisma, params.orgId);
-  if (admins.length === 0) return;
+  if (admins.length === 0) return { sent: false, skipped: true, reason: "no_admins" };
 
   const appUrl = (process.env.APP_URL ?? process.env.WEB_URL ?? "https://cresos.cresdynamics.com").replace(
     /\/$/,
@@ -216,8 +236,15 @@ export async function notifyAdminsExpenseCreated(
     description: params.description,
     spentAt: spentLabel,
     recordedBy,
+    source: params.source,
+    transactionCode: params.transactionCode,
+    account: params.account,
+    paymentMethod: params.paymentMethod,
     approvalUrl: `${appUrl}/approvals`
   });
+
+  let sentCount = 0;
+  let lastError: string | undefined;
 
   for (const admin of admins) {
     const result = await sendOutboundEmail({
@@ -244,15 +271,144 @@ export async function notifyAdminsExpenseCreated(
     });
 
     if (result.ok) {
+      sentCount += 1;
       await logEmailSent(prisma, {
         orgId: params.orgId,
         to: admin.email,
         subject: emailSubject,
-        body: `Expense ${params.expenseId} notification sent to admin.`,
+        body: `Expense ${params.expenseId} approval request sent to admin.`,
         type: "expense.recorded.admin"
       });
+    } else {
+      lastError = result.error;
+      console.error("[finance-workflow] expense admin email failed:", result.error);
     }
   }
+
+  return sentCount > 0
+    ? { sent: true, adminCount: sentCount }
+    : { sent: false, error: lastError ?? "Failed to email admins" };
+}
+
+/** @deprecated alias */
+export const notifyAdminsExpenseCreated = sendExpenseAdminApprovalRequest;
+
+/** Email expense receipt PDF to beneficiary when expense is recorded. */
+export async function sendExpenseReceiptToBeneficiary(
+  prisma: PrismaClient,
+  params: { orgId: string; expenseId: string }
+): Promise<{ sent: boolean; to?: string; skipped?: boolean; reason?: string; error?: string }> {
+  const dedupe = await prisma.notification.findFirst({
+    where: {
+      orgId: params.orgId,
+      type: "expense.receipt.beneficiary",
+      body: { startsWith: `expenseId:${params.expenseId}` },
+      status: "sent"
+    },
+    select: { id: true }
+  });
+  if (dedupe) return { sent: false, skipped: true, reason: "already_sent" };
+
+  const expense = await prisma.expense.findFirst({
+    where: { id: params.expenseId, orgId: params.orgId, deletedAt: null },
+    include: {
+      beneficiary: { select: { id: true, name: true, email: true } }
+    }
+  });
+  if (!expense) return { sent: false, error: "Expense not found" };
+
+  const to = expense.beneficiary?.email?.trim() ?? "";
+  if (!to) return { sent: false, skipped: true, reason: "no_beneficiary_email" };
+
+  const amountStr = Number(expense.amount).toFixed(2);
+  const currency = expense.currency ?? "KES";
+  const spentAt = expense.spentAt.toISOString().split("T")[0] ?? expense.spentAt.toLocaleDateString();
+  const createdAt = expense.createdAt.toISOString().split("T")[0] ?? expense.createdAt.toLocaleDateString();
+  const receiptNumber = `EXP-${String(expense.id).slice(0, 8).toUpperCase()}`;
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await generateExpenseReceiptPdf({
+      receiptNumber,
+      company: { ...CRES_DYNAMICS_PDF_COMPANY },
+      currency,
+      amount: Number(expense.amount),
+      category: expense.category,
+      description: expense.description,
+      notes: expense.notes,
+      source: expense.source,
+      transactionCode: expense.transactionCode,
+      account: expense.account,
+      paymentMethod: expense.paymentMethod,
+      spentAt,
+      status: expense.status,
+      createdAt
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[finance-workflow] expense receipt PDF:", msg);
+    return { sent: false, error: msg };
+  }
+
+  const recipientName = expense.beneficiary?.name?.trim() || null;
+  const { subject, html, text } = renderExpenseBeneficiaryReceiptEmail({
+    recipientName,
+    amount: amountStr,
+    currency,
+    category: expense.category,
+    description: expense.description,
+    spentAt,
+    source: expense.source,
+    transactionCode: expense.transactionCode,
+    account: expense.account,
+    paymentMethod: expense.paymentMethod,
+    receiptNumber,
+    status: expense.status
+  });
+
+  const result = await sendOutboundEmail({
+    to,
+    subject,
+    text,
+    html,
+    emailChannel: "finance",
+    attachments: [
+      {
+        filename: `${receiptNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: "application/pdf"
+      }
+    ]
+  });
+
+  await prisma.notification.create({
+    data: {
+      orgId: params.orgId,
+      channel: "email",
+      to,
+      subject,
+      body: `expenseId:${params.expenseId}\nExpense receipt for ${amountStr} ${currency}.`,
+      status: result.ok ? "sent" : "failed",
+      error: result.ok ? null : result.error.slice(0, 900),
+      sentAt: new Date(),
+      type: "expense.receipt.beneficiary",
+      tier: "financial"
+    }
+  });
+
+  if (result.ok) {
+    await logEmailSent(prisma, {
+      orgId: params.orgId,
+      to,
+      subject,
+      body: `Expense receipt ${params.expenseId} emailed to beneficiary with PDF.`,
+      type: "expense.receipt.beneficiary"
+    });
+    return { sent: true, to };
+  }
+
+  console.error("[finance-workflow] expense beneficiary receipt failed:", result.error);
+  return { sent: false, error: result.error };
 }
 
 /** Email payment receipt to client automatically when a payment is confirmed. */
