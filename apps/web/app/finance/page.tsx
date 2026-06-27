@@ -21,7 +21,9 @@ type Invoice = {
   status: string;
   totalAmount: number;
   projectId: string | null;
+  clientId?: string;
   project: { id: string; name: string } | null;
+  client?: { id: string; name: string; email?: string | null } | null;
 };
 
 type Expense = {
@@ -61,8 +63,9 @@ type Payment = {
   invoiceId: string | null;
   invoice?: {
     number?: string;
-    projectId: string | null;
+    projectId?: string | null;
     project: { id: string; name: string } | null;
+    client?: { id: string; name: string; email?: string | null } | null;
   } | null;
 };
 
@@ -92,6 +95,7 @@ function inferPaymentMethod(account: string, source: string): string {
 function defaultPaymentForm(): PaymentFormState {
   return {
     projectId: "",
+    clientId: "",
     invoiceId: "",
     amount: "",
     source: "",
@@ -333,6 +337,7 @@ export default function FinancePage() {
   } | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(defaultPaymentForm);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentModalMode, setPaymentModalMode] = useState<"create" | "edit">("create");
   const [reminderDayEdit, setReminderDayEdit] = useState<{ clientId: string; day: number | null } | null>(null);
   /** Expense/payout entity ids that have a pending Approval row (from DB). */
   const [pendingApprovalIds, setPendingApprovalIds] = useState<Set<string>>(new Set());
@@ -342,7 +347,9 @@ export default function FinancePage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<
+    { id: string; name: string; clientId?: string | null; client?: { id: string; name: string } | null }[]
+  >([]);
   type InvoiceLineForm = { id: string; description: string; quantity: string; unitPrice: string };
 
   const emptyInvoiceLine = (): InvoiceLineForm => ({
@@ -449,7 +456,9 @@ export default function FinancePage() {
               status: inv.status,
               totalAmount: inv.totalAmount ? Number(inv.totalAmount) : 0,
               projectId: inv.projectId ?? null,
-              project: inv.project ?? null
+              project: inv.project ?? null,
+              clientId: inv.clientId ?? inv.client?.id,
+              client: inv.client ?? null
             }))
           );
       }
@@ -471,8 +480,9 @@ export default function FinancePage() {
             invoice: p.invoice
               ? {
                   number: p.invoice.number ?? undefined,
-                  projectId: p.invoice.projectId ?? null,
-                  project: p.invoice.project ?? null
+                  projectId: p.invoice.projectId ?? p.invoice.project?.id ?? null,
+                  project: p.invoice.project ?? null,
+                  client: p.invoice.client ?? p.invoice.project?.client ?? null
                 }
               : null
           }))
@@ -530,7 +540,7 @@ export default function FinancePage() {
         setPendingFinanceApprovalCount(pendingRows.length);
         setPendingApprovalIds(new Set(pendingRows.map((a) => a.entityId)));
       }
-      if (canCreateInvoice) {
+      if (canCreateInvoice || canRecordPayments) {
         const [clientsRes, projectsRes] = await Promise.all([
           apiFetch("/crm/clients"),
           apiFetch("/projects")
@@ -540,14 +550,19 @@ export default function FinancePage() {
           setClients(clientsData);
         }
         if (projectsRes.ok) {
-          const projectsData = (await projectsRes.json()) as { id: string; name: string }[];
+          const projectsData = (await projectsRes.json()) as {
+            id: string;
+            name: string;
+            clientId?: string | null;
+            client?: { id: string; name: string } | null;
+          }[];
           setProjects(projectsData);
         }
       }
     } catch {
       // ignore
     }
-  }, [apiFetch, canSeeMoneyStats, canCreateInvoice, canAccessFinance, isFinance, isAdmin, isDirector]);
+  }, [apiFetch, canSeeMoneyStats, canCreateInvoice, canRecordPayments, canAccessFinance, isFinance, isAdmin, isDirector]);
 
   useEffect(() => {
     loadData();
@@ -801,28 +816,35 @@ export default function FinancePage() {
     const source = paymentForm.source.trim();
     const account = paymentForm.account.trim();
     const reference = paymentForm.reference.trim();
-    if (!paymentForm.amount || !paymentForm.receivedAt || !paymentForm.invoiceId) return;
+    if (!paymentForm.amount || !paymentForm.receivedAt || !paymentForm.invoiceId || !paymentForm.clientId) return;
     if (!source || !account || !reference) {
       setPaymentSubmitError("Received from, account, and transaction reference are required.");
       return;
     }
     const method = inferPaymentMethod(account, source);
+    const payload = {
+      method,
+      amount: paymentForm.amount,
+      currency: "KES",
+      receivedAt: paymentForm.receivedAt,
+      source,
+      account,
+      reference,
+      invoiceId: paymentForm.invoiceId,
+      projectId: paymentForm.projectId,
+      mpesaRef: method === "mpesa" ? reference : undefined,
+      confirm: true
+    };
     try {
-      const res = await apiFetch("/finance/payments", {
-        method: "POST",
-        body: JSON.stringify({
-          method,
-          amount: paymentForm.amount,
-          currency: "KES",
-          receivedAt: paymentForm.receivedAt,
-          source,
-          account,
-          reference,
-          invoiceId: paymentForm.invoiceId,
-          mpesaRef: method === "mpesa" ? reference : undefined,
-          confirm: true
-        })
-      });
+      const res = paymentForm.paymentId
+        ? await apiFetch(`/finance/payments/${paymentForm.paymentId}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload)
+          })
+        : await apiFetch("/finance/payments", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
       const raw = (await res.json().catch(() => null)) as {
         payment?: { id: string; status?: string };
         error?: string;
@@ -834,12 +856,32 @@ export default function FinancePage() {
       }
       setPaymentForm(defaultPaymentForm());
       setShowPaymentModal(false);
+      setPaymentModalMode("create");
       await loadData();
       if (canSeeMoneyStats) await fetchReport();
       emitDataRefresh();
     } catch {
       setPaymentSubmitError("Network error — payment may not have been saved.");
     }
+  };
+
+  const openEditPayment = (p: Payment) => {
+    const projectId = p.invoice?.projectId ?? p.invoice?.project?.id ?? "";
+    const clientId = p.invoice?.client?.id ?? "";
+    setPaymentForm({
+      paymentId: p.id,
+      projectId,
+      clientId,
+      invoiceId: p.invoiceId ?? "",
+      amount: String(p.amount),
+      source: p.source ?? "",
+      account: p.account ?? "",
+      reference: p.reference ?? "",
+      receivedAt: localDatetimeValue(new Date(p.receivedAt))
+    });
+    setPaymentSubmitError(null);
+    setPaymentModalMode("edit");
+    setShowPaymentModal(true);
   };
 
   const deleteInvoice = async (id: string) => {
@@ -1006,6 +1048,7 @@ export default function FinancePage() {
               onClick={() => {
                 setPaymentSubmitError(null);
                 setPaymentForm(defaultPaymentForm());
+                setPaymentModalMode("create");
                 setShowPaymentModal(true);
               }}
               className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation`}
@@ -1562,6 +1605,7 @@ export default function FinancePage() {
         <FinanceFlatTable>
           <FinanceFlatTableHead>
             <FinanceFlatTh>When</FinanceFlatTh>
+            <FinanceFlatTh>Client</FinanceFlatTh>
             <FinanceFlatTh>Invoice</FinanceFlatTh>
             <FinanceFlatTh>Project</FinanceFlatTh>
             <FinanceFlatTh align="right">Amount</FinanceFlatTh>
@@ -1581,6 +1625,9 @@ export default function FinancePage() {
                       timeStyle: "short"
                     })}
                   </span>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="text-violet-300/90">{p.invoice?.client?.name ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   <span className="font-medium text-slate-100">{p.invoice?.number ?? "—"}</span>
@@ -1608,19 +1655,22 @@ export default function FinancePage() {
                   <FinanceStatusLabel status={p.status} />
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
-                  {p.status === "pending" && canRecordPayments ? (
-                    <FinanceTextAction tone="danger" onClick={() => void deletePayment(p.id)}>
-                      Delete
-                    </FinanceTextAction>
-                  ) : (
-                    <span className="text-xs text-slate-600">—</span>
-                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                    {canRecordPayments && (
+                      <FinanceTextAction onClick={() => openEditPayment(p)}>Edit</FinanceTextAction>
+                    )}
+                    {p.status === "pending" && canRecordPayments && (
+                      <FinanceTextAction tone="danger" onClick={() => void deletePayment(p.id)}>
+                        Delete
+                      </FinanceTextAction>
+                    )}
+                  </div>
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
             ))}
             {payments.length === 0 && (
               <FinanceFlatTableRow>
-                <FinanceFlatTd className="py-8 text-slate-500" colSpan={9}>
+                <FinanceFlatTd className="py-8 text-slate-500" colSpan={10}>
                   No payments yet. Use New payment to record one.
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
@@ -2051,13 +2101,16 @@ export default function FinancePage() {
       />
       <PaymentCreateModal
         open={showPaymentModal}
+        mode={paymentModalMode}
         onClose={() => {
           setShowPaymentModal(false);
+          setPaymentModalMode("create");
           setPaymentSubmitError(null);
         }}
         form={paymentForm}
         setForm={setPaymentForm}
         projects={projects}
+        clients={clients}
         invoices={invoices}
         submitError={paymentSubmitError}
         onSubmit={submitPayment}

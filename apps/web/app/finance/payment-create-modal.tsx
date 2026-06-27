@@ -1,20 +1,30 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { financeNeu } from "../../components/finance/finance-theme";
 import { formatMoney } from "../format-money";
 
-type ProjectOption = { id: string; name: string };
+type ProjectOption = {
+  id: string;
+  name: string;
+  clientId?: string | null;
+  client?: { id: string; name: string } | null;
+};
+type ClientOption = { id: string; name: string };
 type InvoiceOption = {
   id: string;
   number: string;
   totalAmount: number;
   projectId: string | null;
+  clientId?: string;
   project: { id: string; name: string } | null;
+  client?: { id: string; name: string } | null;
 };
 
 export type PaymentFormState = {
+  paymentId?: string;
   projectId: string;
+  clientId: string;
   invoiceId: string;
   amount: string;
   source: string;
@@ -23,12 +33,14 @@ export type PaymentFormState = {
   receivedAt: string;
 };
 
-type PaymentCreateModalProps = {
+type PaymentFormModalProps = {
   open: boolean;
+  mode: "create" | "edit";
   onClose: () => void;
   form: PaymentFormState;
   setForm: React.Dispatch<React.SetStateAction<PaymentFormState>>;
   projects: ProjectOption[];
+  clients: ClientOption[];
   invoices: InvoiceOption[];
   submitError: string | null;
   onSubmit: (e: FormEvent) => void;
@@ -36,21 +48,44 @@ type PaymentCreateModalProps = {
 
 export function PaymentCreateModal({
   open,
+  mode,
   onClose,
   form,
   setForm,
   projects,
+  clients,
   invoices,
   submitError,
   onSubmit
-}: PaymentCreateModalProps) {
+}: PaymentFormModalProps) {
+  const [sourceTouched, setSourceTouched] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setSourceTouched(false);
+      return;
+    }
+    if (mode === "edit") return;
+    if (!form.projectId || sourceTouched) return;
+    const project = projects.find((p) => p.id === form.projectId);
+    const client =
+      (project?.clientId && clients.find((c) => c.id === project.clientId)) ||
+      (project?.client ? { id: project.client.id, name: project.client.name } : null);
+    if (client) {
+      setForm((f) => ({ ...f, clientId: client.id, source: client.name }));
+    }
+  }, [open, mode, form.projectId, sourceTouched, projects, clients, setForm]);
+
   if (!open) return null;
 
-  const projectInvoices = form.projectId
-    ? invoices.filter((inv) => inv.projectId === form.projectId)
-    : invoices;
+  const filteredInvoices = invoices.filter((inv) => {
+    if (form.projectId && inv.projectId !== form.projectId) return false;
+    if (form.clientId && inv.clientId && inv.clientId !== form.clientId) return false;
+    return true;
+  });
 
   const selectedInvoice = invoices.find((inv) => inv.id === form.invoiceId);
+  const selectedClient = clients.find((c) => c.id === form.clientId);
 
   return (
     <div
@@ -60,10 +95,10 @@ export function PaymentCreateModal({
       aria-labelledby="payment-modal-title"
     >
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.06] bg-[#121820] shadow-[8px_8px_24px_rgba(0,0,0,0.65),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
+      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.06] bg-[#121820] shadow-[8px_8px_24px_rgba(0,0,0,0.65),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
           <h2 id="payment-modal-title" className="text-lg font-semibold text-emerald-100">
-            Record payment
+            {mode === "edit" ? "Edit payment" : "Record payment"}
           </h2>
           <button
             type="button"
@@ -85,8 +120,10 @@ export function PaymentCreateModal({
           )}
 
           <p className="mb-3 text-xs leading-relaxed text-slate-500">
-            Link the payment to a project and invoice. The client receives a confirmation email with project progress
-            once recorded.
+            Client defaults from the project. Change client or received-from only when finance needs to override.
+            {mode === "create"
+              ? " On record, the client is emailed a payment confirmation with project progress."
+              : ""}
           </p>
 
           <div className="flex flex-col gap-3">
@@ -94,13 +131,20 @@ export function PaymentCreateModal({
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Project</span>
               <select
                 value={form.projectId}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const projectId = e.target.value;
+                  const project = projects.find((p) => p.id === projectId);
+                  const client =
+                    (project?.clientId && clients.find((c) => c.id === project.clientId)) ||
+                    (project?.client ? { id: project.client.id, name: project.client.name } : null);
                   setForm((f) => ({
                     ...f,
-                    projectId: e.target.value,
-                    invoiceId: f.invoiceId && invoices.find((i) => i.id === f.invoiceId)?.projectId === e.target.value ? f.invoiceId : ""
-                  }))
-                }
+                    projectId,
+                    clientId: client?.id ?? "",
+                    invoiceId: "",
+                    source: sourceTouched ? f.source : client?.name ?? f.source
+                  }));
+                }}
                 className={financeNeu.input}
                 required
               >
@@ -108,6 +152,32 @@ export function PaymentCreateModal({
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.client?.name ? ` · ${p.client.name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Client</span>
+              <select
+                value={form.clientId}
+                onChange={(e) => {
+                  const client = clients.find((c) => c.id === e.target.value);
+                  setForm((f) => ({
+                    ...f,
+                    clientId: e.target.value,
+                    invoiceId: "",
+                    source: sourceTouched ? f.source : client?.name ?? f.source
+                  }));
+                }}
+                className={financeNeu.input}
+                required
+              >
+                <option value="">Select client</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -122,15 +192,17 @@ export function PaymentCreateModal({
                   setForm((f) => ({
                     ...f,
                     invoiceId: e.target.value,
-                    projectId: inv?.projectId ?? f.projectId
+                    projectId: inv?.projectId ?? f.projectId,
+                    clientId: inv?.clientId ?? inv?.client?.id ?? f.clientId,
+                    source: sourceTouched ? f.source : inv?.client?.name ?? f.source
                   }));
                 }}
                 className={financeNeu.input}
                 required
-                disabled={!form.projectId && projectInvoices.length === 0}
+                disabled={!form.projectId}
               >
                 <option value="">Select invoice</option>
-                {projectInvoices.map((inv) => (
+                {filteredInvoices.map((inv) => (
                   <option key={inv.id} value={inv.id}>
                     {inv.number}
                     {inv.project ? ` — ${inv.project.name}` : ""} · {formatMoney(inv.totalAmount)}
@@ -157,9 +229,12 @@ export function PaymentCreateModal({
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received from</span>
               <input
                 type="text"
-                placeholder="Client name or payer"
+                placeholder={selectedClient?.name ?? "Client name or payer"}
                 value={form.source}
-                onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
+                onChange={(e) => {
+                  setSourceTouched(true);
+                  setForm((f) => ({ ...f, source: e.target.value }));
+                }}
                 className={financeNeu.input}
                 required
               />
@@ -206,7 +281,13 @@ export function PaymentCreateModal({
 
             {selectedInvoice && (
               <p className="text-xs text-slate-500">
-                Applying to invoice <span className="text-slate-300">{selectedInvoice.number}</span>
+                {selectedClient?.name ? (
+                  <>
+                    Client <span className="text-slate-300">{selectedClient.name}</span>
+                    {" · "}
+                  </>
+                ) : null}
+                Invoice <span className="text-slate-300">{selectedInvoice.number}</span>
                 {selectedInvoice.project ? ` · ${selectedInvoice.project.name}` : ""}
               </p>
             )}
@@ -217,7 +298,7 @@ export function PaymentCreateModal({
               Cancel
             </button>
             <button type="submit" className={`flex-1 ${financeNeu.btnPrimary}`}>
-              Record payment
+              {mode === "edit" ? "Save changes" : "Record payment"}
             </button>
           </div>
         </form>

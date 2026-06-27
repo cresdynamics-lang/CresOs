@@ -90,6 +90,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           createdBy: { select: { id: true, name: true, email: true } },
           assignedDeveloper: { select: { id: true, name: true, email: true } },
           approvedBy: { select: { id: true, name: true } },
+          client: { select: { id: true, name: true, email: true } },
           ...(isDirector || isAdmin
             ? {
                 developerAssignments: {

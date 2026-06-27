@@ -140,6 +140,67 @@ async function sumConfirmedPaymentsOnInvoice(
   return Number(paidOnInvoice._sum.amount ?? 0);
 }
 
+async function adjustProjectAmountReceived(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  delta: number
+): Promise<void> {
+  if (!projectId || !delta) return;
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { amountReceived: true }
+  });
+  if (!project) return;
+  const current = project.amountReceived != null ? Number(project.amountReceived) : 0;
+  const next = Math.max(0, Math.round((current + delta) * 100) / 100);
+  await tx.project.update({
+    where: { id: projectId },
+    data: { amountReceived: new Prisma.Decimal(next.toFixed(2)) }
+  });
+}
+
+async function syncInvoiceStatusFromConfirmedPayments(
+  tx: Prisma.TransactionClient,
+  invoiceId: string
+): Promise<void> {
+  const inv = await tx.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { totalAmount: true, orgId: true }
+  });
+  if (!inv) return;
+  const paidTotal = await sumConfirmedPaymentsOnInvoice(tx, invoiceId);
+  const invoiceTotal = Number(inv.totalAmount);
+  let nextStatus = "sent";
+  if (invoiceTotal > 0 && paidTotal >= invoiceTotal - 0.01) nextStatus = "paid";
+  else if (paidTotal > 0) nextStatus = "partial";
+  await tx.invoice.update({ where: { id: invoiceId }, data: { status: nextStatus } });
+  if (nextStatus === "paid") {
+    await tx.projectManagementMonth.updateMany({
+      where: { orgId: inv.orgId, invoiceId, paid: false },
+      data: { paid: true, paidAt: new Date() }
+    });
+  }
+}
+
+async function resolvePaymentSourceFromInvoice(
+  prisma: PrismaClient,
+  invoiceId: string,
+  source?: string | null
+): Promise<string> {
+  const trimmed = (source ?? "").trim();
+  if (trimmed) return trimmed;
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, deletedAt: null },
+    select: { client: { select: { name: true } }, project: { select: { clientOrOwnerName: true, name: true } } }
+  });
+  return (
+    inv?.client?.name?.trim() ||
+    inv?.project?.clientOrOwnerName?.trim() ||
+    inv?.project?.name?.trim() ||
+    "Client payment"
+  );
+}
+
 function paymentMethodLabel(method: string): string {
   const labels: Record<string, string> = {
     bank: "Bank",
@@ -1074,7 +1135,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
     const invoices = await prisma.invoice.findMany({
       where: { orgId, deletedAt: null },
       orderBy: { issueDate: "desc" },
-      include: { project: { select: { id: true, name: true } } }
+      include: { project: { select: { id: true, name: true } }, client: { select: { id: true, name: true, email: true } } }
     });
     const enriched = await Promise.all(
       invoices.map(async (inv) => {
@@ -1301,7 +1362,21 @@ export default function financeRouter(prisma: PrismaClient): Router {
     const payments = await prisma.payment.findMany({
       where: { orgId, deletedAt: null },
       orderBy: { receivedAt: "desc" },
-      include: { invoice: { include: { project: { select: { id: true, name: true } } } } }
+      include: {
+        invoice: {
+          include: {
+            client: { select: { id: true, name: true, email: true } },
+            project: {
+              select: {
+                id: true,
+                name: true,
+                clientId: true,
+                client: { select: { id: true, name: true } }
+              }
+            }
+          }
+        }
+      }
     });
     res.json(payments);
     }
@@ -1317,6 +1392,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
       const userId = req.auth!.userId;
       const {
         invoiceId,
+        projectId,
         amount,
         currency,
         method: rawMethod,
@@ -1330,6 +1406,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         confirm
       } = req.body as {
         invoiceId?: string;
+        projectId?: string;
         amount: string;
         currency?: string;
         method: string;
@@ -1359,15 +1436,45 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
 
-      let linkedInvoice: { id: string; number: string; totalAmount: Prisma.Decimal } | null = null;
+      let linkedInvoice: {
+        id: string;
+        number: string;
+        totalAmount: Prisma.Decimal;
+        projectId: string | null;
+        clientId: string;
+      } | null = null;
       if (invoiceId) {
         linkedInvoice = await prisma.invoice.findFirst({
           where: { id: invoiceId, orgId, deletedAt: null },
-          select: { id: true, number: true, totalAmount: true }
+          select: { id: true, number: true, totalAmount: true, projectId: true, clientId: true }
         });
         if (!linkedInvoice) {
           res.status(400).json({ error: "Invoice not found", message: "Invoice must belong to your organization." });
           return;
+        }
+        if (projectId?.trim()) {
+          if (linkedInvoice.projectId && linkedInvoice.projectId !== projectId.trim()) {
+            res.status(400).json({
+              error: "Invoice does not match project",
+              message: "Selected invoice is not linked to the chosen project."
+            });
+            return;
+          }
+          const project = await prisma.project.findFirst({
+            where: { id: projectId.trim(), orgId, deletedAt: null },
+            select: { id: true, clientId: true }
+          });
+          if (!project) {
+            res.status(400).json({ error: "Project not found" });
+            return;
+          }
+          if (project.clientId && project.clientId !== linkedInvoice.clientId) {
+            res.status(400).json({
+              error: "Client mismatch",
+              message: "Invoice client does not match the project's client."
+            });
+            return;
+          }
         }
         const paidSoFar = await sumConfirmedPaymentsOnInvoice(prisma, invoiceId);
         const invoiceTotal = Number(linkedInvoice.totalAmount);
@@ -1383,7 +1490,10 @@ export default function financeRouter(prisma: PrismaClient): Router {
       }
 
       const refForConfirm = (reference?.trim() || mpesaRef?.trim() || "").trim();
-      const sourceTrim = (source ?? "").trim();
+      let sourceTrim = (source ?? "").trim();
+      if (linkedInvoice && !sourceTrim) {
+        sourceTrim = await resolvePaymentSourceFromInvoice(prisma, linkedInvoice.id, source);
+      }
       const accountTrim = (account ?? "").trim();
       const wantsConfirm = confirm !== false;
       const autoConfirmManual = Boolean(sourceTrim && accountTrim && refForConfirm);
@@ -1538,21 +1648,28 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Update payment confirmation details (before confirming)
+  // Update payment (pending or confirmed — finance can correct details and re-link invoice)
   router.patch(
     "/payments/:id",
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const { id } = req.params;
-      const { source, account, reference, mpesaRef, howToProceed, notes } = req.body as {
-        source?: string;
-        account?: string;
-        reference?: string;
-        mpesaRef?: string;
-        howToProceed?: string;
-        notes?: string;
-      };
+      const { source, account, reference, mpesaRef, howToProceed, notes, amount, invoiceId, projectId, receivedAt, method } =
+        req.body as {
+          source?: string;
+          account?: string;
+          reference?: string;
+          mpesaRef?: string;
+          howToProceed?: string;
+          notes?: string;
+          amount?: string;
+          invoiceId?: string | null;
+          projectId?: string;
+          receivedAt?: string;
+          method?: string;
+        };
+
       const payment = await prisma.payment.findFirst({
         where: { id, orgId, deletedAt: null }
       });
@@ -1560,22 +1677,173 @@ export default function financeRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "Payment not found" });
         return;
       }
-      if (payment.status !== "pending") {
-        res.status(400).json({ error: "Only pending payments can be updated" });
+
+      const nextInvoiceId =
+        invoiceId !== undefined ? (invoiceId?.trim() ? invoiceId.trim() : null) : payment.invoiceId;
+      const normalizedAmount =
+        amount !== undefined ? normalizePaymentAmount(amount) : String(Number(payment.amount).toFixed(2));
+      const receivedAtDate =
+        receivedAt !== undefined ? parsePaymentReceivedAt(receivedAt) : payment.receivedAt;
+      if (amount !== undefined && !normalizedAmount) {
+        res.status(400).json({ error: "Invalid amount" });
         return;
       }
-      const updated = await prisma.payment.update({
-        where: { id },
+      if (receivedAt !== undefined && !receivedAtDate) {
+        res.status(400).json({ error: "Invalid received date" });
+        return;
+      }
+
+      if (nextInvoiceId) {
+        const linkedInvoice = await prisma.invoice.findFirst({
+          where: { id: nextInvoiceId, orgId, deletedAt: null },
+          select: { id: true, projectId: true, clientId: true, totalAmount: true, number: true }
+        });
+        if (!linkedInvoice) {
+          res.status(400).json({ error: "Invoice not found" });
+          return;
+        }
+        if (projectId?.trim()) {
+          if (linkedInvoice.projectId && linkedInvoice.projectId !== projectId.trim()) {
+            res.status(400).json({ error: "Invoice does not match project" });
+            return;
+          }
+          const project = await prisma.project.findFirst({
+            where: { id: projectId.trim(), orgId, deletedAt: null },
+            select: { clientId: true }
+          });
+          if (project?.clientId && project.clientId !== linkedInvoice.clientId) {
+            res.status(400).json({ error: "Invoice client does not match project client" });
+            return;
+          }
+        }
+        if (normalizedAmount) {
+          const paidExcluding = await prisma.payment.aggregate({
+            where: {
+              invoiceId: nextInvoiceId,
+              status: "confirmed",
+              deletedAt: null,
+              id: { not: payment.id }
+            },
+            _sum: { amount: true }
+          });
+          const remaining =
+            Number(linkedInvoice.totalAmount) - Number(paidExcluding._sum.amount ?? 0);
+          if (Number(normalizedAmount) > remaining + 0.01) {
+            res.status(400).json({
+              error: "Payment exceeds invoice balance",
+              message: `Invoice ${linkedInvoice.number} has ${Math.max(0, remaining).toFixed(2)} KES remaining.`
+            });
+            return;
+          }
+        }
+      }
+
+      let sourceVal =
+        source !== undefined ? (source ?? "").trim() : (payment.source ?? "").trim();
+      if (!sourceVal && nextInvoiceId) {
+        sourceVal = await resolvePaymentSourceFromInvoice(prisma, nextInvoiceId, source);
+      }
+      const accountVal = account !== undefined ? (account ?? "").trim() : (payment.account ?? "").trim();
+      const referenceVal =
+        reference !== undefined
+          ? (reference ?? "").trim()
+          : (payment.reference ?? payment.mpesaRef ?? "").trim();
+
+      const oldAmount = Number(payment.amount);
+      const newAmount = normalizedAmount ? Number(normalizedAmount) : oldAmount;
+      const oldInvoiceId = payment.invoiceId;
+      const financialChanged =
+        payment.status === "confirmed" &&
+        (oldAmount !== newAmount || oldInvoiceId !== nextInvoiceId);
+
+      const updated = await prisma.$transaction(async (tx) => {
+        if (financialChanged) {
+          if (oldInvoiceId) {
+            const oldInv = await tx.invoice.findUnique({
+              where: { id: oldInvoiceId },
+              select: { projectId: true }
+            });
+            if (oldInv?.projectId) {
+              await adjustProjectAmountReceived(tx, oldInv.projectId, -oldAmount);
+            }
+          }
+        }
+
+        const methodVal =
+          method !== undefined
+            ? method === "bank_transfer"
+              ? "bank"
+              : method.toLowerCase()
+            : payment.method;
+
+        const row = await tx.payment.update({
+          where: { id },
+          data: {
+            ...(amount !== undefined && normalizedAmount
+              ? { amount: new Prisma.Decimal(normalizedAmount) }
+              : {}),
+            ...(invoiceId !== undefined ? { invoiceId: nextInvoiceId } : {}),
+            ...(receivedAtDate ? { receivedAt: receivedAtDate } : {}),
+            ...(method !== undefined ? { method: methodVal } : {}),
+            ...(source !== undefined || !payment.source ? { source: sourceVal || null } : {}),
+            ...(account !== undefined ? { account: accountVal || null } : {}),
+            ...(reference !== undefined ? { reference: referenceVal || null } : {}),
+            ...(mpesaRef !== undefined && { mpesaRef: mpesaRef || null }),
+            ...(howToProceed !== undefined && { howToProceed: howToProceed || null }),
+            ...(notes !== undefined && { notes: notes || null })
+          }
+        });
+
+        if (financialChanged) {
+          if (oldInvoiceId) {
+            await syncInvoiceStatusFromConfirmedPayments(tx, oldInvoiceId);
+          }
+          if (row.status === "confirmed" && row.invoiceId) {
+            const newInv = await tx.invoice.findUnique({
+              where: { id: row.invoiceId },
+              select: { projectId: true }
+            });
+            if (newInv?.projectId) {
+              await adjustProjectAmountReceived(tx, newInv.projectId, newAmount);
+            }
+            await syncInvoiceStatusFromConfirmedPayments(tx, row.invoiceId);
+          }
+        }
+
+        return tx.payment.findUnique({
+          where: { id },
+          include: {
+            invoice: {
+              include: {
+                client: { select: { id: true, name: true, email: true } },
+                project: {
+                  select: {
+                    id: true,
+                    name: true,
+                    clientId: true,
+                    client: { select: { id: true, name: true } }
+                  }
+                }
+              }
+            }
+          }
+        });
+      });
+
+      await prisma.eventLog.create({
         data: {
-          ...(source !== undefined && { source: source || null }),
-          ...(account !== undefined && { account: account || null }),
-          ...(reference !== undefined && { reference: reference || null }),
-          ...(mpesaRef !== undefined && { mpesaRef: mpesaRef || null }),
-          ...(howToProceed !== undefined && { howToProceed: howToProceed || null }),
-          ...(notes !== undefined && { notes: notes || null })
+          orgId,
+          type: "payment.updated",
+          entityType: "payment",
+          entityId: id,
+          metadata: {
+            financialChanged,
+            invoiceId: updated?.invoiceId ?? null
+          }
         }
       });
-      res.json(updated);
+
+      res.json({ success: true, payment: updated });
     }
   );
 
