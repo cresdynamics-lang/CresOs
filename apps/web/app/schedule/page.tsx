@@ -215,14 +215,14 @@ export default function SchedulePage() {
 
   if (hydrated && !canUseSchedule) {
     return (
-      <section className="flex min-h-[calc(100dvh-6.5rem)] items-center justify-center px-4">
+      <section className="flex min-h-0 flex-1 items-center justify-center px-4">
         <p className="text-center text-sm text-slate-400">Tasks & schedule is not available for your account.</p>
       </section>
     );
   }
 
   return (
-    <section className="flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-1 flex-col gap-5">
+    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title="Tasks & schedule"
         description={scheduleDescription}

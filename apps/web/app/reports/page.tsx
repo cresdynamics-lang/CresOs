@@ -75,7 +75,7 @@ export default function ReportsPage() {
     : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report.";
 
   return (
-    <section className="flex min-h-[calc(100dvh-6.5rem)] max-lg:min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-1 flex-col gap-5">
+    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title={reportTitle}
         description={reportDescription}

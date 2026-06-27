@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
-import { AppSiteFooter } from "../components/app-site-footer";
 import { ALL_APP_ROLE_KEYS } from "../lib/app-roles";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
@@ -16,7 +15,6 @@ type NavSection = {
   items: { href: string; label: string; roles: string[] }[];
 };
 
-const HAMBURGER_NAV_ROLES = ["admin", "director_admin", "finance", "client"] as const;
 
 const SIDEBAR_SECTIONS: NavSection[] = [
   {
@@ -656,17 +654,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     onLogout: handleLogout
   };
 
-  const hideTopHeader = isFullscreenPage && isFullscreen;
+  const hideTopHeader = isFullscreen;
   const isSettingsRoute = pathname.startsWith("/settings");
-  const isWorkspaceFullBleed = pathname.startsWith("/finance") || pathname.startsWith("/client");
-  const useHamburgerOnlyNav = roles.some((r) =>
-    (HAMBURGER_NAV_ROLES as readonly string[]).includes(r)
-  );
 
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${isFullscreenPage && isFullscreen ? "bg-slate-950" : ""}`}>
       {mobileNavOpen && !(isFullscreenPage && isFullscreen) && (
-        <div className={`fixed inset-0 z-40 ${useHamburgerOnlyNav ? "" : "lg:hidden"}`}>
+        <div className="fixed inset-0 z-40">
           <button
             type="button"
             aria-label="Close menu"
@@ -686,9 +680,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <aside
-        className={`group/hover-nav hidden w-[4.25rem] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 transition-[width] duration-200 ease-out hover:w-64 ${
-          useHamburgerOnlyNav ? "lg:hidden" : "lg:flex"
-        } ${isFullscreenPage && isFullscreen ? "!hidden" : ""}`}
+        className={`group/hover-nav hidden shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 ${
+          isFullscreenPage && isFullscreen ? "!hidden" : ""
+        }`}
       >
         <SidebarNavContent {...shellNavProps} />
       </aside>
@@ -702,7 +696,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }`}
       >
         <header
-          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2.5 backdrop-blur-sm sm:gap-3 sm:px-6 sm:py-3 ${
+          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 backdrop-blur-sm sm:gap-3 sm:px-4 sm:py-2.5 ${
             hideTopHeader
               ? "hidden"
               : "max-lg:fixed max-lg:inset-x-0 max-lg:top-0 max-lg:z-50 max-lg:pt-[env(safe-area-inset-top,0px)] lg:relative lg:top-auto lg:bg-slate-950/95"
@@ -711,9 +705,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
-              className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 ${
-                useHamburgerOnlyNav ? "flex" : "lg:hidden"
-              }`}
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700"
               aria-label="Open menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
@@ -730,22 +722,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-wrap items-center justify-end gap-1.5 sm:max-w-none sm:gap-2">
             <HeaderStatusStrip />
             
-            {/* Fullscreen Toggle */}
-            {isFullscreenPage && (
-              <button
-                onClick={toggleFullscreen}
-                className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {isFullscreen ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  )}
-                </svg>
-              </button>
-            )}
+            {/* Fullscreen toggle — all workspace pages */}
+            <button
+              onClick={toggleFullscreen}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 lg:min-h-0 lg:min-w-0 lg:p-2"
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isFullscreen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                )}
+              </svg>
+            </button>
           </div>
         </header>
         <div
@@ -765,14 +756,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : "flex max-lg:pt-0 flex-col overflow-hidden lg:pt-0"
                 : isSettingsRoute
                   ? "flex min-h-0 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
-                  : isWorkspaceFullBleed
-                    ? "flex min-h-0 flex-1 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
-                    : "mx-auto overflow-y-auto overscroll-y-contain px-3 pb-4 sm:px-6 sm:pb-6 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)] lg:py-6"
+                  : "flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
             }`}
           >
             {children}
           </div>
-          {!(isFullscreenPage && hideTopHeader) && !isSettingsRoute && !isWorkspaceFullBleed && <AppSiteFooter />}
         </div>
       </main>
     </div>

@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { SalesWorkspaceNav } from "./sales-workspace-nav";
-import { StatCard, StatCardGrid, type StatTone } from "../../components/stat-card";
-import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
-import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { WorkspaceHubCard } from "../../components/workspace-hub-card";
+import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
+import { SalesStatInline, SalesStatRow } from "../../components/sales/sales-ui";
+import { salesWs } from "../../components/sales/sales-theme";
 import { ScheduleKpiStrip, type ScheduleKpiStats } from "../../components/schedule-kpi-strip";
+import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import type { StatTone } from "../../components/stat-card";
 
 type HubCard = {
   href: string;
@@ -17,7 +18,6 @@ type HubCard = {
   action: string;
   roles: string[];
   tone: StatTone;
-  icon: string;
 };
 
 const HUB_CARDS: HubCard[] = [
@@ -27,8 +27,7 @@ const HUB_CARDS: HubCard[] = [
     description: "Dashboard, create draft invoices, and track finance approval status.",
     action: "Open invoices",
     roles: ["admin", "sales"],
-    tone: "brand",
-    icon: "₹"
+    tone: "brand"
   },
   {
     href: "/crm",
@@ -36,8 +35,7 @@ const HUB_CARDS: HubCard[] = [
     description: "Accounts, contacts, and pipeline in one place.",
     action: "Go to CRM",
     roles: ["admin", "sales", "director_admin", "finance"],
-    tone: "sky",
-    icon: "◎"
+    tone: "sky"
   },
   {
     href: "/leads",
@@ -45,8 +43,7 @@ const HUB_CARDS: HubCard[] = [
     description: "Capture, qualify, and move leads through your funnel.",
     action: "View leads",
     roles: ["admin", "director_admin", "sales", "finance"],
-    tone: "amber",
-    icon: "◆"
+    tone: "amber"
   },
   {
     href: "/reports",
@@ -54,8 +51,7 @@ const HUB_CARDS: HubCard[] = [
     description: "Activity, targets, and performance summaries.",
     action: "Open reports",
     roles: ["admin", "director_admin", "sales"],
-    tone: "violet",
-    icon: "▤"
+    tone: "violet"
   },
   {
     href: "/projects",
@@ -63,8 +59,7 @@ const HUB_CARDS: HubCard[] = [
     description: "Delivery status, handoffs, and client work in progress.",
     action: "Browse projects",
     roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"],
-    tone: "emerald",
-    icon: "▣"
+    tone: "emerald"
   },
   {
     href: "/approvals",
@@ -72,10 +67,18 @@ const HUB_CARDS: HubCard[] = [
     description: "Pending finance and director decisions affecting sales.",
     action: "Review queue",
     roles: ["admin", "director_admin", "finance"],
-    tone: "rose",
-    icon: "✓"
+    tone: "rose"
   }
 ];
+
+const toolTitleClass: Record<StatTone, string> = {
+  brand: "text-brand",
+  emerald: "text-emerald-400",
+  amber: "text-amber-400",
+  rose: "text-rose-400",
+  sky: "text-sky-400",
+  violet: "text-violet-400"
+};
 
 export default function SalesHubPage() {
   const router = useRouter();
@@ -148,60 +151,66 @@ export default function SalesHubPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10">
+    <section className="flex min-h-0 flex-1 flex-col gap-8">
       <WorkspaceDashboardIntro
-        title="Sales workspace"
-        description="Jump to the tools you use for pipeline, delivery handoffs, and revenue."
+        title="Sales"
+        description="Pipeline, delivery handoffs, and revenue in one workspace."
         eyebrow="Sales"
+        welcomeChildren={
+          <>
+            <DashboardSectionLabel roleKeys={auth.roleKeys}>
+              Today&apos;s priorities (your queue)
+            </DashboardSectionLabel>
+            <p className="font-body text-sm leading-relaxed text-slate-400">
+              Use <span className="font-medium text-amber-300/90">Sales mail</span> and the sections below for live
+              pipeline and delivery data.
+            </p>
+          </>
+        }
       />
 
-      <div className="mb-8">
-        <SalesWorkspaceNav />
-      </div>
-
       {scheduleKpis && (
-        <div className="mb-6 rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-950/40 via-slate-950/90 to-slate-950 p-4 sm:p-5">
+        <div className={salesWs.scheduleBanner}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="font-display text-sm font-semibold text-sky-300">This week — tasks & schedule</p>
-            <a
+            <Link
               href="/schedule"
               className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
             >
               Open Tasks →
-            </a>
+            </Link>
           </div>
           <ScheduleKpiStrip stats={scheduleKpis} />
         </div>
       )}
 
       {keys.some((r) => ["admin", "sales"].includes(r)) && statsLoaded && stats && (
-        <StatCardGrid>
-          <StatCard label="Invoice drafts" value={stats.total} hint="Total drafts" tone="brand" />
-          <StatCard label="Pending" value={stats.pending} hint="Awaiting approval" tone="amber" />
-          <StatCard label="Approved" value={stats.approved} hint="Cleared" tone="emerald" />
-          <StatCard label="Rejected" value={stats.rejected} hint="Declined" tone="rose" />
-        </StatCardGrid>
+        <SalesStatRow>
+          <SalesStatInline label="Invoice drafts" value={stats.total} hint="Total drafts" tone="brand" />
+          <SalesStatInline label="Pending" value={stats.pending} hint="Awaiting approval" tone="amber" />
+          <SalesStatInline label="Approved" value={stats.approved} hint="Cleared" tone="emerald" />
+          <SalesStatInline label="Rejected" value={stats.rejected} hint="Declined" tone="rose" />
+        </SalesStatRow>
       )}
 
-      <div className="mt-8">
-        <p className="mb-3 font-label text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+      <div>
+        <p className="mb-2 font-label text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
           Workspace tools
         </p>
-        <DashboardCardRow lgCols={3}>
+        <ul>
           {cards.map((card) => (
-            <DashboardScrollCard key={card.href} width="wide">
-              <WorkspaceHubCard
-                href={card.href}
-                title={card.title}
-                description={card.description}
-                action={card.action}
-                tone={card.tone}
-                icon={card.icon}
-              />
-            </DashboardScrollCard>
+            <li key={card.href}>
+              <Link href={card.href} className={salesWs.toolRow}>
+                <div className="min-w-0">
+                  <p className={`font-medium ${toolTitleClass[card.tone]}`}>{card.title}</p>
+                  <p className="mt-0.5 text-sm text-slate-500">{card.description}</p>
+                </div>
+                <span className="shrink-0 text-sm text-slate-400">{card.action} →</span>
+              </Link>
+            </li>
           ))}
-        </DashboardCardRow>
+        </ul>
       </div>
-    </div>
+    </section>
   );
 }

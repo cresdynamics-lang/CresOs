@@ -30,9 +30,7 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
   if (!canAccessFinance) return null;
 
   return (
-    <div
-      className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
-    >
+    <div className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}>
       <aside className="hidden w-[13.5rem] shrink-0 flex-col border-r border-white/[0.04] bg-[#0e1319]/80 md:flex">
         <div className="border-b border-white/[0.04] px-4 py-4">
           <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/90">

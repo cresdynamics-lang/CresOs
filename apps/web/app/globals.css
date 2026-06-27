@@ -135,6 +135,15 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+.sales-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* Developer liquid glass workspace */
 .developer-glass {
   --dev-glass-bg: #080b12;

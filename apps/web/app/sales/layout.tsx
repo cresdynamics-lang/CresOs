@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SalesLayoutClient } from "./sales-layout-client";
 
 export const metadata: Metadata = {
   title: "Sales Hub | Cres Dynamics - CresOS CRM & Sales Platform",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <SalesLayoutClient>{children}</SalesLayoutClient>;
 }

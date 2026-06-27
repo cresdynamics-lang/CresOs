@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
-import { SalesWorkspaceNav } from "../sales-workspace-nav";
 import { StatCard, StatCardGrid } from "../../../components/stat-card";
 import { WorkspaceDashboardIntro } from "../../../components/workspace-dashboard-intro";
 
@@ -311,16 +310,13 @@ export default function SalesInvoicesPage() {
     items.some((item) => item.description && item.quantity > 0 && item.unitPrice > 0);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10">
+    <section className="flex min-h-0 flex-1 flex-col gap-6">
       <WorkspaceDashboardIntro
         title="Sales invoices"
         description="Create invoices tied to projects—lists load from the database. Finance records payments on each invoice; confirming payment increases the project's amount received when the invoice has a project."
         eyebrow="Sales"
         showWelcomeBanner={false}
       />
-      <div className="mb-6">
-        <SalesWorkspaceNav />
-      </div>
 
       {loading ? (
         <div className="flex h-48 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/30">
@@ -653,6 +649,6 @@ export default function SalesInvoicesPage() {
       )}
         </>
       )}
-    </div>
+    </section>
   );
 }

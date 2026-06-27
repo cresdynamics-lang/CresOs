@@ -75,7 +75,7 @@ export default function ClientPortalPage() {
   }, [load]);
 
   return (
-    <section className="mx-auto flex w-full max-w-5xl flex-col gap-8">
+    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-8 px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title="My projects"
         description="Live delivery progress on work linked to your account."

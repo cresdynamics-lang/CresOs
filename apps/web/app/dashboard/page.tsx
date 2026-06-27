@@ -985,7 +985,7 @@ export default function DashboardPage() {
   ]);
 
   return (
-    <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-1 sm:px-0">
+    <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
       <DashboardWelcomeBanner
         firstName={firstName}
         roleLabel={primaryRoleLabel}
@@ -1158,7 +1158,7 @@ export default function DashboardPage() {
       )}
 
       {isDeveloper && hydrated && auth.accessToken && (
-        <DeveloperGlassCanvas className="rounded-3xl p-1 sm:p-2">
+        <DeveloperGlassCanvas className="min-h-0 flex-1 rounded-none p-0 sm:p-0">
           {pendingDevPaymentAck.length > 0 && (
             <div className={`mb-6 ${devGlass.alertWarning}`}>
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
