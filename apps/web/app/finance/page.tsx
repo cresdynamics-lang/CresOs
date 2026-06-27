@@ -11,6 +11,7 @@ import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
 import { InvoiceCreateModal } from "./invoice-create-modal";
+import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
 
 type Invoice = {
   id: string;
@@ -1090,6 +1091,13 @@ export default function FinancePage() {
             tone="violet"
           />
         </FinanceStatRow>
+      )}
+
+      {canSeeMoneyStats && section === "overview" && (
+        <WorkspaceLiveAnalytics
+          variant={isAdmin ? "admin" : isDirector ? "director" : "finance"}
+          className="border-b border-white/[0.06] pb-8"
+        />
       )}
 
       {isAdmin && section === "overview" && (

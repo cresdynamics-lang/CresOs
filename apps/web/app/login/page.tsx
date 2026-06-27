@@ -54,7 +54,12 @@ export default function LoginPage() {
         !roleKeys.some((r: string) =>
           ["admin", "director_admin", "finance", "sales", "developer", "analyst"].includes(r)
         );
-      router.push(isClientOnly ? "/client" : "/dashboard");
+      const isDeveloperOnly =
+        roleKeys.includes("developer") &&
+        !roleKeys.some((r: string) =>
+          ["admin", "director_admin", "finance", "sales", "analyst"].includes(r)
+        );
+      router.push(isClientOnly ? "/client" : isDeveloperOnly ? "/developer" : "/dashboard");
     } catch (err) {
       const msg =
         err instanceof TypeError && err.message === "Failed to fetch"

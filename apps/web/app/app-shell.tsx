@@ -21,6 +21,7 @@ const SIDEBAR_SECTIONS: NavSection[] = [
     title: "Overview",
     items: [
       { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/developer", label: "Developer", roles: ["developer"] },
       { href: "/client", label: "My projects", roles: ["client"] }
     ]
   },
@@ -656,6 +657,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const hideTopHeader = isFullscreen;
   const isSettingsRoute = pathname.startsWith("/settings");
+  const isWorkspaceFullBleed =
+    pathname.startsWith("/finance") ||
+    pathname.startsWith("/client") ||
+    pathname.startsWith("/sales") ||
+    pathname.startsWith("/developer") ||
+    pathname.startsWith("/community");
 
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${isFullscreenPage && isFullscreen ? "bg-slate-950" : ""}`}>

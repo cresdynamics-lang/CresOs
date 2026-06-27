@@ -1654,7 +1654,7 @@ export default function CommunityPage() {
         </div>
       )}
       <div
-        className={`flex min-h-0 flex-1 w-full flex-col overflow-hidden rounded-none md:flex-row md:rounded-2xl ${communityTheme.shell}`}
+        className={`flex min-h-0 flex-1 w-full flex-col overflow-hidden ${communityTheme.shell}`}
       >
         <CommunitySidebar
           visible={showListPanel}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CommunityLayoutClient } from "./community-layout-client";
 
 export const metadata: Metadata = {
   title: "Community | Cres Dynamics - Team Communication & Collaboration",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <CommunityLayoutClient>{children}</CommunityLayoutClient>;
 }

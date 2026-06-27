@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
@@ -17,12 +18,8 @@ import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
 import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
 import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
-import {
-  DeveloperDashboardSections,
-  type DeveloperProgressReminder
-} from "../../components/developer-dashboard";
-import { DeveloperGlassCanvas } from "../../components/developer/developer-glass-ui";
-import { devGlass } from "../../components/developer/developer-glass-theme";
+import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
+import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
 
 type Summary = {
   leadsThisWeek: number;
@@ -285,6 +282,7 @@ export default function DashboardPage() {
   >([]);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const { apiFetch, auth, hydrated } = useAuth();
+  const router = useRouter();
   const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
   const isDirectorOnly =
     auth.roleKeys.includes("director_admin") && !auth.roleKeys.includes("admin");
@@ -644,6 +642,13 @@ export default function DashboardPage() {
   const latestDeveloperReportNeedsAttention = attention?.latestDeveloperReportNeedsAttention ?? null;
   const isDeveloper = auth.roleKeys.includes("developer");
   const isAdmin = auth.roleKeys.includes("admin");
+  const useDeveloperWorkspace = isDeveloper && !isAdmin;
+
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (useDeveloperWorkspace) router.replace("/developer");
+  }, [hydrated, auth.accessToken, useDeveloperWorkspace, router]);
+
   const navCards = useMemo(() => {
     const cards: { href: string; title: string; description: string; badge?: string }[] = [];
     const pendingApprovals = attention?.approvalsPending?.length ?? 0;
@@ -1155,50 +1160,6 @@ export default function DashboardPage() {
             })}
           </StatCardGrid>
         </div>
-      )}
-
-      {isDeveloper && hydrated && auth.accessToken && (
-        <DeveloperGlassCanvas className="min-h-0 flex-1 rounded-none p-0 sm:p-0">
-          {pendingDevPaymentAck.length > 0 && (
-            <div className={`mb-6 ${devGlass.alertWarning}`}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
-                Confirm developer payments (finance)
-              </p>
-              <p className="mt-1 text-xs text-amber-100/90">
-                Finance recorded a payment to you — confirm so the ledger stays aligned.
-              </p>
-              <ul className="mt-3 space-y-2">
-                {pendingDevPaymentAck.map((row) => (
-                  <li
-                    key={row.id}
-                    className={`flex flex-wrap items-center justify-between gap-2 ${devGlass.listRow}`}
-                  >
-                    <span className="text-slate-100">
-                      {formatMoney(Number(row.amount))}
-                      {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
-                      {row.description?.trim() || "Developer payment"} · {new Date(row.spentAt).toLocaleDateString()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void acknowledgeDevPayment(row.id)}
-                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
-                    >
-                      Confirm receipt
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <DeveloperDashboardSections
-            apiFetch={apiFetch}
-            onRefreshAttention={() => void loadSummaryAndAttention()}
-            developerReportStreak={developerReportStreak}
-            overdueTasks={overdueTasks}
-            notifications={attention?.notifications ?? []}
-            progressReminders={attention?.developerProgressReminders ?? []}
-          />
-        </DeveloperGlassCanvas>
       )}
 
       {navCards.length > 0 && !isDeveloper && (
@@ -1981,6 +1942,13 @@ export default function DashboardPage() {
             </aside>
           </div>
         </div>
+      )}
+
+      {isDirectorOrAdmin && (
+        <WorkspaceLiveAnalytics
+          variant={isDirectorOnly ? "director" : "admin"}
+          className="mb-8"
+        />
       )}
 
       {hasMetrics && (

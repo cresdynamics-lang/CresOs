@@ -934,6 +934,390 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
     }
   );
 
+  /** Live workspace analytics — finance / director / admin (charts + AI-style predictions). */
+  router.get(
+    "/live-insights",
+    requireRoles([ROLE_KEYS.admin, ROLE_KEYS.director, ROLE_KEYS.finance, ROLE_KEYS.analyst]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const roleKeys = req.auth!.roleKeys ?? [];
+      const isAdmin = roleKeys.includes(ROLE_KEYS.admin);
+      const isDirector = roleKeys.includes(ROLE_KEYS.director);
+      const isFinance = roleKeys.includes(ROLE_KEYS.finance);
+      const view: "admin" | "director" | "finance" = isAdmin
+        ? "admin"
+        : isDirector
+          ? "director"
+          : "finance";
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * ONE_DAY_MS);
+
+      const [
+        invoices,
+        payments8w,
+        expenses8w,
+        projects,
+        taskGroups,
+        overdueTasksList,
+        clients,
+        invoicePayments,
+        salesReports90d,
+        devReports90d,
+        handoffs30d,
+        users,
+        taskCompletedEvents14d,
+        tasksByAssigneeActive,
+        chatMessages30d
+      ] = await Promise.all([
+        prisma.invoice.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, status: true, totalAmount: true, clientId: true, dueDate: true, issueDate: true }
+        }),
+        prisma.payment.findMany({
+          where: { orgId, deletedAt: null, receivedAt: { gte: eightWeeksAgo } },
+          select: { amount: true, receivedAt: true }
+        }),
+        prisma.expense.findMany({
+          where: { orgId, deletedAt: null, spentAt: { gte: eightWeeksAgo }, status: { in: ["approved", "paid"] } },
+          select: { amount: true, spentAt: true }
+        }),
+        prisma.project.findMany({
+          where: { orgId, deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            endDate: true,
+            price: true,
+            amountReceived: true
+          }
+        }),
+        prisma.task.groupBy({
+          by: ["projectId", "status"],
+          where: { orgId, deletedAt: null },
+          _count: { _all: true }
+        }),
+        prisma.task.findMany({
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { not: "done" },
+            dueDate: { lt: now }
+          },
+          select: { id: true, projectId: true, title: true, dueDate: true },
+          take: 50
+        }),
+        prisma.client.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, name: true, email: true }
+        }),
+        prisma.payment.findMany({
+          where: { orgId, deletedAt: null, invoiceId: { not: null } },
+          select: { invoiceId: true, amount: true }
+        }),
+        prisma.salesReport.findMany({
+          where: { orgId, status: "submitted", submittedAt: { gte: eightWeeksAgo } },
+          select: { submittedAt: true }
+        }),
+        prisma.developerReport.findMany({
+          where: { orgId, reportDate: { gte: eightWeeksAgo } },
+          select: { reportDate: true }
+        }),
+        prisma.projectHandoffRequest.count({
+          where: { orgId, status: "accepted", respondedAt: { gte: new Date(now.getTime() - 30 * ONE_DAY_MS) } }
+        }),
+        prisma.user.findMany({
+          where: { orgId, deletedAt: null },
+          select: { id: true, name: true, email: true }
+        }),
+        prisma.eventLog.findMany({
+          where: { orgId, type: "task.completed", createdAt: { gte: new Date(now.getTime() - 14 * ONE_DAY_MS) } },
+          select: { actorId: true }
+        }),
+        prisma.task.groupBy({
+          by: ["assigneeId"],
+          where: {
+            orgId,
+            deletedAt: null,
+            status: { in: ["todo", "not_started", "in_progress", "waiting_response", "blocked"] }
+          },
+          _count: { _all: true }
+        }),
+        prisma.message.count({
+          where: {
+            deletedAt: null,
+            createdAt: { gte: new Date(now.getTime() - 30 * ONE_DAY_MS) },
+            conversation: { orgId }
+          }
+        })
+      ]);
+
+      const paidByInvoice = new Map<string, number>();
+      for (const p of invoicePayments) {
+        if (!p.invoiceId) continue;
+        paidByInvoice.set(p.invoiceId, (paidByInvoice.get(p.invoiceId) ?? 0) + Number(p.amount));
+      }
+
+      const invoiceStatusAmount: Record<string, number> = {};
+      let totalOutstanding = 0;
+      let overdueDebt = 0;
+      const debtAlerts: {
+        clientId: string;
+        clientName: string;
+        amountDue: number;
+        overdueInvoices: number;
+      }[] = [];
+
+      const clientDebt = new Map<string, { amountDue: number; overdue: number }>();
+      for (const inv of invoices) {
+        const amt = Number(inv.totalAmount);
+        invoiceStatusAmount[inv.status] = (invoiceStatusAmount[inv.status] ?? 0) + amt;
+        const paid = paidByInvoice.get(inv.id) ?? 0;
+        const remaining = Math.max(0, amt - paid);
+        if (["sent", "partial", "overdue"].includes(inv.status)) {
+          totalOutstanding += remaining;
+          if (inv.clientId) {
+            const cur = clientDebt.get(inv.clientId) ?? { amountDue: 0, overdue: 0 };
+            cur.amountDue += remaining;
+            if (inv.status === "overdue" || (inv.dueDate && inv.dueDate < now)) cur.overdue += 1;
+            clientDebt.set(inv.clientId, cur);
+          }
+          if (inv.status === "overdue" || (inv.dueDate && inv.dueDate < now && remaining > 0)) {
+            overdueDebt += remaining;
+          }
+        }
+      }
+
+      for (const c of clients) {
+        const d = clientDebt.get(c.id);
+        if (d && d.amountDue > 0) {
+          debtAlerts.push({
+            clientId: c.id,
+            clientName: c.name,
+            amountDue: Math.round(d.amountDue * 100) / 100,
+            overdueInvoices: d.overdue
+          });
+        }
+      }
+      debtAlerts.sort((a, b) => b.amountDue - a.amountDue);
+
+      const moneyPie = Object.entries(invoiceStatusAmount)
+        .filter(([, v]) => v > 0)
+        .map(([label, value]) => ({ label, value: Math.round(value * 100) / 100 }));
+
+      const weekKeys = lastNWeekKeys(8);
+      const cashFlowWeeks = weekKeys.map((week) => {
+        const inn = payments8w
+          .filter((p) => weekKey(p.receivedAt) === week)
+          .reduce((s, p) => s + Number(p.amount), 0);
+        const out = expenses8w
+          .filter((e) => weekKey(e.spentAt) === week)
+          .reduce((s, e) => s + Number(e.amount), 0);
+        return { week, in: Math.round(inn * 100) / 100, out: Math.round(out * 100) / 100 };
+      });
+
+      const countsByProject: Record<string, { total: number; done: number; overdue: number }> = {};
+      for (const p of projects) countsByProject[p.id] = { total: 0, done: 0, overdue: 0 };
+      for (const row of taskGroups) {
+        const pid = row.projectId as string;
+        if (!countsByProject[pid]) countsByProject[pid] = { total: 0, done: 0, overdue: 0 };
+        countsByProject[pid].total += row._count._all;
+        if (String(row.status) === "done") countsByProject[pid].done += row._count._all;
+      }
+      for (const t of overdueTasksList) {
+        if (countsByProject[t.projectId]) countsByProject[t.projectId].overdue += 1;
+      }
+
+      const projectsByStatus: Record<string, number> = {};
+      for (const p of projects) {
+        projectsByStatus[p.status ?? "unknown"] = (projectsByStatus[p.status] ?? 0) + 1;
+      }
+
+      const slowProjects = projects
+        .filter((p) => ["active", "planned", "paused"].includes(p.status))
+        .map((p) => {
+          const c = countsByProject[p.id] ?? { total: 0, done: 0, overdue: 0 };
+          const daysActive = Math.floor((now.getTime() - p.createdAt.getTime()) / ONE_DAY_MS);
+          const completionRate = c.total > 0 ? c.done / c.total : 0;
+          const pastEnd = p.endDate ? p.endDate < now : false;
+          return {
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            daysActive,
+            completionRate: Math.round(completionRate * 100),
+            overdueTasks: c.overdue,
+            pastEndDate: pastEnd
+          };
+        })
+        .filter((p) => p.pastEndDate || p.overdueTasks > 0 || (p.daysActive > 45 && p.completionRate < 50))
+        .sort((a, b) => b.overdueTasks - a.overdueTasks || b.daysActive - a.daysActive)
+        .slice(0, 12);
+
+      const activeWithTasks = projects.filter((p) => {
+        const c = countsByProject[p.id];
+        return c && c.total > 0;
+      });
+      const successCount = activeWithTasks.filter((p) => {
+        const c = countsByProject[p.id]!;
+        return c.done / c.total >= 0.8;
+      }).length;
+      const projectSuccessRate =
+        activeWithTasks.length > 0 ? Math.round((successCount / activeWithTasks.length) * 100) : 0;
+
+      const completionBuckets = { onTrack: 0, atRisk: 0, stalled: 0 };
+      for (const p of activeWithTasks) {
+        const c = countsByProject[p.id]!;
+        const rate = c.done / c.total;
+        if (rate >= 0.7) completionBuckets.onTrack += 1;
+        else if (rate >= 0.35) completionBuckets.atRisk += 1;
+        else completionBuckets.stalled += 1;
+      }
+
+      const revenueThisMonth = payments8w
+        .filter((p) => p.receivedAt >= startOfMonth)
+        .reduce((s, p) => s + Number(p.amount), 0);
+      const last4In = cashFlowWeeks.slice(-4).reduce((s, w) => s + w.in, 0);
+      const prev4In = cashFlowWeeks.slice(0, 4).reduce((s, w) => s + w.in, 0);
+      const revenueTrend = prev4In > 0 ? (last4In - prev4In) / prev4In : 0;
+      const projectedNextMonth = Math.round(revenueThisMonth * (1 + revenueTrend * 0.5));
+
+      const aiPredictions: { label: string; detail: string; tone: "emerald" | "amber" | "rose" | "sky" }[] = [];
+      if (revenueTrend > 0.08) {
+        aiPredictions.push({
+          label: "Revenue momentum",
+          detail: `Inflows trending up (~${Math.round(revenueTrend * 100)}% vs prior 4 weeks). Projected next month ~KES ${projectedNextMonth.toLocaleString()}.`,
+          tone: "emerald"
+        });
+      } else if (revenueTrend < -0.08) {
+        aiPredictions.push({
+          label: "Revenue softening",
+          detail: `Collections slowed vs prior month. Focus on ${debtAlerts.length} client balance${debtAlerts.length === 1 ? "" : "s"} and overdue follow-up.`,
+          tone: "rose"
+        });
+      }
+      if (overdueDebt > 0) {
+        aiPredictions.push({
+          label: "Debt exposure",
+          detail: `KES ${Math.round(overdueDebt).toLocaleString()} overdue or past due date across open invoices.`,
+          tone: "rose"
+        });
+      }
+      if (slowProjects.length > 0) {
+        aiPredictions.push({
+          label: "Delivery risk",
+          detail: `${slowProjects.length} project${slowProjects.length === 1 ? "" : "s"} running long or behind — review milestones and overdue tasks.`,
+          tone: "amber"
+        });
+      }
+      if (projectSuccessRate >= 70) {
+        aiPredictions.push({
+          label: "Project success",
+          detail: `${projectSuccessRate}% of active projects are ≥80% complete — delivery health is strong.`,
+          tone: "emerald"
+        });
+      }
+
+      let team: {
+        engagement: { label: string; value: number }[];
+        reportActivity: { week: string; sales: number; developer: number }[];
+        velocity: { name: string; tasks14d: number; activeTasks: number }[];
+        messages30d: number;
+        handoffs30d: number;
+      } | undefined;
+
+      if (view === "director" || view === "admin") {
+        const completedByDev: Record<string, number> = {};
+        for (const e of taskCompletedEvents14d) {
+          if (!e.actorId) continue;
+          completedByDev[e.actorId] = (completedByDev[e.actorId] ?? 0) + 1;
+        }
+        const activeByAssignee: Record<string, number> = {};
+        for (const row of tasksByAssigneeActive) {
+          if (row.assigneeId) activeByAssignee[row.assigneeId] = row._count._all;
+        }
+        const velocity = users
+          .map((u) => ({
+            name: u.name?.trim() || u.email,
+            tasks14d: completedByDev[u.id] ?? 0,
+            activeTasks: activeByAssignee[u.id] ?? 0
+          }))
+          .sort((a, b) => b.tasks14d - a.tasks14d)
+          .slice(0, 8);
+
+        const salesByWeek = countByWeek(
+          salesReports90d.filter((r) => r.submittedAt),
+          (r) => r.submittedAt as Date
+        );
+        const devByWeek = countByWeek(devReports90d, (r) => r.reportDate);
+        const reportActivity = weekKeys.map((week) => ({
+          week,
+          sales: salesByWeek.find((w) => w.week === week)?.count ?? 0,
+          developer: devByWeek.find((w) => w.week === week)?.count ?? 0
+        }));
+
+        team = {
+          engagement: [
+            { label: "Sales reports (8w)", value: salesReports90d.length },
+            { label: "Dev reports (8w)", value: devReports90d.length },
+            { label: "Handoffs (30d)", value: handoffs30d },
+            { label: "Chat messages (30d)", value: chatMessages30d }
+          ],
+          reportActivity,
+          velocity,
+          messages30d: chatMessages30d,
+          handoffs30d
+        };
+
+        if (view === "director" || view === "admin") {
+          const avgVelocity =
+            velocity.length > 0 ? velocity.reduce((s, v) => s + v.tasks14d, 0) / velocity.length : 0;
+          if (avgVelocity < 2 && velocity.some((v) => v.activeTasks > 5)) {
+            aiPredictions.push({
+              label: "Team engagement",
+              detail: "Task throughput is low while active load is high — check blockers and report cadence.",
+              tone: "amber"
+            });
+          } else if (salesReports90d.length + devReports90d.length >= 8) {
+            aiPredictions.push({
+              label: "Reporting cadence",
+              detail: "Strong report activity this period — leadership visibility is healthy.",
+              tone: "sky"
+            });
+          }
+        }
+      }
+
+      res.json({
+        generatedAt: now.toISOString(),
+        view,
+        money: {
+          pie: moneyPie,
+          cashFlowWeeks,
+          totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+          overdueDebt: Math.round(overdueDebt * 100) / 100,
+          debtAlerts: debtAlerts.slice(0, 10)
+        },
+        projects: {
+          byStatus: Object.entries(projectsByStatus).map(([status, count]) => ({ status, count })),
+          successRate: projectSuccessRate,
+          completionPie: [
+            { label: "On track", value: completionBuckets.onTrack },
+            { label: "At risk", value: completionBuckets.atRisk },
+            { label: "Stalled", value: completionBuckets.stalled }
+          ].filter((x) => x.value > 0),
+          slowProjects
+        },
+        team,
+        aiPredictions: aiPredictions.slice(0, 5)
+      });
+    }
+  );
+
   return router;
 }
 
