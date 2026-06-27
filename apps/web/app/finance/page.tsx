@@ -345,6 +345,7 @@ export default function FinancePage() {
   const isFinance = auth.roleKeys.includes("finance");
   const isAdmin = auth.roleKeys.includes("admin");
   const canRecordPayments = isFinance || isAdmin;
+  const canRecordExpenses = isFinance || isAdmin;
   const isDirector = auth.roleKeys.includes("director_admin");
   const canCreateInvoice = isFinance || isAdmin;
   const canEditProjectMoney = isFinance || isAdmin || isDirector;
@@ -570,6 +571,13 @@ export default function FinancePage() {
     loadLedger,
     section
   ]);
+
+  const openNewExpenseModal = () => {
+    setExpenseSubmitError(null);
+    setExpenseNotice(null);
+    setExpenseForm(defaultExpenseForm());
+    setShowExpenseModal(true);
+  };
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1032,15 +1040,10 @@ export default function FinancePage() {
               New payment
             </button>
           )}
-          {section === "expenses" && (isFinance || isAdmin) && (
+          {section === "expenses" && canRecordExpenses && (
             <button
               type="button"
-              onClick={() => {
-                setExpenseSubmitError(null);
-                setExpenseNotice(null);
-                setExpenseForm(defaultExpenseForm());
-                setShowExpenseModal(true);
-              }}
+              onClick={openNewExpenseModal}
               className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation !bg-amber-700 hover:!bg-amber-600`}
             >
               New expense
@@ -1683,7 +1686,7 @@ export default function FinancePage() {
 
       {section === "expenses" && (
         <>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500">
             Total {expenseCategoryFilter === "all" ? "" : `(${expenseCategoryFilter}) `} (all statuses):{" "}
             {formatMoney(expensesTotal)}
@@ -1691,21 +1694,32 @@ export default function FinancePage() {
               Approved/paid: {formatMoney(expensesApprovedInFilter)}
             </span>
           </p>
-          <select
-            value={expenseCategoryFilter}
-            onChange={(e) => setExpenseCategoryFilter(e.target.value)}
-            className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-          >
-            <option value="all">All categories</option>
-            {EXPENSE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c.replace(/_/g, " ")}
-              </option>
-            ))}
-            {categories.filter((c) => !EXPENSE_CATEGORIES.includes(c as typeof EXPENSE_CATEGORIES[number])).map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={expenseCategoryFilter}
+              onChange={(e) => setExpenseCategoryFilter(e.target.value)}
+              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200"
+            >
+              <option value="all">All categories</option>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c.replace(/_/g, " ")}
+                </option>
+              ))}
+              {categories.filter((c) => !EXPENSE_CATEGORIES.includes(c as typeof EXPENSE_CATEGORIES[number])).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            {canRecordExpenses ? (
+              <button
+                type="button"
+                onClick={openNewExpenseModal}
+                className={`${financeNeu.btnPrimary} min-h-[44px] shrink-0 touch-manipulation !bg-amber-700 hover:!bg-amber-600`}
+              >
+                New expense
+              </button>
+            ) : null}
+          </div>
         </div>
         <FinanceFlatTable>
           <FinanceFlatTableHead>
@@ -1746,7 +1760,7 @@ export default function FinancePage() {
                     >
                       Receipt
                     </FinanceTextAction>
-                    {isFinance && exp.status === "pending" ? (
+                    {canRecordExpenses && exp.status === "pending" ? (
                       <>
                         <FinanceTextAction onClick={() => startEditExpense(exp)}>Edit</FinanceTextAction>
                         <FinanceTextAction tone="danger" onClick={() => deleteExpense(exp.id)}>
@@ -1760,15 +1774,26 @@ export default function FinancePage() {
             ))}
             {filteredExpenses.length === 0 ? (
               <FinanceFlatTableRow>
-                <FinanceFlatTd colSpan={8} className="text-center text-slate-400">
-                  {expenses.length === 0 ? "No expenses yet." : "No expenses in this category."}
+                <FinanceFlatTd colSpan={8} className="py-10 text-center">
+                  <p className="text-slate-400">
+                    {expenses.length === 0 ? "No expenses yet." : "No expenses in this category."}
+                  </p>
+                  {canRecordExpenses && expenses.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={openNewExpenseModal}
+                      className={`${financeNeu.btnPrimary} mt-3 !bg-amber-700 hover:!bg-amber-600`}
+                    >
+                      New expense
+                    </button>
+                  ) : null}
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
             ) : null}
           </FinanceFlatTableBody>
         </FinanceFlatTable>
 
-        {isFinance && editingExpenseId && editExpenseForm ? (
+        {canRecordExpenses && editingExpenseId && editExpenseForm ? (
           <div className="shell mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Edit pending expense
