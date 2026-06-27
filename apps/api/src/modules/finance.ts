@@ -1753,7 +1753,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
   router.post(
     "/expenses",
-    requireRoles([ROLE_KEYS.finance]),
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
