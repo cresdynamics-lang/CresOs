@@ -6,310 +6,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
-import { ALL_APP_ROLE_KEYS } from "../lib/app-roles";
+import { filterGlobalNavSections } from "../lib/global-nav-sections";
+import { resolveWorkspace } from "../lib/resolve-workspace";
+import { WorkspaceAside } from "../components/workspace/workspace-aside";
+import { GlobalSideNav } from "../components/workspace/global-side-nav";
+import { ShellNavFooter } from "../components/workspace/shell-nav-footer";
+import { workspaceMeta, WorkspaceNavContent } from "../components/workspace/workspace-nav-content";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
-
-type NavSection = {
-  title: string;
-  items: { href: string; label: string; roles: string[]; icon?: string }[];
-};
-
-
-const SIDEBAR_SECTIONS: NavSection[] = [
-  {
-    title: "Home",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: "D", roles: [...ALL_APP_ROLE_KEYS] },
-      { href: "/developer", label: "Developer", icon: "Dv", roles: ["developer"] },
-      { href: "/client", label: "My projects", icon: "P", roles: ["client"] }
-    ]
-  },
-  {
-    title: "Work",
-    items: [
-      { href: "/schedule", label: "Tasks", icon: "T", roles: [...ALL_APP_ROLE_KEYS] },
-      { href: "/community", label: "Community", icon: "C", roles: [...ALL_APP_ROLE_KEYS] }
-    ]
-  },
-  {
-    title: "Mail",
-    items: [
-      { href: "/finance/messages", label: "Finance mail", icon: "F", roles: ["admin", "finance"] },
-      { href: "/sales/messages", label: "Sales mail", icon: "S", roles: ["admin", "sales"] },
-      { href: "/director/messages", label: "Director mail", icon: "Dr", roles: ["admin", "director_admin"] }
-    ]
-  },
-  {
-    title: "Sales",
-    items: [
-      { href: "/sales", label: "Sales hub", icon: "S", roles: ["admin", "sales", "director_admin", "finance"] },
-      { href: "/leads", label: "Leads", icon: "L", roles: ["admin", "director_admin", "sales", "finance"] },
-      { href: "/crm", label: "CRM", icon: "C", roles: ["admin", "sales", "director_admin", "finance"] }
-    ]
-  },
-  {
-    title: "Delivery",
-    items: [
-      {
-        href: "/projects",
-        label: "Projects",
-        icon: "P",
-        roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"]
-      },
-      {
-        href: "/projects/management",
-        label: "Managed projects",
-        icon: "M",
-        roles: ["admin", "director_finance", "finance"]
-      }
-    ]
-  },
-  {
-    title: "Finance",
-    items: [
-      { href: "/finance", label: "Finance hub", icon: "F", roles: ["admin", "finance", "analyst", "director_finance"] },
-      { href: "/approvals", label: "Approvals", icon: "A", roles: ["admin", "director_admin", "finance"] }
-    ]
-  },
-  {
-    title: "Insights",
-    items: [{ href: "/analytics", label: "Analytics", icon: "A", roles: ["admin", "director_admin", "finance", "analyst"] }]
-  },
-  {
-    title: "Reports",
-    items: [
-      { href: "/reports", label: "Sales reports", roles: ["admin", "director_admin", "sales"] },
-      { href: "/developer-reports", label: "Developer reports", roles: ["admin", "director_admin", "developer"] },
-      { href: "/director-reports", label: "Director reports", roles: ["admin", "director_admin"] }
-    ]
-  },
-  {
-    title: "Emil-AI",
-    items: [{ href: "/admin/email-automation", label: "Email automation", roles: ["admin"] }]
-  },
-  {
-    title: "Admin",
-    items: [
-      { href: "/admin/users", label: "Users", roles: ["admin"] },
-      { href: "/admin/org", label: "Departments", roles: ["admin"] },
-      { href: "/admin/roles", label: "Roles", roles: ["admin"] }
-    ]
-  }
-];
-
-function roleLabel(key: string): string {
-  const labels: Record<string, string> = {
-    admin: "Admin",
-    director_admin: "Director",
-    finance: "Finance",
-    developer: "Developer",
-    sales: "Sales",
-    analyst: "Analyst",
-    client: "Client"
-  };
-  return labels[key] ?? key;
-}
-
-type ShellNavItem = { href: string; label: string; roles: string[]; icon?: string };
-type ShellNavSection = { title: string; items: ShellNavItem[] };
-
-const navLabelReveal =
-  "min-w-0 overflow-hidden whitespace-nowrap opacity-0 w-0 transition-all duration-200 ease-out group-hover/hover-nav:ml-2 group-hover/hover-nav:w-auto group-hover/hover-nav:opacity-100";
-
-type SidebarNavContentProps = {
-  /** Mobile drawer: always show labels. Desktop: reveal on sidebar hover. */
-  alwaysExpanded?: boolean;
-  pathname: string;
-  roles: string[];
-  visibleSections: ShellNavSection[];
-  badgeForItem: (href: string, label: string) => { count: number; tone: "rose" | "amber" | "sky" } | null;
-  /** Unread DM count from chat API; used to emphasize Community when user is elsewhere. */
-  communityChatUnread: number;
-  onOpenSettings: () => void;
-  onLogout: () => void;
-  onNavClick?: () => void;
-  showMobileClose?: boolean;
-  onMobileClose?: () => void;
-};
-
-function SidebarNavContent({
-  alwaysExpanded = false,
-  pathname,
-  roles,
-  visibleSections,
-  badgeForItem,
-  communityChatUnread,
-  onOpenSettings,
-  onLogout,
-  onNavClick,
-  showMobileClose,
-  onMobileClose
-}: SidebarNavContentProps) {
-  const labelClass = alwaysExpanded ? "ml-2 min-w-0 flex-1 truncate text-sm font-medium opacity-100" : `min-w-0 flex-1 truncate text-sm font-medium ${navLabelReveal}`;
-  const sectionClass = alwaysExpanded
-    ? "mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
-    : `mb-0 h-0 overflow-hidden px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 opacity-0 transition-all duration-200 group-hover/hover-nav:mb-2 group-hover/hover-nav:h-auto group-hover/hover-nav:opacity-100`;
-
-  return (
-    <>
-      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-4">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <img
-            src="/LOGO.jpg"
-            width={36}
-            height={36}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-xl ring-2 ring-brand/50"
-          />
-          <div
-            className={
-              alwaysExpanded
-                ? "min-w-0"
-                : "min-w-0 overflow-hidden opacity-0 w-0 transition-all duration-200 group-hover/hover-nav:w-auto group-hover/hover-nav:opacity-100"
-            }
-          >
-            <p className="whitespace-nowrap text-sm font-semibold tracking-wide text-brand">CresOS</p>
-            <p className="whitespace-nowrap text-[10px] text-slate-400">Operating System for Growth</p>
-          </div>
-        </div>
-        {showMobileClose ? (
-          <button
-            type="button"
-            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2.5 text-slate-400 hover:bg-slate-800 hover:text-white active:bg-slate-800 lg:hidden"
-            aria-label="Close menu"
-            onClick={() => onMobileClose?.()}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        ) : null}
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
-        {visibleSections.map((section) => (
-          <div key={section.title} className="mb-4 last:mb-0">
-            <p className={sectionClass}>{section.title}</p>
-            <nav className="flex flex-col gap-0.5">
-              {section.items.map((item) => {
-                const onCommunity = pathname.startsWith("/community");
-                const isActive =
-                  pathname === item.href ||
-                  (item.href === "/finance" && pathname.startsWith("/finance")) ||
-                  (item.href === "/reports" && pathname.startsWith("/reports")) ||
-                  (item.href === "/developer-reports" && pathname.startsWith("/developer-reports")) ||
-                  (item.href === "/leads" && pathname.startsWith("/leads")) ||
-                  (item.href === "/crm" && pathname.startsWith("/crm")) ||
-                  (item.href === "/finance/messages" && pathname.startsWith("/finance/messages")) ||
-                  (item.href === "/sales/messages" && pathname.startsWith("/sales/messages")) ||
-                  (item.href === "/director/messages" && pathname.startsWith("/director/messages")) ||
-                  (item.href === "/community" && communityChatUnread > 0 && !onCommunity);
-                const badge = badgeForItem(item.href, item.label);
-                return (
-                  <Link
-                    key={`${section.title}-${item.href}-${item.label}`}
-                    href={item.href}
-                    onClick={() => onNavClick?.()}
-                    title={item.label}
-                    className={`flex min-h-[44px] items-center rounded-lg px-2 py-2 transition-colors touch-manipulation lg:min-h-0 ${
-                      isActive
-                        ? "border border-brand/40 bg-brand/15 text-brand"
-                        : "text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-800"
-                    }`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800/90 text-[10px] font-bold tracking-tight text-slate-200">
-                      {item.icon ?? item.label.charAt(0)}
-                    </span>
-                    <span className={labelClass}>{item.label}</span>
-                    {badge ? (
-                      <span
-                        className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover/hover-nav:opacity-100 ${
-                          alwaysExpanded ? "opacity-100" : ""
-                        } ${
-                          badge.tone === "rose"
-                            ? "bg-rose-500"
-                            : badge.tone === "amber"
-                              ? "bg-amber-500"
-                              : "bg-sky-500"
-                        }`}
-                        title={`${badge.count} needs attention`}
-                      >
-                        {badge.count > 99 ? "99+" : badge.count}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        ))}
-      </div>
-
-      <div className="safe-area-bottom shrink-0 border-t border-slate-800 p-2">
-        <div
-          className={
-            alwaysExpanded
-              ? "mb-2 flex flex-wrap gap-1 px-1"
-              : "mb-0 flex h-0 flex-wrap gap-1 overflow-hidden px-1 opacity-0 transition-all duration-200 group-hover/hover-nav:mb-2 group-hover/hover-nav:h-auto group-hover/hover-nav:opacity-100"
-          }
-        >
-          {roles.map((r) => (
-            <span key={r} className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-              {roleLabel(r)}
-            </span>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              onOpenSettings();
-              onNavClick?.();
-            }}
-            className="flex min-h-[44px] w-full items-center rounded-lg border border-slate-700 px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </span>
-            <span className={labelClass}>Settings</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onNavClick?.();
-              onLogout();
-            }}
-            className="flex min-h-[44px] w-full items-center rounded-lg border border-slate-700 px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 touch-manipulation lg:min-h-0"
-            title="Sign out"
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-            </span>
-            <span className={labelClass}>Sign out</span>
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { auth, setAuth, apiFetch } = useAuth();
@@ -572,21 +276,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const directorFinanceOk =
-    auth.canSeeFinance === true ||
-    roles.includes("admin") ||
-    roles.includes("finance") ||
-    roles.includes("analyst");
-
-  const visibleSections = SIDEBAR_SECTIONS.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => {
-      if (item.roles.includes("director_finance")) {
-        return roles.includes("director_admin") && directorFinanceOk;
-      }
-      return item.roles.some((r) => roles.includes(r));
-    })
-  })).filter((s) => s.items.length > 0);
+  const visibleSections = useMemo(
+    () => filterGlobalNavSections(roles, { canSeeFinance: auth.canSeeFinance }),
+    [roles, auth.canSeeFinance]
+  );
 
   const handleLogout = () => {
     setAuth({
@@ -642,28 +335,44 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Check if current page should be fullscreen
   const isFullscreenPage = pathname === '/community' || pathname.startsWith('/admin/email-automation');
 
-  const shellNavProps = {
-    pathname,
-    roles,
-    visibleSections,
-    badgeForItem,
-    communityChatUnread,
-    onOpenSettings: () => setSettingsOpen(true),
-    onLogout: handleLogout
-  };
+  const workspace = useMemo(() => resolveWorkspace(pathname), [pathname]);
+  const inWorkspace = workspace !== null;
 
   const hideTopHeader = isFullscreen;
   const isSettingsRoute = pathname.startsWith("/settings");
-  const isWorkspaceFullBleed =
-    pathname.startsWith("/finance") ||
-    pathname.startsWith("/client") ||
-    pathname.startsWith("/sales") ||
-    pathname.startsWith("/developer") ||
-    pathname.startsWith("/community");
+  const hideShellChrome = isFullscreenPage && isFullscreen;
+
+  const navFooter = (
+    <ShellNavFooter
+      roleKeys={roles}
+      onOpenSettings={() => setSettingsOpen(true)}
+      onLogout={handleLogout}
+    />
+  );
+
+  const workspaceFooter = inWorkspace ? (
+    <div className="flex flex-col gap-1 px-1">
+      <Link
+        href="/dashboard"
+        onClick={() => setMobileNavOpen(false)}
+        className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+      >
+        App dashboard
+      </Link>
+      {navFooter}
+    </div>
+  ) : (
+    navFooter
+  );
+
+  const asideTitle = inWorkspace && workspace ? workspaceMeta(workspace).title : "CresOS";
+  const asideSubtitle =
+    inWorkspace && workspace ? workspaceMeta(workspace).subtitle : "Operating system for growth";
+  const asideTheme = inWorkspace && workspace ? workspaceMeta(workspace).themeKey : "global";
 
   return (
-    <div className={`flex h-dvh min-h-0 overflow-hidden ${isFullscreenPage && isFullscreen ? "bg-slate-950" : ""}`}>
-      {mobileNavOpen && !(isFullscreenPage && isFullscreen) && (
+    <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-slate-950" : ""}`}>
+      {mobileNavOpen && !hideShellChrome && (
         <div className="fixed inset-0 z-40">
           <button
             type="button"
@@ -671,32 +380,50 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 bg-slate-950/70"
             onClick={() => setMobileNavOpen(false)}
           />
-          <aside className="safe-area-top absolute left-0 top-0 z-10 flex h-full max-h-[100dvh] w-[min(20rem,92vw)] max-w-sm flex-col border-r border-slate-800 bg-slate-900 shadow-2xl">
-            <SidebarNavContent
-              {...shellNavProps}
-              alwaysExpanded
-              onNavClick={() => setMobileNavOpen(false)}
-              showMobileClose
-              onMobileClose={() => setMobileNavOpen(false)}
-            />
-          </aside>
+          <WorkspaceAside
+            title={asideTitle}
+            subtitle={asideSubtitle}
+            themeKey={asideTheme}
+            className="safe-area-top absolute left-0 top-0 z-10 max-w-sm shadow-2xl"
+            footer={workspaceFooter}
+          >
+            <div onClick={() => setMobileNavOpen(false)} role="presentation">
+              {inWorkspace && workspace ? (
+                <WorkspaceNavContent workspace={workspace} />
+              ) : (
+                <GlobalSideNav
+                  sections={visibleSections}
+                  badgeForItem={badgeForItem}
+                  communityChatUnread={communityChatUnread}
+                  onNavClick={() => setMobileNavOpen(false)}
+                />
+              )}
+            </div>
+          </WorkspaceAside>
         </div>
       )}
 
-      <aside
-        className={`group/hover-nav hidden shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900/50 ${
-          isFullscreenPage && isFullscreen ? "!hidden" : ""
-        }`}
-      >
-        <SidebarNavContent {...shellNavProps} />
-      </aside>
+      {!inWorkspace && !hideShellChrome && (
+        <WorkspaceAside
+          title="CresOS"
+          subtitle="Operating system for growth"
+          themeKey="global"
+          className="hidden w-[15rem] md:flex"
+          footer={navFooter}
+        >
+          <GlobalSideNav
+            sections={visibleSections}
+            badgeForItem={badgeForItem}
+            communityChatUnread={communityChatUnread}
+          />
+        </WorkspaceAside>
+      )}
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
 
-      {/* Main content: on small screens the top bar is fixed while content scrolls; lg+ keep in-flow + sticky. */}
       <main
         className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden overflow-x-hidden transition-all duration-300 ${
-          isFullscreenPage && isFullscreen ? "max-w-none" : ""
+          hideShellChrome ? "max-w-none" : ""
         }`}
       >
         <header
@@ -709,7 +436,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 md:hidden"
               aria-label="Open menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}

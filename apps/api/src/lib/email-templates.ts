@@ -503,3 +503,76 @@ export function renderExpenseBeneficiaryReceiptEmail(input: ExpenseBeneficiaryRe
 
   return { subject, html, text: textLines.join("\n") };
 }
+
+export type FinancialReportAdminEmailInput = {
+  periodLabel: string;
+  periodFrom: string;
+  periodTo: string;
+  senderLabel: string;
+  note?: string | null;
+  revenueInPeriod: string;
+  expensesInPeriod: string;
+  salariesInPeriod: string;
+  developerPaymentsInPeriod: string;
+  netInPeriod: string;
+  currency: string;
+};
+
+export function renderFinancialReportAdminEmail(input: FinancialReportAdminEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = `Finance report — ${input.periodLabel}`;
+  const noteBlock = input.note?.trim()
+    ? `<p style="margin:0 0 12px;padding:12px;background:#f8fafc;border-radius:8px;color:#334155;"><strong>Note from ${escapeHtml(input.senderLabel)}:</strong> ${escapeHtml(input.note.trim())}</p>`
+    : "";
+
+  const rows = [
+    ["Period", input.periodLabel],
+    ["From", input.periodFrom],
+    ["To", input.periodTo],
+    ["Client payments (in)", `${input.currency} ${input.revenueInPeriod}`],
+    ["Expenses (out)", `${input.currency} ${input.expensesInPeriod}`],
+    ["Salaries / HR", `${input.currency} ${input.salariesInPeriod}`],
+    ["Developer payments", `${input.currency} ${input.developerPaymentsInPeriod}`],
+    ["Net cash (period)", `${input.currency} ${input.netInPeriod}`]
+  ];
+
+  const tableHtml = rows
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:6px 12px 6px 0;color:#64748b;font-size:13px;">${escapeHtml(label)}</td>` +
+        `<td style="padding:6px 0;font-size:13px;font-weight:600;color:#0f172a;">${escapeHtml(value)}</td></tr>`
+    )
+    .join("");
+
+  const { html, text } = layout("finance", {
+    preheader: `Financial report for ${input.periodLabel}`,
+    headline: "Financial report",
+    greeting: "Hello,",
+    introHtml:
+      `<strong>${escapeHtml(input.senderLabel)}</strong> shared a CresOS finance report for ` +
+      `<strong>${escapeHtml(input.periodLabel)}</strong>. A PDF summary is attached.`,
+    detailHtml:
+      noteBlock +
+      `<table style="margin-top:8px;border-collapse:collapse;">${tableHtml}</table>`,
+    attachmentNote: "Full financial report PDF attached.",
+    footerHtml: `Open CresOS → Finance → Reports for live data. Questions? Contact finance.`
+  });
+
+  const textLines = [
+    "Hello,",
+    "",
+    `Financial report — ${input.periodLabel}`,
+    `Shared by: ${input.senderLabel}`,
+    input.note?.trim() ? `Note: ${input.note.trim()}` : "",
+    "",
+    ...rows.map(([l, v]) => `${l}: ${v}`),
+    "",
+    "PDF report attached.",
+    "Cres Dynamics / CresOS Finance"
+  ].filter(Boolean);
+
+  return { subject, html, text: textLines.join("\n") };
+}

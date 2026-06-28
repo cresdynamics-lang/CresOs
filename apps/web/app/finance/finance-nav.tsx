@@ -15,7 +15,8 @@ export type FinanceSection =
   | "projects"
   | "project_analysis"
   | "clients_due"
-  | "approvals";
+  | "approvals"
+  | "reports";
 
 type NavItem = {
   href: string;
@@ -105,6 +106,13 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
     section: "approvals",
     group: "review",
     roles: ["admin", "director_admin", "finance"]
+  },
+  {
+    href: "/finance/reports",
+    label: "Reports",
+    section: "reports",
+    group: "review",
+    roles: ["admin", "finance", "analyst", "director_admin"]
   }
 ];
 
@@ -224,11 +232,13 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
   },
   payments: {
     title: "Payments",
-    description: "Record confirmed payments — clients receive an automatic receipt with project progress."
+    description:
+      "Client revenue in — record confirmed invoice payments. Clients receive an automatic receipt with project progress."
   },
   expenses: {
     title: "Expenses",
-    description: "Record expenses with receipts; beneficiaries and admins are notified automatically."
+    description:
+      "Outflows — HR salaries & payroll, developer project payments, tools, and ops. Beneficiaries and admins are notified automatically."
   },
   ledger: {
     title: "All transactions",
@@ -249,5 +259,10 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
   approvals: {
     title: "Approvals",
     description: "Review and approve pending expenses, payouts, and finance items."
+  },
+  reports: {
+    title: "Financial reports",
+    description:
+      "Download or email period reports (weekly, monthly, 6 months, yearly, custom). Payments in vs HR salaries & project ops out."
   }
 };

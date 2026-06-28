@@ -12,8 +12,17 @@ import { deliverFinanceInvoiceEmail } from "../lib/invoice-email";
 import {
   sendExpenseAdminApprovalRequest,
   sendExpenseReceiptToBeneficiary,
+  sendFinancialReportToAdmin,
   sendPaymentReceiptToClient
 } from "../lib/finance-workflow";
+import {
+  buildFinancialReport,
+  financialReportToCsv,
+  financialReportToLegacyShape,
+  reportDownloadFilename,
+  resolveReportPeriod
+} from "../services/finance/financial-report";
+import { generateFinancialReportPdf } from "../services/finance/financial-report-pdf";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
@@ -684,213 +693,127 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Real-time financial report — finance & admin only (aggregate money stats)
+  // Financial report — finance & admin (period presets + custom range)
   router.get(
     "/report",
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const now = new Date();
-      /** Calendar month boundaries in UTC so period revenue/expenses match stored timestamps reliably. */
-      const y = now.getUTCFullYear();
-      const m = now.getUTCMonth();
-      const startOfMonthUtc = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
-      const startOfNextMonthUtc = new Date(Date.UTC(y, m + 1, 1, 0, 0, 0, 0));
+      const periodResult = resolveReportPeriod(
+        String(req.query.period ?? "this_month"),
+        req.query.from != null ? String(req.query.from) : undefined,
+        req.query.to != null ? String(req.query.to) : undefined
+      );
+
+      if ("error" in periodResult) {
+        res.status(400).json({ error: periodResult.error });
+        return;
+      }
 
       try {
-        const [
-          revenueThisMonth,
-          revenueAllTime,
-          overdueInvoicesCount,
-          expensesThisMonth,
-          expensesAllTime,
-          pendingPayoutsSum,
-          payoutsPaidThisMonth,
-          payoutsPaidAllTime,
-          invoiceCountByStatus,
-          approvedProjects,
-          openInvoicesForAr,
-          pendingApprovalQueue,
-          pendingPaymentsCount
-        ] = await Promise.all([
-          prisma.payment.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              status: "confirmed",
-              receivedAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
-            }
-          }),
-          prisma.payment.aggregate({
-            _sum: { amount: true },
-            where: { orgId, deletedAt: null, status: "confirmed" }
-          }),
-          prisma.invoice.count({
-            where: { orgId, deletedAt: null, status: "overdue" }
-          }),
-          prisma.expense.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              status: { in: ["approved", "paid"] },
-              spentAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
-            }
-          }),
-          prisma.expense.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              status: { in: ["approved", "paid"] }
-            }
-          }),
-          prisma.payout.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              paidAt: null
-            }
-          }),
-          prisma.payout.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              paidAt: { gte: startOfMonthUtc, lt: startOfNextMonthUtc }
-            }
-          }),
-          prisma.payout.aggregate({
-            _sum: { amount: true },
-            where: {
-              orgId,
-              deletedAt: null,
-              paidAt: { not: null }
-            }
-          }),
-          prisma.invoice.groupBy({
-            by: ["status"],
-            _count: { id: true },
-            where: { orgId, deletedAt: null }
-          }),
-          prisma.project.findMany({
-            where: { orgId, deletedAt: null, approvalStatus: "approved" },
-            select: { price: true, amountReceived: true }
-          }),
-          prisma.invoice.findMany({
-            where: {
-              orgId,
-              deletedAt: null,
-              status: { in: ["sent", "partial", "overdue"] }
-            },
-            select: {
-              totalAmount: true,
-              payments: {
-                where: { deletedAt: null, status: "confirmed" },
-                select: { amount: true }
-              }
-            }
-          }),
-          prisma.approval.count({
-            where: {
-              orgId,
-              status: "pending",
-              entityType: { in: ["expense", "payout"] }
-            }
-          }),
-          prisma.payment.count({
-            where: { orgId, deletedAt: null, status: "pending" }
-          })
-        ]);
-
-        const revMonth = revenueThisMonth._sum.amount?.toNumber() ?? 0;
-        const revAll = revenueAllTime._sum.amount?.toNumber() ?? 0;
-        const expMonth = expensesThisMonth._sum.amount?.toNumber() ?? 0;
-        const expAll = expensesAllTime._sum.amount?.toNumber() ?? 0;
-        const pendingPayouts = pendingPayoutsSum._sum.amount?.toNumber() ?? 0;
-        const payoutPaidMonth = payoutsPaidThisMonth._sum.amount?.toNumber() ?? 0;
-        const payoutPaidAll = payoutsPaidAllTime._sum.amount?.toNumber() ?? 0;
-        const totalOutMonth = expMonth + payoutPaidMonth;
-        const totalOutAll = expAll + payoutPaidAll;
-
-        let projectsTotalContract = 0;
-        let projectsTotalReceived = 0;
-        let projectsRemaining = 0;
-        for (const p of approvedProjects) {
-          if (p.price != null) {
-            const price = Number(p.price);
-            const rec = p.amountReceived != null ? Number(p.amountReceived) : 0;
-            projectsTotalContract += price;
-            projectsTotalReceived += rec;
-            projectsRemaining += Math.max(0, price - rec);
-          } else if (p.amountReceived != null) {
-            projectsTotalReceived += Number(p.amountReceived);
-          }
-        }
-
-        let openInvoiceRemaining = 0;
-        for (const inv of openInvoicesForAr) {
-          const total = Number(inv.totalAmount);
-          const paid = inv.payments.reduce((s, pay) => s + Number(pay.amount), 0);
-          openInvoiceRemaining += Math.max(0, total - paid);
-        }
-
-        /** Prefer remaining contract value on approved projects; if none priced, use open invoice AR. */
-        const outstandingAmount =
-          projectsRemaining > 0 ? projectsRemaining : openInvoiceRemaining;
-        const pendingTotal = pendingApprovalQueue + pendingPaymentsCount;
-
-        res.json({
-          generatedAt: now.toISOString(),
-          period: {
-            startOfMonth: startOfMonthUtc.toISOString(),
-            endOfMonth: now.toISOString(),
-            /** Exclusive upper bound for month filters (UTC). */
-            monthEndExclusive: startOfNextMonthUtc.toISOString()
-          },
-          revenue: { thisMonth: revMonth, allTime: revAll },
-          invoices: {
-            outstandingAmount,
-            openInvoiceRemaining,
-            overdueCount: overdueInvoicesCount,
-            byStatus: invoiceCountByStatus.map((g) => ({ status: g.status, count: g._count.id }))
-          },
-          projects: {
-            approvedCount: approvedProjects.length,
-            totalContractValue: projectsTotalContract,
-            totalReceived: projectsTotalReceived,
-            totalRemaining: projectsRemaining
-          },
-          expenses: { thisMonth: expMonth, allTime: expAll },
-          payouts: {
-            pendingAmount: pendingPayouts,
-            paidThisMonth: payoutPaidMonth,
-            paidAllTime: payoutPaidAll
-          },
-          cashFlow: {
-            revenueThisMonth: revMonth,
-            expensesThisMonth: expMonth,
-            payoutsThisMonth: payoutPaidMonth,
-            totalOutflowsThisMonth: totalOutMonth,
-            netThisMonth: revMonth - totalOutMonth
-          },
-          derived: {
-            /** Confirmed cash in minus approved expenses and paid payouts (UTC calendar month). */
-            netCashMovementThisMonth: revMonth - totalOutMonth,
-            netCashMovementAllTime: revAll - totalOutAll
-          },
-          pending: {
-            approvalQueue: pendingApprovalQueue,
-            paymentsPending: pendingPaymentsCount,
-            total: pendingTotal
-          }
-        });
+        const data = await buildFinancialReport(prisma, orgId, periodResult);
+        res.json(financialReportToLegacyShape(data));
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(err);
         res.status(500).json({ error: "Failed to generate financial report" });
+      }
+    }
+  );
+
+  /** Download financial report as PDF or CSV. */
+  router.get(
+    "/report/download",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const format = String(req.query.format ?? "pdf").toLowerCase();
+      const periodResult = resolveReportPeriod(
+        String(req.query.period ?? "this_month"),
+        req.query.from != null ? String(req.query.from) : undefined,
+        req.query.to != null ? String(req.query.to) : undefined
+      );
+
+      if ("error" in periodResult) {
+        res.status(400).json({ error: periodResult.error });
+        return;
+      }
+
+      try {
+        const data = await buildFinancialReport(prisma, orgId, periodResult);
+        const filename = reportDownloadFilename(data, format === "csv" ? "csv" : "pdf");
+
+        if (format === "csv") {
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+          res.send("\uFEFF" + financialReportToCsv(data));
+          return;
+        }
+
+        const pdf = await generateFinancialReportPdf(data);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.send(pdf);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to download financial report" });
+      }
+    }
+  );
+
+  /** Email financial report PDF to all admins. */
+  router.post(
+    "/report/send-to-admin",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
+      const periodResult = resolveReportPeriod(
+        String(req.body?.period ?? "this_month"),
+        req.body?.from != null ? String(req.body.from) : undefined,
+        req.body?.to != null ? String(req.body.to) : undefined
+      );
+
+      if ("error" in periodResult) {
+        res.status(400).json({ error: periodResult.error });
+        return;
+      }
+
+      try {
+        const data = await buildFinancialReport(prisma, orgId, periodResult);
+        const pdf = await generateFinancialReportPdf(data);
+        const note = typeof req.body?.note === "string" ? req.body.note.trim() : undefined;
+
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, email: true }
+        });
+        const senderLabel = sender?.name?.trim() || sender?.email || "Finance";
+
+        const result = await sendFinancialReportToAdmin(prisma, {
+          orgId,
+          report: data,
+          pdfBuffer: pdf,
+          senderLabel,
+          note
+        });
+
+        if (!result.sent) {
+          res.status(result.skipped ? 200 : 502).json({
+            ok: false,
+            sent: false,
+            reason: result.reason,
+            error: result.error
+          });
+          return;
+        }
+
+        res.json({ ok: true, sent: true, adminCount: result.adminCount });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to send financial report to admin" });
       }
     }
   );

@@ -2,12 +2,15 @@ import type { PrismaClient } from "@prisma/client";
 import {
   renderExpenseAdminEmail,
   renderExpenseBeneficiaryReceiptEmail,
+  renderFinancialReportAdminEmail,
   renderPaymentConfirmationEmail
 } from "./email-templates";
 import { sendOutboundEmail, type SendResult } from "./resend";
 import { getAdminUsers, notifyAdminsInApp } from "../modules/director-notifications";
 import { logEmailSent } from "../modules/admin-activity";
 import { generateExpenseReceiptPdf } from "../services/finance/expense-receipt-pdf";
+import type { FinancialReportData } from "../services/finance/financial-report";
+import { reportDownloadFilename } from "../services/finance/financial-report";
 import { CRES_DYNAMICS_PDF_COMPANY } from "./company-pdf";
 
 export type ProjectProgressSnapshot = {
@@ -559,4 +562,109 @@ export function runPaymentConfirmedNotifications(
   paymentId: string
 ): void {
   void sendPaymentReceiptToClient(prisma, orgId, paymentId);
+}
+
+function formatReportAmount(n: number): string {
+  return n.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Email branded financial report PDF to all admins. */
+export async function sendFinancialReportToAdmin(
+  prisma: PrismaClient,
+  params: {
+    orgId: string;
+    report: FinancialReportData;
+    pdfBuffer: Buffer;
+    senderLabel: string;
+    note?: string;
+  }
+): Promise<
+  { sent: true; adminCount: number } | { sent: false; skipped?: boolean; reason?: string; error?: string }
+> {
+  const { report } = params;
+  const periodFrom = report.period.from.slice(0, 10);
+  const periodTo = report.period.to.slice(0, 10);
+  const filename = reportDownloadFilename(report, "pdf");
+
+  const subjectBody = renderFinancialReportAdminEmail({
+    periodLabel: report.period.label,
+    periodFrom,
+    periodTo,
+    senderLabel: params.senderLabel,
+    note: params.note,
+    revenueInPeriod: formatReportAmount(report.revenue.inPeriod),
+    expensesInPeriod: formatReportAmount(report.expenses.inPeriod),
+    salariesInPeriod: formatReportAmount(report.salaries.inPeriod),
+    developerPaymentsInPeriod: formatReportAmount(report.developerPayments.inPeriod),
+    netInPeriod: formatReportAmount(report.cashFlow.netInPeriod),
+    currency: report.currency
+  });
+
+  const inAppBody =
+    `Period: ${report.period.label}\n` +
+    `Payments in: ${report.currency} ${formatReportAmount(report.revenue.inPeriod)}\n` +
+    `Expenses out: ${report.currency} ${formatReportAmount(report.expenses.inPeriod)}\n` +
+    `Net: ${report.currency} ${formatReportAmount(report.cashFlow.netInPeriod)}\n` +
+    (params.note?.trim() ? `\nNote: ${params.note.trim()}` : "");
+
+  await notifyAdminsInApp(prisma, params.orgId, subjectBody.subject, inAppBody, {
+    type: "finance.report.shared",
+    tier: "financial"
+  });
+
+  const admins = await getAdminUsers(prisma, params.orgId);
+  if (admins.length === 0) return { sent: false, skipped: true, reason: "no_admins" };
+
+  let sentCount = 0;
+  let lastError: string | undefined;
+
+  for (const admin of admins) {
+    const result = await sendOutboundEmail({
+      to: admin.email,
+      subject: subjectBody.subject,
+      text: subjectBody.text,
+      html: subjectBody.html,
+      emailChannel: "finance",
+      attachments: [
+        {
+          filename,
+          content: params.pdfBuffer,
+          contentType: "application/pdf"
+        }
+      ]
+    });
+
+    await prisma.notification.create({
+      data: {
+        orgId: params.orgId,
+        channel: "email",
+        to: admin.email,
+        subject: subjectBody.subject,
+        body: `financeReport:${report.period.preset}\n${inAppBody}`,
+        status: result.ok ? "sent" : "failed",
+        error: result.ok ? null : result.error.slice(0, 900),
+        sentAt: new Date(),
+        type: "finance.report.admin",
+        tier: "financial"
+      }
+    });
+
+    if (result.ok) {
+      sentCount += 1;
+      await logEmailSent(prisma, {
+        orgId: params.orgId,
+        to: admin.email,
+        subject: subjectBody.subject,
+        body: `Finance report (${report.period.label}) emailed to admin with PDF.`,
+        type: "finance.report.admin"
+      });
+    } else {
+      lastError = result.error;
+      console.error("[finance-workflow] financial report admin email failed:", result.error);
+    }
+  }
+
+  return sentCount > 0
+    ? { sent: true, adminCount: sentCount }
+    : { sent: false, error: lastError ?? "Failed to email admins" };
 }

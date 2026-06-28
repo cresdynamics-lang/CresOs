@@ -253,32 +253,8 @@ export function AdminConsole() {
     );
   }
 
-  const subNavLink = (href: string, label: string) => {
-    const active = pathname === href || pathname.startsWith(`${href}/`);
-    return (
-      <Link
-        href={href}
-        className={`shrink-0 rounded px-2.5 py-1.5 text-[11px] sm:px-3 sm:text-sm ${
-          active ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"
-        }`}
-      >
-        {label}
-      </Link>
-    );
-  };
-
   return (
     <section className="flex w-full min-w-0 max-w-full flex-col gap-3 overflow-x-hidden text-xs leading-snug text-slate-300 max-sm:gap-2.5 sm:gap-4 sm:text-sm sm:leading-normal">
-      <nav
-        className="flex w-full min-w-0 max-w-full flex-wrap gap-1.5 sm:gap-2"
-        aria-label="Administration"
-      >
-        {subNavLink("/admin/users", "Users")}
-        {subNavLink("/admin/org", "Departments")}
-        {subNavLink("/admin/roles", "Roles")}
-        {subNavLink("/admin/email-automation", "Email Automation")}
-      </nav>
-
       {tab === "users" && (
         <>
           <div className="shell min-w-0 w-full max-w-full overflow-x-hidden">

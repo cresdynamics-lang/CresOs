@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
+import { WorkspaceAside } from "../../components/workspace/workspace-aside";
+import { ClientSideNav } from "./client-nav";
 
 export function ClientLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -25,7 +27,15 @@ export function ClientLayoutClient({ children }: { children: React.ReactNode }) 
   if (!isClient) return null;
 
   return (
-    <div className="client-portal flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#0a0d14]">
+    <div className="client-portal flex h-full min-h-0 w-full flex-1 overflow-hidden bg-[#0a0d14]">
+      <WorkspaceAside
+        title="Client portal"
+        subtitle="Your projects & updates"
+        themeKey="client"
+        className="hidden w-[15rem] md:flex"
+      >
+        <ClientSideNav />
+      </WorkspaceAside>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-8 sm:py-8">{children}</div>
     </div>
   );

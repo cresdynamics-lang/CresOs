@@ -16,6 +16,19 @@ export const EXPENSE_CATEGORIES = [
   "other"
 ] as const;
 
+export const EXPENSE_CATEGORY_LABELS: Record<(typeof EXPENSE_CATEGORIES)[number], string> = {
+  salaries: "Salaries (HR / payroll)",
+  transport: "Transport",
+  tools: "Tools & software",
+  developer_payment: "Developer payment (project delivery)",
+  apis: "APIs",
+  hostings: "Hosting",
+  domains: "Domains",
+  renewals: "Renewals",
+  apis_per_project: "APIs per project",
+  other: "Other"
+};
+
 export type ExpenseFormState = {
   category: string;
   description: string;
@@ -94,8 +107,8 @@ export function ExpenseCreateModal({
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
             <p className="text-xs leading-relaxed text-slate-400">
-              Record the expense with payment details. A receipt PDF is emailed to the beneficiary automatically; admins
-              are notified to approve.
+              Record money out — salaries (HR), developer project payments, or other ops. A receipt PDF is emailed to
+              the beneficiary; admins are notified to approve.
             </p>
 
             <label className="block">
@@ -108,7 +121,7 @@ export function ExpenseCreateModal({
               >
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
-                    {c.replace(/_/g, " ")}
+                    {EXPENSE_CATEGORY_LABELS[c]}
                   </option>
                 ))}
               </select>
