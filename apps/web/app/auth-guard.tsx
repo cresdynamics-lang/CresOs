@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { resolveHomeRouteForUser } from "../lib/resolve-home-route";
 import { useAuth } from "./auth-context";
 import { AppShell } from "./app-shell";
 
@@ -29,9 +30,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
     if (mustRedirectToDashboard) {
-      router.replace("/dashboard");
+      router.replace(resolveHomeRouteForUser(auth.roleKeys));
     }
-  }, [hydrated, mustRedirectToLogin, mustRedirectToDashboard, router]);
+  }, [hydrated, mustRedirectToLogin, mustRedirectToDashboard, router, auth.roleKeys]);
 
   if (!hydrated) {
     return (

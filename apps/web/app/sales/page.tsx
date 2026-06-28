@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
+import { shouldUseSalesWorkspace } from "../../lib/resolve-home-route";
 import {
   SalesOverviewDashboard,
   type SalesChartSlice,
-  type SalesOverviewKpis
+  type SalesOverviewKpis,
+  type SalesQueueStats
 } from "./sales-overview-dashboard";
 
 type DealRow = { stage?: string | null };
@@ -82,6 +84,11 @@ export default function SalesHubPage() {
   const [loading, setLoading] = useState(true);
   const [scheduleKpis, setScheduleKpis] = useState<ScheduleKpiStats | null>(null);
   const [overdueReportQuestions, setOverdueReportQuestions] = useState(0);
+  const [queue, setQueue] = useState<SalesQueueStats | null>(null);
+  const [reportReminderDue, setReportReminderDue] = useState(false);
+  const [focusTips, setFocusTips] = useState<string[]>([]);
+  const [aiHint, setAiHint] = useState<string | null>(null);
+  const isSalesRep = shouldUseSalesWorkspace(keys);
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -96,7 +103,7 @@ export default function SalesHubPage() {
     setLoading(true);
     try {
       const weekStart = startOfWeek();
-      const [dealsRes, projectsRes, leadsRes, schedRes, dashRes, invoicesRes, alarmRes] =
+      const [dealsRes, projectsRes, leadsRes, schedRes, dashRes, invoicesRes, alarmRes, attentionRes, coachRes] =
         await Promise.all([
           apiFetch("/crm/deals"),
           apiFetch("/projects"),
@@ -104,7 +111,9 @@ export default function SalesHubPage() {
           apiFetch("/schedule?period=week&completed=all"),
           apiFetch("/sales/dashboard"),
           canLoadInvoices ? apiFetch("/sales/invoices?limit=100") : Promise.resolve(null),
-          keys.includes("sales") ? apiFetch("/reports/alarms/overdue") : Promise.resolve(null)
+          keys.includes("sales") ? apiFetch("/reports/alarms/overdue") : Promise.resolve(null),
+          isSalesRep ? apiFetch("/dashboard/attention") : Promise.resolve(null),
+          isSalesRep ? apiFetch("/dashboard/focus-coach") : Promise.resolve(null)
         ]);
 
       let deals: DealRow[] = [];
@@ -117,6 +126,53 @@ export default function SalesHubPage() {
       if (projectsRes.ok) {
         const raw = await projectsRes.json();
         projects = Array.isArray(raw) ? raw : [];
+      }
+
+      if (attentionRes?.ok) {
+        const attention = (await attentionRes.json()) as {
+          stats?: {
+            notificationsCount?: number;
+            messagesCount?: number;
+            dueCount?: number;
+            workProgressPercent?: number;
+            reportStreakDays?: number;
+          };
+          notifications?: { readAt?: string | null }[];
+          messages?: unknown[];
+          dueToday?: unknown[];
+          reportReminderDue?: boolean;
+        };
+        const unread =
+          attention.stats?.notificationsCount ??
+          attention.notifications?.filter((n) => !n.readAt).length ??
+          0;
+        setQueue({
+          unreadNotifications: unread,
+          messagesToReply: attention.stats?.messagesCount ?? attention.messages?.length ?? 0,
+          dueToday: attention.stats?.dueCount ?? attention.dueToday?.length ?? 0,
+          visibleProjects: projects.length,
+          reportStreakDays: attention.stats?.reportStreakDays ?? 0,
+          workProgressPercent: attention.stats?.workProgressPercent ?? 0
+        });
+        setReportReminderDue(attention.reportReminderDue === true);
+      } else if (projects.length > 0) {
+        setQueue((prev) => ({
+          unreadNotifications: prev?.unreadNotifications ?? 0,
+          messagesToReply: prev?.messagesToReply ?? 0,
+          dueToday: prev?.dueToday ?? 0,
+          visibleProjects: projects.length,
+          reportStreakDays: prev?.reportStreakDays ?? 0,
+          workProgressPercent: prev?.workProgressPercent ?? 0
+        }));
+      }
+
+      if (coachRes?.ok) {
+        const coach = (await coachRes.json()) as {
+          deterministicTips?: string[];
+          aiHint?: string | null;
+        };
+        setFocusTips(coach.deterministicTips ?? []);
+        setAiHint(coach.aiHint ?? null);
       }
 
       let leads: LeadRow[] = [];
@@ -205,7 +261,7 @@ export default function SalesHubPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, auth.accessToken, canSeeHub, canLoadInvoices, keys]);
+  }, [apiFetch, auth.accessToken, canSeeHub, canLoadInvoices, isSalesRep, keys]);
 
   useEffect(() => {
     void load();
@@ -227,6 +283,11 @@ export default function SalesHubPage() {
       loading={loading}
       scheduleKpis={scheduleKpis}
       overdueReportQuestions={overdueReportQuestions}
+      queue={queue}
+      reportReminderDue={reportReminderDue}
+      focusTips={focusTips}
+      aiHint={aiHint}
+      isSalesRep={isSalesRep}
       onRefresh={() => void load()}
     />
   );

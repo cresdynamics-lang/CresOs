@@ -22,12 +22,22 @@ export type SalesOverviewKpis = {
   overdueInvoices: number;
 };
 
+export type SalesQueueStats = {
+  unreadNotifications: number;
+  messagesToReply: number;
+  dueToday: number;
+  visibleProjects: number;
+  reportStreakDays: number;
+  workProgressPercent: number;
+};
+
 const QUICK_LINKS = [
   { href: "/sales/messages", label: "Mail" },
   { href: "/sales/invoices", label: "Invoices" },
   { href: "/leads", label: "Leads" },
   { href: "/crm", label: "CRM" },
   { href: "/reports", label: "Reports" },
+  { href: "/reports/new", label: "Submit report" },
   { href: "/projects", label: "Projects" },
   { href: "/schedule", label: "Tasks" },
   { href: "/community", label: "Community" }
@@ -59,6 +69,11 @@ type SalesOverviewDashboardProps = {
   loading: boolean;
   scheduleKpis: ScheduleKpiStats | null;
   overdueReportQuestions: number;
+  queue: SalesQueueStats | null;
+  reportReminderDue: boolean;
+  focusTips: string[];
+  aiHint: string | null;
+  isSalesRep: boolean;
   onRefresh: () => void;
 };
 
@@ -71,6 +86,11 @@ export function SalesOverviewDashboard({
   loading,
   scheduleKpis,
   overdueReportQuestions,
+  queue,
+  reportReminderDue,
+  focusTips,
+  aiHint,
+  isSalesRep,
   onRefresh
 }: SalesOverviewDashboardProps) {
   const { auth } = useAuth();
@@ -85,6 +105,29 @@ export function SalesOverviewDashboard({
 
   const alertItems = useMemo((): SalesAlert[] => {
     const items: SalesAlert[] = [];
+
+    if (reportReminderDue) {
+      items.push({
+        id: "report-due",
+        tone: "danger",
+        title: "Submit your sales report",
+        detail: "It's been 12+ hours since your last report. Leadership uses this for pipeline alignment.",
+        href: "/reports/new",
+        action: "Submit now"
+      });
+    }
+
+    if ((queue?.unreadNotifications ?? 0) > 0) {
+      items.push({
+        id: "unread-notifs",
+        tone: "warning",
+        title: `${queue!.unreadNotifications} unread notification${queue!.unreadNotifications === 1 ? "" : "s"}`,
+        detail: "Clear the bell and Community so messages don't pile up.",
+        href: "/community",
+        action: "Open Community"
+      });
+    }
+
     if (alerts.overdueInvoices > 0) {
       items.push({
         id: "overdue-invoices",
@@ -104,6 +147,7 @@ export function SalesOverviewDashboard({
         action: "Review invoices"
       });
     }
+
     if (alerts.leadsPendingApproval > 0) {
       items.push({
         id: "leads-pending",
@@ -114,6 +158,7 @@ export function SalesOverviewDashboard({
         action: "View leads"
       });
     }
+
     if (alerts.dealsInProspect > 3) {
       items.push({
         id: "deals-prospect",
@@ -124,6 +169,7 @@ export function SalesOverviewDashboard({
         action: "Open CRM"
       });
     }
+
     if (overdueReportQuestions > 0) {
       items.push({
         id: "report-questions",
@@ -134,6 +180,7 @@ export function SalesOverviewDashboard({
         action: "Answer now"
       });
     }
+
     if (scheduleKpis && scheduleKpis.pending > 0 && scheduleKpis.completed === 0) {
       items.push({
         id: "tasks-pending",
@@ -144,8 +191,9 @@ export function SalesOverviewDashboard({
         action: "Open tasks"
       });
     }
+
     return items;
-  }, [alerts, overdueReportQuestions, scheduleKpis]);
+  }, [alerts, overdueReportQuestions, queue, reportReminderDue, scheduleKpis]);
 
   const taskBars = charts.tasks.map((t, idx) => ({
     label: t.label,
@@ -153,19 +201,21 @@ export function SalesOverviewDashboard({
     color: CHART_COLORS[idx % CHART_COLORS.length]
   }));
 
+  const messageHref = (queue?.messagesToReply ?? 0) > 0 ? "/reports" : "/community";
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
         <div className="min-w-0">
           <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-400/90">
-            Sales workspace
+            Sales
           </p>
           <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
             {welcomeHeadline}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-            Full-screen pipeline view for {firstName} — live charts from CRM, invoices, projects, and your weekly
-            schedule.
+            {firstName}, your pipeline queue and charts — use the sidebar to jump between CRM, reports, invoices, and
+            tasks.
           </p>
         </div>
         <button
@@ -174,13 +224,13 @@ export function SalesOverviewDashboard({
           disabled={loading}
           className={`${salesNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
         >
-          {loading ? "Refreshing…" : "Refresh data"}
+          {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
       {alertItems.length > 0 && (
-        <section aria-label="Alerts" className="w-full">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Needs attention</DashboardSectionLabel>
+        <section aria-label="Today's priorities" className="w-full">
+          <DashboardSectionLabel roleKeys={auth.roleKeys}>Today&apos;s priorities</DashboardSectionLabel>
           <ul className="mt-3 grid w-full gap-3 lg:grid-cols-2">
             {alertItems.map((alert) => (
               <li
@@ -213,37 +263,125 @@ export function SalesOverviewDashboard({
         </section>
       )}
 
-      <section aria-label="Key metrics" className="w-full">
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>Pipeline snapshot</DashboardSectionLabel>
+      {isSalesRep && (focusTips.length > 0 || aiHint) && (
+        <section aria-label="Focus coach" className={`w-full ${salesNeu.panelInset}`}>
+          <DashboardSectionLabel roleKeys={auth.roleKeys} tone="focus">
+            Stay focused &amp; aligned
+          </DashboardSectionLabel>
+          {focusTips.length > 0 ? (
+            <ul className="mt-3 ml-1 list-disc space-y-2 pl-4 text-sm text-slate-200 marker:text-amber-500/80">
+              {focusTips.map((tip, i) => (
+                <li key={i}>{tip}</li>
+              ))}
+            </ul>
+          ) : null}
+          {aiHint ? (
+            <p className="mt-3 border-t border-white/[0.06] pt-3 text-sm italic text-violet-200/90">{aiHint}</p>
+          ) : null}
+        </section>
+      )}
+
+      <section aria-label="Your queue" className="w-full">
+        <DashboardSectionLabel roleKeys={auth.roleKeys}>Your queue</DashboardSectionLabel>
         <div className={`mt-3 ${salesNeu.kpiStrip}`}>
           <SalesStatRow>
-            <SalesStatInline
-              label="Leads this week"
-              value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
-              hint="New captures"
-              tone="sky"
-            />
-            <SalesStatInline
-              label="Active deals"
-              value={loading ? "…" : (kpis?.activeDeals ?? 0)}
-              hint="Prospect & proposal"
-              tone="amber"
-            />
-            <SalesStatInline
-              label="Won deals"
-              value={loading ? "…" : (kpis?.wonDeals ?? 0)}
-              hint="Closed"
-              tone="emerald"
-            />
-            <SalesStatInline
-              label="Open invoices"
-              value={loading ? "…" : (kpis?.openInvoices ?? 0)}
-              hint={`${kpis?.paidInvoices ?? 0} paid · ${kpis?.overdueInvoices ?? 0} overdue`}
-              tone="violet"
-            />
+            <Link href="/community" className="min-w-0 hover:opacity-90">
+              <SalesStatInline
+                label="Notifications"
+                value={loading ? "…" : (queue?.unreadNotifications ?? 0)}
+                hint="Unread in-app"
+                tone={(queue?.unreadNotifications ?? 0) > 0 ? "rose" : "sky"}
+              />
+            </Link>
+            <Link href={messageHref} className="min-w-0 hover:opacity-90">
+              <SalesStatInline
+                label="Messages"
+                value={loading ? "…" : (queue?.messagesToReply ?? 0)}
+                hint="Need reply"
+                tone={(queue?.messagesToReply ?? 0) > 0 ? "amber" : "sky"}
+              />
+            </Link>
+            <Link href="/leads" className="min-w-0 hover:opacity-90">
+              <SalesStatInline
+                label="Due today"
+                value={loading ? "…" : (queue?.dueToday ?? 0)}
+                hint="Follow-ups"
+                tone={(queue?.dueToday ?? 0) > 0 ? "amber" : "sky"}
+              />
+            </Link>
+            <Link href="/projects" className="min-w-0 hover:opacity-90">
+              <SalesStatInline
+                label="Projects"
+                value={loading ? "…" : (queue?.visibleProjects ?? 0)}
+                hint="Active / in-flight"
+                tone="violet"
+              />
+            </Link>
           </SalesStatRow>
+          {isSalesRep ? (
+            <SalesStatRow className="mt-6 border-t border-white/[0.06] pt-6">
+              <SalesStatInline
+                label="Report streak"
+                value={loading ? "…" : (queue?.reportStreakDays ?? 0)}
+                hint="Consecutive days"
+                tone="amber"
+              />
+              <SalesStatInline
+                label="Work progress"
+                value={loading ? "…" : `${queue?.workProgressPercent ?? 0}%`}
+                hint="Delivery"
+                tone="emerald"
+              />
+              <SalesStatInline
+                label="Leads this week"
+                value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
+                hint="New captures"
+                tone="sky"
+              />
+              <SalesStatInline
+                label="Active deals"
+                value={loading ? "…" : (kpis?.activeDeals ?? 0)}
+                hint="Prospect & proposal"
+                tone="amber"
+              />
+            </SalesStatRow>
+          ) : null}
         </div>
       </section>
+
+      {!isSalesRep && (
+        <section aria-label="Pipeline snapshot" className="w-full">
+          <DashboardSectionLabel roleKeys={auth.roleKeys}>Pipeline snapshot</DashboardSectionLabel>
+          <div className={`mt-3 ${salesNeu.kpiStrip}`}>
+            <SalesStatRow>
+              <SalesStatInline
+                label="Leads this week"
+                value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
+                hint="New captures"
+                tone="sky"
+              />
+              <SalesStatInline
+                label="Active deals"
+                value={loading ? "…" : (kpis?.activeDeals ?? 0)}
+                hint="Prospect & proposal"
+                tone="amber"
+              />
+              <SalesStatInline
+                label="Won deals"
+                value={loading ? "…" : (kpis?.wonDeals ?? 0)}
+                hint="Closed"
+                tone="emerald"
+              />
+              <SalesStatInline
+                label="Open invoices"
+                value={loading ? "…" : (kpis?.openInvoices ?? 0)}
+                hint={`${kpis?.paidInvoices ?? 0} paid · ${kpis?.overdueInvoices ?? 0} overdue`}
+                tone="violet"
+              />
+            </SalesStatRow>
+          </div>
+        </section>
+      )}
 
       <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">
         {QUICK_LINKS.map((link) => (
@@ -307,6 +445,24 @@ export function SalesOverviewDashboard({
           </ChartPanel>
         </div>
       </section>
+
+      {isSalesRep && (
+        <section aria-label="Work history" className={`w-full ${salesNeu.panelInset}`}>
+          <h3 className="text-sm font-semibold text-slate-200">Your work history (read-only)</h3>
+          <p className="mt-2 text-sm text-slate-400">
+            Past report submissions stay on record. File new daily reports anytime — they won&apos;t overwrite locked
+            entries.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/reports" className={`${salesNeu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`}>
+              Sales reports →
+            </Link>
+            <Link href="/reports/new" className={`${salesNeu.btnPrimary} inline-flex rounded-lg px-3 py-2 text-sm`}>
+              Submit report
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

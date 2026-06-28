@@ -17,6 +17,7 @@ import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
 import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import { shouldUseSalesWorkspace } from "../../lib/resolve-home-route";
 import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
 import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
@@ -294,6 +295,13 @@ export default function DashboardPage() {
     [auth.roleKeys]
   );
   const isSalesOrDeveloper = auth.roleKeys.some((r) => ["sales", "developer"].includes(r));
+
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (shouldUseSalesWorkspace(auth.roleKeys)) {
+      router.replace("/sales");
+    }
+  }, [hydrated, auth.accessToken, auth.roleKeys, router]);
 
   useEffect(() => {
     void requestNotificationPermission();
@@ -988,6 +996,14 @@ export default function DashboardPage() {
     reportReminderDue,
     attention?.approvalsPending?.length
   ]);
+
+  if (shouldUseSalesWorkspace(auth.roleKeys)) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-slate-400">Opening sales workspace…</p>
+      </div>
+    );
+  }
 
   return (
     <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">

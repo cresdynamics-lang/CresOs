@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
+import { resolveHomeRouteForUser } from "../../lib/resolve-home-route";
 import { AuthGlassCanvas, AuthGlassCard, authGlass } from "../../components/auth/auth-glass-ui";
 
 export default function LoginPage() {
@@ -60,7 +61,9 @@ export default function LoginPage() {
         !roleKeys.some((r: string) =>
           ["admin", "director_admin", "finance", "sales", "analyst"].includes(r)
         );
-      router.push(isClientOnly ? "/client" : isDeveloperOnly ? "/developer" : "/dashboard");
+      router.push(
+        isClientOnly ? "/client" : isDeveloperOnly ? "/developer" : resolveHomeRouteForUser(roleKeys)
+      );
     } catch (err) {
       const msg =
         err instanceof TypeError && err.message === "Failed to fetch"
