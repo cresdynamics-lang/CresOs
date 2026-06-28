@@ -15,6 +15,7 @@ import {
 import { WorkspaceHubCard } from "../../components/workspace-hub-card";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
+import { DeveloperProjectsView } from "./developer-projects-view";
 
 type Developer = { id: string; name: string | null; email: string };
 
@@ -64,6 +65,7 @@ export default function ProjectsPage() {
   const [copyDone, setCopyDone] = useState(false);
   const [savingLinkId, setSavingLinkId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const isSales = auth.roleKeys.some((r) => ["director_admin", "sales"].includes(r));
   const isDirector = auth.roleKeys.includes("director_admin");
@@ -82,6 +84,7 @@ export default function ProjectsPage() {
   const canSeeManagement = auth.roleKeys.some((r) => ["admin", "director_admin", "finance"].includes(r));
 
   const loadProjects = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await apiFetch("/projects");
       if (!res.ok) return;
@@ -114,6 +117,8 @@ export default function ProjectsPage() {
       );
     } catch {
       // ignore
+    } finally {
+      setLoading(false);
     }
   }, [apiFetch]);
 
@@ -202,11 +207,6 @@ export default function ProjectsPage() {
     });
   }
 
-  const emptyMessage =
-    filter === "all"
-      ? `No projects yet.${canCreateProject ? " Create one to get started." : ""}`
-      : `No ${filter} projects.`;
-
   const toolbar = (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {canFilterByApproval && (
@@ -231,6 +231,21 @@ export default function ProjectsPage() {
       )}
     </div>
   );
+
+  const emptyMessage =
+    filter === "all"
+      ? `No projects yet.${canCreateProject ? " Create one to get started." : ""}`
+      : `No ${filter} projects.`;
+
+  if (isDeveloperOnly) {
+    return (
+      <DeveloperProjectsView
+        projects={projects}
+        loading={loading}
+        onRefresh={() => void loadProjects()}
+      />
+    );
+  }
 
   return (
     <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">

@@ -10,7 +10,7 @@ import { WorkspaceAccountFooter } from "./workspace-account-footer";
 import { workspaceMeta } from "./workspace-nav-content";
 import { FinanceSideNav } from "../../app/finance/finance-nav";
 import { SalesSideNav } from "../../app/sales/sales-workspace-nav";
-import { DeveloperSideNav } from "../../app/developer/developer-nav";
+import { DeveloperNav, DeveloperSideNav } from "../../app/developer/developer-nav";
 import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 
 type WorkspaceRouteShellProps = {
@@ -56,6 +56,9 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
       >
         {aside}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-white/[0.06] px-3 py-2 md:hidden">
+            <DeveloperNav />
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
             {children}
           </div>
