@@ -38,8 +38,9 @@ export default function ReportsPage() {
   const [overdue, setOverdue] = useState<OverdueItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const isLeadership = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const canCreateSalesReport = auth.roleKeys.includes("sales");
   const isSalesOnly =
-    auth.roleKeys.includes("sales") &&
+    canCreateSalesReport &&
     !auth.roleKeys.some((r) => ["admin", "director_admin", "director"].includes(r));
 
   useEffect(() => {
@@ -70,8 +71,8 @@ export default function ReportsPage() {
   const reportTitle = isLeadership ? "Submitted reports" : "My reports";
   const reportDescription = isLeadership
     ? auth.roleKeys.includes("admin")
-      ? "Admins and directors see who submitted each sales report, a short preview of what they wrote, character count, whether an automated leadership reply was added to the thread, and exact server timestamps."
-      : "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report (reliable even if you were offline)."
+      ? "Admins and directors see who submitted each sales report, a short preview of what they wrote, character count, leadership review on the thread, and exact server timestamps."
+      : "View and comment on sales activity reports. Submitted at shows the server time when sales finalized the report."
     : "Submitted reports are read-only. Create a draft, then submit — you cannot change the body of a submitted report.";
 
   return (
@@ -93,7 +94,7 @@ export default function ReportsPage() {
                 AI Reports →
               </Link>
             )}
-            {!isLeadership && (
+            {canCreateSalesReport && !isLeadership && (
               <Link
                 href="/reports/new"
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-900/30 hover:from-amber-500 hover:to-rose-500"
@@ -117,7 +118,7 @@ export default function ReportsPage() {
       {!isLeadership && overdue.length > 0 && (
         <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
           <p className="font-semibold text-amber-200">
-            Alarm: {overdue.length} director question{overdue.length === 1 ? "" : "s"} not answered within 24 hours
+            Alarm: {overdue.length} open question{overdue.length === 1 ? "" : "s"} past the answer deadline
           </p>
           <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
             {overdue.slice(0, 5).map((o) => (
@@ -150,7 +151,7 @@ export default function ReportsPage() {
                   ? "Sales activity reports will appear here when your team submits them."
                   : "Create a draft and submit your first activity report."}
               </p>
-              {!isLeadership && (
+              {canCreateSalesReport && !isLeadership && (
                 <Link
                   href="/reports/new"
                   className="mt-6 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-500"
@@ -167,7 +168,7 @@ export default function ReportsPage() {
                   {isLeadership && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
                   {isLeadership && <th className="px-3 py-2.5 font-medium">Activity preview</th>}
                   {isLeadership && <th className="px-3 py-2.5 font-medium">Chars</th>}
-                  {isLeadership && <th className="px-3 py-2.5 font-medium">Auto reply</th>}
+                  {isLeadership && <th className="px-3 py-2.5 font-medium">Leadership reply</th>}
                   <th className="px-3 py-2.5 font-medium">Status</th>
                   <th className="px-3 py-2.5 font-medium">Review</th>
                   <th className="px-3 py-2.5 font-medium">Remarks</th>

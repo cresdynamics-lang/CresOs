@@ -54,6 +54,15 @@ const FIELDS = [
   { key: "nextPlan", label: "Next plan / planned for next day" }
 ] as const;
 
+const FIELD_PLACEHOLDERS: Record<(typeof FIELDS)[number]["key"], string> = {
+  whatWorked: "Wins, progress, or momentum from today…",
+  blockers: "Anything slowing you down…",
+  needsAttention: "Risks or items leadership should know about…",
+  implemented: "What you shipped or completed…",
+  pending: "Work still in progress…",
+  nextPlan: "What you plan to tackle next…"
+};
+
 function todayDateString(): string {
   const d = new Date();
   return d.toISOString().slice(0, 10);
@@ -215,10 +224,10 @@ export default function DeveloperReportsPage() {
         title={isDirector ? "Developer reports" : "My reports"}
         description={
           isDirector
-            ? "View reports from developers. Leadership AI review runs automatically on the server when a report is filed — directors do not need to trigger it. Use this list to see review status and open threads."
+            ? "View reports from developers. Open any row to see review status, remarks, and the comment thread."
             : directorLabel
-              ? `Submit daily reports to ${directorLabel}. Leadership review and questions are added automatically within about a minute — you do not need anyone online. Answer open questions within 24 hours. One report per calendar day; filed entries are read-only.`
-              : "Leadership review and questions are added automatically when you submit — usually within a minute. Answer open questions within 24 hours. One report per calendar day; filed entries are read-only."
+              ? `Submit daily reports to ${directorLabel}. One report per calendar day; filed entries are read-only.`
+              : "File one daily report per calendar day. Submitted entries are read-only."
         }
         eyebrow={isDirector ? "Director" : "Developer reports"}
         brandLead="Operating system for growth"
@@ -248,16 +257,14 @@ export default function DeveloperReportsPage() {
 
       {isDevSelfView && aiPollReportId && (
         <div className={`shrink-0 ${devGlass.alertInfo} px-4 py-3 sm:px-5`}>
-          <p className="text-sm text-sky-200">
-            Leadership is reviewing your report — automated feedback and questions usually appear within a minute.
-          </p>
+          <p className="text-sm text-sky-200">Leadership is reviewing your report — check back here for comments and questions.</p>
         </div>
       )}
 
       {isDevSelfView && overdue.length > 0 && (
         <div className={`shrink-0 ${devGlass.alertWarning} px-4 py-3 sm:px-5`}>
           <p className="font-semibold text-amber-200">
-            Alarm: {overdue.length} director question{overdue.length === 1 ? "" : "s"} not answered within 24 hours
+            Alarm: {overdue.length} open question{overdue.length === 1 ? "" : "s"} past the answer deadline
           </p>
           <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
             {overdue.slice(0, 5).map((o) => (
@@ -308,7 +315,7 @@ export default function DeveloperReportsPage() {
                 <th className="px-3 py-2.5 font-medium">Review</th>
                 <th className="px-3 py-2.5 font-medium">Leadership</th>
                 <th className="px-3 py-2.5 font-medium">Open Qs</th>
-                {isDirector && <th className="px-3 py-2.5 font-medium">AI reply</th>}
+                {isDirector && <th className="px-3 py-2.5 font-medium">Leadership reply</th>}
                 <th className="px-3 py-2.5 font-medium">Filed</th>
                 <th className="px-3 py-2.5 text-right font-medium">Action</th>
               </CrmTableHead>
@@ -414,6 +421,7 @@ export default function DeveloperReportsPage() {
                     value={form[key]}
                     onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
                     rows={2}
+                    placeholder={FIELD_PLACEHOLDERS[key]}
                     className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
                   />
                 </label>

@@ -6,13 +6,19 @@ import Link from "next/link";
 import { useAuth } from "../../auth-context";
 
 export default function NewReportPage() {
-  const { apiFetch } = useAuth();
+  const { apiFetch, auth, hydrated } = useAuth();
   const router = useRouter();
+  const canCreate = auth.roleKeys.includes("sales");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [directorLabel, setDirectorLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hydrated || !auth.accessToken) return;
+    if (!canCreate) router.replace("/reports");
+  }, [hydrated, auth.accessToken, canCreate, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +78,14 @@ export default function NewReportPage() {
       setLoading(false);
     }
   };
+
+  if (!hydrated || !canCreate) {
+    return (
+      <div className="flex h-48 items-center justify-center">
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-4">

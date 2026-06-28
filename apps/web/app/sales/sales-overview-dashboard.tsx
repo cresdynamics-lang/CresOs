@@ -175,7 +175,7 @@ export function SalesOverviewDashboard({
         id: "report-questions",
         tone: "danger",
         title: `${overdueReportQuestions} report question${overdueReportQuestions === 1 ? "" : "s"} overdue`,
-        detail: "Answer director questions within 24 hours.",
+        detail: "Answer director questions on your reports.",
         href: "/reports",
         action: "Answer now"
       });

@@ -365,7 +365,7 @@ export default function DeveloperReportDetailPage() {
       {!isDirector && isAuthor && leadershipReplied && openQuestions > 0 && (
         <div className={`rounded-2xl px-4 py-3 sm:px-5 ${devGlass.alertWarning}`}>
           <p className="font-medium text-amber-200">
-            {openQuestions} question{openQuestions === 1 ? "" : "s"} need your answer within 24 hours
+            {openQuestions} open question{openQuestions === 1 ? "" : "s"} waiting for your answer
           </p>
           <p className="mt-1 text-sm text-slate-300">Scroll to Comments & questions below to respond.</p>
         </div>
@@ -404,8 +404,7 @@ export default function DeveloperReportDetailPage() {
                 {report.remarks?.trim() ? report.remarks.trim() : "— None yet —"}
               </p>
               <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-                Automated leadership review runs on the server when a developer submits — no director action needed.
-                Replies appear in <strong>Comments</strong> below. Add a note here to append to saved remarks.
+                Leadership replies appear in <strong>Comments</strong> below. Add a note here to append to saved remarks.
               </p>
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-xs text-cres-text sm:text-sm">
@@ -501,11 +500,6 @@ export default function DeveloperReportDetailPage() {
                   <span className="font-medium text-cres-text-muted">
                     {c.author?.name ?? c.author?.email ?? "User"}
                   </span>
-                  {c.source === "ai_auto" ? (
-                    <span className="rounded bg-slate-600/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-100">
-                      Auto
-                    </span>
-                  ) : null}
                   <span>{c.kind === "question" ? "asked" : "commented"}</span>
                   <span>{new Date(c.createdAt).toLocaleString()}</span>
                   {deadline && (
@@ -534,7 +528,7 @@ export default function DeveloperReportDetailPage() {
                       type="text"
                       value={responseByParent[c.id] ?? ""}
                       onChange={(e) => setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                      placeholder="Your answer (required within 24h)"
+                      placeholder="Your answer"
                       className="flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
                     />
                     <button
@@ -571,7 +565,7 @@ export default function DeveloperReportDetailPage() {
                 className="rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
               >
                 <option value="comment">Comment</option>
-                <option value="question">Question (requires answer within 24h)</option>
+                <option value="question">Question</option>
               </select>
               <button
                 type="button"

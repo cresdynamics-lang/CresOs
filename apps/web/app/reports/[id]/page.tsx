@@ -297,8 +297,8 @@ export default function ReportDetailPage() {
                     {report.remarks?.trim() ? report.remarks.trim() : "— None yet —"}
                   </p>
                   <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-                    Automated leadership replies appear in <strong>Comments</strong> below. Add a note here to append to
-                    saved remarks without removing prior text, unless you choose replace.
+                    Leadership replies appear in <strong>Comments</strong> below. Add a note here to append to saved
+                    remarks without removing prior text, unless you choose replace.
                   </p>
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-cres-text sm:text-sm">
@@ -390,11 +390,6 @@ export default function ReportDetailPage() {
                       <span className="font-medium text-cres-text-muted">
                         {c.author?.name ?? c.author?.email ?? "User"}
                       </span>
-                      {c.source === "ai_auto" ? (
-                        <span className="rounded bg-slate-600/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-100">
-                          Auto
-                        </span>
-                      ) : null}
                       <span>{c.kind === "question" ? "asked" : "commented"}</span>
                       <span>{new Date(c.createdAt).toLocaleString()}</span>
                       {deadline && (
@@ -428,7 +423,7 @@ export default function ReportDetailPage() {
                           onChange={(e) =>
                             setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))
                           }
-                          placeholder="Your answer (required within 24h)"
+                          placeholder="Your answer"
                           className="flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
                         />
                         <button
@@ -465,7 +460,7 @@ export default function ReportDetailPage() {
                     className="rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
                   >
                     <option value="comment">Comment</option>
-                    <option value="question">Question (requires answer within 24h)</option>
+                    <option value="question">Question</option>
                   </select>
                   <button
                     type="button"
