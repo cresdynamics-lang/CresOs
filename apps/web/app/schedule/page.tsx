@@ -22,6 +22,7 @@ import {
   nairobiDatetimeLocalToIso,
   toNairobiDatetimeLocalValue
 } from "../../lib/nairobi-datetime";
+import { DeveloperScheduleView } from "./developer-schedule-view";
 
 type ScheduleItem = {
   id: string;
@@ -84,12 +85,16 @@ export default function SchedulePage() {
   const { apiFetch, auth, hydrated } = useAuth();
   const roleKeys = auth.roleKeys;
   const canUseSchedule = canAccessSchedule(roleKeys);
+  const isDeveloperOnly =
+    roleKeys.includes("developer") &&
+    !roleKeys.some((r) => ["admin", "director_admin", "sales", "finance", "analyst", "client"].includes(r));
   const showOrgToggle = canViewOrgSchedule(roleKeys);
   const canDeleteOrEditHistory = canDeleteScheduleItems(roleKeys);
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter">("week");
   const [completedFilter, setCompletedFilter] = useState<"all" | "done" | "pending">("all");
   const [orgSchedule, setOrgSchedule] = useState(false);
   const [data, setData] = useState<ScheduleResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -110,6 +115,7 @@ export default function SchedulePage() {
   }, []);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const q = new URLSearchParams({ period, completed: completedFilter });
       if (showOrgToggle && orgSchedule) q.set("scope", "org");
@@ -117,6 +123,8 @@ export default function SchedulePage() {
       if (res.ok) setData((await res.json()) as ScheduleResponse);
     } catch {
       setData(null);
+    } finally {
+      setLoading(false);
     }
   }, [period, completedFilter, apiFetch, showOrgToggle, orgSchedule]);
 
@@ -218,6 +226,35 @@ export default function SchedulePage() {
       <section className="flex min-h-0 flex-1 items-center justify-center px-4">
         <p className="text-center text-sm text-slate-400">Tasks & schedule is not available for your account.</p>
       </section>
+    );
+  }
+
+  if (isDeveloperOnly) {
+    return (
+      <DeveloperScheduleView
+        period={period}
+        onPeriodChange={setPeriod}
+        completedFilter={completedFilter}
+        onCompletedFilterChange={setCompletedFilter}
+        stats={data?.stats ?? null}
+        items={data?.items ?? null}
+        periodLabel={periodLabel}
+        nairobiNow={nairobiNow}
+        loading={loading}
+        onRefresh={() => void load()}
+        onAddOpen={() => setAddOpen(true)}
+        addOpen={addOpen}
+        onAddClose={() => setAddOpen(false)}
+        form={form}
+        onFormChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+        types={TYPES}
+        onSubmitAdd={(e) => void handleAdd(e)}
+        submitting={submitting}
+        onToggleDone={(item) => void toggleDone(item)}
+        togglingId={togglingId}
+        typeMeta={typeMeta}
+        notificationDenied={notificationPermission === "denied"}
+      />
     );
   }
 
