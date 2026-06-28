@@ -9,6 +9,7 @@ import { scheduleDeveloperDailyDigest } from "./modules/developer-daily-digest";
 import { scheduleDailyOps } from "./modules/daily-reminders-ai-reports";
 import { scheduleDeveloperProgressReminders } from "./modules/developer-progress-reminders-scheduler";
 import { attachChatCommunityWs } from "./modules/chat-community-ws";
+import { scheduleDeveloperReportAiReviews } from "./modules/director-ai-automation";
 import { scheduleEmailPipeline } from "./modules/email-automation";
 
 // Ensure local `.env` wins over inherited environment variables in dev.
@@ -36,6 +37,7 @@ server.listen(PORT, () => {
   scheduleDeveloperDailyDigest(prisma);
   scheduleDeveloperProgressReminders(prisma);
   scheduleDailyOps(prisma);
+  scheduleDeveloperReportAiReviews(prisma);
   scheduleEmailPipeline(prisma);
 });
 

@@ -292,3 +292,64 @@ html.theme-light .shell {
   }
 }
 
+/* Auth liquid glass + water droplets (login / register) */
+.auth-glass {
+  color-scheme: dark;
+}
+
+.auth-droplet {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 26%,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(186, 230, 253, 0.18) 28%,
+    rgba(56, 189, 248, 0.1) 48%,
+    rgba(212, 168, 83, 0.04) 62%,
+    transparent 74%
+  );
+  box-shadow:
+    inset 0 0 28px rgba(255, 255, 255, 0.14),
+    inset -4px -6px 16px rgba(56, 189, 248, 0.06),
+    0 14px 48px rgba(56, 189, 248, 0.1),
+    0 4px 16px rgba(212, 168, 83, 0.06);
+  opacity: 0.6;
+  animation: community-droplet-float 9s ease-in-out infinite;
+}
+
+.auth-droplet-b {
+  animation-delay: -2s;
+  animation-duration: 11s;
+}
+.auth-droplet-c {
+  animation-delay: -4s;
+  animation-duration: 8s;
+}
+.auth-droplet-d {
+  animation-delay: -1s;
+  animation-duration: 10s;
+}
+.auth-droplet-e {
+  animation-delay: -5s;
+  animation-duration: 12s;
+}
+.auth-droplet-f {
+  animation-delay: -3s;
+  animation-duration: 7s;
+}
+.auth-droplet-g {
+  animation-delay: -6s;
+  animation-duration: 9s;
+  opacity: 0.45;
+}
+.auth-droplet-h {
+  animation-delay: -2.5s;
+  animation-duration: 13s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-droplet {
+    animation: none;
+  }
+}
+

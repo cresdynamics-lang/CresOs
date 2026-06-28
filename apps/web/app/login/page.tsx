@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
+import { AuthGlassCanvas, AuthGlassCard, authGlass } from "../../components/auth/auth-glass-ui";
 
 export default function LoginPage() {
   const { setAuth } = useAuth();
@@ -71,74 +72,91 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cres-bg text-cres-text flex flex-col">
-      <header className="border-b border-cres-border bg-cres-surface/80 backdrop-blur">
+    <AuthGlassCanvas>
+      <header className={authGlass.header}>
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="text-sm text-cres-text-muted hover:text-cres-text transition-colors"
+            className="text-sm text-slate-400 transition-colors hover:text-slate-200"
           >
             ← Back to home
           </Link>
-          <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-cres-text">
-            <img src="/LOGO.jpg" width={32} height={32} alt="" className="h-8 w-8 rounded-lg" />
+          <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold text-slate-100">
+            <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md">
+              <img src="/LOGO.jpg" width={32} height={32} alt="" className="h-7 w-7 rounded-lg" />
+            </span>
             CresOS
           </Link>
         </div>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 py-12">
-        <section className="w-full max-w-md">
-          <div className="rounded-xl border border-cres-border bg-cres-card p-6 sm:p-8">
-            <h1 className="mb-1 text-xl font-semibold text-cres-text">
-              Sign in
-            </h1>
-            <p className="mb-6 text-sm text-cres-text-muted">
-              Use your Cres Dynamics account to access your workspace.
-            </p>
+      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:py-14">
+        <section className="w-full max-w-md animate-fade-in">
+          <AuthGlassCard>
+            <div className="mb-6 flex items-center gap-3">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/12 bg-gradient-to-br from-sky-500/25 to-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-md"
+                aria-hidden
+              >
+                <DropletIcon />
+              </span>
+              <div>
+                <h1 className="font-display text-xl font-bold tracking-tight text-white sm:text-2xl">
+                  Sign in
+                </h1>
+                <p className="mt-0.5 text-sm text-slate-400">
+                  Use your Cres Dynamics account to access your workspace.
+                </p>
+              </div>
+            </div>
+
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <label className="block text-sm">
-                <span className="mb-1.5 block text-cres-text-muted">Email</span>
+                <span className={authGlass.label}>Email</span>
                 <input
                   type="email"
-                  className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2.5 text-sm text-cres-text placeholder-cres-muted outline-none transition-colors focus:border-cres-accent focus:ring-1 focus:ring-cres-accent"
+                  className={authGlass.input}
                   placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1.5 block text-cres-text-muted">Password</span>
+                <span className={authGlass.label}>Password</span>
                 <input
                   type="password"
-                  className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2.5 text-sm text-cres-text placeholder-cres-muted outline-none transition-colors focus:border-cres-accent focus:ring-1 focus:ring-cres-accent"
+                  className={authGlass.input}
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
               </label>
-              <p className="text-xs text-cres-muted">
+              <p className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5 text-xs leading-relaxed text-slate-500 backdrop-blur-sm">
                 Clients: sign in with your email and password as{" "}
-                <span className="text-cres-text-muted">FirstName+project number</span> (e.g. Charles13).
+                <span className="font-medium text-slate-300">FirstName+project number</span> (e.g.{" "}
+                <span className="font-mono text-sky-300/90">Charles13</span>).
               </p>
               {error && (
-                <p className="text-sm text-rose-400" role="alert">
+                <p
+                  className="rounded-xl border border-rose-500/25 bg-rose-950/30 px-3 py-2.5 text-sm text-rose-200 backdrop-blur-sm"
+                  role="alert"
+                >
                   {error}
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={loading}
-                className="mt-1 inline-flex items-center justify-center rounded-lg bg-cres-accent px-4 py-3 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover transition-colors disabled:opacity-60 disabled:pointer-events-none"
-              >
+              <button type="submit" disabled={loading} className={authGlass.button}>
                 {loading ? "Signing in…" : "Sign in"}
               </button>
             </form>
-          </div>
-          <p className="mt-4 text-center text-xs text-cres-muted">
+          </AuthGlassCard>
+
+          <p className={`mt-5 text-center text-xs ${authGlass.muted}`}>
             New database?{" "}
-            <Link href="/register" className="text-cres-accent hover:underline">
+            <Link href="/register" className={authGlass.link}>
               Create a workspace
             </Link>
             {" · "}
@@ -146,24 +164,38 @@ export default function LoginPage() {
               href="https://cresdynamics.com/contact"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cres-accent hover:underline"
+              className={authGlass.link}
             >
               Contact Cres Dynamics
             </a>
           </p>
-          <p className="mt-6 text-center text-[11px] text-cres-muted">
+          <p className={`mt-6 text-center text-[11px] ${authGlass.muted}`}>
             Built by{" "}
             <a
               href="https://cresdynamics.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-cres-accent underline-offset-2 hover:underline"
+              className="font-medium text-amber-300/90 underline-offset-2 transition-colors hover:text-amber-200 hover:underline"
             >
               Cres Dynamics
             </a>
           </p>
         </section>
       </main>
-    </div>
+    </AuthGlassCanvas>
+  );
+}
+
+function DropletIcon() {
+  return (
+    <svg className="h-5 w-5 text-sky-200/90" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2.69c-3.5 4.02-6 7.14-6 10.31a6 6 0 1 0 12 0c0-3.17-2.5-6.29-6-10.31z" opacity="0.85" />
+      <path
+        d="M12 2.69c-3.5 4.02-6 7.14-6 10.31a6 6 0 1 0 12 0c0-3.17-2.5-6.29-6-10.31z"
+        fill="none"
+        stroke="rgba(255,255,255,0.35)"
+        strokeWidth="0.75"
+      />
+    </svg>
   );
 }

@@ -29,5 +29,9 @@ export const devGlass = {
   alertInfo:
     "rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/12 via-white/[0.04] to-sky-500/5 p-4 shadow-[0_8px_28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:p-5",
   tableWrap:
-    "overflow-x-auto rounded-xl border border-white/10 bg-black/20 shadow-[inset_0_2px_12px_rgba(0,0,0,0.3)] backdrop-blur-md"
+    "overflow-x-auto rounded-xl border border-white/10 bg-black/20 shadow-[inset_0_2px_12px_rgba(0,0,0,0.3)] backdrop-blur-md",
+  navActive:
+    "border border-violet-400/30 bg-violet-500/15 text-violet-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md",
+  navIdle:
+    "border border-transparent text-slate-400 hover:border-white/[0.06] hover:bg-white/[0.06] hover:text-slate-200"
 } as const;

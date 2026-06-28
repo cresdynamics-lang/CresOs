@@ -810,10 +810,10 @@ async function runAutoDirectorReplySalesReport(prisma: PrismaClient, reportId: s
   ]);
 }
 
-async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportId: string): Promise<void> {
+async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportId: string): Promise<boolean> {
   // If Groq is not configured, do not write canned remarks.
   // Only generate replies when the AI provider is actually available.
-  if (!getGroq()) return;
+  if (!getGroq()) return false;
 
   const report = await prisma.developerReport.findUnique({
     where: { id: reportId },
@@ -828,25 +828,25 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
       }
     }
   });
-  if (!report) return;
-  if (report.reviewStatus === "checked") return;
+  if (!report) return false;
+  if (report.reviewStatus === "checked") return false;
 
   const leadershipIds = await getDirectorAndAdminUserIds(prisma, report.orgId);
-  if (leadershipIds.length === 0) return;
+  if (leadershipIds.length === 0) return false;
 
   const existingLeadershipComment = await prisma.developerReportComment.findFirst({
     where: {
       reportId,
-      authorId: { in: leadershipIds },
-      createdAt: { gte: report.createdAt }
+      OR: [
+        { source: "ai_auto" },
+        { authorId: { in: leadershipIds }, createdAt: { gte: report.createdAt } }
+      ]
     }
   });
-  if (existingLeadershipComment) return;
+  if (existingLeadershipComment) return false;
 
   const authorId = await pickDirectorAuthorId(prisma, report.orgId);
-  if (!authorId) return;
-
-  if (report.reviewedById != null && report.reviewedById !== authorId) return;
+  if (!authorId) return false;
 
   const teamMemberName = report.submittedBy?.name?.trim() || report.submittedBy?.email || "Team member";
   const reportDateIso = report.reportDate.toISOString().slice(0, 10);
@@ -1080,7 +1080,7 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
   });
 
   const raw = await groqPlainText(DIRECTOR_REPLY_SYSTEM, userMsg, 1050, 0.32);
-  if (!raw) return;
+  if (!raw) return false;
   const normalized = ensureMarkedReviewed(raw.trim()).slice(0, 8000);
   const hasRiskSignals = overdueTasks.length > 0 || milestonesOverdue.length > 0 || countsDay.blocked > 0;
   const minQuestions = hasRiskSignals ? 3 : 2;
@@ -1161,10 +1161,101 @@ async function runAutoDirectorReplyDeveloperReport(prisma: PrismaClient, reportI
       data: {
         reviewStatus: "viewed",
         reviewedAt: new Date(),
-        reviewedById: authorId
+        reviewedById: authorId,
+        remarks: commentBody
       }
     })
   ]);
+
+  const qCount = questions.length;
+  await prisma.notification.create({
+    data: {
+      orgId: report.orgId,
+      channel: "in_app",
+      to: report.submittedById,
+      subject: `Director reviewed your report (${reportDateIso})`,
+      body:
+        qCount > 0
+          ? `Leadership reviewed your developer report for ${reportDateIso}. Please answer ${qCount} question${qCount === 1 ? "" : "s"} in Developer reports.`
+          : `Leadership reviewed your developer report for ${reportDateIso}. Open Developer reports to read the feedback.`,
+      status: "sent",
+      type: "developer_report.reviewed",
+      tier: "governance"
+    }
+  });
+
+  return true;
+}
+
+/** Manually trigger (or retry) automated director review on a developer report. */
+export async function triggerDeveloperReportAiReview(
+  prisma: PrismaClient,
+  reportId: string
+): Promise<{ ok: true; created: boolean } | { ok: false; reason: string }> {
+  if (!AUTO_REPLY_ENABLED) {
+    return { ok: false, reason: "Director AI auto-reply is disabled (DIRECTOR_AI_AUTO_REPLY=false)" };
+  }
+  if (!getGroq()) {
+    return { ok: false, reason: "Groq AI is not configured on the server" };
+  }
+  const created = await runAutoDirectorReplyDeveloperReport(prisma, reportId);
+  if (created) return { ok: true, created: true };
+  const existing = await prisma.developerReportComment.findFirst({
+    where: { reportId, source: "ai_auto" }
+  });
+  if (existing) return { ok: true, created: false };
+  return { ok: false, reason: "Could not generate AI review for this report" };
+}
+
+const PENDING_DEV_AI_MIN_AGE_MS = 90_000;
+const PENDING_DEV_AI_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Catch developer reports that missed the initial queued auto-reply (Groq blip, restart, etc.). */
+export async function processPendingDeveloperReportAiReviews(prisma: PrismaClient): Promise<number> {
+  if (!AUTO_REPLY_ENABLED || !getGroq()) return 0;
+
+  const now = Date.now();
+  const reports = await prisma.developerReport.findMany({
+    where: {
+      reviewStatus: { not: "checked" },
+      createdAt: {
+        gte: new Date(now - PENDING_DEV_AI_MAX_AGE_MS),
+        lte: new Date(now - PENDING_DEV_AI_MIN_AGE_MS)
+      },
+      comments: { none: { source: "ai_auto" } }
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+    take: 20
+  });
+
+  let processed = 0;
+  for (const r of reports) {
+    try {
+      const created = await runAutoDirectorReplyDeveloperReport(prisma, r.id);
+      if (created) processed += 1;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[director-ai] pending developer report retry error:", e);
+    }
+  }
+  return processed;
+}
+
+/** Server-side retry loop — no browser or director action required. */
+export function scheduleDeveloperReportAiReviews(prisma: PrismaClient): void {
+  if (!AUTO_REPLY_ENABLED) return;
+  const intervalMs = 2 * 60 * 1000;
+  const tick = () => {
+    void processPendingDeveloperReportAiReviews(prisma).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("[director-ai] pending developer report sweep failed:", e);
+    });
+  };
+  void tick();
+  setInterval(tick, intervalMs);
+  // eslint-disable-next-line no-console
+  console.info("[director-ai] Scheduled developer report auto-review retry (every 2m)");
 }
 
 async function listRoleMembers(

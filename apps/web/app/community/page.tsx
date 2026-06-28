@@ -15,6 +15,13 @@ import { browserNotificationSoundAllowed } from "../../lib/notification-signals"
 import { CommunityCallOverlay } from "../../components/community/community-call-overlay";
 import { CommunityIncomingCall } from "../../components/community/community-incoming-call";
 import { CommunityEmojiPicker } from "../../components/community/community-emoji-picker";
+import {
+  CommunityMessageContextMenu,
+  ForwardedLabel,
+  isForwardedMessage,
+  StickerBubble,
+  type MessageMenuAction
+} from "../../components/community/community-message-context-menu";
 import { VoiceMessageMicIcon } from "../../components/community/call-icons";
 import { CommunityMemberPicker } from "../../components/community/community-member-picker";
 import { CommunitySidebar } from "../../components/community/community-sidebar";
@@ -155,6 +162,25 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     return <div className="italic text-[#8696A0]">This message was deleted.</div>;
   }
 
+  const forwarded = isForwardedMessage(message);
+  const mdSticker =
+    message.metadata &&
+    typeof message.metadata === "object" &&
+    (message.metadata as { sticker?: boolean }).sticker === true;
+  const stickerLabel =
+    message.metadata && typeof message.metadata === "object"
+      ? String((message.metadata as { stickerLabel?: string }).stickerLabel ?? "")
+      : "";
+
+  if (mdSticker && message.type === "text") {
+    return (
+      <div>
+        {forwarded ? <ForwardedLabel /> : null}
+        <StickerBubble emoji={message.content} label={stickerLabel || undefined} />
+      </div>
+    );
+  }
+
   if (message.type === "location" && md) {
     const lat = Number(md.lat);
     const lng = Number(md.lng);
@@ -182,6 +208,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   if (message.type === "image" && fileUrl) {
     return (
       <div className="space-y-1">
+        {forwarded ? <ForwardedLabel /> : null}
         <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
           <img
             src={fileUrl}
@@ -206,6 +233,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   if (message.type === "video" && fileUrl) {
     return (
       <div className="space-y-1">
+        {forwarded ? <ForwardedLabel /> : null}
         <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
           <video src={fileUrl} controls className="max-h-56 w-full opacity-80" />
           <a
@@ -263,7 +291,12 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     );
   }
 
-  return <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>;
+  return (
+    <div>
+      {forwarded ? <ForwardedLabel /> : null}
+      <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+    </div>
+  );
 }
 
 function formatTimestampShort(timestamp: string): string {
@@ -359,6 +392,8 @@ export default function CommunityPage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
+  const [messageMenuPos, setMessageMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDesktopMenu, setIsDesktopMenu] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFiredRef = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number; messageId: string } | null>(null);
@@ -1069,8 +1104,10 @@ export default function CommunityPage() {
     }
   }, []);
 
-  const openMessageMenu = useCallback((messageId: string) => {
+  const openMessageMenu = useCallback((messageId: string, clientPos?: { x: number; y: number }) => {
     setMessageMenuId(messageId);
+    setMessageMenuPos(clientPos ?? null);
+    setIsDesktopMenu(Boolean(clientPos && typeof window !== "undefined" && window.innerWidth >= 768));
     try {
       navigator.vibrate?.(12);
     } catch {
@@ -1513,6 +1550,7 @@ export default function CommunityPage() {
     async (messageId: string) => {
       if (!selectedConversation?.id) return;
       setMessageMenuId(null);
+      setMessageMenuPos(null);
       const res = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages/${messageId}/info`);
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -1523,6 +1561,106 @@ export default function CommunityPage() {
       if (payload.data) setMessageInfo({ messageId, data: payload.data });
     },
     [selectedConversation, apiFetch]
+  );
+
+  const sendStickerMessage = useCallback(
+    async (sticker: { id: string; emoji: string; label: string }) => {
+      if (!selectedConversation?.id || !auth.accessToken) return;
+      try {
+        const response = await apiFetch(`/chat-community/conversations/${selectedConversation.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: sticker.emoji,
+            type: "text",
+            metadata: { sticker: true, stickerId: sticker.id, stickerLabel: sticker.label },
+            replyTo: replyToId
+          })
+        });
+        if (!response.ok) {
+          const err = (await response.json().catch(() => ({}))) as { error?: string };
+          setChatError(err.error ?? "Could not send sticker");
+          return;
+        }
+        const data = await response.json();
+        const raw = data.data.message;
+        const nextMsg: Message = {
+          id: raw.id,
+          content: raw.content,
+          senderId: raw.senderId,
+          senderName: raw.senderName ?? "You",
+          timestamp: raw.timestamp,
+          type: raw.type === "system" ? "system" : "text",
+          status: raw.status === "delivered" ? "delivered" : "sent",
+          metadata: raw.metadata ?? null,
+          flags: raw.flags ?? { starred: false, saved: false },
+          editedAt: raw.editedAt ?? null,
+          revokedAt: raw.revokedAt ?? null
+        };
+        setMessages((prev) => [...prev, nextMsg]);
+        setReplyToId(null);
+        void loadConversations();
+      } catch {
+        setChatError("Could not send sticker.");
+      }
+    },
+    [selectedConversation, auth.accessToken, apiFetch, replyToId, loadConversations]
+  );
+
+  const handleMessageMenuAction = useCallback(
+    (action: MessageMenuAction, menuMessage: Message) => {
+      const closeMenu = () => {
+        setMessageMenuId(null);
+        setMessageMenuPos(null);
+      };
+      switch (action) {
+        case "reply":
+          setReplyToId(menuMessage.id);
+          closeMenu();
+          requestAnimationFrame(() => composerRef.current?.focus());
+          break;
+        case "forward":
+          setForwardingMessage(menuMessage);
+          closeMenu();
+          break;
+        case "copy":
+          if (menuMessage.content) {
+            void navigator.clipboard?.writeText(menuMessage.content).catch(() => {});
+          }
+          closeMenu();
+          break;
+        case "edit":
+          setEditingMessageId(menuMessage.id);
+          setEditDraft(menuMessage.content);
+          closeMenu();
+          requestAnimationFrame(() => composerRef.current?.focus());
+          break;
+        case "star":
+          void updateMessageFlags(menuMessage.id, { starred: !(menuMessage.flags?.starred === true) });
+          closeMenu();
+          break;
+        case "save":
+          void updateMessageFlags(menuMessage.id, { saved: !(menuMessage.flags?.saved === true) });
+          closeMenu();
+          break;
+        case "info":
+          void loadMessageInfo(menuMessage.id);
+          break;
+        case "delete-self":
+          void deleteMessageApi(menuMessage.id, "self");
+          closeMenu();
+          break;
+        case "delete-everyone":
+          if (window.confirm("Delete this message for everyone in the chat?")) {
+            void deleteMessageApi(menuMessage.id, "everyone");
+          }
+          closeMenu();
+          break;
+        default:
+          closeMenu();
+      }
+    },
+    [updateMessageFlags, loadMessageInfo, deleteMessageApi]
   );
 
   const saveEditMessage = useCallback(async () => {
@@ -1839,7 +1977,7 @@ export default function CommunityPage() {
                           onContextMenu={(e) => {
                             if (message.type === "deleted" || message.revokedAt) return;
                             e.preventDefault();
-                            openMessageMenu(message.id);
+                            openMessageMenu(message.id, { x: e.clientX, y: e.clientY });
                           }}
                           onMouseDown={() => {
                             if (message.type === "deleted" || message.revokedAt) return;
@@ -1875,7 +2013,7 @@ export default function CommunityPage() {
                           onContextMenu={(e) => {
                             if (message.type === "deleted" || message.revokedAt) return;
                             e.preventDefault();
-                            openMessageMenu(message.id);
+                            openMessageMenu(message.id, { x: e.clientX, y: e.clientY });
                           }}
                           onTouchStart={(e) => {
                             if (message.type === "deleted" || message.revokedAt) return;
@@ -1967,79 +2105,19 @@ export default function CommunityPage() {
                 const menuMessage = messages.find((m) => m.id === messageMenuId);
                 if (!menuMessage || menuMessage.type === "deleted" || menuMessage.revokedAt) return null;
                 const menuMine = menuMessage.senderId === auth.userId;
-                const closeMenu = () => setMessageMenuId(null);
-                const sheetBtn =
-                  "flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] text-[#E9EDEF] active:bg-[#2A3942]";
                 return createPortal(
-                  <div
-                    className="fixed inset-0 z-[140] flex flex-col justify-end bg-black/55"
-                    role="dialog"
-                    aria-label="Message options"
-                    onClick={closeMenu}
-                  >
-                    <div
-                      className={`message-menu-sheet mx-auto w-full max-w-lg rounded-t-2xl shadow-2xl ${activeChatUi.sheetBg}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="mx-auto my-2 h-1 w-10 rounded-full bg-[#3d4f56]" />
-                      <div className="px-4 pb-2">
-                        <p className="text-[11px] uppercase tracking-wide text-[#8696A0]">Message</p>
-                        <p className="mt-1 line-clamp-2 text-sm text-[#E9EDEF]">
-                          {menuMessage.content || "(attachment)"}
-                        </p>
-                      </div>
-                      <div className="border-t border-[#2A3942]/80">
-                        {menuMine && menuMessage.type === "text" && (
-                          <button
-                            type="button"
-                            className={sheetBtn}
-                            onClick={() => {
-                              setEditingMessageId(menuMessage.id);
-                              setEditDraft(menuMessage.content);
-                              closeMenu();
-                              requestAnimationFrame(() => composerRef.current?.focus());
-                            }}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <button type="button" className={sheetBtn} onClick={() => { setReplyToId(menuMessage.id); closeMenu(); requestAnimationFrame(() => composerRef.current?.focus()); }}>
-                          Reply
-                        </button>
-                        <button type="button" className={sheetBtn} onClick={() => { setForwardingMessage(menuMessage); closeMenu(); }}>
-                          Forward
-                        </button>
-                        <button type="button" className={sheetBtn} onClick={() => void updateMessageFlags(menuMessage.id, { starred: !(menuMessage.flags?.starred === true) })}>
-                          {menuMessage.flags?.starred ? "Unstar" : "Star"}
-                        </button>
-                        <button type="button" className={sheetBtn} onClick={() => void updateMessageFlags(menuMessage.id, { saved: !(menuMessage.flags?.saved === true) })}>
-                          {menuMessage.flags?.saved ? "Unsave" : "Save"}
-                        </button>
-                        <button type="button" className={sheetBtn} onClick={() => void loadMessageInfo(menuMessage.id)}>
-                          Info
-                        </button>
-                        <button type="button" className={sheetBtn} onClick={() => void deleteMessageApi(menuMessage.id, "self")}>
-                          Delete for me
-                        </button>
-                        {menuMine && (
-                          <button
-                            type="button"
-                            className={`${sheetBtn} text-rose-300`}
-                            onClick={() => {
-                              if (window.confirm("Delete this message for everyone in the chat?")) {
-                                void deleteMessageApi(menuMessage.id, "everyone");
-                              }
-                            }}
-                          >
-                            Delete for everyone
-                          </button>
-                        )}
-                      </div>
-                      <button type="button" className="mt-1 w-full border-t border-[#2A3942]/80 py-4 text-center text-[15px] font-medium text-[#53BDEB]" onClick={closeMenu}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>,
+                  <CommunityMessageContextMenu
+                    message={menuMessage}
+                    isMine={menuMine}
+                    position={messageMenuPos}
+                    isDesktop={isDesktopMenu}
+                    sheetBg={activeChatUi.sheetBg}
+                    onClose={() => {
+                      setMessageMenuId(null);
+                      setMessageMenuPos(null);
+                    }}
+                    onAction={(action) => handleMessageMenuAction(action, menuMessage)}
+                  />,
                   document.body
                 );
               })()}
@@ -2425,15 +2503,17 @@ export default function CommunityPage() {
                       }
                       requestAnimationFrame(() => composerRef.current?.focus());
                     }}
-                    className="absolute bottom-full left-0 z-30 mb-2 w-64"
+                    onPickSticker={(sticker) => void sendStickerMessage(sticker)}
+                    className="absolute bottom-full left-0 z-30 mb-2"
                   />
                   <button
                     type="button"
-                    className="absolute bottom-2 left-2 z-10 rounded-full p-1 text-lg text-[#8696A0] hover:bg-[#3B4A54] hover:text-[#E9EDEF]"
-                    title="Insert emoji"
+                    className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 rounded-full px-1 py-1 text-[#8696A0] hover:bg-[#3B4A54] hover:text-[#E9EDEF]"
+                    title="Emoji & stickers"
                     onClick={() => setComposerEmojiOpen((o) => !o)}
                   >
-                    😊
+                    <span className="text-lg">😊</span>
+                    <span className="hidden text-[10px] font-medium sm:inline">+</span>
                   </button>
                 <textarea
                   ref={composerRef}

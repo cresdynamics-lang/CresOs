@@ -20,6 +20,40 @@ function mergeAppendedRemarks(prev: string | null | undefined, addition: string)
   return p ? `${p}${LEADERSHIP_APPEND_SEP}${a}` : a;
 }
 
+function enrichDeveloperReportListItem(
+  r: {
+    comments?: {
+      authorId: string;
+      source: string | null;
+      content: string;
+      createdAt: Date;
+      kind: string;
+      replies?: { id: string }[];
+    }[];
+    createdAt: Date;
+    submittedBy?: { id: string; name: string | null; email: string };
+    [key: string]: unknown;
+  },
+  leadershipIds: string[]
+) {
+  const { comments, ...rest } = r;
+  const filedAtMs = r.createdAt ? new Date(r.createdAt).getTime() : 0;
+  const thread = comments ?? [];
+  const hasAiLeadershipReply = thread.some(
+    (c) =>
+      c.source === "ai_auto" ||
+      (leadershipIds.includes(c.authorId) &&
+        typeof c.content === "string" &&
+        c.content.includes(MARKED_REVIEWED_LINE) &&
+        filedAtMs > 0 &&
+        new Date(c.createdAt).getTime() >= filedAtMs)
+  );
+  const pendingQuestionsCount = thread.filter(
+    (c) => c.kind === "question" && (c.replies?.length ?? 0) === 0
+  ).length;
+  return { ...rest, hasAiLeadershipReply, pendingQuestionsCount };
+}
+
 function totalDeveloperReportContent(body: {
   whatWorked?: string;
   blockers?: string;
@@ -60,41 +94,31 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
         where = scoped ? { orgId, submittedById: { in: scoped } } : { orgId };
       }
 
-      const leadershipIds = isLeadership ? await getDirectorAndAdminUserIds(prisma, orgId) : [];
+      const leadershipIds = await getDirectorAndAdminUserIds(prisma, orgId);
 
       const list = await prisma.developerReport.findMany({
         where,
         orderBy: { reportDate: "desc" },
-        include: isLeadership
-          ? {
-              submittedBy: { select: { id: true, name: true, email: true } },
-              comments: {
-                where: { parentId: null },
-                select: { authorId: true, source: true, content: true, createdAt: true }
-              }
+        include: {
+          ...(isLeadership
+            ? { submittedBy: { select: { id: true, name: true, email: true } } }
+            : {}),
+          comments: {
+            where: { parentId: null },
+            select: {
+              authorId: true,
+              source: true,
+              content: true,
+              createdAt: true,
+              kind: true,
+              replies: { select: { id: true } }
             }
-          : undefined
+          }
+        }
       });
 
-      if (isLeadership) {
-        const mapped = list.map((r) => {
-          const { comments, ...rest } = r;
-          const filedAtMs = r.createdAt ? new Date(r.createdAt).getTime() : 0;
-          const hasAiLeadershipReply = (comments ?? []).some(
-            (c) =>
-              c.source === "ai_auto" ||
-              (leadershipIds.includes(c.authorId) &&
-                typeof c.content === "string" &&
-                c.content.includes(MARKED_REVIEWED_LINE) &&
-                filedAtMs > 0 &&
-                new Date(c.createdAt).getTime() >= filedAtMs)
-          );
-          return { ...rest, hasAiLeadershipReply };
-        });
-        return res.json(mapped);
-      }
-
-      res.json(list);
+      const mapped = list.map((r) => enrichDeveloperReportListItem(r, leadershipIds));
+      return res.json(mapped);
     }
   );
 

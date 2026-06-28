@@ -7,7 +7,7 @@ import { useAuth } from "./auth-context";
 import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
 import { filterGlobalNavSections } from "../lib/global-nav-sections";
-import { resolveWorkspace } from "../lib/resolve-workspace";
+import { resolveWorkspaceForUser } from "../lib/resolve-workspace-for-user";
 import { WorkspaceAside } from "../components/workspace/workspace-aside";
 import { WorkspaceAccountFooter } from "../components/workspace/workspace-account-footer";
 import { GlobalSideNav } from "../components/workspace/global-side-nav";
@@ -335,7 +335,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Check if current page should be fullscreen
   const isFullscreenPage = pathname === '/community' || pathname.startsWith('/admin/email-automation');
 
-  const workspace = useMemo(() => resolveWorkspace(pathname), [pathname]);
+  const workspace = useMemo(
+    () => resolveWorkspaceForUser(pathname, auth.roleKeys),
+    [pathname, auth.roleKeys]
+  );
   const inWorkspace = workspace !== null;
 
   const hideTopHeader = isFullscreen;
@@ -364,7 +367,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           setMobileNavOpen(false);
           handleLogout();
         }}
-        showAccountLink={workspace !== "finance"}
+        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales"}
       />
     </div>
   ) : (

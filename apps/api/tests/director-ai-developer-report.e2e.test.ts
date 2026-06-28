@@ -111,20 +111,29 @@ describe("Director AI — developer report E2E (DB + Groq)", () => {
     const reportId = createRes.body.id as string;
     expect(reportId).toBeTruthy();
 
-    let remarks: string | null = null;
+    let aiComment: { content: string; source: string | null } | null = null;
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
       const row = await prisma.developerReport.findUnique({
         where: { id: reportId },
-        select: { remarks: true, reviewStatus: true, reviewedById: true }
+        select: { reviewStatus: true, reviewedById: true }
       });
-      remarks = row?.remarks ?? null;
-      if (remarks?.includes("Marked reviewed. ✓")) break;
+      const comment = await prisma.developerReportComment.findFirst({
+        where: { reportId, source: "ai_auto", kind: "comment" },
+        select: { content: true, source: true }
+      });
+      aiComment = comment;
+      if (comment?.content?.includes("Marked reviewed. ✓") && row?.reviewStatus === "viewed") break;
       await new Promise((r) => setTimeout(r, 400));
     }
 
-    expect(remarks, "Expected Groq to populate remarks within timeout").toBeTruthy();
-    expect(remarks!).toContain("Marked reviewed. ✓");
+    expect(aiComment, "Expected Groq to add ai_auto comment within timeout").toBeTruthy();
+    expect(aiComment!.content).toContain("Marked reviewed. ✓");
+
+    const questions = await prisma.developerReportComment.count({
+      where: { reportId, kind: "question", source: "ai_auto" }
+    });
+    expect(questions).toBeGreaterThanOrEqual(2);
 
     const full = await prisma.developerReport.findUnique({
       where: { id: reportId },
@@ -132,6 +141,7 @@ describe("Director AI — developer report E2E (DB + Groq)", () => {
     });
     expect(full?.reviewStatus).toBe("viewed");
     expect(full?.reviewedById).toBeTruthy();
+    expect(full?.remarks).toContain("Marked reviewed. ✓");
 
     const director = await prisma.user.findUnique({
       where: { email: directorEmail },

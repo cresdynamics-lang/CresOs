@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { logAdminActivity } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { getProjectDeveloperAccess } from "../lib/project-access";
+import { syncDailyFocusDelivery } from "../lib/daily-project-focus";
 import { primaryRoleLabel } from "../lib/user-capabilities";
 import multer from "multer";
 import fs from "fs";
@@ -752,13 +753,33 @@ export default function userRouter(prisma: PrismaClient): Router {
           }
         });
 
+        let focusDelivery: Awaited<ReturnType<typeof syncDailyFocusDelivery>> | null = null;
+        if (isDev) {
+          focusDelivery = await syncDailyFocusDelivery(prisma, orgId, userId, projectId, note);
+        }
+
         res.json({
           success: true,
           data: {
             projectId: updated.currentFocusProject?.id ?? projectId,
             projectName: updated.currentFocusProject?.name,
             note: updated.currentFocusNote,
-            updatedAt: updated.currentFocusUpdatedAt?.toISOString()
+            updatedAt: updated.currentFocusUpdatedAt?.toISOString(),
+            dailyFocusTask: focusDelivery
+              ? {
+                  id: focusDelivery.taskId,
+                  title: focusDelivery.taskTitle,
+                  created: focusDelivery.taskCreated,
+                  dateKey: focusDelivery.dateKey
+                }
+              : null,
+            milestoneUpdate: focusDelivery?.milestoneId
+              ? {
+                  id: focusDelivery.milestoneId,
+                  name: focusDelivery.milestoneName,
+                  criteriaUpdated: focusDelivery.milestoneCriteriaUpdated
+                }
+              : null
           }
         });
       } catch (error) {

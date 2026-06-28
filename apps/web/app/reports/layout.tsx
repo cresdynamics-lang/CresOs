@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SalesLinkedLayoutClient } from "../sales/sales-linked-layout-client";
 
 export const metadata: Metadata = {
   title: "Reports | Cres Dynamics - Business Reports & Analytics",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function ReportsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <SalesLinkedLayoutClient>{children}</SalesLinkedLayoutClient>;
 }

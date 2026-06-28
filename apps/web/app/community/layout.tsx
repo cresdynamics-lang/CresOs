@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CommunityLayoutClient } from "./community-layout-client";
+import { ContextualWorkspaceLayoutClient } from "../../components/workspace/contextual-workspace-layout-client";
 
 export const metadata: Metadata = {
   title: "Community | Cres Dynamics - Team Communication & Collaboration",
@@ -12,5 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
-  return <CommunityLayoutClient>{children}</CommunityLayoutClient>;
+  return (
+    <ContextualWorkspaceLayoutClient>
+      <CommunityLayoutClient>{children}</CommunityLayoutClient>
+    </ContextualWorkspaceLayoutClient>
+  );
 }

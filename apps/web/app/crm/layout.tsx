@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SalesLinkedLayoutClient } from "../sales/sales-linked-layout-client";
 
 export const metadata: Metadata = {
   title: "CRM | Cres Dynamics - Customer Relationship Management",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <SalesLinkedLayoutClient>{children}</SalesLinkedLayoutClient>;
 }

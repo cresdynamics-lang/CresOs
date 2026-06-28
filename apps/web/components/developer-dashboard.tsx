@@ -842,6 +842,7 @@ function CurrentFocusPanelStyled({
   const [projectId, setProjectId] = useState("");
   const [note, setNote] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [focusNotice, setFocusNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -879,6 +880,7 @@ function CurrentFocusPanelStyled({
   async function save() {
     setSaving(true);
     setError(null);
+    setFocusNotice(null);
     try {
       const res = await apiFetch("/user/current-focus", {
         method: "PATCH",
@@ -891,8 +893,22 @@ function CurrentFocusPanelStyled({
         return;
       }
       if (j.data?.updatedAt) setUpdatedAt(j.data.updatedAt);
+      const parts: string[] = ["Focus saved."];
+      if (j.data?.dailyFocusTask?.id) {
+        parts.push(
+          j.data.dailyFocusTask.created
+            ? "Added to today's tasks."
+            : "Updated today's focus task."
+        );
+      }
+      if (j.data?.milestoneUpdate?.criteriaUpdated) {
+        parts.push(`Milestone "${j.data.milestoneUpdate.name}" success criteria updated.`);
+      } else if (j.data?.milestoneUpdate?.name && note.trim()) {
+        parts.push(`Linked to milestone "${j.data.milestoneUpdate.name}".`);
+      }
+      setFocusNotice(parts.join(" "));
     } catch (e) {
-      // ignore
+      setError("Could not save focus");
     } finally {
       setSaving(false);
     }
@@ -912,10 +928,12 @@ function CurrentFocusPanelStyled({
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">Set Today's Project Focus</h4>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Select the project you are working on today so it displays in your Active Project Context and keeps your team updated.
+            Select the project you are working on today so it displays in your Active Project Context, adds a task for
+            today, and updates milestone success criteria. You'll get alerts if focus or today's task is missed.
           </p>
         </div>
         {error && <p className="text-xs text-rose-400">{error}</p>}
+        {focusNotice && <p className="text-xs text-emerald-300/90">{focusNotice}</p>}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Project Focus

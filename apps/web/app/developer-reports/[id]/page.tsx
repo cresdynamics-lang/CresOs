@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
+import { devGlass } from "../../../components/developer/developer-glass-theme";
 import { formatNairobiDate, formatNairobiDateTime } from "../../../lib/nairobi-datetime";
 
 type Comment = {
@@ -89,6 +90,23 @@ function normalizeReport(
   };
 }
 
+const MARKED_REVIEWED = "Marked reviewed. ✓";
+
+function hasLeadershipReply(comments: Comment[]): boolean {
+  return comments.some(
+    (c) =>
+      !c.parentId &&
+      (c.source === "ai_auto" || (c.kind === "comment" && c.content.includes(MARKED_REVIEWED)))
+  );
+}
+
+function pendingQuestionCount(comments: Comment[]): number {
+  return comments.filter((c) => !c.parentId && c.kind === "question").filter((q) => {
+    const replies = comments.filter((r) => r.parentId === q.id);
+    return replies.length === 0;
+  }).length;
+}
+
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 function isOverdue(askedAt: string): boolean {
@@ -112,6 +130,7 @@ export default function DeveloperReportDetailPage() {
   const [loading, setLoading] = useState(false);
   const [directorNoteAppend, setDirectorNoteAppend] = useState("");
   const [replaceEntireRemarks, setReplaceEntireRemarks] = useState(false);
+  const [waitingForAi, setWaitingForAi] = useState(false);
 
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
   const remarkReplacePrefilledRef = useRef(false);
@@ -148,6 +167,46 @@ export default function DeveloperReportDetailPage() {
     }
     load();
   }, [id, apiFetch, router]);
+
+  useEffect(() => {
+    if (!report || !isAuthor || isDirector) return;
+    if (hasLeadershipReply(report.comments ?? [])) {
+      setWaitingForAi(false);
+      return;
+    }
+    if ((report.reviewStatus ?? "pending") !== "pending" && report.remarks?.trim()) {
+      setWaitingForAi(false);
+      return;
+    }
+    setWaitingForAi(true);
+    let cancelled = false;
+    let attempts = 0;
+    const tick = async () => {
+      if (cancelled || attempts >= 24) {
+        setWaitingForAi(false);
+        return;
+      }
+      attempts += 1;
+      const res = await apiFetch(`/developer-reports/${id}`);
+      if (cancelled) return;
+      if (res.ok) {
+        const data = (await res.json()) as Partial<DeveloperReport>;
+        const normalized = normalizeReport(data);
+        if (normalized) {
+          setReport(normalized);
+          if (hasLeadershipReply(normalized.comments ?? [])) {
+            setWaitingForAi(false);
+            return;
+          }
+        }
+      }
+      window.setTimeout(tick, 2500);
+    };
+    window.setTimeout(tick, 2500);
+    return () => {
+      cancelled = true;
+    };
+  }, [report?.id, report?.reviewStatus, isAuthor, isDirector, id, apiFetch]);
 
   const reloadReport = async () => {
     const resReport = await apiFetch(`/developer-reports/${id}`);
@@ -202,6 +261,8 @@ export default function DeveloperReportDetailPage() {
 
   const comments = report.comments ?? [];
   const topLevel = comments.filter((c) => !c.parentId);
+  const openQuestions = pendingQuestionCount(comments);
+  const leadershipReplied = hasLeadershipReply(comments);
 
   const setReview = async (reviewStatus: "viewed" | "checked") => {
     if (!report) return;
@@ -253,7 +314,7 @@ export default function DeveloperReportDetailPage() {
   };
 
   return (
-    <section className="flex flex-col gap-4 max-sm:gap-3">
+    <section className="flex w-full min-w-0 flex-col gap-4 px-3 py-4 max-sm:gap-3 sm:px-6 sm:py-5">
       <div className="shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4">
         <div>
           <Link href="/developer-reports" className="text-xs text-cres-accent hover:underline sm:text-sm">
@@ -293,6 +354,23 @@ export default function DeveloperReportDetailPage() {
         </div>
       </div>
 
+      {!isDirector && isAuthor && waitingForAi && (
+        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${devGlass.alertInfo}`}>
+          <p className="text-sm text-sky-200">
+            Leadership is reviewing your report. Automated feedback and questions usually appear within a minute.
+          </p>
+        </div>
+      )}
+
+      {!isDirector && isAuthor && leadershipReplied && openQuestions > 0 && (
+        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${devGlass.alertWarning}`}>
+          <p className="font-medium text-amber-200">
+            {openQuestions} question{openQuestions === 1 ? "" : "s"} need your answer within 24 hours
+          </p>
+          <p className="mt-1 text-sm text-slate-300">Scroll to Comments & questions below to respond.</p>
+        </div>
+      )}
+
       {isDirector && (
         <div className="shell border-cres-border bg-cres-card/80">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -326,8 +404,8 @@ export default function DeveloperReportDetailPage() {
                 {report.remarks?.trim() ? report.remarks.trim() : "— None yet —"}
               </p>
               <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-                Automated leadership replies appear in <strong>Comments</strong> below. Add a note here to append to saved
-                remarks without removing prior text, unless you choose replace.
+                Automated leadership review runs on the server when a developer submits — no director action needed.
+                Replies appear in <strong>Comments</strong> below. Add a note here to append to saved remarks.
               </p>
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-xs text-cres-text sm:text-sm">
@@ -397,7 +475,11 @@ export default function DeveloperReportDetailPage() {
         <h3 className="mb-3 text-xs font-semibold text-cres-text sm:text-sm">Comments & questions</h3>
 
         {topLevel.length === 0 && !isDirector && (
-          <p className="text-xs text-cres-muted sm:text-sm">No comments yet from director.</p>
+          <p className="text-xs text-cres-muted sm:text-sm">
+            {waitingForAi
+              ? "Waiting for leadership review…"
+              : "No comments yet from director."}
+          </p>
         )}
         {topLevel.length === 0 && isDirector && (
           <p className="text-xs text-cres-muted sm:text-sm">No comments yet. Add a comment or question below.</p>

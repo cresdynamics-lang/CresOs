@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ContextualWorkspaceLayoutClient } from "../../components/workspace/contextual-workspace-layout-client";
 
 export const metadata: Metadata = {
   title: "Tasks & Schedule | Cres Dynamics - Task Management",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function ScheduleLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ContextualWorkspaceLayoutClient>{children}</ContextualWorkspaceLayoutClient>;
 }

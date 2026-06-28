@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ContextualWorkspaceLayoutClient } from "../../components/workspace/contextual-workspace-layout-client";
 
 export const metadata: Metadata = {
   title: "Projects | Cres Dynamics - CresOS Business Operating System",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProjectsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ContextualWorkspaceLayoutClient>{children}</ContextualWorkspaceLayoutClient>;
 }

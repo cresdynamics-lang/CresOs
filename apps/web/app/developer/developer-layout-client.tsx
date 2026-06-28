@@ -3,9 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { DeveloperGlassCanvas } from "../../components/developer/developer-glass-ui";
-import { WorkspaceAside } from "../../components/workspace/workspace-aside";
-import { DeveloperSideNav } from "./developer-nav";
+import { WorkspaceRouteShell } from "../../components/workspace/workspace-route-shell";
 
 export function DeveloperLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,22 +26,5 @@ export function DeveloperLayoutClient({ children }: { children: React.ReactNode 
 
   if (!canAccess) return null;
 
-  return (
-    <DeveloperGlassCanvas className="h-full min-h-0 flex-1 gap-0 p-0">
-      <div className="relative z-[1] flex h-full min-h-0 w-full flex-1 overflow-hidden">
-        <WorkspaceAside
-          title="Developer"
-          subtitle="Tasks, projects & reports"
-          themeKey="developer"
-          className="hidden w-[15rem] md:flex"
-        >
-          <DeveloperSideNav />
-        </WorkspaceAside>
-
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-          {children}
-        </div>
-      </div>
-    </DeveloperGlassCanvas>
-  );
+  return <WorkspaceRouteShell workspace="developer">{children}</WorkspaceRouteShell>;
 }

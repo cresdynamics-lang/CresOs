@@ -1,11 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 import { ROLE_KEYS } from "./auth-middleware";
 import { DEFAULT_ORG_DAY_TZ, getUtcRangeForZonedDate, getZonedDateKey } from "./org-zoned-day";
+import {
+  findTodayFocusTask,
+  isFocusSetToday
+} from "../lib/daily-project-focus";
 import { parseReminderSnoozePhrase, snoozeUntilFromPreset } from "../lib/reminder-snooze";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 const DAILY_NUDGE_HOUR = Math.min(23, Math.max(6, Number(process.env.DEVELOPER_PROGRESS_NUDGE_HOUR ?? 9)));
+const FOCUS_REMINDER_HOUR = Math.min(23, Math.max(7, Number(process.env.DEVELOPER_FOCUS_REMINDER_HOUR ?? 10)));
+const FOCUS_TASK_DEADLINE_HOUR = Math.min(23, Math.max(12, Number(process.env.DEVELOPER_FOCUS_TASK_DEADLINE_HOUR ?? 18)));
 
 export type DeveloperProgressReminderBanner = {
   reminderKey: string;
@@ -297,6 +303,60 @@ export async function processDeveloperProgressReminders(
 
       if (await markSent(prisma, orgId, userId, dailyKey, bucketKey)) {
         await notifyDeveloperInApp(prisma, orgId, userId, subject, body, "developer.daily_progress");
+      }
+    }
+  }
+
+  // Missing daily focus after morning cutoff
+  const missingFocusKey = "missing_daily_focus";
+  if (hour >= FOCUS_REMINDER_HOUR && !(await isSnoozed(prisma, orgId, userId, missingFocusKey, now))) {
+    const focusToday = isFocusSetToday(user?.currentFocusUpdatedAt, dateKey);
+    if (!focusToday) {
+      const bucketKey = dateKey;
+      const subject = "Set today's project focus";
+      const body =
+        "You haven't set today's project focus yet. Choose your project and a short note — it adds a task for today and updates milestone success criteria for your team.";
+
+      banners.push({ reminderKey: missingFocusKey, subject, body, severity: "warning" });
+
+      if (await markSent(prisma, orgId, userId, missingFocusKey, bucketKey)) {
+        await notifyDeveloperInApp(prisma, orgId, userId, subject, body, "developer.missing_focus");
+      }
+    }
+  }
+
+  // Incomplete daily focus task after end-of-day cutoff
+  if (user?.currentFocusProjectId && user.currentFocusUpdatedAt && hour >= FOCUS_TASK_DEADLINE_HOUR) {
+    const focusToday = isFocusSetToday(user.currentFocusUpdatedAt, dateKey);
+    if (focusToday) {
+      const focusTask = await findTodayFocusTask(
+        prisma,
+        orgId,
+        userId,
+        user.currentFocusProjectId
+      );
+      const incompleteKey = `incomplete_focus_task:${user.currentFocusProjectId}`;
+      if (
+        focusTask &&
+        focusTask.status !== "done" &&
+        !(await isSnoozed(prisma, orgId, userId, incompleteKey, now))
+      ) {
+        const bucketKey = dateKey;
+        const subject = `Complete today's focus: ${focusTask.title}`;
+        const body = `Your daily focus task on "${user.currentFocusProject?.name ?? "your project"}" is still open. Mark it done in Tasks or update your focus if plans changed.`;
+
+        banners.push({
+          reminderKey: incompleteKey,
+          subject,
+          body,
+          projectId: user.currentFocusProjectId,
+          projectName: user.currentFocusProject?.name ?? undefined,
+          severity: "warning"
+        });
+
+        if (await markSent(prisma, orgId, userId, incompleteKey, bucketKey)) {
+          await notifyDeveloperInApp(prisma, orgId, userId, subject, body, "developer.incomplete_focus_task");
+        }
       }
     }
   }

@@ -31,6 +31,7 @@ type DeveloperReport = {
   reviewStatus?: string;
   remarks?: string | null;
   hasAiLeadershipReply?: boolean;
+  pendingQuestionsCount?: number;
   submittedBy?: { id: string; name: string | null; email: string };
 };
 
@@ -78,6 +79,7 @@ export default function DeveloperReportsPage() {
     nextPlan: ""
   });
   const [submitting, setSubmitting] = useState(false);
+  const [aiPollReportId, setAiPollReportId] = useState<string | null>(null);
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
   const isDeveloper = auth.roleKeys.includes("developer");
   const isDevSelfView = isDeveloper && !isDirector;
@@ -132,6 +134,40 @@ export default function DeveloperReportsPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!aiPollReportId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const tick = async () => {
+      if (cancelled) return;
+      if (attempts >= 20) {
+        setAiPollReportId(null);
+        return;
+      }
+      attempts += 1;
+      try {
+        const listRes = await apiFetch("/developer-reports");
+        if (cancelled) return;
+        if (listRes.ok) {
+          const data = (await listRes.json()) as DeveloperReport[];
+          setList(data);
+          const row = data.find((r) => r.id === aiPollReportId);
+          if (row?.hasAiLeadershipReply) {
+            setAiPollReportId(null);
+            return;
+          }
+        }
+      } catch {
+        // keep polling
+      }
+      if (!cancelled) window.setTimeout(tick, 2500);
+    };
+    window.setTimeout(tick, 2500);
+    return () => {
+      cancelled = true;
+    };
+  }, [aiPollReportId, apiFetch]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (totalFormChars(form) < 60) {
@@ -154,9 +190,11 @@ export default function DeveloperReportsPage() {
         })
       });
       if (res.ok) {
+        const created = (await res.json()) as { id: string };
         setShowForm(false);
         setForm({ reportDate: todayDateString(), whatWorked: "", blockers: "", needsAttention: "", implemented: "", pending: "", nextPlan: "" });
         await load();
+        if (created.id) setAiPollReportId(created.id);
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.error ?? "Failed to create report");
@@ -177,10 +215,10 @@ export default function DeveloperReportsPage() {
         title={isDirector ? "Developer reports" : "My reports"}
         description={
           isDirector
-            ? "View reports from developers. Each entry shows when it was filed and last updated on the server — useful even if you were not online when it was submitted."
+            ? "View reports from developers. Leadership AI review runs automatically on the server when a report is filed — directors do not need to trigger it. Use this list to see review status and open threads."
             : directorLabel
-              ? `Daily standard: cover the sections with enough detail (at least 60 characters total). Submit to ${directorLabel} for review. Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day).`
-              : "Daily standard: cover the sections with enough detail (at least 60 characters total). Filed reports are read-only — you cannot edit or delete them after save; only new entries can be added (one per calendar day)."
+              ? `Submit daily reports to ${directorLabel}. Leadership review and questions are added automatically within about a minute — you do not need anyone online. Answer open questions within 24 hours. One report per calendar day; filed entries are read-only.`
+              : "Leadership review and questions are added automatically when you submit — usually within a minute. Answer open questions within 24 hours. One report per calendar day; filed entries are read-only."
         }
         eyebrow={isDirector ? "Director" : "Developer reports"}
         brandLead="Operating system for growth"
@@ -205,6 +243,14 @@ export default function DeveloperReportsPage() {
       {loadError && (
         <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
           {loadError}
+        </div>
+      )}
+
+      {isDevSelfView && aiPollReportId && (
+        <div className={`shrink-0 ${devGlass.alertInfo} px-4 py-3 sm:px-5`}>
+          <p className="text-sm text-sky-200">
+            Leadership is reviewing your report — automated feedback and questions usually appear within a minute.
+          </p>
         </div>
       )}
 
@@ -259,7 +305,9 @@ export default function DeveloperReportsPage() {
                 <th className="px-3 py-2.5 font-medium">Date</th>
                 {isDirector && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
                 {isDirector && <th className="px-3 py-2.5 font-medium">Summary</th>}
-                <th className="px-3 py-2.5 font-medium">Status</th>
+                <th className="px-3 py-2.5 font-medium">Review</th>
+                <th className="px-3 py-2.5 font-medium">Leadership</th>
+                <th className="px-3 py-2.5 font-medium">Open Qs</th>
                 {isDirector && <th className="px-3 py-2.5 font-medium">AI reply</th>}
                 <th className="px-3 py-2.5 font-medium">Filed</th>
                 <th className="px-3 py-2.5 text-right font-medium">Action</th>
@@ -293,6 +341,24 @@ export default function DeveloperReportsPage() {
                       )}
                       <td className="py-2 pr-3 text-xs">
                         <span className={badgeClass}>{status}</span>
+                      </td>
+                      <td className="py-2 pr-3 text-xs text-slate-400">
+                        {report.hasAiLeadershipReply ? (
+                          <span className="text-emerald-300">Reviewed</span>
+                        ) : status === "pending" ? (
+                          <span className="text-amber-200">Awaiting</span>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 text-xs">
+                        {(report.pendingQuestionsCount ?? 0) > 0 ? (
+                          <span className="rounded bg-amber-500/15 px-2 py-0.5 text-amber-200">
+                            {report.pendingQuestionsCount}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
                       </td>
                       {isDirector && (
                         <td className="py-2 pr-3 text-xs text-slate-400">
