@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { salesWs } from "../../components/sales/sales-theme";
+import { salesNeu } from "../../components/sales/sales-theme";
 import { ALL_APP_ROLE_KEYS } from "../../lib/app-roles";
 
 type NavItem = {
@@ -150,7 +150,7 @@ function SalesNavLinks({ vertical = false }: { vertical?: boolean }) {
       vertical
         ? "min-h-[40px] rounded-lg px-3 py-2 text-[13px] font-medium transition-all touch-manipulation lg:min-h-0"
         : "min-h-[44px] shrink-0 snap-start rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap touch-manipulation sm:min-h-0",
-      active ? salesWs.navActive : salesWs.navIdle
+      active ? salesNeu.navActive : salesNeu.navIdle
     ].join(" ");
 
   if (vertical) {

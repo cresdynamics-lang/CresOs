@@ -144,6 +144,42 @@ html.theme-light .shell {
   padding-right: 0;
 }
 
+/* Sales neumorphism — mirrors finance-neu with amber accent */
+.sales-neu {
+  --sales-neu-bg: #0b0f14;
+  --sales-neu-surface: #121820;
+  --sales-neu-inset: #0e1319;
+  --sales-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --sales-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.sales-neu .shell {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--sales-neu-surface);
+  box-shadow: var(--sales-neu-raised);
+}
+
+.sales-neu input:not([type="checkbox"]):not([type="radio"]),
+.sales-neu select,
+.sales-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--sales-neu-inset);
+  box-shadow: var(--sales-neu-inset-shadow);
+}
+
+.sales-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.sales-neu select:focus,
+.sales-neu textarea:focus {
+  outline: none;
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: var(--sales-neu-inset-shadow), 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+.sales-fullscreen.sales-neu .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Developer liquid glass workspace */
 .developer-glass {
   --dev-glass-bg: #080b12;

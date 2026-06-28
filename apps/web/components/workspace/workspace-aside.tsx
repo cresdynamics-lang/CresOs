@@ -17,8 +17,8 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
     subtitle: "text-slate-500"
   },
   sales: {
-    panel: "bg-[#0e1118]/95",
-    border: "border-white/[0.06]",
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
     title: "text-amber-400/90",
     subtitle: "text-slate-500"
   },

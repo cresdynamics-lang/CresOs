@@ -100,7 +100,12 @@ export default function salesRouter(prisma: PrismaClient): Router {
           outstandingInvoices,
           paidInvoices,
           cancelledInvoices,
-          recentRaw
+          overdueInvoices,
+          recentRaw,
+          deals,
+          projects,
+          leadsThisWeek,
+          leadsPendingApproval
         ] = await Promise.all([
           prisma.invoice.count({ where: base }),
           prisma.invoice.count({ where: outstandingWhere }),
@@ -110,6 +115,9 @@ export default function salesRouter(prisma: PrismaClient): Router {
           prisma.invoice.count({
             where: { ...base, status: "cancelled" }
           }),
+          prisma.invoice.count({
+            where: { ...base, status: "overdue" }
+          }),
           prisma.invoice.findMany({
             where: base,
             include: {
@@ -118,8 +126,58 @@ export default function salesRouter(prisma: PrismaClient): Router {
             },
             orderBy: { createdAt: "desc" },
             take: 10
+          }),
+          prisma.deal.findMany({
+            where: { orgId, deletedAt: null, ...(isAdmin ? {} : { ownerId: userId }) },
+            select: { stage: true }
+          }),
+          prisma.project.findMany({
+            where: { orgId, deletedAt: null },
+            select: { status: true }
+          }),
+          (() => {
+            const startOfWeek = new Date();
+            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+            startOfWeek.setHours(0, 0, 0, 0);
+            return prisma.lead.count({
+              where: {
+                orgId,
+                deletedAt: null,
+                createdAt: { gte: startOfWeek },
+                ...(isAdmin ? {} : { ownerId: userId })
+              }
+            });
+          })(),
+          prisma.lead.count({
+            where: {
+              orgId,
+              deletedAt: null,
+              approvalStatus: "pending_approval",
+              ...(isAdmin ? {} : { ownerId: userId })
+            }
           })
         ]);
+
+        const invoiceStatusGroups = await prisma.invoice.groupBy({
+          by: ["status"],
+          where: base,
+          _count: { _all: true }
+        });
+
+        const dealsByStage = deals.reduce<Record<string, number>>((acc, d) => {
+          const s = d.stage || "prospect";
+          acc[s] = (acc[s] ?? 0) + 1;
+          return acc;
+        }, {});
+
+        const projectsByStatus = projects.reduce<Record<string, number>>((acc, p) => {
+          const s = p.status || "planned";
+          acc[s] = (acc[s] ?? 0) + 1;
+          return acc;
+        }, {});
+
+        const wonDeals = deals.filter((d) => d.stage === "won").length;
+        const activeDeals = deals.filter((d) => !["won", "lost"].includes(d.stage)).length;
 
         const recentInvoices = recentRaw.map((inv) => serializeInvoiceRow({ ...inv, items: [] }));
 
@@ -131,10 +189,31 @@ export default function salesRouter(prisma: PrismaClient): Router {
               outstanding: outstandingInvoices,
               paid: paidInvoices,
               cancelled: cancelledInvoices,
+              overdue: overdueInvoices,
               /** @deprecated use outstanding — kept for older clients */
               pending: outstandingInvoices,
               approved: paidInvoices,
               rejected: cancelledInvoices
+            },
+            kpis: {
+              leadsThisWeek,
+              activeDeals,
+              wonDeals,
+              activeProjects: projects.filter((p) => ["planned", "active"].includes(p.status)).length
+            },
+            charts: {
+              invoicesByStatus: invoiceStatusGroups.map((g) => ({
+                label: g.status,
+                value: g._count._all
+              })),
+              dealsByStage: Object.entries(dealsByStage).map(([label, value]) => ({ label, value })),
+              projectsByStatus: Object.entries(projectsByStatus).map(([label, value]) => ({ label, value }))
+            },
+            alerts: {
+              outstandingInvoices,
+              overdueInvoices,
+              leadsPendingApproval,
+              dealsInProspect: dealsByStage.prospect ?? 0
             },
             recentInvoices
           }

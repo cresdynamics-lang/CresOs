@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { WorkspaceKey } from "../../lib/resolve-workspace";
 import { DeveloperGlassCanvas } from "../developer/developer-glass-ui";
 import { devGlass } from "../developer/developer-glass-theme";
-import { salesWs } from "../sales/sales-theme";
+import { salesNeu } from "../sales/sales-theme";
 import { financeNeu } from "../finance/finance-theme";
 import { WorkspaceAside } from "./workspace-aside";
 import { WorkspaceAccountFooter } from "./workspace-account-footer";
@@ -64,10 +64,10 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
   if (workspace === "sales") {
     return (
       <div
-        className={`${salesWs.workspace} ${salesWs.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
+        className={`${salesNeu.workspace} sales-fullscreen ${salesNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
       >
         {aside}
-        {content}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{content}</div>
       </div>
     );
   }
