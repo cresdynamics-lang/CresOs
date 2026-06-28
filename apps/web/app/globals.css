@@ -180,6 +180,10 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+.sales-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Developer liquid glass workspace */
 .developer-glass {
   --dev-glass-bg: #080b12;

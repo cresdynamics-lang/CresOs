@@ -27,7 +27,11 @@ export const salesNeu = {
   alertWarning:
     "rounded-2xl border border-amber-500/35 bg-gradient-to-br from-amber-950/50 via-[#121820] to-[#0e1319] shadow-[6px_6px_14px_rgba(0,0,0,0.45)]",
   alertDanger:
-    "rounded-2xl border border-rose-500/35 bg-gradient-to-br from-rose-950/40 via-[#121820] to-[#0e1319] shadow-[6px_6px_14px_rgba(0,0,0,0.45)]"
+    "rounded-2xl border border-rose-500/35 bg-gradient-to-br from-rose-950/40 via-[#121820] to-[#0e1319] shadow-[6px_6px_14px_rgba(0,0,0,0.45)]",
+  chartPanel:
+    "flex min-h-[min(20rem,42vh)] w-full flex-col rounded-2xl border border-white/[0.04] bg-[#121820] p-5 shadow-[6px_6px_14px_rgba(0,0,0,0.55),-4px_-4px_12px_rgba(255,255,255,0.04)] sm:p-6",
+  kpiStrip:
+    "w-full rounded-2xl border border-white/[0.04] bg-[#0e1319] px-4 py-5 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:px-6"
 } as const;
 
 /** @deprecated use salesNeu — kept for gradual migration */

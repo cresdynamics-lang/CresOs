@@ -3,44 +3,23 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useAuth } from "../auth-context";
-import {
-  DashboardSectionLabel,
-  DashboardWelcomeBanner
-} from "../../components/dashboard-welcome-banner";
+import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { HorizontalBarChart, PieChart, VerticalBarChart } from "../../components/analytics/chart-widgets";
-import { SalesNeuPanel, SalesStatCard, SalesStatGrid } from "../../components/sales/sales-ui";
+import { SalesStatInline, SalesStatRow } from "../../components/sales/sales-ui";
 import { salesNeu } from "../../components/sales/sales-theme";
-import { ScheduleKpiStrip, type ScheduleKpiStats } from "../../components/schedule-kpi-strip";
+import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
 import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
 
-export type SalesDashboardData = {
-  stats: {
-    total: number;
-    outstanding: number;
-    paid: number;
-    cancelled: number;
-    overdue?: number;
-    pending: number;
-    approved: number;
-    rejected: number;
-  };
-  kpis?: {
-    leadsThisWeek: number;
-    activeDeals: number;
-    wonDeals: number;
-    activeProjects: number;
-  };
-  charts?: {
-    invoicesByStatus: { label: string; value: number }[];
-    dealsByStage: { label: string; value: number }[];
-    projectsByStatus: { label: string; value: number }[];
-  };
-  alerts?: {
-    outstandingInvoices: number;
-    overdueInvoices: number;
-    leadsPendingApproval: number;
-    dealsInProspect: number;
-  };
+export type SalesChartSlice = { label: string; value: number };
+
+export type SalesOverviewKpis = {
+  leadsThisWeek: number;
+  activeDeals: number;
+  wonDeals: number;
+  activeProjects: number;
+  openInvoices: number;
+  paidInvoices: number;
+  overdueInvoices: number;
 };
 
 const QUICK_LINKS = [
@@ -51,8 +30,7 @@ const QUICK_LINKS = [
   { href: "/reports", label: "Reports" },
   { href: "/projects", label: "Projects" },
   { href: "/schedule", label: "Tasks" },
-  { href: "/community", label: "Community" },
-  { href: "/settings/account", label: "Settings" }
+  { href: "/community", label: "Community" }
 ] as const;
 
 type SalesAlert = {
@@ -65,17 +43,35 @@ type SalesAlert = {
 };
 
 type SalesOverviewDashboardProps = {
-  dashboard: SalesDashboardData | null;
+  kpis: SalesOverviewKpis | null;
+  charts: {
+    invoices: SalesChartSlice[];
+    deals: SalesChartSlice[];
+    projects: SalesChartSlice[];
+    tasks: SalesChartSlice[];
+  };
+  alerts: {
+    outstandingInvoices: number;
+    overdueInvoices: number;
+    leadsPendingApproval: number;
+    dealsInProspect: number;
+  };
   loading: boolean;
   scheduleKpis: ScheduleKpiStats | null;
   overdueReportQuestions: number;
+  onRefresh: () => void;
 };
 
+const CHART_COLORS = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
+
 export function SalesOverviewDashboard({
-  dashboard,
+  kpis,
+  charts,
+  alerts,
   loading,
   scheduleKpis,
-  overdueReportQuestions
+  overdueReportQuestions,
+  onRefresh
 }: SalesOverviewDashboardProps) {
   const { auth } = useAuth();
   const firstName = useMemo(
@@ -87,44 +83,42 @@ export function SalesOverviewDashboard({
     [auth.userName, auth.userEmail]
   );
 
-  const alerts = useMemo((): SalesAlert[] => {
-    if (!dashboard?.alerts) return [];
-    const a = dashboard.alerts;
+  const alertItems = useMemo((): SalesAlert[] => {
     const items: SalesAlert[] = [];
-    if (a.overdueInvoices > 0) {
+    if (alerts.overdueInvoices > 0) {
       items.push({
         id: "overdue-invoices",
         tone: "danger",
-        title: `${a.overdueInvoices} overdue invoice${a.overdueInvoices === 1 ? "" : "s"}`,
+        title: `${alerts.overdueInvoices} overdue invoice${alerts.overdueInvoices === 1 ? "" : "s"}`,
         detail: "Follow up with clients before finance escalates collection.",
         href: "/sales/invoices",
         action: "Open invoices"
       });
-    } else if (a.outstandingInvoices > 0) {
+    } else if (alerts.outstandingInvoices > 0) {
       items.push({
         id: "outstanding-invoices",
         tone: "warning",
-        title: `${a.outstandingInvoices} invoice${a.outstandingInvoices === 1 ? "" : "s"} awaiting payment`,
-        detail: "Draft, sent, or partial invoices still open in the pipeline.",
+        title: `${alerts.outstandingInvoices} open invoice${alerts.outstandingInvoices === 1 ? "" : "s"}`,
+        detail: "Draft, sent, or partial invoices still awaiting payment.",
         href: "/sales/invoices",
         action: "Review invoices"
       });
     }
-    if (a.leadsPendingApproval > 0) {
+    if (alerts.leadsPendingApproval > 0) {
       items.push({
         id: "leads-pending",
         tone: "warning",
-        title: `${a.leadsPendingApproval} lead${a.leadsPendingApproval === 1 ? "" : "s"} need director approval`,
+        title: `${alerts.leadsPendingApproval} lead${alerts.leadsPendingApproval === 1 ? "" : "s"} need approval`,
         detail: "New leads stay blocked until leadership approves them.",
         href: "/leads",
         action: "View leads"
       });
     }
-    if (a.dealsInProspect > 3) {
+    if (alerts.dealsInProspect > 3) {
       items.push({
         id: "deals-prospect",
         tone: "warning",
-        title: `${a.dealsInProspect} deals still in prospect`,
+        title: `${alerts.dealsInProspect} deals in prospect`,
         detail: "Move qualified deals to proposal or won to keep pipeline velocity.",
         href: "/crm",
         action: "Open CRM"
@@ -135,7 +129,7 @@ export function SalesOverviewDashboard({
         id: "report-questions",
         tone: "danger",
         title: `${overdueReportQuestions} report question${overdueReportQuestions === 1 ? "" : "s"} overdue`,
-        detail: "Answer director questions within 24 hours to stay aligned.",
+        detail: "Answer director questions within 24 hours.",
         href: "/reports",
         action: "Answer now"
       });
@@ -144,49 +138,56 @@ export function SalesOverviewDashboard({
       items.push({
         id: "tasks-pending",
         tone: "warning",
-        title: `${scheduleKpis.pending} task${scheduleKpis.pending === 1 ? "" : "s"} still open this week`,
+        title: `${scheduleKpis.pending} open task${scheduleKpis.pending === 1 ? "" : "s"} this week`,
         detail: "Complete scheduled tasks to keep delivery on track.",
         href: "/schedule",
         action: "Open tasks"
       });
     }
     return items;
-  }, [dashboard?.alerts, overdueReportQuestions, scheduleKpis]);
+  }, [alerts, overdueReportQuestions, scheduleKpis]);
 
-  const taskProgressItems = scheduleKpis
-    ? [
-        { label: "Done", value: scheduleKpis.completed, color: "bg-emerald-500" },
-        { label: "Pending", value: scheduleKpis.pending, color: "bg-amber-500" }
-      ].filter((i) => i.value > 0)
-    : [];
+  const taskBars = charts.tasks.map((t, idx) => ({
+    label: t.label,
+    value: t.value,
+    color: CHART_COLORS[idx % CHART_COLORS.length]
+  }));
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-4">
-      <header className="space-y-4">
-        <DashboardWelcomeBanner
-          firstName={firstName}
-          roleLabel="Sales"
-          roleKeys={auth.roleKeys}
-          showRoleLabel
-          headline={welcomeHeadline}
-        >
-          <p className="font-body text-sm leading-relaxed text-slate-400">
-            Pipeline, invoices, delivery handoffs, and daily reports in one workspace. Pick a section from the
-            sidebar or use quick links below.
+    <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+        <div className="min-w-0">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-400/90">
+            Sales workspace
           </p>
-        </DashboardWelcomeBanner>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+            {welcomeHeadline}
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+            Full-screen pipeline view for {firstName} — live charts from CRM, invoices, projects, and your weekly
+            schedule.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className={`${salesNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+        >
+          {loading ? "Refreshing…" : "Refresh data"}
+        </button>
       </header>
 
-      {alerts.length > 0 && (
-        <section aria-label="Alerts">
+      {alertItems.length > 0 && (
+        <section aria-label="Alerts" className="w-full">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>Needs attention</DashboardSectionLabel>
-          <ul className="mt-3 space-y-3">
-            {alerts.map((alert) => (
+          <ul className="mt-3 grid w-full gap-3 lg:grid-cols-2">
+            {alertItems.map((alert) => (
               <li
                 key={alert.id}
                 className={alert.tone === "danger" ? salesNeu.alertDanger : salesNeu.alertWarning}
               >
-                <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
                   <div className="min-w-0">
                     <p
                       className={`font-semibold ${alert.tone === "danger" ? "text-rose-200" : "text-amber-200"}`}
@@ -199,8 +200,8 @@ export function SalesOverviewDashboard({
                     href={alert.href}
                     className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${
                       alert.tone === "danger"
-                        ? "bg-rose-600/80 text-white hover:bg-rose-500"
-                        : "bg-amber-600/80 text-white hover:bg-amber-500"
+                        ? "bg-rose-600/90 text-white hover:bg-rose-500"
+                        : "bg-amber-600/90 text-white hover:bg-amber-500"
                     }`}
                   >
                     {alert.action} →
@@ -212,42 +213,39 @@ export function SalesOverviewDashboard({
         </section>
       )}
 
-      <section aria-label="Key metrics">
+      <section aria-label="Key metrics" className="w-full">
         <DashboardSectionLabel roleKeys={auth.roleKeys}>Pipeline snapshot</DashboardSectionLabel>
-        <div className="mt-3">
-          <SalesStatGrid>
-            <SalesStatCard
+        <div className={`mt-3 ${salesNeu.kpiStrip}`}>
+          <SalesStatRow>
+            <SalesStatInline
               label="Leads this week"
-              value={loading ? "…" : (dashboard?.kpis?.leadsThisWeek ?? "—")}
-              hint="New leads captured"
+              value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
+              hint="New captures"
               tone="sky"
             />
-            <SalesStatCard
+            <SalesStatInline
               label="Active deals"
-              value={loading ? "…" : (dashboard?.kpis?.activeDeals ?? "—")}
+              value={loading ? "…" : (kpis?.activeDeals ?? 0)}
               hint="Prospect & proposal"
               tone="amber"
             />
-            <SalesStatCard
+            <SalesStatInline
               label="Won deals"
-              value={loading ? "…" : (dashboard?.kpis?.wonDeals ?? "—")}
-              hint="Closed successfully"
+              value={loading ? "…" : (kpis?.wonDeals ?? 0)}
+              hint="Closed"
               tone="emerald"
             />
-            <SalesStatCard
+            <SalesStatInline
               label="Open invoices"
-              value={loading ? "…" : (dashboard?.stats.outstanding ?? "—")}
-              hint={`${dashboard?.stats.paid ?? 0} paid · ${dashboard?.stats.overdue ?? 0} overdue`}
+              value={loading ? "…" : (kpis?.openInvoices ?? 0)}
+              hint={`${kpis?.paidInvoices ?? 0} paid · ${kpis?.overdueInvoices ?? 0} overdue`}
               tone="violet"
             />
-          </SalesStatGrid>
+          </SalesStatRow>
         </div>
       </section>
 
-      <nav
-        aria-label="Sales quick links"
-        className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-6"
-      >
+      <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
@@ -259,122 +257,65 @@ export function SalesOverviewDashboard({
         ))}
       </nav>
 
-      {scheduleKpis && (
-        <section aria-label="Weekly tasks">
-          <SalesNeuPanel inset className="p-4 sm:p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-200">This week — tasks & schedule</h2>
-              <Link href="/schedule" className={`${salesNeu.btnPrimary} text-xs`}>
-                Open tasks →
-              </Link>
-            </div>
-            <ScheduleKpiStrip stats={scheduleKpis} />
-          </SalesNeuPanel>
-        </section>
-      )}
-
-      <section aria-label="Progress charts">
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
-        <div className="mt-3 grid gap-6 lg:grid-cols-2">
-          <SalesNeuPanel inset className="p-4 sm:p-5">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Invoice status mix
-            </h3>
-            <div className="mt-4">
-              <PieChart
-                items={dashboard?.charts?.invoicesByStatus ?? []}
-                emptyLabel={loading ? "Loading…" : "No invoices yet"}
-              />
-            </div>
-          </SalesNeuPanel>
-
-          <SalesNeuPanel inset className="p-4 sm:p-5">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Deal pipeline by stage
-            </h3>
-            <div className="mt-4">
-              <PieChart
-                items={dashboard?.charts?.dealsByStage ?? []}
-                emptyLabel={loading ? "Loading…" : "No deals yet — add from CRM"}
-              />
-            </div>
-          </SalesNeuPanel>
-
-          <SalesNeuPanel inset className="p-4 sm:p-5">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Projects by status
-            </h3>
-            <div className="mt-4">
-              <HorizontalBarChart
-                items={(dashboard?.charts?.projectsByStatus ?? []).map((p, idx) => ({
-                  label: p.label.replace(/_/g, " "),
-                  value: p.value,
-                  color: ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-violet-500"][idx % 4]
-                }))}
-                emptyLabel={loading ? "Loading…" : "No projects yet"}
-              />
-            </div>
-          </SalesNeuPanel>
-
-          <SalesNeuPanel inset className="p-4 sm:p-5">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Weekly task progress
-            </h3>
-            <div className="mt-4">
-              {taskProgressItems.length > 0 ? (
-                <VerticalBarChart items={taskProgressItems} />
-              ) : (
-                <p className="text-xs text-slate-500">
-                  {scheduleKpis ? "No tasks logged this week" : "Loading schedule…"}
-                </p>
-              )}
-            </div>
-          </SalesNeuPanel>
+      <section aria-label="Progress charts" className="w-full flex-1">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
+          {scheduleKpis ? (
+            <p className="text-xs text-slate-500">
+              Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending · {scheduleKpis.total}{" "}
+              total
+            </p>
+          ) : null}
         </div>
-      </section>
 
-      <section aria-label="How data stays in sync">
-        <SalesNeuPanel inset className="p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-slate-200">How your numbers stay in sync</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Charts pull live data from invoices, CRM deals, projects, and your task schedule.
-          </p>
-          <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <FlowStep
-              source="Leads & CRM"
-              detail="New leads and deal stages feed the pipeline charts."
-              feeds="Leads KPI · Deal pie chart"
+        <div className="grid w-full gap-4 xl:grid-cols-2">
+          <ChartPanel title="Invoice status mix">
+            <PieChart
+              items={charts.invoices}
+              size={220}
+              emptyLabel={loading ? "Loading invoice data…" : "No invoices yet — create one under Invoices"}
             />
-            <FlowStep
-              source="Sales invoices"
-              detail="Draft through paid status on invoices you create."
-              feeds="Invoice pie · Open invoices KPI"
+          </ChartPanel>
+
+          <ChartPanel title="Deal pipeline by stage">
+            <PieChart
+              items={charts.deals}
+              size={220}
+              emptyLabel={loading ? "Loading deals…" : "No deals yet — add from CRM"}
             />
-            <FlowStep
-              source="Projects"
-              detail="Delivery status across active client work."
-              feeds="Projects bar chart · Active projects KPI"
+          </ChartPanel>
+
+          <ChartPanel title="Projects by status">
+            <HorizontalBarChart
+              items={charts.projects.map((p, idx) => ({
+                label: p.label.replace(/_/g, " "),
+                value: p.value,
+                color: CHART_COLORS[idx % CHART_COLORS.length]
+              }))}
+              emptyLabel={loading ? "Loading projects…" : "No projects in org yet"}
             />
-            <FlowStep
-              source="Tasks"
-              detail="Your weekly schedule completion and overdue counts."
-              feeds="Task bar chart · Overdue alerts"
-            />
-          </ol>
-        </SalesNeuPanel>
+          </ChartPanel>
+
+          <ChartPanel title="Weekly task progress">
+            {taskBars.length > 0 ? (
+              <VerticalBarChart items={taskBars} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                {loading ? "Loading schedule…" : "No tasks scheduled this week — open Tasks to plan your week"}
+              </p>
+            )}
+          </ChartPanel>
+        </div>
       </section>
     </div>
   );
 }
 
-function FlowStep({ source, detail, feeds }: { source: string; detail: string; feeds: string }) {
+function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <li className="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90">{source}</p>
-      <p className="mt-1 text-xs leading-relaxed text-slate-400">{detail}</p>
-      <p className="mt-2 text-[11px] text-slate-500">
-        → <span className="text-slate-300">{feeds}</span>
-      </p>
-    </li>
+    <div className={salesNeu.chartPanel}>
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-400/80">{title}</h3>
+      <div className="mt-5 flex flex-1 flex-col items-center justify-center">{children}</div>
+    </div>
   );
 }

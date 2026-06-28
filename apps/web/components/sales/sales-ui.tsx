@@ -82,9 +82,11 @@ export function SalesStatGrid({ children }: { children: ReactNode }) {
   return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
 }
 
-export function SalesStatRow({ children }: { children: ReactNode }) {
+export function SalesStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-b border-white/[0.06] pb-6 sm:grid-cols-4">
+    <div
+      className={`grid w-full grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-4 ${className}`.trim()}
+    >
       {children}
     </div>
   );

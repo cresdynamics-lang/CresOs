@@ -82,7 +82,13 @@ export default function salesRouter(prisma: PrismaClient): Router {
 
   router.get(
     "/dashboard",
-    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
+    requireRoles([
+      ROLE_KEYS.sales,
+      ROLE_KEYS.admin,
+      ROLE_KEYS.director,
+      ROLE_KEYS.finance,
+      ROLE_KEYS.analyst
+    ]),
     async (req, res) => {
       try {
         const orgId = req.auth!.orgId;
