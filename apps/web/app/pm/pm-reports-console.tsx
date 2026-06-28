@@ -9,8 +9,9 @@ import { canAccessPmWorkspace } from "../../lib/is-pm-only";
 type DevReport = {
   id: string;
   reportDate: string;
-  summary?: string | null;
+  whatWorked?: string | null;
   blockers?: string | null;
+  nextPlan?: string | null;
   submittedBy?: { id: string; name: string; email: string };
 };
 
@@ -55,7 +56,9 @@ export function PmReportsConsole() {
                   })}
                 </p>
               </div>
-              {r.summary ? <p className="mt-2 text-sm text-slate-300">{r.summary}</p> : null}
+              {r.whatWorked || r.nextPlan ? (
+                <p className="mt-2 text-sm text-slate-300">{r.whatWorked || r.nextPlan}</p>
+              ) : null}
               {r.blockers ? (
                 <p className="mt-1 text-xs text-amber-400/90">Blockers: {r.blockers}</p>
               ) : null}

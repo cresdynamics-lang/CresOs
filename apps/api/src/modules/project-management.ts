@@ -148,28 +148,30 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
     });
 
     const projectIds = projects.map((p) => p.id);
-    const [pendingByProject, reportsByProject, devCounts] = await Promise.all([
+    const recentReports = await prisma.developerReport.findMany({
+      where: { orgId, reportDate: { gte: weekAgo } },
+      select: { submittedById: true }
+    });
+    const devsWhoReported = new Set(recentReports.map((r) => r.submittedById));
+
+    const [pendingByProject, devCounts] = await Promise.all([
       prisma.pmDeveloperCheckIn.groupBy({
         by: ["projectId"],
         where: { orgId, status: "pending", projectId: { in: projectIds } },
         _count: { _all: true }
       }),
-      prisma.developerReport.groupBy({
-        by: ["projectId"],
-        where: { orgId, projectId: { in: projectIds }, reportDate: { gte: weekAgo } },
-        _count: { _all: true }
-      }),
       Promise.all(
-        projects.map(async (p) => ({
-          projectId: p.id,
-          count: (await getAcceptedDeveloperIds(prisma, p.id)).length
-        }))
+        projects.map(async (p) => {
+          const devIds = await getAcceptedDeveloperIds(prisma, p.id);
+          const reportsLast7Days = devIds.filter((id) => devsWhoReported.has(id)).length;
+          return { projectId: p.id, count: devIds.length, reportsLast7Days };
+        })
       )
     ]);
 
     const pendingMap = Object.fromEntries(pendingByProject.map((r) => [r.projectId, r._count._all]));
-    const reportsMap = Object.fromEntries(reportsByProject.map((r) => [r.projectId, r._count._all]));
     const devMap = Object.fromEntries(devCounts.map((r) => [r.projectId, r.count]));
+    const reportsMap = Object.fromEntries(devCounts.map((r) => [r.projectId, r.reportsLast7Days]));
 
     const scored = projects.map((p) =>
       scoreProjectHealth({
