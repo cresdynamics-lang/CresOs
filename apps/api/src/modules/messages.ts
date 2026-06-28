@@ -4,9 +4,9 @@ import type { PrismaClient } from "@prisma/client";
 import {
   composeNotificationTier,
   composeNotificationType,
-  renderComposeEmail,
   type ComposeChannel
 } from "../lib/compose-email";
+import { loadOrgEmailTemplates, renderFromTemplate } from "../lib/email-template-engine";
 import { getEmailSender } from "../lib/email-senders";
 import { sendOutboundEmail } from "../lib/resend";
 import { ROLE_KEYS } from "./auth-middleware";
@@ -63,7 +63,23 @@ export default function messagesRouter(prisma: PrismaClient): Router {
 
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
-    const { html, text } = renderComposeEmail({ channel, subject, bodyText: messageText });
+    const templates = await loadOrgEmailTemplates(prisma, orgId);
+    const templateKey = `compose_${channel}` as const;
+    const channelLabels: Record<ComposeChannel, string> = {
+      finance: "Finance",
+      director: "Director",
+      sales: "Sales"
+    };
+    const rendered =
+      renderFromTemplate(templates, templateKey, {
+        body: messageText,
+        subject,
+        channel_label: channelLabels[channel]
+      }) ?? null;
+    const { html, text } = rendered ?? {
+      html: `<p>${messageText.replace(/\n/g, "<br>")}</p>`,
+      text: messageText
+    };
     const sender = getEmailSender(channel);
 
     const result = await sendOutboundEmail({

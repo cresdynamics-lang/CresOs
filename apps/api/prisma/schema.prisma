@@ -158,6 +158,12 @@ model User {
   reportsToDirector   User?  @relation("DirectorTeam", fields: [reportsToDirectorId], references: [id], onDelete: SetNull)
   teamMembers         User[] @relation("DirectorTeam")
 
+  /// HR / employment profile (managed by HR workspace)
+  jobTitle       String?
+  employmentType String?   @default("full_time") // full_time | part_time | contract
+  hireDate       DateTime?
+  monthlySalary  Decimal?  @db.Decimal(14, 2)
+
   /// Admin-controlled flags: canSeeFinance, canSubmitReports, canReviewTeamReports, etc.
   capabilityFlags Json?
 
@@ -1472,6 +1478,7 @@ model EmailAutomationConfig {
   id           String   @id @default(cuid())
   orgId        String   @unique
   instructions String   @db.Text @default("")
+  templates    Json?
   isEnabled    Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

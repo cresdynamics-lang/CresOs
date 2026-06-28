@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { DirectorAnalyticsOverview } from "../../components/analytics/director-analytics-overview";
 import {
   HorizontalBarChart,
   MiniLineTrend,
@@ -225,23 +226,14 @@ export default function AnalyticsPage() {
 
       {director && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
-            <StatTile label="Active projects" value={director.overview.activeProjects} tone="emerald" />
-            <StatTile label="Overdue tasks" value={director.overview.overdueTasks} tone="rose" />
-            <StatTile label="Blocked tasks" value={director.overview.blockedTasks} tone="amber" />
-            <StatTile label="Leads this month" value={director.overview.leadsThisMonth} tone="sky" />
-            <StatTile
-              label="Win rate"
-              value={`${(director.overview.winRate * 100).toFixed(0)}%`}
-              hint={`${director.overview.dealsWon} won · ${director.overview.dealsLost} lost`}
-              tone="violet"
-            />
-            <StatTile label="Sales reports (month)" value={director.overview.salesReportsThisMonth} tone="sky" />
-            <StatTile label="Dev reports (month)" value={director.overview.developerReportsThisMonth} tone="emerald" />
-            <StatTile label="Handoffs (30d)" value={director.overview.handoffs30d} tone="slate" />
-            <StatTile label="Stale projects (72h+)" value={director.risks.staleProjects72h} tone="amber" />
-            <StatTile label="Stalled deals (14d)" value={director.risks.stalledDeals14d} tone="rose" />
-          </div>
+          <DirectorAnalyticsOverview
+            overview={director.overview}
+            projects={director.projects}
+            leads={director.leads}
+            pipeline={director.pipeline}
+            reports={director.reports}
+            risks={director.risks}
+          />
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
             <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 sm:p-4">

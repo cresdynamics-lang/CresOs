@@ -15,16 +15,49 @@ import { InvoiceCreateModal } from "./invoice-create-modal";
 import { PaymentCreateModal, type PaymentFormState } from "./payment-create-modal";
 import { ExpenseCreateModal, defaultExpenseForm, type ExpenseFormState, EXPENSE_CATEGORIES } from "./expense-create-modal";
 
+type InvoiceItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 type Invoice = {
   id: string;
   number: string;
   status: string;
   totalAmount: number;
+  paidAmount: number;
+  amountRemaining: number;
+  currency: string;
+  issueDate: string;
+  dueDate: string | null;
+  notes: string | null;
   projectId: string | null;
   clientId?: string;
   project: { id: string; name: string } | null;
   client?: { id: string; name: string; email?: string | null } | null;
+  items: InvoiceItem[];
 };
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+function invoiceClientLabel(inv: Invoice): string {
+  return inv.client?.name?.trim() || "Unknown client";
+}
+
+function invoiceItemsSummary(items: InvoiceItem[]): string {
+  if (!items.length) return "No line items";
+  const first = items[0].description.trim() || "Line item";
+  if (items.length === 1) return first;
+  return `${first} (+${items.length - 1} more)`;
+}
 
 type Expense = {
   id: string;
@@ -308,7 +341,16 @@ export default function FinancePage() {
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [projects, setProjects] = useState<
-    { id: string; name: string; clientId?: string | null; client?: { id: string; name: string } | null }[]
+    {
+      id: string;
+      name: string;
+      clientId?: string | null;
+      client?: { id: string; name: string } | null;
+      price?: number | null;
+      amountReceived?: number | null;
+      financeProjectSeq?: number | null;
+      financeRefYear?: number | null;
+    }[]
   >([]);
   type InvoiceLineForm = { id: string; description: string; quantity: string; unitPrice: string };
 
@@ -410,18 +452,39 @@ export default function FinancePage() {
       ]);
       if (invRes.ok) {
         const data = (await invRes.json()) as any[];
-          setInvoices(
-            data.map((inv) => ({
-              id: inv.id,
-              number: inv.number,
-              status: inv.status,
-              totalAmount: inv.totalAmount ? Number(inv.totalAmount) : 0,
-              projectId: inv.projectId ?? null,
-              project: inv.project ?? null,
-              clientId: inv.clientId ?? inv.client?.id,
-              client: inv.client ?? null
-            }))
-          );
+        setInvoices(
+          data.map((inv) => ({
+            id: inv.id,
+            number: inv.number,
+            status: inv.status,
+            totalAmount: inv.totalAmount ? Number(inv.totalAmount) : 0,
+            paidAmount: inv.paidAmount != null ? Number(inv.paidAmount) : 0,
+            amountRemaining:
+              inv.amountRemaining != null
+                ? Number(inv.amountRemaining)
+                : Math.max(0, Number(inv.totalAmount ?? 0) - Number(inv.paidAmount ?? 0)),
+            currency: inv.currency ?? "KES",
+            issueDate: inv.issueDate ?? inv.createdAt ?? new Date().toISOString(),
+            dueDate: inv.dueDate ?? null,
+            notes: inv.notes ?? null,
+            projectId: inv.projectId ?? null,
+            project: inv.project ?? null,
+            clientId: inv.clientId ?? inv.client?.id,
+            client: inv.client ?? null,
+            items: Array.isArray(inv.items)
+              ? inv.items.map((it: any) => ({
+                  id: it.id,
+                  description: String(it.description ?? ""),
+                  quantity: Number(it.quantity) || 1,
+                  unitPrice: Number(it.unitPrice) || 0,
+                  lineTotal:
+                    it.lineTotal != null
+                      ? Number(it.lineTotal)
+                      : (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0)
+                }))
+              : []
+          }))
+        );
       }
       if (payRes.ok) {
         const data = (await payRes.json()) as any[];
@@ -516,6 +579,10 @@ export default function FinancePage() {
             name: string;
             clientId?: string | null;
             client?: { id: string; name: string } | null;
+            price?: number | null;
+            amountReceived?: number | null;
+            financeProjectSeq?: number | null;
+            financeRefYear?: number | null;
           }[];
           setProjects(projectsData);
         }
@@ -707,6 +774,19 @@ export default function FinancePage() {
     }
   };
 
+  const invoiceProjects = useMemo(() => {
+    const finById = new Map(projectFinancials.map((p) => [p.id, p]));
+    return projects.map((p) => {
+      const fin = finById.get(p.id);
+      return {
+        ...p,
+        clientId: p.clientId ?? p.client?.id ?? null,
+        price: fin?.allocated ?? p.price ?? null,
+        amountReceived: fin?.received ?? p.amountReceived ?? 0
+      };
+    });
+  }, [projects, projectFinancials]);
+
   const startEditProjectMoney = (p: ProjectFinancial) => {
     setEditingProjectId(p.id);
     setProjectMoneyDraft({
@@ -729,9 +809,6 @@ export default function FinancePage() {
         body.price = Number(projectMoneyDraft.allocated);
       } else {
         body.price = null;
-      }
-      if (projectMoneyDraft.received.trim() !== "") {
-        body.amountReceived = Number(projectMoneyDraft.received);
       }
       if (projectMoneyDraft.managementMonthlyAmount.trim() !== "") {
         body.managementMonthlyAmount = Number(projectMoneyDraft.managementMonthlyAmount);
@@ -952,6 +1029,22 @@ export default function FinancePage() {
     }
   };
 
+  const syncProjectReceipts = async (projectId?: string) => {
+    try {
+      const res = await apiFetch(
+        projectId ? `/finance/projects/${projectId}/recalc-received` : "/finance/projects/recalc-received",
+        { method: "POST", body: projectId ? undefined : JSON.stringify({}) }
+      );
+      if (res.ok) {
+        await loadData();
+        if (canSeeMoneyStats) await fetchReport();
+        emitDataRefresh();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const submitForApproval = async (entityType: "expense" | "payout", entityId: string) => {
     try {
       const res = await apiFetch("/finance/approvals", {
@@ -1140,9 +1233,20 @@ export default function FinancePage() {
             Projects finance status
           </h3>
           <p className="mb-3 text-xs text-slate-400">
-            Allocated (contract) vs received (paid so far) and pending (remaining). Finance, Director, and Admin can update
-            amounts to match bank reality; confirmed invoice payments also roll into received automatically.
+            Allocated (contract) vs received (sum of confirmed invoice payments). Sales and Finance share the same
+            invoice list — record payments against invoices to update received automatically.
           </p>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {canEditProjectMoney ? (
+              <button
+                type="button"
+                onClick={() => void syncProjectReceipts()}
+                className={`text-xs ${financeNeu.btnGhost}`}
+              >
+                Sync all received from payments
+              </button>
+            ) : null}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -1182,18 +1286,18 @@ export default function FinancePage() {
                       )}
                     </td>
                     <td className="py-2 pr-2 text-right text-emerald-400">
-                      {editingProjectId === p.id ? (
-                        <input
-                          type="number"
-                          className="w-28 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-right text-emerald-200"
-                          value={projectMoneyDraft.received}
-                          onChange={(e) =>
-                            setProjectMoneyDraft((d) => ({ ...d, received: e.target.value }))
-                          }
-                        />
-                      ) : (
-                        formatMoney(p.received)
-                      )}
+                      <div className="flex flex-col items-end gap-1">
+                        <span>{formatMoney(p.received)}</span>
+                        {canEditProjectMoney && editingProjectId === p.id ? (
+                          <button
+                            type="button"
+                            onClick={() => void syncProjectReceipts(p.id)}
+                            className="text-[10px] text-sky-400 hover:underline"
+                          >
+                            Sync from payments
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="py-2 pr-2 text-right text-amber-400">
                       {p.remaining != null ? formatMoney(p.remaining) : "—"}
@@ -1393,32 +1497,95 @@ export default function FinancePage() {
       )}
 
       {section === "invoices" && (
+        <div className={`${financeNeu.tableWrap}`}>
         <FinanceFlatTable>
           <FinanceFlatTableHead>
             <FinanceFlatTh>Invoice</FinanceFlatTh>
-            <FinanceFlatTh>Status</FinanceFlatTh>
+            <FinanceFlatTh>Client</FinanceFlatTh>
             <FinanceFlatTh>Project</FinanceFlatTh>
-            <FinanceFlatTh align="right">Amount</FinanceFlatTh>
+            <FinanceFlatTh>Line items</FinanceFlatTh>
+            <FinanceFlatTh>Due</FinanceFlatTh>
+            <FinanceFlatTh align="right">Total</FinanceFlatTh>
+            <FinanceFlatTh align="right">Paid / remaining</FinanceFlatTh>
+            <FinanceFlatTh>Status</FinanceFlatTh>
             <FinanceFlatTh align="right">Actions</FinanceFlatTh>
           </FinanceFlatTableHead>
           <FinanceFlatTableBody>
             {invoices.map((inv) => (
               <FinanceFlatTableRow key={inv.id}>
                 <FinanceFlatTd>
-                  <span className="font-medium text-slate-100">{inv.number}</span>
+                  <div className="min-w-[8rem]">
+                    <span className="font-medium text-slate-100">{inv.number}</span>
+                    <p className="mt-0.5 text-xs text-slate-500">Issued {formatShortDate(inv.issueDate)}</p>
+                  </div>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <FinanceStatusLabel status={inv.status} />
+                  <div className="min-w-[9rem]">
+                    <span className="text-violet-300/90">{invoiceClientLabel(inv)}</span>
+                    {inv.client?.email ? (
+                      <p className="mt-0.5 truncate text-xs text-slate-500">{inv.client.email}</p>
+                    ) : null}
+                  </div>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   {inv.project ? (
                     <span className="text-sky-400/90">{inv.project.name}</span>
                   ) : (
-                    <span className="text-slate-500">—</span>
+                    <span className="text-slate-500">No project</span>
                   )}
                 </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <div
+                    className="min-w-[10rem] max-w-xs"
+                    title={
+                      inv.items.length
+                        ? inv.items
+                            .map(
+                              (it) =>
+                                `${it.description} · ${it.quantity} × ${formatMoney(it.unitPrice)} = ${formatMoney(it.lineTotal)}`
+                            )
+                            .join("\n")
+                        : undefined
+                    }
+                  >
+                    <p className="text-sm text-slate-300">{invoiceItemsSummary(inv.items)}</p>
+                    {inv.items.length > 0 ? (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {inv.items.length} line{inv.items.length === 1 ? "" : "s"} ·{" "}
+                        {formatMoney(inv.items.reduce((s, it) => s + it.lineTotal, 0))}
+                      </p>
+                    ) : null}
+                    {inv.notes?.trim() ? (
+                      <p className="mt-0.5 truncate text-xs text-slate-500" title={inv.notes}>
+                        Note: {inv.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <span className="whitespace-nowrap text-slate-300">{formatShortDate(inv.dueDate)}</span>
+                </FinanceFlatTd>
                 <FinanceFlatTd align="right">
-                  <span className="font-medium tabular-nums text-emerald-400">{formatMoney(inv.totalAmount)}</span>
+                  <span className="font-medium tabular-nums text-emerald-400">
+                    {formatMoney(inv.totalAmount)}
+                  </span>
+                </FinanceFlatTd>
+                <FinanceFlatTd align="right">
+                  <div className="tabular-nums text-right text-sm">
+                    <p className="text-emerald-300/90">{formatMoney(inv.paidAmount)}</p>
+                    <p
+                      className={
+                        inv.amountRemaining > 0 ? "text-amber-300/90" : "text-slate-500"
+                      }
+                    >
+                      {inv.amountRemaining > 0
+                        ? `${formatMoney(inv.amountRemaining)} due`
+                        : "Settled"}
+                    </p>
+                  </div>
+                </FinanceFlatTd>
+                <FinanceFlatTd>
+                  <FinanceStatusLabel status={inv.status} />
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
                   <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
@@ -1438,13 +1605,14 @@ export default function FinancePage() {
             ))}
             {invoices.length === 0 && (
               <FinanceFlatTableRow>
-                <FinanceFlatTd className="py-8 text-slate-500" colSpan={5}>
+                <FinanceFlatTd className="py-8 text-slate-500" colSpan={9}>
                   No invoices yet.
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
             )}
           </FinanceFlatTableBody>
         </FinanceFlatTable>
+        </div>
       )}
 
       {section === "payments" && (
@@ -1742,7 +1910,7 @@ export default function FinancePage() {
         form={invoiceForm}
         setForm={setInvoiceForm}
         clients={clients}
-        projects={projects}
+        projects={invoiceProjects}
         submitError={invoiceSubmitError}
         onSubmit={submitInvoice}
         emptyLine={emptyInvoiceLine}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnalyticsLayoutClient } from "./analytics-layout-client";
 
 export const metadata: Metadata = {
   title: "Analytics | Cres Dynamics - Business Intelligence & Reports",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function AnalyticsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <AnalyticsLayoutClient>{children}</AnalyticsLayoutClient>;
 }

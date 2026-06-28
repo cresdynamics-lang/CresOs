@@ -243,38 +243,47 @@ export default function authRouter(prisma: PrismaClient): Router {
         ])
       ] as string[];
 
-      const session = await prisma.session.create({
-        data: {
-          orgId: primaryOrg,
-          userId: user.id
-        }
-      });
-
       const ip =
         (typeof req.headers["x-forwarded-for"] === "string" && req.headers["x-forwarded-for"].split(",")[0]?.trim()) ||
         req.socket?.remoteAddress ||
         null;
       const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null;
+
+      const session = await prisma.session.create({
+        data: {
+          orgId: primaryOrg,
+          userId: user.id,
+          ip: ip ?? undefined,
+          userAgent: userAgent ?? undefined
+        }
+      });
+
+      const isClientPortalLogin = roleKeys.includes(ROLE_KEYS.client);
+      const loginEventType = isClientPortalLogin ? "client.portal.login" : "auth.login.success";
+      const loginSummary = isClientPortalLogin
+        ? `Client portal login: ${user.name?.trim() || user.email}`
+        : "User logged in";
+
       try {
         await prisma.eventLog.create({
           data: {
             orgId: primaryOrg,
             actorId: user.id,
-            type: "auth.login.success",
+            type: loginEventType,
             entityType: "session",
             entityId: session.id,
-            metadata: { email: emailNorm, ip, userAgent }
+            metadata: { email: emailNorm, ip, userAgent, roleKeys }
           }
         });
         await logAdminActivity(prisma, {
           orgId: primaryOrg,
-          type: "auth.login.success",
-          summary: "User logged in",
+          type: loginEventType,
+          summary: loginSummary,
           body: `${user.name?.trim() || user.email} logged in.${ip ? ` IP: ${ip}.` : ""}${userAgent ? ` UA: ${userAgent.slice(0, 180)}${userAgent.length > 180 ? "…" : ""}` : ""}`,
           actorId: user.id,
           entityType: "session",
           entityId: session.id,
-          metadata: { ip, userAgent }
+          metadata: { ip, userAgent, roleKeys, clientPortal: isClientPortalLogin }
         });
         await notifyAdminsInApp(
           prisma,

@@ -22,7 +22,8 @@ export const ROLE_KEYS = {
   developer: "developer",
   sales: "sales",
   analyst: "analyst",
-  client: "client"
+  client: "client",
+  hr: "hr"
 } as const;
 
 /** Every product role — Community and shared features use this so all logged-in org users stay included. */

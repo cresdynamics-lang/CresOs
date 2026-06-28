@@ -31,7 +31,13 @@ export const salesNeu = {
   chartPanel:
     "flex min-h-[min(20rem,42vh)] w-full flex-col rounded-2xl border border-white/[0.04] bg-[#121820] p-5 shadow-[6px_6px_14px_rgba(0,0,0,0.55),-4px_-4px_12px_rgba(255,255,255,0.04)] sm:p-6",
   kpiStrip:
-    "w-full rounded-2xl border border-white/[0.04] bg-[#0e1319] px-4 py-5 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:px-6"
+    "w-full rounded-2xl border border-white/[0.04] bg-[#0e1319] px-4 py-5 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:px-6",
+  input:
+    "w-full rounded-xl border border-white/[0.05] bg-[#0e1319] px-3 py-2.5 text-sm text-slate-100 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45),inset_-2px_-2px_6px_rgba(255,255,255,0.03)] placeholder:text-slate-500 focus:border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500/15",
+  btnGhost:
+    "rounded-xl border border-white/[0.06] bg-[#121820] px-3 py-2 text-sm text-slate-200 shadow-[4px_4px_10px_rgba(0,0,0,0.35),-2px_-2px_8px_rgba(255,255,255,0.03)] hover:text-white active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)] disabled:opacity-50",
+  listRow:
+    "rounded-xl border border-white/[0.04] bg-[#10161e] px-3 py-2 shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_8px_rgba(255,255,255,0.03)] transition-shadow hover:shadow-[5px_5px_12px_rgba(0,0,0,0.45),-3px_-3px_10px_rgba(255,255,255,0.04)]"
 } as const;
 
 /** @deprecated use salesNeu — kept for gradual migration */

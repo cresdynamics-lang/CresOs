@@ -5,4 +5,3 @@ import { AdminConsole } from "../admin-console";
 export default function AdminOrgPage() {
   return <AdminConsole />;
 }
-

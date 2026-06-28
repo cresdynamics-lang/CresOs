@@ -1,474 +1,309 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth-context";
+import { emitDataRefresh } from "../../data-refresh";
+import {
+  SettingsPage,
+  SettingsPanel,
+  SettingsSaveBar,
+  SettingsSection,
+  SettingsToggle,
+  useSettingsTheme
+} from "../../../components/settings/settings-primitives";
+
+const VALID_TIER_IDS = new Set(["execution", "financial", "governance", "structural"]);
+
+const TIERS: { id: string; label: string; hint: string }[] = [
+  { id: "execution", label: "Execution", hint: "Tasks, reminders, delivery" },
+  { id: "financial", label: "Financial", hint: "Invoices, payments, finance alerts" },
+  { id: "governance", label: "Governance", hint: "Approvals, compliance, oversight" },
+  { id: "structural", label: "Structural", hint: "Org and access changes" }
+];
+
+type InAppPrefs = {
+  mutedTiers: string[];
+  muteAllInApp: boolean;
+  playCommunitySound: boolean;
+};
+
+type EmailChannelPrefs = {
+  projects: boolean;
+  tasks: boolean;
+  messages: boolean;
+  reports: boolean;
+};
+
+type FullNotificationPrefs = {
+  email: EmailChannelPrefs & Record<string, boolean>;
+  push: Record<string, boolean>;
+  inApp: Record<string, boolean>;
+  schedule: Record<string, boolean>;
+  frequency: Record<string, boolean>;
+};
+
+function normalizeInApp(raw: unknown): InAppPrefs {
+  if (!raw || typeof raw !== "object") {
+    return { mutedTiers: [], muteAllInApp: false, playCommunitySound: false };
+  }
+  const o = raw as Record<string, unknown>;
+  const muted = Array.isArray(o.mutedTiers)
+    ? o.mutedTiers.filter((t): t is string => typeof t === "string" && VALID_TIER_IDS.has(t))
+    : [];
+  return {
+    mutedTiers: Array.from(new Set(muted)),
+    muteAllInApp: Boolean(o.muteAllInApp),
+    playCommunitySound: Boolean(o.playCommunitySound)
+  };
+}
+
+const DEFAULT_EMAIL: EmailChannelPrefs = {
+  projects: true,
+  tasks: true,
+  messages: true,
+  reports: false
+};
+
+const DEFAULT_NOTIFICATIONS: FullNotificationPrefs = {
+  email: { ...DEFAULT_EMAIL, mentions: true, approvals: true, system: true },
+  push: {
+    projects: true,
+    tasks: true,
+    messages: true,
+    mentions: true,
+    approvals: true,
+    reports: false,
+    system: true
+  },
+  inApp: {
+    projects: true,
+    tasks: true,
+    messages: true,
+    mentions: true,
+    approvals: true,
+    reports: true,
+    system: true
+  },
+  schedule: { meetingReminders: true, taskDeadlines: true, projectMilestones: true },
+  frequency: { immediate: true, hourly: false, daily: false, weekly: false }
+};
 
 export default function NotificationsPage() {
-  const { auth, apiFetch } = useAuth();
+  const { apiFetch } = useAuth();
+  const theme = useSettingsTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [notifications, setNotifications] = useState({
-    email: {
-      projects: true,
-      tasks: true,
-      messages: true,
-      mentions: true,
-      approvals: true,
-      reports: false,
-      system: true
-    },
-    push: {
-      projects: true,
-      tasks: true,
-      messages: true,
-      mentions: true,
-      approvals: true,
-      reports: false,
-      system: true
-    },
-    inApp: {
-      projects: true,
-      tasks: true,
-      messages: true,
-      mentions: true,
-      approvals: true,
-      reports: true,
-      system: true
-    },
-    schedule: {
-      meetingReminders: true,
-      taskDeadlines: true,
-      projectMilestones: true
-    },
-    frequency: {
-      immediate: true,
-      hourly: false,
-      daily: false,
-      weekly: false
-    }
+  const [success, setSuccess] = useState<string | null>(null);
+  const [inApp, setInApp] = useState<InAppPrefs>({
+    mutedTiers: [],
+    muteAllInApp: false,
+    playCommunitySound: false
   });
+  const [savedInApp, setSavedInApp] = useState<InAppPrefs>(inApp);
+  const [email, setEmail] = useState<EmailChannelPrefs>(DEFAULT_EMAIL);
+  const [savedEmail, setSavedEmail] = useState<EmailChannelPrefs>(DEFAULT_EMAIL);
+  const [fullNotifications, setFullNotifications] = useState<FullNotificationPrefs>(DEFAULT_NOTIFICATIONS);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await apiFetch("/user/notifications");
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications({ ...notifications, ...data.data });
+      const [meRes, notifRes] = await Promise.all([
+        apiFetch("/account/me"),
+        apiFetch("/user/notifications")
+      ]);
+      if (meRes.ok) {
+        const me = (await meRes.json()) as { notificationPreferences?: unknown };
+        const normalized = normalizeInApp(me.notificationPreferences);
+        setInApp(normalized);
+        setSavedInApp(normalized);
       }
-    } catch (error) {
-      console.error("Failed to fetch notification settings:", error);
+      if (notifRes.ok) {
+        const data = (await notifRes.json()) as { data?: Partial<FullNotificationPrefs> };
+        const full: FullNotificationPrefs = {
+          ...DEFAULT_NOTIFICATIONS,
+          ...data.data,
+          email: { ...DEFAULT_NOTIFICATIONS.email, ...data.data?.email }
+        };
+        setFullNotifications(full);
+        const mergedEmail: EmailChannelPrefs = {
+          projects: full.email.projects ?? true,
+          tasks: full.email.tasks ?? true,
+          messages: full.email.messages ?? true,
+          reports: full.email.reports ?? false
+        };
+        setEmail(mergedEmail);
+        setSavedEmail(mergedEmail);
+      }
     } finally {
       setLoading(false);
     }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const inAppDirty = useMemo(() => JSON.stringify(inApp) !== JSON.stringify(savedInApp), [inApp, savedInApp]);
+  const emailDirty = useMemo(() => JSON.stringify(email) !== JSON.stringify(savedEmail), [email, savedEmail]);
+  const dirty = inAppDirty || emailDirty;
+
+  const toggleTier = (id: string) => {
+    setSuccess(null);
+    setInApp((prev) => {
+      const muted = new Set(prev.mutedTiers);
+      if (muted.has(id)) muted.delete(id);
+      else muted.add(id);
+      return { ...prev, mutedTiers: Array.from(muted) };
+    });
   };
 
-  const updateNotifications = async () => {
+  const save = async () => {
     setSaving(true);
+    setSuccess(null);
     try {
-      const response = await apiFetch("/user/notifications", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(notifications)
-      });
-
-      if (response.ok) {
-        alert("Notification settings updated successfully!");
+      const tasks: Promise<Response>[] = [];
+      if (inAppDirty) {
+        tasks.push(
+          apiFetch("/account/me", {
+            method: "PATCH",
+            body: JSON.stringify({
+              notificationPreferences: {
+                muteAllInApp: inApp.muteAllInApp,
+                mutedTiers: inApp.mutedTiers,
+                playCommunitySound: inApp.playCommunitySound
+              }
+            })
+          })
+        );
       }
-    } catch (error) {
-      console.error("Failed to update notification settings:", error);
-      alert("Failed to update notification settings. Please try again.");
+      if (emailDirty) {
+        tasks.push(
+          apiFetch("/user/notifications", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...fullNotifications,
+              email: { ...fullNotifications.email, ...email }
+            })
+          })
+        );
+      }
+      const results = await Promise.all(tasks);
+      if (results.every((r) => r.ok)) {
+        setSavedInApp(inApp);
+        setSavedEmail(email);
+        if (emailDirty) {
+          setFullNotifications((prev) => ({ ...prev, email: { ...prev.email, ...email } }));
+        }
+        setSuccess("Notification settings saved.");
+        emitDataRefresh();
+      } else {
+        setSuccess("Some settings could not be saved. Try again.");
+      }
+    } catch {
+      setSuccess("Network error.");
     } finally {
       setSaving(false);
     }
   };
 
-  const updateNotificationSetting = (category: string, setting: string, value: boolean) => {
-    setNotifications({
-      ...notifications,
-      [category]: {
-        ...notifications[category as keyof typeof notifications],
-        [setting]: value
-      }
-    });
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading notification settings...</div>
+      <div className="px-4 py-12 sm:px-6 lg:px-8">
+        <p className="text-sm text-slate-500">Loading notification settings…</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-none space-y-0">
-        {/* Email Notifications */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Email Notifications</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Projects</div>
-                <div className="text-sm text-slate-400">Project updates, assignments, and changes</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "projects", !notifications.email.projects)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.projects ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.projects ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Tasks</div>
-                <div className="text-sm text-slate-400">Task assignments, updates, and deadlines</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "tasks", !notifications.email.tasks)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.tasks ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.tasks ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Messages</div>
-                <div className="text-sm text-slate-400">New messages and chat notifications</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "messages", !notifications.email.messages)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.messages ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.messages ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Mentions</div>
-                <div className="text-sm text-slate-400">When someone mentions you</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "mentions", !notifications.email.mentions)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.mentions ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.mentions ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Approvals</div>
-                <div className="text-sm text-slate-400">Approval requests and status changes</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "approvals", !notifications.email.approvals)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.approvals ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.approvals ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Reports</div>
-                <div className="text-sm text-slate-400">Weekly and monthly reports</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "reports", !notifications.email.reports)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.reports ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.reports ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">System</div>
-                <div className="text-sm text-slate-400">System updates and maintenance</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("email", "system", !notifications.email.system)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.email.system ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.email.system ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+    <SettingsPage>
+      <SettingsPanel>
+        <SettingsSection
+          label="In-app"
+          title="In-app bell"
+          description="Control what appears in your notification feed and badge count."
+        >
+          <div className="max-w-3xl space-y-4">
+            <SettingsToggle
+              label="Play sound for Community messages"
+              description="Short sound for incoming community chat (browser may require a click first)."
+              on={inApp.playCommunitySound}
+              onChange={(playCommunitySound) => {
+                setSuccess(null);
+                setInApp((p) => ({ ...p, playCommunitySound }));
+              }}
+            />
+            <SettingsToggle
+              label="Mute all in-app notifications"
+              description="Hides the feed and clears the badge until turned off."
+              on={inApp.muteAllInApp}
+              onChange={(muteAllInApp) => {
+                setSuccess(null);
+                setInApp((p) => ({ ...p, muteAllInApp }));
+              }}
+            />
+            <div className={inApp.muteAllInApp ? "pointer-events-none opacity-40" : ""}>
+              <p className={`mb-3 ${theme.sectionLabel}`}>Hide by category</p>
+              <ul className="space-y-2">
+                {TIERS.map((t) => (
+                  <li key={t.id} className={theme.listRow}>
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={inApp.mutedTiers.includes(t.id)}
+                        onChange={() => toggleTier(t.id)}
+                        className="mt-1 rounded border-slate-600"
+                      />
+                      <span>
+                        <span className="block text-sm text-slate-200">{t.label}</span>
+                        <span className="text-xs text-slate-500">{t.hint}</span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Push Notifications */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Push Notifications</h2>
-          
-          <div className="space-y-4">
-            {Object.entries(notifications.push).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-slate-200 capitalize">
-                    {key === "projects" ? "Projects" :
-                     key === "tasks" ? "Tasks" :
-                     key === "messages" ? "Messages" :
-                     key === "mentions" ? "Mentions" :
-                     key === "approvals" ? "Approvals" :
-                     key === "reports" ? "Reports" : "System"}
-                  </div>
-                  <div className="text-sm text-slate-400">
-                    {key === "projects" ? "Project updates, assignments, and changes" :
-                     key === "tasks" ? "Task assignments, updates, and deadlines" :
-                     key === "messages" ? "New messages and chat notifications" :
-                     key === "mentions" ? "When someone mentions you" :
-                     key === "approvals" ? "Approval requests and status changes" :
-                     key === "reports" ? "Weekly and monthly reports" : "System updates and maintenance"}
-                  </div>
-                </div>
-                <button
-                  onClick={() => updateNotificationSetting("push", key, !value)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    value ? 'bg-brand' : 'bg-slate-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    value ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
+      <SettingsPanel>
+        <SettingsSection
+          label="Email"
+          title="Email channels"
+          description="Choose which topics can email your notification address."
+        >
+          <div className="max-w-3xl space-y-3">
+            {(
+              [
+                ["projects", "Projects", "Assignments and project updates"],
+                ["tasks", "Tasks", "Deadlines and schedule reminders"],
+                ["messages", "Messages", "Community and direct messages"],
+                ["reports", "Reports", "Developer and leadership report digests"]
+              ] as const
+            ).map(([key, label, hint]) => (
+              <SettingsToggle
+                key={key}
+                label={label}
+                description={hint}
+                on={email[key]}
+                onChange={(next) => {
+                  setSuccess(null);
+                  setEmail((p) => ({ ...p, [key]: next }));
+                }}
+              />
             ))}
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* In-App Notifications */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">In-App Notifications</h2>
-          
-          <div className="space-y-4">
-            {Object.entries(notifications.inApp).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-slate-200 capitalize">
-                    {key === "projects" ? "Projects" :
-                     key === "tasks" ? "Tasks" :
-                     key === "messages" ? "Messages" :
-                     key === "mentions" ? "Mentions" :
-                     key === "approvals" ? "Approvals" :
-                     key === "reports" ? "Reports" : "System"}
-                  </div>
-                  <div className="text-sm text-slate-400">
-                    {key === "projects" ? "Project updates, assignments, and changes" :
-                     key === "tasks" ? "Task assignments, updates, and deadlines" :
-                     key === "messages" ? "New messages and chat notifications" :
-                     key === "mentions" ? "When someone mentions you" :
-                     key === "approvals" ? "Approval requests and status changes" :
-                     key === "reports" ? "Weekly and monthly reports" : "System updates and maintenance"}
-                  </div>
-                </div>
-                <button
-                  onClick={() => updateNotificationSetting("inApp", key, !value)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    value ? 'bg-brand' : 'bg-slate-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    value ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Schedule Notifications */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Schedule Notifications</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Meeting Reminders</div>
-                <div className="text-sm text-slate-400">Reminders before scheduled meetings</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("schedule", "meetingReminders", !notifications.schedule.meetingReminders)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.schedule.meetingReminders ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.schedule.meetingReminders ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Task Deadlines</div>
-                <div className="text-sm text-slate-400">Notifications for upcoming task deadlines</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("schedule", "taskDeadlines", !notifications.schedule.taskDeadlines)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.schedule.taskDeadlines ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.schedule.taskDeadlines ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Project Milestones</div>
-                <div className="text-sm text-slate-400">Notifications for project milestones</div>
-              </div>
-              <button
-                onClick={() => updateNotificationSetting("schedule", "projectMilestones", !notifications.schedule.projectMilestones)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.schedule.projectMilestones ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.schedule.projectMilestones ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Frequency */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Notification Frequency</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Immediate</div>
-                <div className="text-sm text-slate-400">Receive notifications as they happen</div>
-              </div>
-              <button
-                onClick={() => setNotifications({
-                  ...notifications,
-                  frequency: { ...notifications.frequency, immediate: !notifications.frequency.immediate }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.frequency.immediate ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.frequency.immediate ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Hourly Digest</div>
-                <div className="text-sm text-slate-400">Receive hourly summary of notifications</div>
-              </div>
-              <button
-                onClick={() => setNotifications({
-                  ...notifications,
-                  frequency: { ...notifications.frequency, hourly: !notifications.frequency.hourly }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.frequency.hourly ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.frequency.hourly ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Daily Digest</div>
-                <div className="text-sm text-slate-400">Receive daily summary of notifications</div>
-              </div>
-              <button
-                onClick={() => setNotifications({
-                  ...notifications,
-                  frequency: { ...notifications.frequency, daily: !notifications.frequency.daily }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.frequency.daily ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.frequency.daily ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Weekly Digest</div>
-                <div className="text-sm text-slate-400">Receive weekly summary of notifications</div>
-              </div>
-              <button
-                onClick={() => setNotifications({
-                  ...notifications,
-                  frequency: { ...notifications.frequency, weekly: !notifications.frequency.weekly }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  notifications.frequency.weekly ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  notifications.frequency.weekly ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={updateNotifications}
-            disabled={saving}
-            className="px-6 py-3 bg-brand text-white rounded-lg hover:bg-brand/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? "Saving..." : "Save Notification Settings"}
-          </button>
-        </div>
-    </div>
+      <SettingsSaveBar
+        dirty={dirty}
+        saving={saving}
+        onSave={() => void save()}
+        label="Save notification settings"
+        successMessage={success}
+      />
+    </SettingsPage>
   );
 }

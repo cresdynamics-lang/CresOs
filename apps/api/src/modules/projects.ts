@@ -103,10 +103,13 @@ export default function projectsRouter(prisma: PrismaClient): Router {
 
       const projectIds = projects.map((p) => p.id);
       const emptySummary = { not_started: 0, in_progress: 0, waiting_response: 0, blocked: 0, done: 0 };
+      const emptyMilestoneSummary = { total: 0, completed: 0, pending: 0 };
       const taskSummaryByProject: Record<string, typeof emptySummary> = {};
+      const milestoneSummaryByProject: Record<string, typeof emptyMilestoneSummary> = {};
       if (projectIds.length > 0) {
         for (const id of projectIds) {
           taskSummaryByProject[id] = { ...emptySummary };
+          milestoneSummaryByProject[id] = { ...emptyMilestoneSummary };
         }
         const grouped = await prisma.task.groupBy({
           by: ["projectId", "status"],
@@ -120,6 +123,17 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           if (taskSummaryByProject[pid] && st in taskSummaryByProject[pid]) {
             taskSummaryByProject[pid][st] = row._count._all;
           }
+        }
+        const milestones = await prisma.milestone.findMany({
+          where: { orgId, projectId: { in: projectIds }, deletedAt: null },
+          select: { projectId: true, status: true }
+        });
+        for (const m of milestones) {
+          const summary = milestoneSummaryByProject[m.projectId];
+          if (!summary) continue;
+          summary.total += 1;
+          if (m.status === "completed") summary.completed += 1;
+          else summary.pending += 1;
         }
       }
 
@@ -135,7 +149,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
           managementActive: p.managementActive,
           managementStartedAt: p.managementStartedAt,
           managementProgressPercent: p.managementProgressPercent,
-          taskSummary: taskSummaryByProject[p.id] ?? { ...emptySummary }
+          taskSummary: taskSummaryByProject[p.id] ?? { ...emptySummary },
+          milestoneSummary: milestoneSummaryByProject[p.id] ?? { ...emptyMilestoneSummary }
         };
         if (stripSensitive) {
           delete (row as any).phone;

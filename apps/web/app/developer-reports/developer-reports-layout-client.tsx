@@ -4,10 +4,19 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceRouteShell } from "../../components/workspace/workspace-route-shell";
+import { devNeu } from "../../components/developer/developer-theme";
+import { LeadershipLayoutGate } from "../../components/workspace/leadership-layout-gate";
+import { isDirectorOnly } from "../../lib/is-director-only";
+import { isAdminOnly } from "../../lib/is-admin-only";
 
 export function DeveloperReportsLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { auth, hydrated } = useAuth();
+
+  if (isDirectorOnly(auth.roleKeys) || isAdminOnly(auth.roleKeys)) {
+    return <LeadershipLayoutGate>{children}</LeadershipLayoutGate>;
+  }
+
   const canAccess =
     auth.roleKeys.includes("developer") ||
     auth.roleKeys.includes("admin") ||
@@ -20,7 +29,9 @@ export function DeveloperReportsLayoutClient({ children }: { children: React.Rea
 
   if (!hydrated || !auth.accessToken) {
     return (
-      <div className="developer-glass flex h-full items-center justify-center bg-[#080b12] text-sm text-slate-400">
+      <div
+        className={`${devNeu.workspace} developer-fullscreen flex min-h-[16rem] flex-1 items-center justify-center text-sm text-slate-400 ${devNeu.canvas}`}
+      >
         Loading reports…
       </div>
     );

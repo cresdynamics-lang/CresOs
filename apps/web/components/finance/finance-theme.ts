@@ -29,5 +29,13 @@ export const financeNeu = {
   statViolet:
     "border-violet-500/15 bg-[#14101a] shadow-[5px_5px_12px_rgba(0,0,0,0.5),-3px_-3px_10px_rgba(139,92,246,0.06)]",
   tableWrap:
-    "overflow-x-auto rounded-xl border border-white/[0.04] bg-[#0e1319] shadow-[inset_3px_3px_10px_rgba(0,0,0,0.45),inset_-2px_-2px_8px_rgba(255,255,255,0.02)]"
+    "overflow-x-auto rounded-xl border border-white/[0.04] bg-[#0e1319] shadow-[inset_3px_3px_10px_rgba(0,0,0,0.45),inset_-2px_-2px_8px_rgba(255,255,255,0.02)]",
+  alertWarning:
+    "rounded-xl border border-amber-500/25 bg-[#1a1610] shadow-[4px_4px_12px_rgba(0,0,0,0.45),-2px_-2px_8px_rgba(245,158,11,0.06)]",
+  alertDanger:
+    "rounded-xl border border-rose-500/30 bg-[#1a1014] shadow-[4px_4px_12px_rgba(0,0,0,0.45),-2px_-2px_8px_rgba(244,63,94,0.08)]",
+  alertInfo:
+    "rounded-xl border border-emerald-500/20 bg-[#101a16] shadow-[4px_4px_12px_rgba(0,0,0,0.45),-2px_-2px_8px_rgba(16,185,129,0.05)]",
+  kpiStrip:
+    "rounded-xl border border-white/[0.04] bg-[#0e1319] p-4 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:p-5"
 } as const;

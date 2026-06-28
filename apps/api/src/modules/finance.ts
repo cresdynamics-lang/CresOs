@@ -27,6 +27,11 @@ import { generateFinancialReportPdf } from "../services/finance/financial-report
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
 import { billableMonthsUtc, ymKey } from "../lib/management-billing";
+import {
+  recalcOrgProjectReceipts,
+  recalcProjectAmountReceived,
+  validateInvoiceClientProject
+} from "../lib/project-payment-sync";
 
 /** Avoid Invalid Date from empty due-date strings (breaks Prisma / Postgres). */
 function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
@@ -94,15 +99,7 @@ async function confirmPaymentCore(
   if (!inv) return {};
 
   if (inv.projectId) {
-    const project = await tx.project.findUnique({
-      where: { id: inv.projectId },
-      select: { amountReceived: true }
-    });
-    const current = project?.amountReceived != null ? Number(project.amountReceived) : 0;
-    await tx.project.update({
-      where: { id: inv.projectId },
-      data: { amountReceived: new Prisma.Decimal(current + amountNum) }
-    });
+    await recalcProjectAmountReceived(tx, inv.projectId);
   }
 
   const paidOnInvoice = await tx.payment.aggregate({
@@ -1059,7 +1056,14 @@ export default function financeRouter(prisma: PrismaClient): Router {
     const invoices = await prisma.invoice.findMany({
       where: { orgId, deletedAt: null },
       orderBy: { issueDate: "desc" },
-      include: { project: { select: { id: true, name: true } }, client: { select: { id: true, name: true, email: true } } }
+      include: {
+        project: { select: { id: true, name: true } },
+        client: { select: { id: true, name: true, email: true } },
+        items: {
+          select: { id: true, description: true, quantity: true, unitPrice: true },
+          orderBy: { id: "asc" }
+        }
+      }
     });
     const enriched = await Promise.all(
       invoices.map(async (inv) => {
@@ -1067,7 +1071,24 @@ export default function financeRouter(prisma: PrismaClient): Router {
         const total = Number(inv.totalAmount);
         const amountRemaining = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
         return {
-          ...inv,
+          id: inv.id,
+          number: inv.number,
+          status: inv.status,
+          issueDate: inv.issueDate.toISOString(),
+          dueDate: inv.dueDate?.toISOString() ?? null,
+          currency: inv.currency,
+          notes: inv.notes,
+          clientId: inv.clientId,
+          projectId: inv.projectId,
+          client: inv.client,
+          project: inv.project,
+          items: inv.items.map((it) => ({
+            id: it.id,
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: Number(it.unitPrice),
+            lineTotal: Math.round(it.quantity * Number(it.unitPrice) * 100) / 100
+          })),
           paidAmount,
           amountRemaining,
           totalAmount: total
@@ -1133,13 +1154,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }, 0);
 
           if (projectId) {
-            const project = await tx.project.findFirst({
-              where: { id: projectId, orgId, deletedAt: null },
-              select: { id: true }
-            });
-            if (!project) {
-              throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
-            }
+            await validateInvoiceClientProject(tx, orgId, clientId, projectId);
           }
 
           const number = await allocateInvoiceNumberForCreate(tx, orgId, projectId, issue);
@@ -1237,6 +1252,13 @@ export default function financeRouter(prisma: PrismaClient): Router {
         });
       } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
+        if (err?.code === "CLIENT_PROJECT_MISMATCH") {
+          res.status(400).json({
+            error: "Client mismatch",
+            message: "Selected client must match the project's client."
+          });
+          return;
+        }
         if (err?.code === "PROJECT_NOT_FOUND" || err?.message === "Project not found") {
           res.status(400).json({ error: "Project not found" });
           return;
@@ -1682,17 +1704,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
         (oldAmount !== newAmount || oldInvoiceId !== nextInvoiceId);
 
       const updated = await prisma.$transaction(async (tx) => {
-        if (financialChanged) {
-          if (oldInvoiceId) {
-            const oldInv = await tx.invoice.findUnique({
-              where: { id: oldInvoiceId },
-              select: { projectId: true }
-            });
-            if (oldInv?.projectId) {
-              await adjustProjectAmountReceived(tx, oldInv.projectId, -oldAmount);
-            }
-          }
-        }
+        const affectedProjects = new Set<string>();
 
         const methodVal =
           method !== undefined
@@ -1721,6 +1733,11 @@ export default function financeRouter(prisma: PrismaClient): Router {
 
         if (financialChanged) {
           if (oldInvoiceId) {
+            const oldInv = await tx.invoice.findUnique({
+              where: { id: oldInvoiceId },
+              select: { projectId: true }
+            });
+            if (oldInv?.projectId) affectedProjects.add(oldInv.projectId);
             await syncInvoiceStatusFromConfirmedPayments(tx, oldInvoiceId);
           }
           if (row.status === "confirmed" && row.invoiceId) {
@@ -1728,10 +1745,11 @@ export default function financeRouter(prisma: PrismaClient): Router {
               where: { id: row.invoiceId },
               select: { projectId: true }
             });
-            if (newInv?.projectId) {
-              await adjustProjectAmountReceived(tx, newInv.projectId, newAmount);
-            }
+            if (newInv?.projectId) affectedProjects.add(newInv.projectId);
             await syncInvoiceStatusFromConfirmedPayments(tx, row.invoiceId);
+          }
+          for (const pid of affectedProjects) {
+            await recalcProjectAmountReceived(tx, pid);
           }
         }
 
@@ -2464,7 +2482,16 @@ export default function financeRouter(prisma: PrismaClient): Router {
         res.status(403).json({ error: "Invoices with confirmed payments cannot be deleted" });
         return;
       }
-      await prisma.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
+      await prisma.$transaction(async (tx) => {
+        await tx.projectManagementMonth.updateMany({
+          where: { orgId, invoiceId: id },
+          data: { invoiceId: null, paid: false, paidAt: null }
+        });
+        await tx.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
+        if (existing.projectId) {
+          await recalcProjectAmountReceived(tx, existing.projectId);
+        }
+      });
       await prisma.eventLog.create({
         data: { orgId, type: "invoice.deleted", entityType: "invoice", entityId: id }
       });
@@ -2592,15 +2619,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
         return;
       }
       const data: Record<string, unknown> = {};
+      if (body.amountReceived !== undefined) {
+        res.status(400).json({
+          error: "amountReceived is computed",
+          message:
+            "Received amount is synced from confirmed invoice payments. Record payments against invoices or run recalc."
+        });
+        return;
+      }
       if (body.price !== undefined) {
         data.price =
           body.price != null && body.price !== "" ? new Prisma.Decimal(Number(body.price)) : null;
-      }
-      if (body.amountReceived !== undefined) {
-        data.amountReceived =
-          body.amountReceived != null && body.amountReceived !== ""
-            ? new Prisma.Decimal(Number(body.amountReceived))
-            : new Prisma.Decimal(0);
       }
       if (body.managementMonthlyAmount !== undefined) {
         data.managementMonthlyAmount =
@@ -2615,7 +2644,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
             : null;
       }
       if (Object.keys(data).length === 0) {
-        res.status(400).json({ error: "No fields to update (send price, amountReceived, management fields)." });
+        res.status(400).json({ error: "No fields to update (send price or management fields)." });
         return;
       }
       const updated = await prisma.project.update({
@@ -2919,43 +2948,33 @@ export default function financeRouter(prisma: PrismaClient): Router {
     }
   );
 
-  // Recalc project amountReceived from confirmed payments (for backfill / consistency)
   router.post(
     "/projects/recalc-received",
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const payments = await prisma.payment.findMany({
-        where: { orgId, deletedAt: null, status: "confirmed", invoiceId: { not: null } },
-        include: { invoice: { select: { projectId: true } } }
-      });
-      const byProject = new Map<string, number>();
-      for (const p of payments) {
-        const pid = p.invoice?.projectId;
-        if (pid) {
-          byProject.set(pid, (byProject.get(pid) ?? 0) + Number(p.amount));
-        }
-      }
-      for (const [projectId, total] of byProject) {
-        await prisma.project.update({
-          where: { id: projectId },
-          data: { amountReceived: new Prisma.Decimal(total) }
-        });
-      }
-      const projectsWithPrice = await prisma.project.findMany({
-        where: { orgId, deletedAt: null, price: { not: null } },
+      const { projectId } = (req.body ?? {}) as { projectId?: string };
+      const result = await recalcOrgProjectReceipts(prisma, orgId, projectId?.trim() || undefined);
+      res.json(result);
+    }
+  );
+
+  router.post(
+    "/projects/:projectId/recalc-received",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const { projectId } = req.params;
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, orgId, deletedAt: null },
         select: { id: true }
       });
-      const zeroIds = projectsWithPrice
-        .map((p) => p.id)
-        .filter((id) => !byProject.has(id));
-      if (zeroIds.length > 0) {
-        await prisma.project.updateMany({
-          where: { id: { in: zeroIds } },
-          data: { amountReceived: new Prisma.Decimal(0) }
-        });
+      if (!project) {
+        res.status(404).json({ error: "Project not found" });
+        return;
       }
-      res.json({ updated: byProject.size, zeroed: zeroIds.length });
+      const result = await recalcOrgProjectReceipts(prisma, orgId, projectId);
+      res.json(result);
     }
   );
 

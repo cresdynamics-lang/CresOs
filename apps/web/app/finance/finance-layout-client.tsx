@@ -7,12 +7,20 @@ import { WorkspaceAside } from "../../components/workspace/workspace-aside";
 import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
 import { financeNeu } from "../../components/finance/finance-theme";
 import { FinanceSideNav } from "./finance-nav";
+import { LeadershipLayoutGate } from "../../components/workspace/leadership-layout-gate";
 import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
+import { isDirectorOnly } from "../../lib/is-director-only";
+import { isAdminOnly } from "../../lib/is-admin-only";
 
 export function FinanceLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
+
+  if (isDirectorOnly(auth.roleKeys) || isAdminOnly(auth.roleKeys)) {
+    return <LeadershipLayoutGate>{children}</LeadershipLayoutGate>;
+  }
+
   const canAccessFinance =
     auth.canSeeFinance === true ||
     auth.roleKeys.some((r) => ["admin", "finance", "analyst", "director_admin"].includes(r));
@@ -39,7 +47,7 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
         subtitle="Payments in · salaries & ops out"
         themeKey="finance"
         className="hidden w-[15rem] md:flex"
-        footer={<WorkspaceAccountFooter themeKey="finance" onLogout={handleLogout} showAccountLink={false} />}
+        footer={<WorkspaceAccountFooter themeKey="finance" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />}
       >
         <FinanceSideNav />
       </WorkspaceAside>

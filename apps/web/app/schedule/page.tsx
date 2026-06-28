@@ -23,6 +23,8 @@ import {
   toNairobiDatetimeLocalValue
 } from "../../lib/nairobi-datetime";
 import { DeveloperScheduleView } from "./developer-schedule-view";
+import { SalesScheduleView } from "./sales-schedule-view";
+import { isSalesScheduleNeu } from "../../lib/resolve-workspace-for-user";
 
 type ScheduleItem = {
   id: string;
@@ -88,6 +90,7 @@ export default function SchedulePage() {
   const isDeveloperOnly =
     roleKeys.includes("developer") &&
     !roleKeys.some((r) => ["admin", "director_admin", "sales", "finance", "analyst", "client"].includes(r));
+  const useSalesNeu = isSalesScheduleNeu(roleKeys);
   const showOrgToggle = canViewOrgSchedule(roleKeys);
   const canDeleteOrEditHistory = canDeleteScheduleItems(roleKeys);
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter">("week");
@@ -226,6 +229,43 @@ export default function SchedulePage() {
       <section className="flex min-h-0 flex-1 items-center justify-center px-4">
         <p className="text-center text-sm text-slate-400">Tasks & schedule is not available for your account.</p>
       </section>
+    );
+  }
+
+  if (useSalesNeu) {
+    return (
+      <SalesScheduleView
+        period={period}
+        onPeriodChange={setPeriod}
+        completedFilter={completedFilter}
+        onCompletedFilterChange={setCompletedFilter}
+        stats={data?.stats ?? null}
+        items={data?.items ?? null}
+        periodLabel={periodLabel}
+        scopeOrg={data?.scope === "org"}
+        nairobiNow={nairobiNow}
+        loading={loading}
+        onRefresh={() => void load()}
+        onAddOpen={() => setAddOpen(true)}
+        addOpen={addOpen}
+        onAddClose={() => setAddOpen(false)}
+        form={form}
+        onFormChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+        types={TYPES}
+        onSubmitAdd={(e) => void handleAdd(e)}
+        submitting={submitting}
+        onToggleDone={(item) => void toggleDone(item)}
+        togglingId={togglingId}
+        onDelete={(id) => void handleDelete(id)}
+        canDelete={canDeleteOrEditHistory}
+        typeMeta={typeMeta}
+        notificationDenied={notificationPermission === "denied"}
+        attention={attention}
+        scheduleDescription={scheduleDescription}
+        showOrgToggle={showOrgToggle}
+        orgSchedule={orgSchedule}
+        onOrgScheduleChange={setOrgSchedule}
+      />
     );
   }
 

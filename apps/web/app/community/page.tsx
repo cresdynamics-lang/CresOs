@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import { useAuth } from "../auth-context";
 import { browserNotificationSoundAllowed } from "../../lib/notification-signals";
+import { sumDirectMessageUnread } from "../../lib/community-unread";
 import { CommunityCallOverlay } from "../../components/community/community-call-overlay";
 import { CommunityIncomingCall } from "../../components/community/community-incoming-call";
 import { CommunityEmojiPicker } from "../../components/community/community-emoji-picker";
@@ -457,7 +458,7 @@ export default function CommunityPage() {
           audioUnlockedRef.current &&
           browserNotificationSoundAllowed(auth.roleKeys ?? [])
         ) {
-          const totalUnread = next.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
+          const totalUnread = sumDirectMessageUnread(next);
           const prevTotal = lastUnreadTotalRef.current;
           lastUnreadTotalRef.current = totalUnread;
           const now = Date.now();

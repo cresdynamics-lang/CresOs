@@ -8,7 +8,15 @@ import { HorizontalBarChart, PieChart, VerticalBarChart } from "../../components
 import { SalesStatInline, SalesStatRow } from "../../components/sales/sales-ui";
 import { salesNeu } from "../../components/sales/sales-theme";
 import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
-import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import {
+  WorkspaceAlignedTips,
+  WorkspaceDashboardSection,
+  WorkspacePriorityGrid,
+  dedupeAiHint,
+  dedupeFocusTips,
+  type WorkspacePriorityItem
+} from "../../components/workspace/workspace-dashboard-primitives";
+import { buildWelcomeHeadline } from "../../lib/personalized-greeting";
 
 export type SalesChartSlice = { label: string; value: number };
 
@@ -42,15 +50,6 @@ const QUICK_LINKS = [
   { href: "/schedule", label: "Tasks" },
   { href: "/community", label: "Community" }
 ] as const;
-
-type SalesAlert = {
-  id: string;
-  tone: "warning" | "danger";
-  title: string;
-  detail: string;
-  href: string;
-  action: string;
-};
 
 type SalesOverviewDashboardProps = {
   kpis: SalesOverviewKpis | null;
@@ -94,17 +93,13 @@ export function SalesOverviewDashboard({
   onRefresh
 }: SalesOverviewDashboardProps) {
   const { auth } = useAuth();
-  const firstName = useMemo(
-    () => getDisplayFirstName(auth.userName, auth.userEmail),
-    [auth.userName, auth.userEmail]
-  );
   const welcomeHeadline = useMemo(
     () => buildWelcomeHeadline(auth.userName, auth.userEmail),
     [auth.userName, auth.userEmail]
   );
 
-  const alertItems = useMemo((): SalesAlert[] => {
-    const items: SalesAlert[] = [];
+  const alertItems = useMemo((): WorkspacePriorityItem[] => {
+    const items: WorkspacePriorityItem[] = [];
 
     if (reportReminderDue) {
       items.push({
@@ -195,6 +190,24 @@ export function SalesOverviewDashboard({
     return items;
   }, [alerts, overdueReportQuestions, queue, reportReminderDue, scheduleKpis]);
 
+  const alignedTips = useMemo(
+    () =>
+      dedupeFocusTips(focusTips, {
+        reportReminderDue,
+        overdueReportQuestions,
+        hasUnreadAlert: (queue?.unreadNotifications ?? 0) > 0,
+        hasOutstandingInvoiceAlert: alerts.outstandingInvoices > 0 && alerts.overdueInvoices === 0,
+        hasOverdueInvoiceAlert: alerts.overdueInvoices > 0,
+        priorityTitles: alertItems.map((a) => a.title)
+      }),
+    [focusTips, reportReminderDue, overdueReportQuestions, queue, alerts, alertItems]
+  );
+
+  const alignedHint = useMemo(
+    () => dedupeAiHint(aiHint, alignedTips, { reportReminderDue }),
+    [aiHint, alignedTips, reportReminderDue]
+  );
+
   const taskBars = charts.tasks.map((t, idx) => ({
     label: t.label,
     value: t.value,
@@ -214,8 +227,7 @@ export function SalesOverviewDashboard({
             {welcomeHeadline}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-            {firstName}, your pipeline queue and charts — use the sidebar to jump between CRM, reports, invoices, and
-            tasks.
+            Your pipeline queue and charts — use the sidebar to jump between CRM, reports, invoices, and tasks.
           </p>
         </div>
         <button
@@ -228,61 +240,25 @@ export function SalesOverviewDashboard({
         </button>
       </header>
 
-      {alertItems.length > 0 && (
-        <section aria-label="Today's priorities" className="w-full">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Today&apos;s priorities</DashboardSectionLabel>
-          <ul className="mt-3 grid w-full gap-3 lg:grid-cols-2">
-            {alertItems.map((alert) => (
-              <li
-                key={alert.id}
-                className={alert.tone === "danger" ? salesNeu.alertDanger : salesNeu.alertWarning}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                  <div className="min-w-0">
-                    <p
-                      className={`font-semibold ${alert.tone === "danger" ? "text-rose-200" : "text-amber-200"}`}
-                    >
-                      {alert.title}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-300">{alert.detail}</p>
-                  </div>
-                  <Link
-                    href={alert.href}
-                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                      alert.tone === "danger"
-                        ? "bg-rose-600/90 text-white hover:bg-rose-500"
-                        : "bg-amber-600/90 text-white hover:bg-amber-500"
-                    }`}
-                  >
-                    {alert.action} →
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {alertItems.length > 0 ? (
+        <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>
+          <WorkspacePriorityGrid
+            items={alertItems}
+            panelClass={(tone) => (tone === "danger" ? salesNeu.alertDanger : salesNeu.alertWarning)}
+          />
+        </WorkspaceDashboardSection>
+      ) : null}
 
-      {isSalesRep && (focusTips.length > 0 || aiHint) && (
-        <section aria-label="Focus coach" className={`w-full ${salesNeu.panelInset}`}>
-          <DashboardSectionLabel roleKeys={auth.roleKeys} tone="focus">
-            Stay focused &amp; aligned
-          </DashboardSectionLabel>
-          {focusTips.length > 0 ? (
-            <ul className="mt-3 ml-1 list-disc space-y-2 pl-4 text-sm text-slate-200 marker:text-amber-500/80">
-              {focusTips.map((tip, i) => (
-                <li key={i}>{tip}</li>
-              ))}
-            </ul>
-          ) : null}
-          {aiHint ? (
-            <p className="mt-3 border-t border-white/[0.06] pt-3 text-sm italic text-violet-200/90">{aiHint}</p>
-          ) : null}
-        </section>
-      )}
+      {isSalesRep ? (
+        <WorkspaceAlignedTips
+          tips={alignedTips}
+          aiHint={alignedHint}
+          panelClass={`${salesNeu.panelInset} p-4 sm:p-5`}
+          roleKeys={auth.roleKeys}
+        />
+      ) : null}
 
-      <section aria-label="Your queue" className="w-full">
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>Your queue</DashboardSectionLabel>
+      <WorkspaceDashboardSection label="Your queue" roleKeys={auth.roleKeys}>
         <div className={`mt-3 ${salesNeu.kpiStrip}`}>
           <SalesStatRow>
             <Link href="/community" className="min-w-0 hover:opacity-90">
@@ -347,11 +323,10 @@ export function SalesOverviewDashboard({
             </SalesStatRow>
           ) : null}
         </div>
-      </section>
+      </WorkspaceDashboardSection>
 
       {!isSalesRep && (
-        <section aria-label="Pipeline snapshot" className="w-full">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Pipeline snapshot</DashboardSectionLabel>
+        <WorkspaceDashboardSection label="Pipeline snapshot" roleKeys={auth.roleKeys}>
           <div className={`mt-3 ${salesNeu.kpiStrip}`}>
             <SalesStatRow>
               <SalesStatInline
@@ -380,7 +355,7 @@ export function SalesOverviewDashboard({
               />
             </SalesStatRow>
           </div>
-        </section>
+        </WorkspaceDashboardSection>
       )}
 
       <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">

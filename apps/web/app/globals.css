@@ -144,6 +144,98 @@ html.theme-light .shell {
   padding-right: 0;
 }
 
+/* Admin workspace — dark neumorphism (indigo accent) */
+.admin-neu {
+  --admin-neu-bg: #0b0f14;
+  --admin-neu-surface: #121820;
+  --admin-neu-inset: #0e1319;
+  --admin-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --admin-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.admin-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--admin-neu-raised);
+}
+
+.admin-neu input:not([type="checkbox"]):not([type="radio"]),
+.admin-neu select,
+.admin-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: #0e1319;
+  color: #f1f5f9;
+  box-shadow: var(--admin-neu-inset-shadow);
+}
+
+.admin-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.admin-neu select:focus,
+.admin-neu textarea:focus {
+  border-color: rgba(99, 102, 241, 0.35);
+  outline: none;
+  box-shadow: var(--admin-neu-inset-shadow), 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.admin-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.admin-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
+/* HR workspace — dark neumorphism (rose accent) */
+.hr-neu {
+  --hr-neu-bg: #0b0f14;
+  --hr-neu-surface: #121820;
+  --hr-neu-inset: #0e1319;
+  --hr-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --hr-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.hr-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--hr-neu-raised);
+}
+
+.hr-neu input:not([type="checkbox"]):not([type="radio"]),
+.hr-neu select,
+.hr-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: #0e1319;
+  color: #f1f5f9;
+  box-shadow: var(--hr-neu-inset-shadow);
+}
+
+.hr-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.hr-neu select:focus,
+.hr-neu textarea:focus {
+  border-color: rgba(244, 63, 94, 0.35);
+  outline: none;
+  box-shadow: var(--hr-neu-inset-shadow), 0 0 0 2px rgba(244, 63, 94, 0.15);
+}
+
+.hr-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.hr-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Sales neumorphism — mirrors finance-neu with amber accent */
 .sales-neu {
   --sales-neu-bg: #0b0f14;
@@ -479,5 +571,54 @@ html.theme-light .shell {
   .auth-droplet {
     animation: none;
   }
+}
+
+/* User preference overrides (Settings → Preferences) */
+html.user-reduce-motion *,
+html.user-reduce-motion *::before,
+html.user-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+html.user-high-contrast {
+  filter: contrast(1.12) saturate(1.05);
+}
+
+html.user-high-contrast .developer-neu,
+html.user-high-contrast .finance-neu,
+html.user-high-contrast .sales-neu {
+  --user-contrast-ring: rgba(255, 255, 255, 0.14);
+}
+
+html.user-font-small {
+  font-size: 93.75%;
+}
+
+html.user-font-medium {
+  font-size: 100%;
+}
+
+html.user-font-large {
+  font-size: 106.25%;
+}
+
+html.user-font-extra-large {
+  font-size: 112.5%;
+}
+
+html.user-screen-reader :focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.85);
+  outline-offset: 2px;
+}
+
+html.user-screen-reader button,
+html.user-screen-reader a,
+html.user-screen-reader input,
+html.user-screen-reader select,
+html.user-screen-reader textarea {
+  min-height: 44px;
 }
 

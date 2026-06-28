@@ -5,6 +5,7 @@ import { Syne, DM_Sans, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "./auth-context";
 import { AuthGuard } from "./auth-guard";
 import { ThemeProvider } from "../lib/theme-provider";
+import { UserPreferencesApplier } from "../components/settings/user-preferences-applier";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-slate-950 font-body text-slate-50 antialiased">
         <ThemeProvider>
           <AuthProvider>
+            <UserPreferencesApplier />
             <AuthGuard>{children}</AuthGuard>
           </AuthProvider>
         </ThemeProvider>

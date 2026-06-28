@@ -2,29 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const SETTINGS_TABS = [
-  { href: "/settings/account", label: "Account", desc: "Profile & photo" },
-  { href: "/settings/preferences", label: "Preferences", desc: "Theme & locale" },
-  { href: "/settings/notifications", label: "Notifications", desc: "Alerts & email" },
-  { href: "/settings/security", label: "Security", desc: "Password & sessions" },
-  { href: "/settings/profile", label: "Contact", desc: "Phones & next of kin" }
-] as const;
+import { useSettingsTheme } from "../../components/settings/settings-primitives";
+import { SETTINGS_TABS } from "../../components/settings/settings-tabs-nav";
+import { settingsBackLink } from "../../lib/resolve-settings-workspace";
+import type { SettingsWorkspaceKey } from "../../lib/resolve-settings-workspace";
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SettingsSideNav() {
+/** Settings-only sidebar for users without a dedicated workspace (global chrome). */
+export function SettingsSideNav({ workspaceKey = "global" }: { workspaceKey?: SettingsWorkspaceKey }) {
   const pathname = usePathname();
-
-  const linkClass = (active: boolean) =>
-    [
-      "block min-h-[44px] rounded-lg px-3 py-2.5 touch-manipulation transition-colors lg:min-h-0",
-      active
-        ? "border border-brand/35 bg-brand/10 text-sky-100"
-        : "border border-transparent text-slate-400 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-slate-200"
-    ].join(" ");
+  const theme = useSettingsTheme();
+  const back = settingsBackLink(workspaceKey);
 
   return (
     <nav aria-label="Settings" className="flex flex-col gap-4 px-2 py-3">
@@ -40,10 +31,11 @@ export function SettingsSideNav() {
                 key={tab.href}
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className={linkClass(active)}
+                className={`block min-h-[44px] rounded-lg px-3 py-2.5 touch-manipulation transition-all lg:min-h-0 ${
+                  active ? theme.navActive : theme.navIdle
+                }`}
               >
                 <span className="block text-[13px] font-medium">{tab.label}</span>
-                <span className="mt-0.5 block text-[11px] font-normal text-slate-500">{tab.desc}</span>
               </Link>
             );
           })}
@@ -53,11 +45,8 @@ export function SettingsSideNav() {
         <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           Workspace
         </p>
-        <Link
-          href="/finance"
-          className="block rounded-lg px-3 py-2 text-[13px] font-medium text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
-        >
-          ← Back to Finance
+        <Link href={back.href} className={`block rounded-lg px-3 py-2 text-[13px] font-medium ${theme.navIdle}`}>
+          {back.label}
         </Link>
       </div>
     </nav>
@@ -75,14 +64,14 @@ export const SETTINGS_TAB_COPY: Record<string, { title: string; description: str
   },
   "/settings/notifications": {
     title: "Notifications",
-    description: "Choose which alerts you receive by email and in the app."
+    description: "Control in-app alerts, sounds, and email notification channels."
   },
   "/settings/security": {
     title: "Security",
-    description: "Password, sessions, and sign-in safety."
+    description: "Change your password and manage sign-in preferences."
   },
   "/settings/profile": {
     title: "Contact details",
-    description: "Extra phones, work emails, and next of kin."
+    description: "Extra phones, work emails, and next of kin for emergencies."
   }
 };

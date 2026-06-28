@@ -1,496 +1,247 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth-context";
+import {
+  SettingsField,
+  SettingsFormGrid,
+  SettingsMessage,
+  SettingsPage,
+  SettingsPanel,
+  SettingsSaveBar,
+  SettingsSection,
+  SettingsToggle,
+  useSettingsTheme
+} from "../../../components/settings/settings-primitives";
+
+type PasswordFields = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type SecurityPrefs = {
+  login: { loginNotifications: boolean };
+  [key: string]: unknown;
+};
 
 export default function SecurityPage() {
-  const { auth, apiFetch } = useAuth();
+  const { apiFetch } = useAuth();
+  const theme = useSettingsTheme();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [security, setSecurity] = useState({
-    password: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: ""
-    },
-    twoFactor: {
-      enabled: false,
-      method: "sms", // sms, email, app
-      phoneNumber: "",
-      backupCodes: []
-    },
-    sessions: {
-      autoLogout: 30, // minutes
-      requireReauth: false,
-      activeSessions: []
-    },
-    privacy: {
-      dataSharing: false,
-      analytics: true,
-      marketing: false,
-      cookies: true
-    },
-    login: {
-      requireTwoFactor: false,
-      allowedIPs: [],
-      loginNotifications: true
-    }
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [password, setPassword] = useState<PasswordFields>({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
   });
+  const [savedPrefs, setSavedPrefs] = useState<SecurityPrefs>({
+    login: { loginNotifications: true }
+  });
+  const [prefs, setPrefs] = useState<SecurityPrefs>({
+    login: { loginNotifications: true }
+  });
+  const [fullSecurity, setFullSecurity] = useState<Record<string, unknown>>({});
+  const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [prefsMessage, setPrefsMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSecuritySettings();
-  }, []);
-
-  const fetchSecuritySettings = async () => {
-    try {
-      const response = await apiFetch("/user/security");
-      if (response.ok) {
-        const data = await response.json();
-        setSecurity({ ...security, ...data.data });
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/user/security");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { data?: Record<string, unknown> };
+        const raw = data.data ?? {};
+        setFullSecurity(raw);
+        const next: SecurityPrefs = {
+          ...raw,
+          login: {
+            loginNotifications:
+              (raw.login as { loginNotifications?: boolean } | undefined)?.loginNotifications ?? true
+          }
+        };
+        setPrefs(next);
+        setSavedPrefs(next);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch security settings:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch]);
 
-  const updateSecuritySettings = async () => {
-    setSaving(true);
-    try {
-      const response = await apiFetch("/user/security", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(security)
-      });
-
-      if (response.ok) {
-        alert("Security settings updated successfully!");
-      }
-    } catch (error) {
-      console.error("Failed to update security settings:", error);
-      alert("Failed to update security settings. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const prefsDirty = useMemo(
+    () => prefs.login.loginNotifications !== savedPrefs.login.loginNotifications,
+    [prefs, savedPrefs]
+  );
 
   const changePassword = async () => {
-    const { currentPassword, newPassword, confirmPassword } = security.password;
-    
+    const { currentPassword, newPassword, confirmPassword } = password;
     if (!currentPassword || !newPassword || !confirmPassword) {
-      alert("Please fill in all password fields");
+      setMessage({ type: "error", text: "Fill in all password fields." });
       return;
     }
-
     if (newPassword !== confirmPassword) {
-      alert("New password and confirmation do not match");
+      setMessage({ type: "error", text: "New password and confirmation do not match." });
       return;
     }
-
     if (newPassword.length < 8) {
-      alert("Password must be at least 8 characters long");
+      setMessage({ type: "error", text: "Password must be at least 8 characters." });
       return;
     }
 
+    setChangingPassword(true);
+    setMessage(null);
     try {
-      const response = await apiFetch("/account/change-password", {
+      const res = await apiFetch("/account/change-password", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      if (res.ok) {
+        setPassword({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setMessage({ type: "ok", text: "Password changed successfully." });
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setMessage({ type: "error", text: err.error ?? "Failed to change password." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Network error." });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const savePrefs = async () => {
+    setSavingPrefs(true);
+    setPrefsMessage(null);
+    try {
+      const res = await apiFetch("/user/security", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          currentPassword,
-          newPassword
+          ...fullSecurity,
+          login: prefs.login
         })
       });
-
-      if (response.ok) {
-        alert("Password changed successfully!");
-        setSecurity({
-          ...security,
-          password: { currentPassword: "", newPassword: "", confirmPassword: "" }
-        });
+      if (res.ok) {
+        setSavedPrefs(prefs);
+        setPrefsMessage("Sign-in preferences saved.");
       } else {
-        const error = await response.json();
-        alert(error.error || "Failed to change password");
+        setPrefsMessage("Could not save preferences.");
       }
-    } catch (error) {
-      console.error("Failed to change password:", error);
-      alert("Failed to change password. Please try again.");
-    }
-  };
-
-  const toggleTwoFactor = async () => {
-    if (!security.twoFactor.enabled) {
-      // Enable 2FA
-      alert("Two-factor authentication setup will be implemented soon");
-    } else {
-      // Disable 2FA
-      try {
-        const response = await apiFetch("/user/disable-2fa", {
-          method: "POST"
-        });
-
-        if (response.ok) {
-          setSecurity({
-            ...security,
-            twoFactor: { ...security.twoFactor, enabled: false }
-          });
-          alert("Two-factor authentication disabled");
-        }
-      } catch (error) {
-        console.error("Failed to disable 2FA:", error);
-        alert("Failed to disable two-factor authentication");
-      }
-    }
-  };
-
-  const revokeSession = async (sessionId: string) => {
-    try {
-      const response = await apiFetch(`/user/sessions/${sessionId}`, {
-        method: "DELETE"
-      });
-
-      if (response.ok) {
-        setSecurity({
-          ...security,
-          sessions: {
-            ...security.sessions,
-            activeSessions: security.sessions.activeSessions.filter((s: any) => s.id !== sessionId)
-          }
-        });
-        alert("Session revoked successfully");
-      }
-    } catch (error) {
-      console.error("Failed to revoke session:", error);
-      alert("Failed to revoke session");
+    } catch {
+      setPrefsMessage("Network error.");
+    } finally {
+      setSavingPrefs(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading security settings...</div>
+      <div className="px-4 py-12 sm:px-6 lg:px-8">
+        <p className="text-sm text-slate-500">Loading security settings…</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-none space-y-0">
-        {/* Password Change */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Change Password</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Current Password
-              </label>
-              <input
-                type="password"
-                value={security.password.currentPassword}
-                onChange={(e) => setSecurity({
-                  ...security,
-                  password: { ...security.password, currentPassword: e.target.value }
-                })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                New Password
-              </label>
-              <input
-                type="password"
-                value={security.password.newPassword}
-                onChange={(e) => setSecurity({
-                  ...security,
-                  password: { ...security.password, newPassword: e.target.value }
-                })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                value={security.password.confirmPassword}
-                onChange={(e) => setSecurity({
-                  ...security,
-                  password: { ...security.password, confirmPassword: e.target.value }
-                })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={changePassword}
-                className="px-6 py-2 bg-brand text-white rounded-lg hover:bg-brand/80 transition-colors"
-              >
-                Change Password
-              </button>
-            </div>
+    <SettingsPage>
+      <SettingsPanel>
+        <SettingsSection
+          label="Credentials"
+          title="Change password"
+          description="Use a strong password you do not reuse elsewhere."
+        >
+          <div className="flex flex-col gap-6">
+            <SettingsFormGrid>
+              <SettingsField label="Current password">
+                <input
+                  type="password"
+                  value={password.currentPassword}
+                  onChange={(e) => {
+                    setMessage(null);
+                    setPassword((p) => ({ ...p, currentPassword: e.target.value }));
+                  }}
+                  className={theme.input}
+                  autoComplete="current-password"
+                />
+              </SettingsField>
+              <SettingsField label="New password">
+                <input
+                  type="password"
+                  value={password.newPassword}
+                  onChange={(e) => {
+                    setMessage(null);
+                    setPassword((p) => ({ ...p, newPassword: e.target.value }));
+                  }}
+                  className={theme.input}
+                  autoComplete="new-password"
+                />
+              </SettingsField>
+              <div className="sm:col-span-2">
+                <SettingsField label="Confirm new password">
+                  <input
+                    type="password"
+                    value={password.confirmPassword}
+                    onChange={(e) => {
+                      setMessage(null);
+                      setPassword((p) => ({ ...p, confirmPassword: e.target.value }));
+                    }}
+                    className={theme.input}
+                    autoComplete="new-password"
+                  />
+                </SettingsField>
+              </div>
+            </SettingsFormGrid>
+            {message ? <SettingsMessage type={message.type}>{message.text}</SettingsMessage> : null}
+            <button
+              type="button"
+              disabled={changingPassword}
+              onClick={() => void changePassword()}
+              className={`self-start ${theme.btnPrimary}`}
+            >
+              {changingPassword ? "Updating…" : "Change password"}
+            </button>
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Two-Factor Authentication */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Two-Factor Authentication</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Enable 2FA</div>
-                <div className="text-sm text-slate-400">
-                  Add an extra layer of security to your account
-                </div>
-              </div>
-              <button
-                onClick={toggleTwoFactor}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.twoFactor.enabled ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.twoFactor.enabled ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            {security.twoFactor.enabled && (
-              <div className="p-4 bg-green-900/20 border border-green-800 rounded-lg">
-                <div className="text-green-400">
-                  <div className="font-medium mb-2">2FA is enabled</div>
-                  <div className="text-sm">
-                    Method: {security.twoFactor.method === "sms" ? "SMS" : 
-                           security.twoFactor.method === "email" ? "Email" : "Authenticator App"}
-                  </div>
-                </div>
-              </div>
-            )}
+      <SettingsPanel>
+        <SettingsSection
+          label="Alerts"
+          title="Sign-in alerts"
+          description="Get notified when a new device signs in to your account."
+        >
+          <div className="max-w-2xl">
+            <SettingsToggle
+              label="Login notifications"
+              description="Email alert when your account is accessed from a new session."
+              on={prefs.login.loginNotifications}
+              onChange={(loginNotifications) => {
+                setPrefsMessage(null);
+                setPrefs({ login: { loginNotifications } });
+              }}
+            />
+            <SettingsSaveBar
+              dirty={prefsDirty}
+              saving={savingPrefs}
+              onSave={() => void savePrefs()}
+              label="Save sign-in preferences"
+              successMessage={prefsMessage}
+            />
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Active Sessions */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Active Sessions</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Auto-logout</div>
-                <div className="text-sm text-slate-400">Automatically log out after inactivity</div>
-              </div>
-              <select
-                value={security.sessions.autoLogout}
-                onChange={(e) => setSecurity({
-                  ...security,
-                  sessions: { ...security.sessions, autoLogout: parseInt(e.target.value) }
-                })}
-                className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              >
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={60}>1 hour</option>
-                <option value={120}>2 hours</option>
-                <option value={240}>4 hours</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Require Re-authentication</div>
-                <div className="text-sm text-slate-400">Require password for sensitive actions</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  sessions: { ...security.sessions, requireReauth: !security.sessions.requireReauth }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.sessions.requireReauth ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.sessions.requireReauth ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-lg font-medium text-slate-200 mb-4">Current Session</h3>
-              <div className="p-4 bg-slate-800/50 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-slate-200">Current Device</div>
-                    <div className="text-sm text-slate-400">
-                      {window.navigator.userAgent.split(' ')[0]} • {window.location.hostname}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Active now • This session
-                    </div>
-                  </div>
-                  <div className="px-3 py-1 bg-green-900/20 text-green-400 rounded text-sm">
-                    Current
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Privacy Settings */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Privacy Settings</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Data Sharing</div>
-                <div className="text-sm text-slate-400">Share anonymous usage data to improve the service</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  privacy: { ...security.privacy, dataSharing: !security.privacy.dataSharing }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.privacy.dataSharing ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.privacy.dataSharing ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Analytics</div>
-                <div className="text-sm text-slate-400">Allow analytics tracking</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  privacy: { ...security.privacy, analytics: !security.privacy.analytics }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.privacy.analytics ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.privacy.analytics ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Marketing Communications</div>
-                <div className="text-sm text-slate-400">Receive marketing emails and notifications</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  privacy: { ...security.privacy, marketing: !security.privacy.marketing }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.privacy.marketing ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.privacy.marketing ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Cookies</div>
-                <div className="text-sm text-slate-400">Allow cookies for better experience</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  privacy: { ...security.privacy, cookies: !security.privacy.cookies }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.privacy.cookies ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.privacy.cookies ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Login Security */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Login Security</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Require Two-Factor for Login</div>
-                <div className="text-sm text-slate-400">Force 2FA for all login attempts</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  login: { ...security.login, requireTwoFactor: !security.login.requireTwoFactor }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.login.requireTwoFactor ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.login.requireTwoFactor ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Login Notifications</div>
-                <div className="text-sm text-slate-400">Get notified of new login attempts</div>
-              </div>
-              <button
-                onClick={() => setSecurity({
-                  ...security,
-                  login: { ...security.login, loginNotifications: !security.login.loginNotifications }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  security.login.loginNotifications ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  security.login.loginNotifications ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={updateSecuritySettings}
-            disabled={saving}
-            className="px-6 py-3 bg-brand text-white rounded-lg hover:bg-brand/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? "Saving..." : "Save Security Settings"}
-          </button>
-        </div>
-    </div>
+      <SettingsPanel className="border-b-0">
+        <p className="max-w-3xl text-sm text-slate-500">
+          Two-factor authentication and remote session management are planned. Password changes take effect immediately.
+        </p>
+      </SettingsPanel>
+    </SettingsPage>
   );
 }

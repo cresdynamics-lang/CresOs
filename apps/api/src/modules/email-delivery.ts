@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { channelFromNotificationType, renderSalesBulkEmail } from "../lib/email-templates";
+import { loadOrgEmailTemplates, renderFromTemplate } from "../lib/email-template-engine";
 import { sendInvoiceEmailToClient } from "../lib/invoice-email";
 import { sendOutboundEmail } from "../lib/resend";
 
@@ -74,11 +75,13 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
         emailChannel: "sales"
       });
     } else {
+      const templates = await loadOrgEmailTemplates(prisma, orgId);
+      const rendered = renderFromTemplate(templates, "notification", { subject, body });
       result = await sendOutboundEmail({
         to,
         subject,
-        text: toText(subject, body),
-        html: plainHtml(subject, body),
+        text: rendered?.text ?? toText(subject, body),
+        html: rendered?.html ?? plainHtml(subject, body),
         emailChannel
       });
     }

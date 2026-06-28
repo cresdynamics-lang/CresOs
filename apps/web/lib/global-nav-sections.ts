@@ -32,6 +32,7 @@ export const GLOBAL_NAV_SECTIONS: GlobalNavSection[] = [
     items: [
       { href: "/sales", label: "Sales", roles: ["admin", "sales", "director_admin", "finance"] },
       { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst", "director_admin"] },
+      { href: "/hr", label: "HR", roles: ["admin", "hr"] },
       { href: "/admin/users", label: "Admin", roles: ["admin"] }
     ]
   },

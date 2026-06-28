@@ -4,6 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../app/auth-context";
 import { SettingsProfilePhoto } from "./settings-profile-photo";
+import {
+  SettingsField,
+  SettingsFormGrid,
+  SettingsFormGridFull,
+  SettingsHero,
+  SettingsMessage,
+  SettingsPage,
+  SettingsPanel,
+  SettingsSaveBar,
+  SettingsSection,
+  useSettingsTheme
+} from "./settings/settings-primitives";
 
 type SavedFields = {
   name: string;
@@ -36,7 +48,6 @@ export type AccountProfile = {
 };
 
 type SettingsAccountFormProps = {
-  /** Compact layout for the slide-over settings panel */
   variant?: "page" | "panel";
   showPhoto?: boolean;
   showExtendedLink?: boolean;
@@ -48,6 +59,7 @@ export function SettingsAccountForm({
   showExtendedLink = true
 }: SettingsAccountFormProps) {
   const { apiFetch, patchAuth } = useAuth();
+  const theme = useSettingsTheme();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -98,10 +110,10 @@ export function SettingsAccountForm({
     return () => {
       cancelled = true;
     };
-  }, [apiFetch]);
+  }, [apiFetch, patchAuth]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setSaving(true);
     setMessage(null);
     try {
@@ -139,34 +151,28 @@ export function SettingsAccountForm({
   };
 
   if (!profile) {
-    return <p className="text-slate-400">Loading…</p>;
+    return (
+      <div className="px-4 py-12 sm:px-6 lg:px-8">
+        <p className="text-sm text-slate-500">Loading account…</p>
+      </div>
+    );
   }
 
-  const rootClass = variant === "page" ? "flex w-full max-w-3xl flex-col gap-8" : "space-y-4";
+  const displayName = name.trim() || profile.name || profile.email;
 
-  return (
-    <div className={rootClass}>
-      {showPhoto && (
-        <div className={variant === "page" ? "border-b border-slate-800/70 pb-8" : ""}>
+  if (variant === "panel") {
+    return (
+      <div className="space-y-4">
+        {showPhoto ? (
           <SettingsProfilePhoto
             picturePath={profile.profilePicture}
-            displayName={name.trim() || profile.name || profile.email}
-            compact={variant === "panel"}
+            displayName={displayName}
+            compact
             onPictureChange={(path) => setProfile((p) => (p ? { ...p, profilePicture: path } : p))}
           />
-        </div>
-      )}
-
-      <div>
-        {variant === "page" && (
-          <h3 className="mb-1 font-display text-sm font-semibold text-slate-100 sm:text-base">Account</h3>
-        )}
-        <p className="mb-4 text-xs text-slate-400 sm:text-sm">
-          Your notification email is used for reminders, meetings, and alerts.
-        </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-400">Name</span>
+        ) : null}
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
+          <SettingsField label="Name">
             <input
               type="text"
               value={name}
@@ -174,70 +180,106 @@ export function SettingsAccountForm({
                 clearOkOnEdit();
                 setName(e.target.value);
               }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+              className={theme.input}
               placeholder="Your name"
             />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-400">Login email (read-only)</span>
-            <input
-              type="email"
-              value={profile.email}
-              readOnly
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2 text-slate-400"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-400">Notification email</span>
-            <input
-              type="email"
-              value={notificationEmail}
-              onChange={(e) => {
-                clearOkOnEdit();
-                setNotificationEmail(e.target.value);
-              }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-              placeholder="Email for reminders and alerts"
-            />
-            <p className="mt-1 text-[10px] text-slate-500">Leave empty to use your login email.</p>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-400">Phone</span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => {
-                clearOkOnEdit();
-                setPhone(e.target.value);
-              }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-              placeholder="Your phone number"
-            />
-          </label>
-          {message?.type === "ok" && !isDirty && (
-            <p className="text-sm text-emerald-400">{message.text}</p>
-          )}
-          {message?.type === "error" && (
-            <p className="text-sm text-rose-400">{message.text}</p>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            {(isDirty || saving) && (
-              <button
-                type="submit"
-                disabled={saving || !isDirty}
-                className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            )}
-            {showExtendedLink && variant === "page" && (
-              <Link href="/settings/profile" className="text-sm text-sky-400 hover:underline">
-                Contact details & next of kin →
-              </Link>
-            )}
-          </div>
+          </SettingsField>
+          <SettingsField label="Login email (read-only)">
+            <input type="email" value={profile.email} readOnly className={theme.inputReadonly} />
+          </SettingsField>
+          {message?.type === "error" ? <SettingsMessage type="error">{message.text}</SettingsMessage> : null}
+          <SettingsSaveBar
+            dirty={isDirty}
+            saving={saving}
+            onSave={() => void handleSubmit()}
+            successMessage={message?.type === "ok" && !isDirty ? message.text : null}
+          />
         </form>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <SettingsPage>
+      {showPhoto ? (
+        <SettingsHero>
+          <SettingsProfilePhoto
+            picturePath={profile.profilePicture}
+            displayName={displayName}
+            hero
+            onPictureChange={(path) => setProfile((p) => (p ? { ...p, profilePicture: path } : p))}
+          />
+        </SettingsHero>
+      ) : null}
+
+      <SettingsPanel>
+        <SettingsSection
+          label="Profile"
+          title="Account details"
+          description="Your notification email is used for reminders, meetings, and alerts."
+        >
+          <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-6">
+            <SettingsFormGrid>
+              <SettingsField label="Name">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    clearOkOnEdit();
+                    setName(e.target.value);
+                  }}
+                  className={theme.input}
+                  placeholder="Your name"
+                />
+              </SettingsField>
+              <SettingsField label="Phone">
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    clearOkOnEdit();
+                    setPhone(e.target.value);
+                  }}
+                  className={theme.input}
+                  placeholder="Your phone number"
+                />
+              </SettingsField>
+              <SettingsField label="Login email (read-only)">
+                <input type="email" value={profile.email} readOnly className={theme.inputReadonly} />
+              </SettingsField>
+              <SettingsField label="Notification email" hint="Leave empty to use your login email.">
+                <input
+                  type="email"
+                  value={notificationEmail}
+                  onChange={(e) => {
+                    clearOkOnEdit();
+                    setNotificationEmail(e.target.value);
+                  }}
+                  className={theme.input}
+                  placeholder="Email for reminders and alerts"
+                />
+              </SettingsField>
+            </SettingsFormGrid>
+
+            {message?.type === "error" ? <SettingsMessage type="error">{message.text}</SettingsMessage> : null}
+
+            <SettingsFormGridFull className="flex flex-wrap items-center gap-4">
+              {showExtendedLink ? (
+                <Link href="/settings/profile" className={`text-sm ${theme.accentText} hover:underline`}>
+                  Contact details & next of kin →
+                </Link>
+              ) : null}
+            </SettingsFormGridFull>
+
+            <SettingsSaveBar
+              dirty={isDirty}
+              saving={saving}
+              onSave={() => void handleSubmit()}
+              successMessage={message?.type === "ok" && !isDirty ? message.text : null}
+            />
+          </form>
+        </SettingsSection>
+      </SettingsPanel>
+    </SettingsPage>
   );
 }

@@ -10,7 +10,15 @@ import { DevStatInline, DevStatRow } from "../../components/developer/developer-
 import { devNeu } from "../../components/developer/developer-theme";
 import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
 import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
-import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import {
+  WorkspaceAlignedTips,
+  WorkspaceDashboardSection,
+  WorkspacePriorityGrid,
+  dedupeAiHint,
+  dedupeFocusTips,
+  type WorkspacePriorityItem
+} from "../../components/workspace/workspace-dashboard-primitives";
+import { buildWelcomeHeadline } from "../../lib/personalized-greeting";
 
 export type DevProjectRow = {
   id: string;
@@ -21,36 +29,21 @@ export type DevProjectRow = {
   doneTasks: number;
   taskCount: number;
   status: string;
+  milestoneTotal?: number;
+  milestoneCompleted?: number;
 };
 
 export type DevQueueStats = {
   assignedProjects: number;
+  activeProjects: number;
   overdueTasks: number;
   blockedTasks: number;
   avgProgress: number;
+  milestoneSuccessPercent: number;
   reportStreakDays: number;
   workProgressPercent: number;
   unreadNotifications: number;
 };
-
-type DevAlert = {
-  id: string;
-  tone: "warning" | "danger" | "info";
-  title: string;
-  detail: string;
-  href: string;
-  action: string;
-};
-
-const QUICK_LINKS = [
-  { href: "/schedule", label: "Tasks" },
-  { href: "/developer-reports", label: "Reports" },
-  { href: "/projects", label: "Projects" },
-  { href: "/community", label: "Community" },
-  { href: "/settings/account", label: "Settings" }
-] as const;
-
-const CHART_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500"];
 
 type DeveloperOverviewDashboardProps = {
   queue: DevQueueStats;
@@ -65,6 +58,8 @@ type DeveloperOverviewDashboardProps = {
     description: string | null;
     currency?: string;
   }[];
+  focusTips: string[];
+  aiHint: string | null;
   loading: boolean;
   loadError?: string | null;
   onRefresh: () => void;
@@ -73,6 +68,16 @@ type DeveloperOverviewDashboardProps = {
   dismissedReminderKeys: Set<string>;
 };
 
+const QUICK_LINKS = [
+  { href: "/schedule", label: "Tasks" },
+  { href: "/developer-reports", label: "Reports" },
+  { href: "/projects", label: "Projects" },
+  { href: "/community", label: "Community" },
+  { href: "/settings/account", label: "Settings" }
+] as const;
+
+const CHART_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500"];
+
 export function DeveloperOverviewDashboard({
   queue,
   projects,
@@ -80,6 +85,8 @@ export function DeveloperOverviewDashboard({
   reportReminderDue,
   progressReminders,
   pendingPayments,
+  focusTips,
+  aiHint,
   loading,
   loadError,
   onRefresh,
@@ -88,10 +95,6 @@ export function DeveloperOverviewDashboard({
   dismissedReminderKeys
 }: DeveloperOverviewDashboardProps) {
   const { auth } = useAuth();
-  const firstName = useMemo(
-    () => getDisplayFirstName(auth.userName, auth.userEmail),
-    [auth.userName, auth.userEmail]
-  );
   const welcomeHeadline = useMemo(
     () => buildWelcomeHeadline(auth.userName, auth.userEmail),
     [auth.userName, auth.userEmail]
@@ -99,8 +102,8 @@ export function DeveloperOverviewDashboard({
 
   const visibleReminders = progressReminders.filter((r) => !dismissedReminderKeys.has(r.reminderKey));
 
-  const alertItems = useMemo((): DevAlert[] => {
-    const items: DevAlert[] = [];
+  const alertItems = useMemo((): WorkspacePriorityItem[] => {
+    const items: WorkspacePriorityItem[] = [];
     if (reportReminderDue) {
       items.push({
         id: "report-due",
@@ -144,7 +147,24 @@ export function DeveloperOverviewDashboard({
     return items;
   }, [queue, reportReminderDue, visibleReminders]);
 
+  const alignedTips = useMemo(
+    () =>
+      dedupeFocusTips(focusTips, {
+        reportReminderDue,
+        hasUnreadAlert: queue.unreadNotifications > 0,
+        hasOverdueTasksAlert: queue.overdueTasks > 0,
+        priorityTitles: alertItems.map((a) => a.title)
+      }),
+    [focusTips, reportReminderDue, queue.unreadNotifications, alertItems]
+  );
+
+  const alignedHint = useMemo(
+    () => dedupeAiHint(aiHint, alignedTips, { reportReminderDue }),
+    [aiHint, alignedTips, reportReminderDue]
+  );
+
   const projectBars = projects
+    .filter((p) => p.status === "active" || p.status === "planned")
     .slice(0, 8)
     .map((p, idx) => {
       const name = p.name?.trim() || "Project";
@@ -177,7 +197,7 @@ export function DeveloperOverviewDashboard({
         ].filter((t) => t.value > 0)
       : [];
 
-  const alertClass = (tone: DevAlert["tone"]) => {
+  const alertClass = (tone: WorkspacePriorityItem["tone"]) => {
     if (tone === "danger") return devNeu.alertDanger;
     if (tone === "warning") return devNeu.alertWarning;
     return devNeu.alertInfo;
@@ -194,8 +214,7 @@ export function DeveloperOverviewDashboard({
             {welcomeHeadline}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-            {firstName}, your delivery queue and project progress — use the sidebar for tasks, reports, and
-            projects.
+            Your delivery queue and milestone progress — use the sidebar for tasks, reports, and projects.
           </p>
         </div>
         <button
@@ -215,15 +234,16 @@ export function DeveloperOverviewDashboard({
       ) : null}
 
       {pendingPayments.length > 0 && (
-        <section aria-label="Payment confirmations" className="w-full">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Confirm payments</DashboardSectionLabel>
+        <WorkspaceDashboardSection label="Confirm payments" roleKeys={auth.roleKeys}>
           <ul className="mt-3 grid w-full gap-3">
             {pendingPayments.map((row) => (
               <li key={row.id} className={devNeu.alertWarning}>
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
                   <div className="min-w-0">
-                    <p className="font-semibold text-amber-200">Finance payment recorded</p>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="font-display text-base font-semibold leading-snug text-amber-100 sm:text-lg">
+                      Finance payment recorded
+                    </p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
                       {formatMoney(Number(row.amount))}
                       {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
                       {row.description?.trim() || "Developer payment"} ·{" "}
@@ -233,7 +253,7 @@ export function DeveloperOverviewDashboard({
                   <button
                     type="button"
                     onClick={() => onAckPayment(row.id)}
-                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${devNeu.btnPrimary}`}
+                    className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-bold uppercase tracking-wide sm:text-sm ${devNeu.btnPrimary}`}
                   >
                     Confirm receipt
                   </button>
@@ -241,67 +261,44 @@ export function DeveloperOverviewDashboard({
               </li>
             ))}
           </ul>
-        </section>
+        </WorkspaceDashboardSection>
       )}
 
-      {alertItems.length > 0 && (
-        <section aria-label="Today's priorities" className="w-full">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Today&apos;s priorities</DashboardSectionLabel>
-          <ul className="mt-3 grid w-full gap-3 lg:grid-cols-2">
-            {alertItems.map((alert) => (
-              <li key={alert.id} className={alertClass(alert.tone)}>
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`font-semibold ${
-                        alert.tone === "danger"
-                          ? "text-rose-200"
-                          : alert.tone === "warning"
-                            ? "text-amber-200"
-                            : "text-violet-200"
-                      }`}
-                    >
-                      {alert.title}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-300">{alert.detail}</p>
-                    {visibleReminders.some((r) => r.reminderKey === alert.id) ? (
-                      <button
-                        type="button"
-                        onClick={() => onDismissReminder(alert.id)}
-                        className="mt-2 text-xs text-slate-500 hover:text-slate-300"
-                      >
-                        Dismiss
-                      </button>
-                    ) : null}
-                  </div>
-                  <Link
-                    href={alert.href}
-                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
-                      alert.tone === "danger"
-                        ? "bg-rose-600/90 hover:bg-rose-500"
-                        : alert.tone === "warning"
-                          ? "bg-amber-600/90 hover:bg-amber-500"
-                          : "bg-violet-600/90 hover:bg-violet-500"
-                    }`}
-                  >
-                    {alert.action} →
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {alertItems.length > 0 ? (
+        <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>
+          <WorkspacePriorityGrid
+            items={alertItems}
+            panelClass={alertClass}
+            dismissible={(id) =>
+              visibleReminders.some((r) => r.reminderKey === id) ? (
+                <button
+                  type="button"
+                  onClick={() => onDismissReminder(id)}
+                  className="mt-2 text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Dismiss
+                </button>
+              ) : null
+            }
+          />
+        </WorkspaceDashboardSection>
+      ) : null}
 
-      <section aria-label="Delivery snapshot" className="w-full">
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>Delivery snapshot</DashboardSectionLabel>
+      <WorkspaceAlignedTips
+        tips={alignedTips}
+        aiHint={alignedHint}
+        panelClass={`${devNeu.panelInset} p-4 sm:p-5`}
+        roleKeys={auth.roleKeys}
+      />
+
+      <WorkspaceDashboardSection label="Your queue" roleKeys={auth.roleKeys}>
         <div className={`mt-3 ${devNeu.kpiStrip}`}>
           <DevStatRow>
             <Link href="/projects" className="min-w-0 hover:opacity-90">
               <DevStatInline
-                label="Projects"
-                value={loading ? "…" : queue.assignedProjects}
-                hint="Assigned to you"
+                label="Active projects"
+                value={loading ? "…" : queue.activeProjects}
+                hint="Planned or in flight"
                 tone="violet"
               />
             </Link>
@@ -314,9 +311,9 @@ export function DeveloperOverviewDashboard({
               />
             </Link>
             <DevStatInline
-              label="Avg progress"
+              label="Milestone avg"
               value={loading ? "…" : `${queue.avgProgress}%`}
-              hint="Across your tasks"
+              hint="Completion on active projects"
               tone="emerald"
             />
             <DevStatInline
@@ -352,7 +349,7 @@ export function DeveloperOverviewDashboard({
             </Link>
           </DevStatRow>
         </div>
-      </section>
+      </WorkspaceDashboardSection>
 
       <nav aria-label="Developer quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">
         {QUICK_LINKS.map((link) => (
@@ -377,11 +374,11 @@ export function DeveloperOverviewDashboard({
         </div>
 
         <div className="grid w-full gap-4 xl:grid-cols-2">
-          <ChartPanel title="Project progress">
+          <ChartPanel title="Milestone completion">
             <HorizontalBarChart
               items={projectBars}
               valueSuffix="%"
-              emptyLabel={loading ? "Loading projects…" : "No assigned projects yet"}
+              emptyLabel={loading ? "Loading projects…" : "No active projects yet"}
             />
           </ChartPanel>
 

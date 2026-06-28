@@ -18,6 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
   developer: "Developer",
   sales: "Sales",
   analyst: "Analyst",
+  hr: "HR",
   client: "Client"
 };
 

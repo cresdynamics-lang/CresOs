@@ -8,12 +8,20 @@ import { WorkspaceAccountFooter } from "../../components/workspace/workspace-acc
 import { salesNeu } from "../../components/sales/sales-theme";
 import { SalesSideNav } from "./sales-workspace-nav";
 import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
+import { LeadershipLayoutGate } from "../../components/workspace/leadership-layout-gate";
+import { isDirectorOnly } from "../../lib/is-director-only";
+import { isAdminOnly } from "../../lib/is-admin-only";
 
 /** Sales workspace chrome for pipeline routes (/leads, /crm, /reports). */
 export function SalesLinkedLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
+
+  if (isDirectorOnly(auth.roleKeys) || isAdminOnly(auth.roleKeys)) {
+    return <LeadershipLayoutGate>{children}</LeadershipLayoutGate>;
+  }
+
   const canAccess = auth.roleKeys.some((r) =>
     ["admin", "sales", "director_admin", "finance"].includes(r)
   );
@@ -44,7 +52,7 @@ export function SalesLinkedLayoutClient({ children }: { children: React.ReactNod
         subtitle="Pipeline · delivery · revenue"
         themeKey="sales"
         className="hidden w-[15rem] md:flex"
-        footer={<WorkspaceAccountFooter themeKey="sales" onLogout={handleLogout} showAccountLink={false} />}
+        footer={<WorkspaceAccountFooter themeKey="sales" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />}
       >
         <SalesSideNav />
       </WorkspaceAside>

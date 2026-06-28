@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { NotificationPreferencesForm } from "./notification-preferences-form";
 import { SettingsAccountForm } from "../components/settings-account-form";
+import { SettingsThemeProvider } from "../components/settings/settings-primitives";
+import { resolveSettingsWorkspace } from "../lib/resolve-settings-workspace";
+import { useAuth } from "./auth-context";
 import { useWorkspaceLogout } from "../lib/use-workspace-logout";
 
 type TabId = "account" | "preferences";
@@ -16,6 +19,8 @@ const TABS: { id: TabId; label: string; description: string }[] = [
 ];
 
 export function SettingsPanel({ open, onClose, initialTab }: Props) {
+  const { auth } = useAuth();
+  const workspaceKey = resolveSettingsWorkspace(auth.roleKeys);
   const [tab, setTab] = useState<TabId>(initialTab ?? "account");
   const handleLogout = useWorkspaceLogout();
 
@@ -76,8 +81,10 @@ export function SettingsPanel({ open, onClose, initialTab }: Props) {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-            {tab === "account" && <SettingsAccountForm variant="panel" showExtendedLink={false} />}
-            {tab === "preferences" && <NotificationPreferencesForm />}
+            <SettingsThemeProvider workspaceKey={workspaceKey}>
+              {tab === "account" && <SettingsAccountForm variant="panel" showExtendedLink={false} />}
+              {tab === "preferences" && <NotificationPreferencesForm />}
+            </SettingsThemeProvider>
           </div>
         </div>
 

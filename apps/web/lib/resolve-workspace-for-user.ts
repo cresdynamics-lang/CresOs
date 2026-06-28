@@ -1,19 +1,31 @@
 import type { WorkspaceKey } from "./resolve-workspace";
 import { resolveWorkspace } from "./resolve-workspace";
+import { isDirectorOnly } from "./is-director-only";
+import { isAdminOnly } from "./is-admin-only";
+import { isClientOnly } from "./is-client-only";
+import { canAccessHrWorkspace, isHrOnly } from "./is-hr-only";
 
 function hasRole(roleKeys: string[], role: string): boolean {
   return roleKeys.includes(role);
 }
 
-function isDeveloperOnly(roleKeys: string[]): boolean {
+/** Developer workspace chrome (neu UI) — developer role without leadership or other workspace roles. */
+export function isDeveloperOnly(roleKeys: string[]): boolean {
   return (
     hasRole(roleKeys, "developer") &&
     !hasRole(roleKeys, "admin") &&
     !hasRole(roleKeys, "sales") &&
     !hasRole(roleKeys, "finance") &&
     !hasRole(roleKeys, "analyst") &&
-    !hasRole(roleKeys, "director_admin")
+    !hasRole(roleKeys, "director_admin") &&
+    !hasRole(roleKeys, "client")
   );
+}
+
+/** Sales workspace schedule UI — sales or director_admin without developer-only isolation. */
+export function isSalesScheduleNeu(roleKeys: string[]): boolean {
+  if (isDeveloperOnly(roleKeys)) return false;
+  return hasRole(roleKeys, "sales") || hasRole(roleKeys, "director_admin");
 }
 
 function isSharedWorkspacePath(path: string): boolean {
@@ -55,6 +67,28 @@ function pickSharedWorkspace(path: string, roleKeys: string[]): WorkspaceKey | n
 /** Workspace for current path and user — used for side panel + hiding global nav. */
 export function resolveWorkspaceForUser(pathname: string, roleKeys: string[]): WorkspaceKey | null {
   const path = pathname.split("?")[0] ?? pathname;
+  if (path.startsWith("/settings")) return null;
+
+  if (path.startsWith("/hr") && canAccessHrWorkspace(roleKeys)) {
+    return "hr";
+  }
+
+  if (isDirectorOnly(roleKeys)) {
+    return "director";
+  }
+
+  if (isAdminOnly(roleKeys)) {
+    return "admin";
+  }
+
+  if (isHrOnly(roleKeys)) {
+    return "hr";
+  }
+
+  if (isClientOnly(roleKeys)) {
+    return "client";
+  }
+
   const pathBased = resolveWorkspace(path);
   if (pathBased) return pathBased;
   if (!isSharedWorkspacePath(path)) return null;

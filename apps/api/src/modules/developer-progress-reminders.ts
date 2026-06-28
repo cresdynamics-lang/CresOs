@@ -157,7 +157,20 @@ export async function getDeveloperProjectAnalytics(
 ) {
   const projectIds = await assignedProjectIds(prisma, orgId, userId);
   if (projectIds.length === 0) {
-    return { projects: [], totals: { assigned: 0, overdue: 0, blocked: 0, avgProgress: 0 } };
+    return {
+      projects: [],
+      totals: {
+        assigned: 0,
+        totalAssigned: 0,
+        active: 0,
+        overdue: 0,
+        blocked: 0,
+        avgProgress: 0,
+        milestonesDone: 0,
+        milestonesTotal: 0,
+        milestoneSuccessPercent: 0
+      }
+    };
   }
 
   const now = new Date();
@@ -193,6 +206,10 @@ export async function getDeveloperProjectAnalytics(
       const pendingMilestones = await prisma.milestone.count({
         where: { orgId, projectId: p.id, deletedAt: null, status: { not: "completed" } }
       });
+      const completedMilestones = await prisma.milestone.count({
+        where: { orgId, projectId: p.id, deletedAt: null, status: "completed" }
+      });
+      const totalMilestones = pendingMilestones + completedMilestones;
       const overdueMilestones = await prisma.milestone.count({
         where: {
           orgId,
@@ -203,7 +220,12 @@ export async function getDeveloperProjectAnalytics(
         }
       });
 
-      const progressPercent = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
+      const progressPercent =
+        totalMilestones > 0
+          ? Math.round((completedMilestones / totalMilestones) * 100)
+          : tasks.length > 0
+            ? Math.round((done / tasks.length) * 100)
+            : 0;
       const hoursSinceUpdate = lastUpdate
         ? Math.round((now.getTime() - lastUpdate.getTime()) / ONE_HOUR_MS)
         : null;
@@ -223,6 +245,8 @@ export async function getDeveloperProjectAnalytics(
         blockedTasks: blocked,
         pendingMilestones,
         overdueMilestones,
+        milestoneTotal: totalMilestones,
+        milestoneCompleted: completedMilestones,
         progressPercent,
         lastTaskUpdateAt: lastUpdate?.toISOString() ?? null,
         hoursSinceUpdate,
@@ -231,14 +255,30 @@ export async function getDeveloperProjectAnalytics(
     })
   );
 
+  const activeRows = rows.filter((r) => r.status === "active" || r.status === "planned");
   const overdue = rows.reduce((s, r) => s + r.overdueTasks, 0);
   const blocked = rows.reduce((s, r) => s + r.blockedTasks, 0);
   const avgProgress =
-    rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.progressPercent, 0) / rows.length) : 0;
+    activeRows.length > 0
+      ? Math.round(activeRows.reduce((s, r) => s + r.progressPercent, 0) / activeRows.length)
+      : 0;
+  const milestonesDone = rows.reduce((s, r) => s + (r.milestoneCompleted ?? 0), 0);
+  const milestonesTotal = rows.reduce((s, r) => s + (r.milestoneTotal ?? 0), 0);
 
   return {
     projects: rows,
-    totals: { assigned: rows.length, overdue, blocked, avgProgress },
+    totals: {
+      assigned: activeRows.length,
+      totalAssigned: rows.length,
+      active: activeRows.length,
+      overdue,
+      blocked,
+      avgProgress,
+      milestonesDone,
+      milestonesTotal,
+      milestoneSuccessPercent:
+        milestonesTotal > 0 ? Math.round((milestonesDone / milestonesTotal) * 100) : 0
+    },
     refreshedAt: now.toISOString()
   };
 }

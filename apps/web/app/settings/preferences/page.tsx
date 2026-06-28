@@ -1,479 +1,479 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth-context";
 import { useTheme, type ThemeMode } from "../../../lib/theme-provider";
+import {
+  applyUserPreferencesToDocument,
+  getDesktopNotificationState,
+  requestDesktopNotificationPermission,
+  type NotificationPermissionState
+} from "../../../lib/apply-user-preferences";
+import {
+  DEFAULT_USER_PREFERENCES,
+  detectBrowserLanguage,
+  detectBrowserTimezone,
+  dispatchPreferencesChanged,
+  getTimezoneOptions,
+  normalizeUserPreferences,
+  preferencesSnapshot,
+  type UserPreferences
+} from "../../../lib/user-preferences";
+import {
+  SettingsField,
+  SettingsFormGrid,
+  SettingsPage,
+  SettingsPanel,
+  SettingsSaveBar,
+  SettingsSection,
+  SettingsToggle,
+  useSettingsTheme
+} from "../../../components/settings/settings-primitives";
 
-function Toggle({
-  on,
-  onToggle
+function ThemeChoice({
+  mode,
+  selected,
+  resolved,
+  onSelect
 }: {
-  on: boolean;
-  onToggle: () => void;
+  mode: ThemeMode;
+  selected: ThemeMode;
+  resolved: "dark" | "light";
+  onSelect: (m: ThemeMode) => void;
 }) {
+  const themeTokens = useSettingsTheme();
+  const active = selected === mode;
+  const hint =
+    mode === "auto"
+      ? `Matches device (${resolved})`
+      : mode === "dark"
+        ? "Dark surfaces"
+        : "Light surfaces";
+
   return (
     <button
       type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={onToggle}
-      className={`h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-brand" : "bg-slate-600"}`}
+      onClick={() => onSelect(mode)}
+      aria-pressed={active}
+      className={`flex min-w-[5.5rem] flex-col items-center gap-1 rounded-xl px-4 py-3 text-sm capitalize transition-all ${
+        active ? themeTokens.navActive : themeTokens.navIdle
+      }`}
     >
-      <span
-        className={`block h-5 w-5 translate-y-0.5 rounded-full bg-white transition-transform ${
-          on ? "translate-x-[1.35rem]" : "translate-x-0.5"
-        }`}
-      />
+      <span className="font-semibold">{mode}</span>
+      <span className="text-[10px] font-normal normal-case text-slate-500">{hint}</span>
     </button>
   );
 }
 
+function desktopStatusLabel(state: NotificationPermissionState): string {
+  if (state === "unsupported") return "Not supported in this browser";
+  if (state === "granted") return "Browser permission granted";
+  if (state === "denied") return "Blocked in browser — enable in site settings";
+  return "Permission not requested yet";
+}
+
 export default function PreferencesPage() {
   const { apiFetch } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { resolved, setTheme } = useTheme();
+  const themeTokens = useSettingsTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [preferences, setPreferences] = useState({
-    theme: "dark",
-    language: "en",
-    timezone: "UTC",
-    dateFormat: "MM/DD/YYYY",
-    timeFormat: "12h",
-    notifications: {
-      email: true,
-      push: true,
-      sms: false,
-      desktop: true
-    },
-    privacy: {
-      showOnlineStatus: true,
-      showLastSeen: false,
-      allowDirectMessages: true,
-      profileVisibility: "all"
-    },
-    accessibility: {
-      fontSize: "medium",
-      highContrast: false,
-      reduceMotion: false,
-      screenReader: false
-    }
-  });
+  const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_USER_PREFERENCES);
+  const [savedSnap, setSavedSnap] = useState(preferencesSnapshot(DEFAULT_USER_PREFERENCES));
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [desktopPerm, setDesktopPerm] = useState<NotificationPermissionState>("default");
+  const [browserTz] = useState(() => detectBrowserTimezone());
+  const [browserLang] = useState(() => detectBrowserLanguage());
 
-  useEffect(() => {
-    fetchPreferences();
-  }, []);
+  const timezoneOptions = useMemo(() => {
+    const base = [...getTimezoneOptions()];
+    if (browserTz && !base.includes(browserTz)) base.unshift(browserTz);
+    return base;
+  }, [browserTz]);
 
-  const fetchPreferences = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await apiFetch("/user/preferences");
-      if (response.ok) {
-        const data = await response.json();
-        const merged = { ...preferences, ...data.data };
-        setPreferences(merged);
-        if (merged.theme === "light" || merged.theme === "dark" || merged.theme === "auto") {
-          setTheme(merged.theme);
-        }
+      const res = await apiFetch("/user/preferences");
+      if (res.ok) {
+        const data = (await res.json()) as { data?: unknown };
+        const merged = normalizeUserPreferences(data.data ?? DEFAULT_USER_PREFERENCES);
+        const perm = getDesktopNotificationState();
+        const withDesktop =
+          perm !== "granted"
+            ? { ...merged, notifications: { ...merged.notifications, desktop: false } }
+            : merged;
+        setPrefs(withDesktop);
+        setSavedSnap(preferencesSnapshot(withDesktop));
+        setTheme(withDesktop.theme);
+        applyUserPreferencesToDocument(withDesktop);
       }
-    } catch (error) {
-      console.error("Failed to fetch preferences:", error);
+    } catch {
+      setError("Could not load preferences.");
     } finally {
       setLoading(false);
+      setDesktopPerm(getDesktopNotificationState());
     }
-  };
+  }, [apiFetch, setTheme]);
 
-  const persistPreferences = async (next: typeof preferences) => {
-    try {
-      await apiFetch("/user/preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next)
-      });
-    } catch (error) {
-      console.error("Failed to update preferences:", error);
-    }
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const applyTheme = (mode: ThemeMode) => {
+  const isDirty = useMemo(() => preferencesSnapshot(prefs) !== savedSnap, [prefs, savedSnap]);
+
+  const patch = useCallback((updater: (p: UserPreferences) => UserPreferences) => {
+    setSuccess(null);
+    setError(null);
+    setPrefs(updater);
+  }, []);
+
+  const persist = useCallback(
+    async (next: UserPreferences, opts?: { silent?: boolean }) => {
+      setSaving(true);
+      if (!opts?.silent) {
+        setSuccess(null);
+        setError(null);
+      }
+      try {
+        const res = await apiFetch("/user/preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(next)
+        });
+        if (res.ok) {
+          const normalized = normalizeUserPreferences(next);
+          setPrefs(normalized);
+          setSavedSnap(preferencesSnapshot(normalized));
+          applyUserPreferencesToDocument(normalized);
+          dispatchPreferencesChanged(normalized);
+          if (!opts?.silent) setSuccess("Preferences saved.");
+          return true;
+        }
+        if (!opts?.silent) setError("Could not save preferences.");
+        return false;
+      } catch {
+        if (!opts?.silent) setError("Network error.");
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [apiFetch]
+  );
+
+  const applyTheme = async (mode: ThemeMode) => {
     setTheme(mode);
-    const next = { ...preferences, theme: mode };
-    setPreferences(next);
-    void persistPreferences(next);
-  };
-
-  const patchPreference = <K extends keyof typeof preferences>(
-    key: K,
-    value: (typeof preferences)[K]
-  ) => {
-    const next = { ...preferences, [key]: value };
-    setPreferences(next);
-    void persistPreferences(next);
-  };
-
-  const updatePreferences = async () => {
-    setSaving(true);
+    setPrefs((p) => ({ ...p, theme: mode }));
     try {
-      const response = await apiFetch("/user/preferences", {
+      const res = await apiFetch("/user/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preferences)
+        body: JSON.stringify({ theme: mode })
       });
-      if (!response.ok) alert("Failed to update preferences.");
+      if (res.ok) {
+        const saved = normalizeUserPreferences(JSON.parse(savedSnap));
+        const synced = { ...saved, theme: mode };
+        setSavedSnap(preferencesSnapshot(synced));
+        applyUserPreferencesToDocument({ ...prefs, theme: mode });
+        dispatchPreferencesChanged({ ...prefs, theme: mode });
+      }
     } catch {
-      alert("Failed to update preferences. Please try again.");
-    } finally {
-      setSaving(false);
+      /* theme still applied locally */
+    }
+  };
+
+  const useBrowserTimezone = () => {
+    patch((p) => ({ ...p, timezone: browserTz }));
+  };
+
+  const useBrowserLanguage = () => {
+    patch((p) => ({ ...p, language: browserLang }));
+  };
+
+  const onDesktopToggle = async (enabled: boolean) => {
+    if (!enabled) {
+      patch((p) => ({ ...p, notifications: { ...p.notifications, desktop: false } }));
+      return;
+    }
+    const perm = await requestDesktopNotificationPermission();
+    setDesktopPerm(perm);
+    if (perm === "granted") {
+      patch((p) => ({ ...p, notifications: { ...p.notifications, desktop: true } }));
+    } else {
+      patch((p) => ({ ...p, notifications: { ...p.notifications, desktop: false } }));
+      setError(
+        perm === "denied"
+          ? "Desktop notifications are blocked in your browser."
+          : "Desktop notification permission was not granted."
+      );
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading preferences...</div>
+      <div className="px-4 py-12 sm:px-6 lg:px-8">
+        <p className="text-sm text-slate-500">Loading preferences…</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-none space-y-0">
-        {/* Appearance */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Appearance</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Theme</label>
-              <div className="flex flex-wrap gap-2">
-                {(["dark", "light", "auto"] as ThemeMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => applyTheme(mode)}
-                    className={`rounded-lg px-4 py-2 text-sm capitalize ${
-                      (preferences.theme === mode || theme === mode)
-                        ? "bg-brand text-white"
-                        : "border border-slate-700 bg-slate-800 text-slate-300"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
+    <SettingsPage className="pb-4">
+      <SettingsPanel>
+        <SettingsSection
+          label="Display"
+          title="Appearance"
+          description="Theme applies immediately and syncs to your account."
+        >
+          <SettingsField label="Theme" hint="Applies immediately when selected. Auto follows your device.">
+            <div className="flex flex-wrap gap-2">
+              {(["dark", "light", "auto"] as ThemeMode[]).map((mode) => (
+                <ThemeChoice
+                  key={mode}
+                  mode={mode}
+                  selected={prefs.theme}
+                  resolved={resolved}
+                  onSelect={applyTheme}
+                />
+              ))}
+            </div>
+          </SettingsField>
+          <SettingsFormGrid className="mt-6">
+            <SettingsField label="Language" hint={`Browser: ${browserLang === "sw" ? "Swahili" : "English"}`}>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={prefs.language}
+                  onChange={(e) => patch((p) => ({ ...p, language: e.target.value }))}
+                  className={themeTokens.input}
+                >
+                  <option value="en">English</option>
+                  <option value="sw">Swahili</option>
+                </select>
+                <button type="button" onClick={useBrowserLanguage} className={`self-start text-xs ${themeTokens.accentText}`}>
+                  Use browser language
+                </button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">Applies immediately when selected.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Language
-              </label>
+            </SettingsField>
+            <SettingsField label="Timezone" hint={`Device: ${browserTz}`}>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={prefs.timezone}
+                  onChange={(e) => patch((p) => ({ ...p, timezone: e.target.value }))}
+                  className={themeTokens.input}
+                >
+                  {timezoneOptions.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                      {tz === browserTz ? " (this device)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={useBrowserTimezone} className={`self-start text-xs ${themeTokens.accentText}`}>
+                  Use device timezone
+                </button>
+              </div>
+            </SettingsField>
+            <SettingsField label="Date format">
               <select
-                value={preferences.language}
-                onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                value={prefs.dateFormat}
+                onChange={(e) => patch((p) => ({ ...p, dateFormat: e.target.value }))}
+                className={themeTokens.input}
               >
-                <option value="en">English</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-                <option value="de">German</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Timezone
-              </label>
-              <select
-                value={preferences.timezone}
-                onChange={(e) => setPreferences({ ...preferences, timezone: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              >
-                <option value="UTC">UTC</option>
-                <option value="EST">Eastern Time</option>
-                <option value="PST">Pacific Time</option>
-                <option value="GMT">GMT</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Date Format
-              </label>
-              <select
-                value={preferences.dateFormat}
-                onChange={(e) => setPreferences({ ...preferences, dateFormat: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              >
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                 <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                 <option value="YYYY-MM-DD">YYYY-MM-DD</option>
               </select>
+            </SettingsField>
+            <SettingsField label="Time format">
+              <select
+                value={prefs.timeFormat}
+                onChange={(e) =>
+                  patch((p) => ({ ...p, timeFormat: e.target.value === "12h" ? "12h" : "24h" }))
+                }
+                className={themeTokens.input}
+              >
+                <option value="24h">24-hour</option>
+                <option value="12h">12-hour</option>
+              </select>
+            </SettingsField>
+          </SettingsFormGrid>
+        </SettingsSection>
+      </SettingsPanel>
+
+      <SettingsPanel>
+        <SettingsSection
+          label="Channels"
+          title="Notifications"
+          description="Channel preferences stored on your profile. Desktop uses browser permission."
+        >
+          <div className="max-w-3xl divide-y divide-white/[0.06]">
+            <div className="py-3 first:pt-0">
+              <SettingsToggle
+                label="Email notifications"
+                description="Receive notifications via email to your notification address."
+                on={prefs.notifications.email}
+                onChange={(email) => patch((p) => ({ ...p, notifications: { ...p.notifications, email } }))}
+              />
+            </div>
+            <div className="py-3">
+              <SettingsToggle
+                label="Push notifications"
+                description="Mobile and web push when supported by your device."
+                on={prefs.notifications.push}
+                onChange={(push) => patch((p) => ({ ...p, notifications: { ...p.notifications, push } }))}
+              />
+            </div>
+            <div className="py-3">
+              <SettingsToggle
+                label="SMS notifications"
+                description="Text messages for urgent alerts (when enabled for your org)."
+                on={prefs.notifications.sms}
+                onChange={(sms) => patch((p) => ({ ...p, notifications: { ...p.notifications, sms } }))}
+              />
+            </div>
+            <div className="py-3">
+              <SettingsToggle
+                label="Desktop notifications"
+                description={desktopStatusLabel(desktopPerm)}
+                on={prefs.notifications.desktop}
+                onChange={(v) => void onDesktopToggle(v)}
+                disabled={desktopPerm === "unsupported"}
+              />
             </div>
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Notifications */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Notifications</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Email Notifications</div>
-                <div className="text-sm text-slate-400">Receive notifications via email</div>
-              </div>
-              <Toggle
-                on={preferences.notifications.email}
-                onToggle={() =>
-                  patchPreference("notifications", {
-                    ...preferences.notifications,
-                    email: !preferences.notifications.email
-                  })
+      <SettingsPanel>
+        <SettingsSection label="Visibility" title="Privacy" description="Control how others see you in the workspace.">
+          <div className="max-w-3xl divide-y divide-white/[0.06]">
+            <div className="py-3 first:pt-0">
+              <SettingsToggle
+                label="Show online status"
+                description="Let others see when you're online."
+                on={prefs.privacy.showOnlineStatus}
+                onChange={(showOnlineStatus) =>
+                  patch((p) => ({ ...p, privacy: { ...p.privacy, showOnlineStatus } }))
                 }
               />
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Push Notifications</div>
-                <div className="text-sm text-slate-400">Receive push notifications</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  notifications: { ...preferences.notifications, push: !preferences.notifications.push }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.notifications.push ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.notifications.push ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+            <div className="py-3">
+              <SettingsToggle
+                label="Show last seen"
+                description="Let others see when you were last active."
+                on={prefs.privacy.showLastSeen}
+                onChange={(showLastSeen) =>
+                  patch((p) => ({ ...p, privacy: { ...p.privacy, showLastSeen } }))
+                }
+              />
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">SMS Notifications</div>
-                <div className="text-sm text-slate-400">Receive SMS notifications</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  notifications: { ...preferences.notifications, sms: !preferences.notifications.sms }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.notifications.sms ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.notifications.sms ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+            <div className="py-3">
+              <SettingsToggle
+                label="Allow direct messages"
+                description="Let others send you direct messages."
+                on={prefs.privacy.allowDirectMessages}
+                onChange={(allowDirectMessages) =>
+                  patch((p) => ({ ...p, privacy: { ...p.privacy, allowDirectMessages } }))
+                }
+              />
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Desktop Notifications</div>
-                <div className="text-sm text-slate-400">Receive desktop notifications</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  notifications: { ...preferences.notifications, desktop: !preferences.notifications.desktop }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.notifications.desktop ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.notifications.desktop ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+            <div className="py-3">
+              <SettingsField label="Profile visibility">
+                <select
+                  value={prefs.privacy.profileVisibility}
+                  onChange={(e) =>
+                    patch((p) => ({
+                      ...p,
+                      privacy: {
+                        ...p.privacy,
+                        profileVisibility:
+                          e.target.value === "team" || e.target.value === "none" ? e.target.value : "all"
+                      }
+                    }))
+                  }
+                  className={themeTokens.input}
+                >
+                  <option value="all">Everyone in the org</option>
+                  <option value="team">Team members only</option>
+                  <option value="none">Only me</option>
+                </select>
+              </SettingsField>
             </div>
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Privacy */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Privacy</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Show Online Status</div>
-                <div className="text-sm text-slate-400">Let others see when you're online</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  privacy: { ...preferences.privacy, showOnlineStatus: !preferences.privacy.showOnlineStatus }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.privacy.showOnlineStatus ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.privacy.showOnlineStatus ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Show Last Seen</div>
-                <div className="text-sm text-slate-400">Let others see when you were last active</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  privacy: { ...preferences.privacy, showLastSeen: !preferences.privacy.showLastSeen }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.privacy.showLastSeen ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.privacy.showLastSeen ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Allow Direct Messages</div>
-                <div className="text-sm text-slate-400">Let others send you direct messages</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  privacy: { ...preferences.privacy, allowDirectMessages: !preferences.privacy.allowDirectMessages }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.privacy.allowDirectMessages ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.privacy.allowDirectMessages ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Profile Visibility
-              </label>
+      <SettingsPanel>
+        <SettingsSection
+          label="Comfort"
+          title="Accessibility"
+          description="Adjust display for comfort and assistive needs."
+        >
+          <div className="max-w-3xl space-y-4">
+            <SettingsField label="Font size">
               <select
-                value={preferences.privacy.profileVisibility}
-                onChange={(e) => setPreferences({
-                  ...preferences,
-                  privacy: { ...preferences.privacy, profileVisibility: e.target.value }
-                })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
-              >
-                <option value="all">Everyone</option>
-                <option value="team">Team Members</option>
-                <option value="none">Private</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Accessibility */}
-        <div className="border-b border-slate-800/70 pb-10 last:border-b-0">
-          <h2 className="font-display text-base font-semibold text-slate-100 mb-4">Accessibility</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Font Size
-              </label>
-              <select
-                value={preferences.accessibility.fontSize}
-                onChange={(e) => setPreferences({
-                  ...preferences,
-                  accessibility: { ...preferences.accessibility, fontSize: e.target.value }
-                })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                value={prefs.accessibility.fontSize}
+                onChange={(e) =>
+                  patch((p) => ({
+                    ...p,
+                    accessibility: {
+                      ...p.accessibility,
+                      fontSize:
+                        e.target.value === "small" ||
+                        e.target.value === "large" ||
+                        e.target.value === "extra-large"
+                          ? e.target.value
+                          : "medium"
+                    }
+                  }))
+                }
+                className={themeTokens.input}
               >
                 <option value="small">Small</option>
                 <option value="medium">Medium</option>
                 <option value="large">Large</option>
-                <option value="extra-large">Extra Large</option>
+                <option value="extra-large">Extra large</option>
               </select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">High Contrast</div>
-                <div className="text-sm text-slate-400">Increase contrast for better visibility</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  accessibility: { ...preferences.accessibility, highContrast: !preferences.accessibility.highContrast }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.accessibility.highContrast ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.accessibility.highContrast ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Reduce Motion</div>
-                <div className="text-sm text-slate-400">Reduce animations and transitions</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  accessibility: { ...preferences.accessibility, reduceMotion: !preferences.accessibility.reduceMotion }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.accessibility.reduceMotion ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.accessibility.reduceMotion ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-slate-200">Screen Reader Support</div>
-                <div className="text-sm text-slate-400">Optimize for screen readers</div>
-              </div>
-              <button
-                onClick={() => setPreferences({
-                  ...preferences,
-                  accessibility: { ...preferences.accessibility, screenReader: !preferences.accessibility.screenReader }
-                })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  preferences.accessibility.screenReader ? 'bg-brand' : 'bg-slate-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  preferences.accessibility.screenReader ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
+            </SettingsField>
+            <SettingsToggle
+              label="High contrast"
+              description="Increase contrast for better visibility."
+              on={prefs.accessibility.highContrast}
+              onChange={(highContrast) =>
+                patch((p) => ({ ...p, accessibility: { ...p.accessibility, highContrast } }))
+              }
+            />
+            <SettingsToggle
+              label="Reduce motion"
+              description="Reduce animations and transitions across the app."
+              on={prefs.accessibility.reduceMotion}
+              onChange={(reduceMotion) =>
+                patch((p) => ({ ...p, accessibility: { ...p.accessibility, reduceMotion } }))
+              }
+            />
+            <SettingsToggle
+              label="Screen reader support"
+              description="Stronger focus rings and larger touch targets."
+              on={prefs.accessibility.screenReader}
+              onChange={(screenReader) =>
+                patch((p) => ({ ...p, accessibility: { ...p.accessibility, screenReader } }))
+              }
+            />
           </div>
-        </div>
+        </SettingsSection>
+      </SettingsPanel>
 
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={updatePreferences}
-            disabled={saving}
-            className="px-6 py-3 bg-brand text-white rounded-lg hover:bg-brand/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? "Saving..." : "Save Preferences"}
-          </button>
-        </div>
-    </div>
+      <SettingsSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void persist(prefs)}
+        label="Save preferences"
+        successMessage={success}
+        errorMessage={error}
+      />
+    </SettingsPage>
   );
 }

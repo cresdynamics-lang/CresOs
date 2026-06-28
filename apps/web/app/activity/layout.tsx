@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ActivityLayoutClient } from "./activity-layout-client";
 
 export const metadata: Metadata = {
   title: "Activity | Cres Dynamics - Activity Feed & Notifications",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function ActivityLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ActivityLayoutClient>{children}</ActivityLayoutClient>;
 }

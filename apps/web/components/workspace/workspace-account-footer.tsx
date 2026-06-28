@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAuth } from "../../app/auth-context";
 import { getDisplayFirstName } from "../../lib/personalized-greeting";
 
-type ThemeKey = "finance" | "sales" | "developer" | "admin" | "client" | "global";
+type ThemeKey = "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr" | "global";
 
 const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }> = {
   finance: {
@@ -22,6 +22,11 @@ const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }
     avatar: "bg-violet-500/15 text-violet-300",
     signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
   },
+  director: {
+    ring: "ring-sky-500/20",
+    avatar: "bg-sky-500/15 text-sky-300",
+    signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
+  },
   admin: {
     ring: "ring-sky-500/20",
     avatar: "bg-sky-500/15 text-sky-300",
@@ -30,6 +35,11 @@ const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }
   client: {
     ring: "ring-teal-500/20",
     avatar: "bg-teal-500/15 text-teal-300",
+    signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
+  },
+  hr: {
+    ring: "ring-rose-500/20",
+    avatar: "bg-rose-500/15 text-rose-300",
     signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
   },
   global: {
@@ -44,12 +54,15 @@ type WorkspaceAccountFooterProps = {
   onLogout: () => void;
   /** Show link to full account page (default true). */
   showAccountLink?: boolean;
+  /** Show name/email identity card (default false — dashboards greet the user). */
+  showIdentity?: boolean;
 };
 
 export function WorkspaceAccountFooter({
   themeKey = "global",
   onLogout,
-  showAccountLink = true
+  showAccountLink = true,
+  showIdentity = false
 }: WorkspaceAccountFooterProps) {
   const { auth } = useAuth();
   const accent = ACCENT[themeKey] ?? ACCENT.global;
@@ -59,19 +72,21 @@ export function WorkspaceAccountFooter({
 
   return (
     <div className="flex flex-col gap-2 px-1">
-      <div
-        className={`flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-black/25 px-2.5 py-2.5 ring-1 ${accent.ring}`}
-      >
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${accent.avatar}`}
+      {showIdentity ? (
+        <div
+          className={`flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-black/25 px-2.5 py-2.5 ring-1 ${accent.ring}`}
         >
-          {initial}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-200">{firstName}</p>
-          {email ? <p className="truncate text-[11px] text-slate-500">{email}</p> : null}
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${accent.avatar}`}
+          >
+            {initial}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-slate-200">{firstName}</p>
+            {email ? <p className="truncate text-[11px] text-slate-500">{email}</p> : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {showAccountLink ? (
         <Link

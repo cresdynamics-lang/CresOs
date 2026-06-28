@@ -2,17 +2,23 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
-import {
-  DashboardSectionLabel,
-  DashboardWelcomeBanner
-} from "../../components/dashboard-welcome-banner";
+import { WorkforceAnalyticsPanel } from "../../components/analytics/workforce-analytics-panel";
+import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { FinanceNeuPanel, FinanceStatCard, FinanceStatGrid } from "../../components/finance/finance-ui";
 import { financeNeu } from "../../components/finance/finance-theme";
-import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
+import {
+  WorkspaceAlignedTips,
+  WorkspaceDashboardSection,
+  WorkspacePriorityGrid,
+  dedupeAiHint,
+  dedupeFocusTips,
+  type WorkspacePriorityItem
+} from "../../components/workspace/workspace-dashboard-primitives";
+import { buildWelcomeHeadline } from "../../lib/personalized-greeting";
 
 type FinancialReport = {
   generatedAt: string;
@@ -61,11 +67,10 @@ export function FinanceOverviewDashboard({
   isAdmin,
   analyticsVariant
 }: FinanceOverviewDashboardProps) {
-  const { auth } = useAuth();
-  const firstName = useMemo(
-    () => getDisplayFirstName(auth.userName, auth.userEmail),
-    [auth.userName, auth.userEmail]
-  );
+  const { apiFetch, auth } = useAuth();
+  const [focusTips, setFocusTips] = useState<string[]>([]);
+  const [aiHint, setAiHint] = useState<string | null>(null);
+
   const welcomeHeadline = useMemo(
     () => buildWelcomeHeadline(auth.userName, auth.userEmail),
     [auth.userName, auth.userEmail]
@@ -78,29 +83,132 @@ export function FinanceOverviewDashboard({
 
   const pendingTotal = report?.pending?.total ?? pendingFallback;
 
+  const loadCoach = useCallback(async () => {
+    if (!auth.accessToken) return;
+    try {
+      const res = await apiFetch("/dashboard/focus-coach");
+      if (!res.ok) return;
+      const coach = (await res.json()) as {
+        deterministicTips?: string[];
+        aiHint?: string | null;
+      };
+      setFocusTips(coach.deterministicTips ?? []);
+      setAiHint(coach.aiHint ?? null);
+    } catch {
+      // optional coaching layer
+    }
+  }, [apiFetch, auth.accessToken]);
+
+  useEffect(() => {
+    void loadCoach();
+  }, [loadCoach]);
+
+  const alertItems = useMemo((): WorkspacePriorityItem[] => {
+    if (!report) return [];
+    const items: WorkspacePriorityItem[] = [];
+    const overdue = report.invoices.overdueCount;
+    const pendingApprovals = report.pending?.approvalQueue ?? 0;
+    const pendingPayments = report.pending?.paymentsPending ?? 0;
+
+    if (overdue > 0) {
+      items.push({
+        id: "overdue-invoices",
+        tone: "danger",
+        title: `${overdue} overdue invoice${overdue === 1 ? "" : "s"}`,
+        detail: "Follow up on unpaid invoices before collection escalates.",
+        href: "/finance/invoices",
+        action: "Review invoices"
+      });
+    }
+
+    if (pendingPayments > 0) {
+      items.push({
+        id: "pending-payments",
+        tone: "warning",
+        title: `${pendingPayments} payment${pendingPayments === 1 ? "" : "s"} awaiting confirmation`,
+        detail: "Confirm bank receipts so project balances stay accurate.",
+        href: "/finance/payments",
+        action: "Open payments"
+      });
+    }
+
+    if (pendingApprovals > 0) {
+      items.push({
+        id: "pending-approvals",
+        tone: "warning",
+        title: `${pendingApprovals} approval${pendingApprovals === 1 ? "" : "s"} in queue`,
+        detail: "Clear the queue so salaries, expenses, and payouts can move.",
+        href: "/approvals",
+        action: "Open approvals"
+      });
+    }
+
+    if (report.cashFlow.netThisMonth < 0 && overdue === 0) {
+      items.push({
+        id: "negative-flow",
+        tone: "warning",
+        title: "Net cash flow is negative this month",
+        detail: "Review outflows and outstanding receivables in reports.",
+        href: "/finance/reports",
+        action: "View reports"
+      });
+    }
+
+    return items;
+  }, [report]);
+
+  const alignedTips = useMemo(
+    () =>
+      dedupeFocusTips(focusTips, {
+        hasOverdueInvoiceAlert: (report?.invoices.overdueCount ?? 0) > 0,
+        hasPendingApprovalsAlert: (report?.pending?.approvalQueue ?? 0) > 0,
+        hasPendingPaymentsAlert: (report?.pending?.paymentsPending ?? 0) > 0,
+        priorityTitles: alertItems.map((a) => a.title)
+      }),
+    [focusTips, report, alertItems]
+  );
+
+  const alignedHint = useMemo(() => dedupeAiHint(aiHint, alignedTips, {}), [aiHint, alignedTips]);
+
+  const alertClass = (tone: WorkspacePriorityItem["tone"]) => {
+    if (tone === "danger") return financeNeu.alertDanger;
+    if (tone === "warning") return financeNeu.alertWarning;
+    return financeNeu.alertInfo;
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-4">
-      {/* Single header — welcome + context, no duplicate page title */}
-      <header className="space-y-4">
-        <DashboardWelcomeBanner
-          firstName={firstName}
-          roleLabel={roleLabel}
-          roleKeys={auth.roleKeys}
-          showRoleLabel
-          headline={welcomeHeadline}
-        >
-          <p className="font-body text-sm leading-relaxed text-slate-400">
-            Client payments in, salaries &amp; ops out — all amounts in{" "}
-            <span className="font-medium text-slate-300">Kenyan Shillings (KES)</span>. Pick a section
-            from the sidebar or use quick links below.
+    <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+        <div className="min-w-0">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-400/90">
+            {roleLabel}
           </p>
-        </DashboardWelcomeBanner>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+            {welcomeHeadline}
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+            Client payments in, salaries and ops out — all amounts in{" "}
+            <span className="font-medium text-slate-300">Kenyan Shillings (KES)</span>. Use the sidebar or quick links
+            below.
+          </p>
+        </div>
       </header>
 
-      {/* Primary KPIs — equal card grid */}
-      <section aria-label="Key metrics">
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>This month (UTC)</DashboardSectionLabel>
-        <div className="mt-3">
+      {alertItems.length > 0 ? (
+        <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>
+          <WorkspacePriorityGrid items={alertItems} panelClass={alertClass} />
+        </WorkspaceDashboardSection>
+      ) : null}
+
+      <WorkspaceAlignedTips
+        tips={alignedTips}
+        aiHint={alignedHint}
+        panelClass={`${financeNeu.panelInset} p-4 sm:p-5`}
+        roleKeys={auth.roleKeys}
+      />
+
+      <WorkspaceDashboardSection label="Your queue" roleKeys={auth.roleKeys}>
+        <p className="-mt-1 mb-3 text-xs text-slate-500">This month (UTC)</p>
           <FinanceStatGrid>
             <FinanceStatCard
               label="Revenue in"
@@ -131,10 +239,8 @@ export function FinanceOverviewDashboard({
               tone="violet"
             />
           </FinanceStatGrid>
-        </div>
-      </section>
+      </WorkspaceDashboardSection>
 
-      {/* Quick navigation */}
       <nav
         aria-label="Finance quick links"
         className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-6"
@@ -190,8 +296,14 @@ export function FinanceOverviewDashboard({
         </FinanceNeuPanel>
       </section>
 
-      {/* Live analytics — balanced 2-column layout */}
-      <WorkspaceLiveAnalytics variant={analyticsVariant} compact className="border-0 pb-0" />
+      <section aria-label="Progress charts" className="w-full">
+        <DashboardSectionLabel roleKeys={auth.roleKeys} tone="dashboard">
+          Progress charts
+        </DashboardSectionLabel>
+        <WorkspaceLiveAnalytics variant={analyticsVariant} compact className="mt-3 border-0 pb-0" />
+      </section>
+
+      <WorkforceAnalyticsPanel variant="finance" accent="finance" showHeader />
 
       {/* Secondary period summary — replaces duplicate “Financial report” block */}
       {report && (

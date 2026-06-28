@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DashboardLayoutClient } from "./dashboard-layout-client";
 
 export const metadata: Metadata = {
   title: "Dashboard | Cres Dynamics - CresOS Business Operating System",
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <DashboardLayoutClient>{children}</DashboardLayoutClient>;
 }

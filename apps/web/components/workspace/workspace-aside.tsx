@@ -23,15 +23,21 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
     subtitle: "text-slate-500"
   },
   developer: {
-    panel: "bg-black/30 backdrop-blur-xl",
-    border: "border-white/10",
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
     title: "text-violet-400/90",
     subtitle: "text-slate-500"
   },
-  admin: {
-    panel: "bg-slate-900/95",
-    border: "border-slate-800",
+  director: {
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
     title: "text-sky-400/90",
+    subtitle: "text-slate-500"
+  },
+  admin: {
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
+    title: "text-indigo-400/90",
     subtitle: "text-slate-500"
   },
   client: {
@@ -40,10 +46,16 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
     title: "text-teal-400/90",
     subtitle: "text-slate-500"
   },
+  hr: {
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
+    title: "text-rose-400/90",
+    subtitle: "text-slate-500"
+  },
   global: {
-    panel: "bg-slate-950/95",
-    border: "border-slate-800",
-    title: "text-brand",
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
+    title: "text-slate-300",
     subtitle: "text-slate-500"
   }
 };

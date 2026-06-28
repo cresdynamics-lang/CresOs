@@ -8,6 +8,7 @@ export type RoleThemeKey =
   | "developer"
   | "sales"
   | "analyst"
+  | "hr"
   | "client"
   | "default";
 
@@ -83,6 +84,16 @@ const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
     sectionLabel: "text-cyan-400",
     dot: "text-cyan-400"
   },
+  hr: {
+    border: "border-rose-500/40",
+    bg: "from-rose-950/45 via-slate-900/80 to-pink-950/25",
+    glow: "shadow-[0_0_40px_-12px_rgba(244,63,94,0.32)]",
+    nameGradient: "from-rose-200 via-pink-100 to-fuchsia-200",
+    roleText: "text-rose-300",
+    rolePill: "border-rose-500/50 bg-rose-500/15 text-rose-100",
+    sectionLabel: "text-pink-400",
+    dot: "text-rose-400"
+  },
   client: {
     border: "border-slate-500/40",
     bg: "from-slate-900/90 to-slate-950/90",
@@ -110,6 +121,7 @@ export function resolveRoleTheme(roleKeys: string[]): RoleTheme {
     "admin",
     "director_admin",
     "finance",
+    "hr",
     "sales",
     "developer",
     "analyst",
@@ -210,6 +222,7 @@ const BULLET_MARKER: Record<RoleThemeKey, string> = {
   developer: "marker:text-violet-500",
   sales: "marker:text-amber-500",
   analyst: "marker:text-cyan-500",
+  hr: "marker:text-rose-500",
   client: "marker:text-slate-500",
   default: "marker:text-brand"
 };

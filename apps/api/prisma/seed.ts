@@ -21,8 +21,19 @@ const USERS = [
   { email: "director@cresdynamics.com", name: "Director", roleKey: ROLE_KEYS.director, password: DIRECTOR_PASSWORD },
   { email: "wilson.developer@cresdynamics.com", name: "Wilson Developer", roleKey: ROLE_KEYS.developer, password: PASSWORD },
   { email: "finance@cresdynamics.com", name: "Finance", roleKey: ROLE_KEYS.finance, password: PASSWORD },
-  { email: "salim.sales@cresdynamics.com", name: "Salim Sales", roleKey: ROLE_KEYS.sales, password: PASSWORD }
+  { email: "salim.sales@cresdynamics.com", name: "Salim Sales", roleKey: ROLE_KEYS.sales, password: PASSWORD },
+  { email: "hr@cresdynamics.com", name: "Hannah HR", roleKey: "hr", password: PASSWORD },
+  { email: "contact@acme.example", name: "Acme Retail Ltd", roleKey: ROLE_KEYS.client, password: "Acme1" }
 ] as const;
+
+const STANDARD_DEPARTMENTS: { name: string; description: string; roleKeys: string[] }[] = [
+  { name: "Sales", description: "Pipeline, leads, and client relationships", roleKeys: [ROLE_KEYS.sales] },
+  { name: "Development", description: "Engineering delivery and developer reports", roleKeys: [ROLE_KEYS.developer] },
+  { name: "Finance", description: "Invoices, payments, and approvals", roleKeys: [ROLE_KEYS.finance] },
+  { name: "HR", description: "People operations, onboarding, and org health", roleKeys: ["hr"] },
+  { name: "Marketing", description: "Campaigns and brand growth", roleKeys: [] },
+  { name: "Operations", description: "Cross-team coordination and ops", roleKeys: [ROLE_KEYS.admin, ROLE_KEYS.director] }
+];
 
 const ROLE_NAMES: Record<string, string> = {
   [ROLE_KEYS.admin]: "Admin",
@@ -31,7 +42,8 @@ const ROLE_NAMES: Record<string, string> = {
   [ROLE_KEYS.developer]: "Developer",
   [ROLE_KEYS.sales]: "Sales",
   [ROLE_KEYS.analyst]: "Analyst",
-  [ROLE_KEYS.client]: "Client"
+  [ROLE_KEYS.client]: "Client",
+  hr: "HR"
 };
 
 async function ensureOrg() {
@@ -46,18 +58,49 @@ async function ensureOrg() {
 }
 
 async function ensureRoles(orgId: string) {
-  const roleKeys = Object.values(ROLE_KEYS);
+  const roleKeys = [...Object.values(ROLE_KEYS), "hr"];
   let roles = await prisma.role.findMany({ where: { orgId } });
   const existingKeys = new Set(roles.map((r) => r.key));
   for (const key of roleKeys) {
     if (!existingKeys.has(key)) {
       await prisma.role.create({
-        data: { orgId, name: ROLE_NAMES[key], key }
+        data: { orgId, name: ROLE_NAMES[key] ?? key, key }
       });
     }
   }
   roles = await prisma.role.findMany({ where: { orgId } });
   return Object.fromEntries(roles.map((r) => [r.key, r]));
+}
+
+async function ensureStandardDepartments(
+  orgId: string,
+  roleByKey: Record<string, { id: string; key: string }>
+) {
+  for (const spec of STANDARD_DEPARTMENTS) {
+    let dept = await prisma.department.findFirst({
+      where: { orgId, name: spec.name, deletedAt: null }
+    });
+    if (!dept) {
+      dept = await prisma.department.create({
+        data: { orgId, name: spec.name, description: spec.description }
+      });
+      console.log("Created department:", spec.name);
+    } else if (!dept.description) {
+      await prisma.department.update({
+        where: { id: dept.id },
+        data: { description: spec.description }
+      });
+    }
+    for (const roleKey of spec.roleKeys) {
+      const role = roleByKey[roleKey];
+      if (role) {
+        await prisma.role.update({
+          where: { id: role.id },
+          data: { departmentId: dept.id }
+        });
+      }
+    }
+  }
 }
 
 async function upsertSeedUser(
@@ -142,14 +185,103 @@ async function assignTeamToDirector(orgId: string, directorId: string) {
   }
 }
 
+async function ensureAcmeDemoClient(orgId: string, salesId: string) {
+  const existing = await prisma.client.findFirst({
+    where: { orgId, name: "Acme Retail Ltd", deletedAt: null },
+    select: { id: true }
+  });
+  const client = existing
+    ? await prisma.client.update({
+        where: { id: existing.id },
+        data: {
+          email: "contact@acme.example",
+          phone: "+254700000001",
+          deletedAt: null
+        }
+      })
+    : await prisma.client.create({
+        data: {
+          orgId,
+          name: "Acme Retail Ltd",
+          email: "contact@acme.example",
+          phone: "+254700000001"
+        }
+      });
+
+  const project = await prisma.project.findFirst({
+    where: { orgId, name: "Acme Retail Platform", deletedAt: null }
+  });
+  if (!project) return;
+
+  if (!project.clientId || project.ownerUserId == null) {
+    await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        clientId: client.id,
+        ownerUserId: project.ownerUserId ?? salesId,
+        clientOrOwnerName: project.clientOrOwnerName ?? client.name
+      }
+    });
+    console.log("Linked demo project to CRM client:", client.name);
+  }
+
+  await prisma.lead.updateMany({
+    where: { orgId, projectId: project.id, clientId: null },
+    data: { clientId: client.id }
+  });
+}
+
+async function ensureDemoTasksAndMilestones(
+  orgId: string,
+  projectId: string,
+  developerId: string,
+  salesId: string
+) {
+  const existingMilestones = await prisma.milestone.count({ where: { projectId, orgId } });
+  if (existingMilestones === 0) {
+    await prisma.milestone.createMany({
+      data: [
+        { orgId, projectId, name: "Discovery & scope", status: "completed", dueDate: new Date() },
+        { orgId, projectId, name: "Core platform build", status: "in_progress" },
+        { orgId, projectId, name: "UAT & handover", status: "pending" }
+      ]
+    });
+    console.log("Created demo milestones");
+  }
+
+  const existingTasks = await prisma.task.count({ where: { projectId, orgId, deletedAt: null } });
+  if (existingTasks === 0) {
+    await prisma.task.createMany({
+      data: [
+        { orgId, projectId, title: "Requirements sign-off", status: "done", assigneeId: salesId },
+        { orgId, projectId, title: "API integration", status: "done", assigneeId: developerId },
+        { orgId, projectId, title: "Admin dashboard", status: "in_progress", assigneeId: developerId },
+        { orgId, projectId, title: "Client portal polish", status: "todo", assigneeId: developerId }
+      ]
+    });
+    console.log("Created demo tasks");
+  }
+}
+
 async function seedDemoData(orgId: string, directorId: string, developerId: string, salesId: string) {
   const existingProject = await prisma.project.findFirst({
     where: { orgId, name: "Acme Retail Platform" }
   });
   if (existingProject) {
     console.log("Demo project exists:", existingProject.name);
+    await ensureAcmeDemoClient(orgId, salesId);
+    await ensureDemoTasksAndMilestones(orgId, existingProject.id, developerId, salesId);
     return;
   }
+
+  const client = await prisma.client.create({
+    data: {
+      orgId,
+      name: "Acme Retail Ltd",
+      email: "contact@acme.example",
+      phone: "+254700000001"
+    }
+  });
 
   const project = await prisma.project.create({
     data: {
@@ -157,14 +289,16 @@ async function seedDemoData(orgId: string, directorId: string, developerId: stri
       name: "Acme Retail Platform",
       status: "active",
       type: "project",
-      clientOrOwnerName: "Acme Retail Ltd",
-      phone: "+254700000001",
-      email: "contact@acme.example",
+      clientId: client.id,
+      clientOrOwnerName: client.name,
+      phone: client.phone,
+      email: client.email,
       price: 150000,
       approvalStatus: "approved",
       approvedAt: new Date(),
       assignedDeveloperId: developerId,
       createdByUserId: salesId,
+      ownerUserId: salesId,
       approvedById: directorId,
       financeProjectSeq: 1,
       financeRefYear: new Date().getFullYear()
@@ -186,6 +320,8 @@ async function seedDemoData(orgId: string, directorId: string, developerId: stri
   });
   console.log("Wilson accepted on demo project");
 
+  await ensureDemoTasksAndMilestones(orgId, project.id, developerId, salesId);
+
   const lead = await prisma.lead.findFirst({ where: { orgId, title: "Acme Retail Platform" } });
   if (!lead) {
     await prisma.lead.create({
@@ -198,7 +334,8 @@ async function seedDemoData(orgId: string, directorId: string, developerId: stri
         approvedAt: new Date(),
         approvedById: directorId,
         ownerId: salesId,
-        projectId: project.id
+        projectId: project.id,
+        clientId: client.id
       }
     });
     console.log("Created demo lead");
@@ -208,6 +345,7 @@ async function seedDemoData(orgId: string, directorId: string, developerId: stri
 async function main() {
   const org = await ensureOrg();
   const roleByKey = await ensureRoles(org.id);
+  await ensureStandardDepartments(org.id, roleByKey);
 
   const usersByEmail: Record<string, { id: string }> = {};
   for (const u of USERS) {
@@ -224,6 +362,15 @@ async function main() {
   const salim = usersByEmail["salim.sales@cresdynamics.com"];
   if (director && wilson && salim) {
     await seedDemoData(org.id, director.id, wilson.id, salim.id);
+    await ensureAcmeDemoClient(org.id, salim.id);
+  }
+
+  const acmeClient = await prisma.client.findFirst({
+    where: { orgId: org.id, email: "contact@acme.example", deletedAt: null }
+  });
+  const acmeUser = usersByEmail["contact@acme.example"];
+  if (acmeClient && acmeUser) {
+    console.log("Client portal login: contact@acme.example / Acme1 (linked to", acmeClient.name + ")");
   }
 
   console.log("\n--- Seed credentials ---");

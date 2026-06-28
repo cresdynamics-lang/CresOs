@@ -4,9 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { CrmActionLink, CrmDataTable, CrmSectionPanel, CrmTableHead } from "../../components/crm/crm-section";
-import { devGlass } from "../../components/developer/developer-glass-theme";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { formatNairobiDate, formatNairobiDateTime } from "../../lib/nairobi-datetime";
+import { isDeveloperOnly } from "../../lib/resolve-workspace-for-user";
+import { DeveloperReportsView } from "./developer-reports-view";
+import { DeveloperReportVoiceForm } from "../../components/reporting/developer-report-voice-form";
+import { devNeu } from "../../components/developer/developer-theme";
 
 function reportPreview(report: DeveloperReport): string {
   const parts = [report.whatWorked, report.blockers, report.needsAttention, report.implemented]
@@ -73,10 +76,11 @@ function totalFormChars(form: Record<(typeof FIELDS)[number]["key"], string>): n
 }
 
 export default function DeveloperReportsPage() {
-  const { apiFetch, auth } = useAuth();
+  const { apiFetch, auth, hydrated } = useAuth();
   const [list, setList] = useState<DeveloperReport[]>([]);
   const [overdue, setOverdue] = useState<OverdueItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     reportDate: todayDateString(),
@@ -91,11 +95,11 @@ export default function DeveloperReportsPage() {
   const [aiPollReportId, setAiPollReportId] = useState<string | null>(null);
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
   const isDeveloper = auth.roleKeys.includes("developer");
-  const isDevSelfView = isDeveloper && !isDirector;
+  const useDeveloperNeuView = isDeveloperOnly(auth.roleKeys);
   const [directorLabel, setDirectorLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isDevSelfView) return;
+    if (!useDeveloperNeuView) return;
     let cancelled = false;
     (async () => {
       try {
@@ -113,10 +117,11 @@ export default function DeveloperReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, isDevSelfView]);
+  }, [apiFetch, useDeveloperNeuView]);
 
   const load = useCallback(async () => {
     setLoadError(null);
+    setLoading(true);
     try {
       const [listRes, alarmRes] = await Promise.all([
         apiFetch("/developer-reports"),
@@ -136,6 +141,8 @@ export default function DeveloperReportsPage() {
     } catch {
       setLoadError("Could not reach the server. Check your connection and try again.");
       setList([]);
+    } finally {
+      setLoading(false);
     }
   }, [apiFetch]);
 
@@ -218,6 +225,38 @@ export default function DeveloperReportsPage() {
     setShowForm(true);
   }
 
+  if (!hydrated) {
+    return (
+      <div className={`flex min-h-[12rem] flex-1 items-center justify-center text-sm text-slate-500 ${devNeu.canvas}`}>
+        Loading reports…
+      </div>
+    );
+  }
+
+  if (useDeveloperNeuView) {
+    return (
+      <DeveloperReportsView
+        reports={list}
+        overdue={overdue}
+        directorLabel={directorLabel}
+        loading={loading}
+        loadError={loadError}
+        aiPollActive={!!aiPollReportId}
+        onRefresh={() => void load()}
+        onNewReport={startNew}
+        showForm={showForm}
+        onCloseForm={() => setShowForm(false)}
+        form={form}
+        onFormChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+        fields={FIELDS}
+        fieldPlaceholders={FIELD_PLACEHOLDERS}
+        onSubmit={(e) => void handleSubmit(e)}
+        submitting={submitting}
+        totalFormChars={totalFormChars(form)}
+      />
+    );
+  }
+
   return (
     <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
@@ -252,31 +291,6 @@ export default function DeveloperReportsPage() {
       {loadError && (
         <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
           {loadError}
-        </div>
-      )}
-
-      {isDevSelfView && aiPollReportId && (
-        <div className={`shrink-0 ${devGlass.alertInfo} px-4 py-3 sm:px-5`}>
-          <p className="text-sm text-sky-200">Leadership is reviewing your report — check back here for comments and questions.</p>
-        </div>
-      )}
-
-      {isDevSelfView && overdue.length > 0 && (
-        <div className={`shrink-0 ${devGlass.alertWarning} px-4 py-3 sm:px-5`}>
-          <p className="font-semibold text-amber-200">
-            Alarm: {overdue.length} open question{overdue.length === 1 ? "" : "s"} past the answer deadline
-          </p>
-          <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
-            {overdue.slice(0, 5).map((o) => (
-              <li key={o.id}>
-                <Link href={`/developer-reports/${o.reportId}`} className="text-amber-300 hover:underline">
-                  Report {o.reportTitle}
-                </Link>
-                {" — answer by deadline"}
-              </li>
-            ))}
-            {overdue.length > 5 && <li className="text-slate-500">… and {overdue.length - 5} more</li>}
-          </ul>
         </div>
       )}
 
@@ -401,48 +415,23 @@ export default function DeveloperReportsPage() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-violet-500/40 bg-gradient-to-br from-violet-950/60 via-slate-950 to-sky-950/30 shadow-2xl">
             <div className="border-b border-slate-800/80 px-5 py-4 sm:px-6">
               <h3 className="font-display text-xl font-bold tracking-tight text-violet-200">Submit developer report</h3>
-              <p className="mt-1 text-sm text-slate-400">At least 60 characters total across sections.</p>
+              <p className="mt-1 text-sm text-slate-400">
+                Voice filing walks section by section — start with What worked. At least 60 characters total.
+              </p>
             </div>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 py-5 sm:px-6">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Report date</span>
-                <input
-                  type="date"
-                  value={form.reportDate}
-                  onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
-                  className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
-                  required
-                />
-              </label>
-              {FIELDS.map(({ key, label }) => (
-                <label key={key} className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
-                  <textarea
-                    value={form[key]}
-                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    rows={2}
-                    placeholder={FIELD_PLACEHOLDERS[key]}
-                    className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100"
-                  />
-                </label>
-              ))}
-              <div className="flex flex-wrap gap-2 border-t border-slate-800/80 pt-4">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:from-violet-500 hover:to-sky-500 disabled:opacity-50"
-                >
-                  {submitting ? "Saving…" : "Submit report"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="rounded-xl border border-slate-600 px-5 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+            <div className="px-5 py-5 sm:px-6">
+              <DeveloperReportVoiceForm
+                form={form}
+                onFormChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+                fields={FIELDS}
+                fieldPlaceholders={FIELD_PLACEHOLDERS}
+                onSubmit={handleSubmit}
+                onCancel={() => setShowForm(false)}
+                submitting={submitting}
+                totalFormChars={totalFormChars(form)}
+                variant="crm"
+              />
+            </div>
           </div>
         </div>
       )}

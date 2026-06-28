@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
 import { deliverSalesInvoiceEmail } from "../lib/invoice-email";
+import { validateInvoiceClientProject } from "../lib/project-payment-sync";
 import { logEmailSent } from "./admin-activity";
 
 /** Avoid Invalid Date from empty due-date strings (same as finance). */
@@ -71,7 +72,9 @@ function serializeInvoiceRow(
     dueDate: inv.dueDate?.toISOString() ?? null,
     notes: inv.notes,
     createdAt: inv.createdAt.toISOString(),
-    client: inv.client,
+    clientId: inv.clientId,
+    projectId: inv.projectId,
+    client: inv.client ?? { id: inv.clientId, name: "Unknown client", email: null },
     project: inv.project,
     items
   };
@@ -328,18 +331,7 @@ export default function salesRouter(prisma: PrismaClient): Router {
             }, 0);
 
             if (projectId) {
-              const project = await tx.project.findFirst({
-                where: { id: projectId, orgId, deletedAt: null },
-                select: { id: true, clientId: true }
-              });
-              if (!project) {
-                throw Object.assign(new Error("Project not found"), { code: "PROJECT_NOT_FOUND" });
-              }
-              if (project.clientId && project.clientId !== clientId) {
-                throw Object.assign(new Error("Client must match project"), {
-                  code: "CLIENT_PROJECT_MISMATCH"
-                });
-              }
+              await validateInvoiceClientProject(tx, orgId, clientId, projectId);
             }
 
             const number = await allocateInvoiceNumberForCreate(tx, orgId, projectId, issue);
@@ -639,8 +631,10 @@ export default function salesRouter(prisma: PrismaClient): Router {
             price: true,
             amountReceived: true,
             approvalStatus: true,
+            clientOrOwnerName: true,
             client: {
               select: {
+                id: true,
                 name: true
               }
             }
@@ -648,11 +642,21 @@ export default function salesRouter(prisma: PrismaClient): Router {
           orderBy: { name: "asc" }
         });
 
-        const data = projects.map((p) => ({
-          ...p,
-          price: p.price != null ? Number(p.price) : null,
-          amountReceived: p.amountReceived != null ? Number(p.amountReceived) : null
-        }));
+        const data = projects.map((p) => {
+          const clientName =
+            p.client?.name?.trim() || p.clientOrOwnerName?.trim() || null;
+          return {
+            id: p.id,
+            name: p.name,
+            clientId: p.clientId,
+            status: p.status,
+            approvalStatus: p.approvalStatus,
+            price: p.price != null ? Number(p.price) : null,
+            amountReceived: p.amountReceived != null ? Number(p.amountReceived) : null,
+            clientName,
+            client: clientName ? { id: p.client?.id ?? p.clientId, name: clientName } : null
+          };
+        });
 
         res.json({
           success: true,

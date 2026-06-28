@@ -35,7 +35,7 @@ function filterCategoryMessage(m: AdminMessage): ActivityFilter | "other" {
   if (t.includes("approval") || t.includes("finance") || t.includes("decline") || t.includes("payout") || t.includes("expense")) {
     return "approvals";
   }
-  if (t.includes("user") || t.includes("invite") || t.includes("role") || t.includes("login") || t.includes("session")) {
+  if (t.includes("user") || t.includes("invite") || t.includes("role") || t.includes("login") || t.includes("session") || t.includes("client.portal")) {
     return "users";
   }
   if (t.includes("project") || t.includes("milestone") || t.includes("task") || t.includes("handoff")) {

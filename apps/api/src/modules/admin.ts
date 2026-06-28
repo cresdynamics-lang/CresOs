@@ -211,7 +211,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
       const list = await prisma.department.findMany({
         where: { orgId, deletedAt: null },
         orderBy: { name: "asc" },
-        include: { 
+        include: {
           _count: { select: { roles: true } },
           roles: {
             select: {
@@ -223,42 +223,8 @@ export default function adminRouter(prisma: PrismaClient): Router {
           }
         }
       });
-      
-      // Ensure standard departments exist
-      const standardDepartments = ['Sales', 'Development', 'Finance', 'Marketing', 'Operations', 'HR'];
-      const existingDeptNames = list.map(d => d.name);
-      
-      // Create missing standard departments
-      for (const deptName of standardDepartments) {
-        if (!existingDeptNames.includes(deptName)) {
-          await prisma.department.create({
-            data: {
-              orgId,
-              name: deptName,
-              description: `Standard ${deptName} department`
-            }
-          });
-        }
-      }
-      
-      // Fetch updated list
-      const updatedList = await prisma.department.findMany({
-        where: { orgId, deletedAt: null },
-        orderBy: { name: "asc" },
-        include: { 
-          _count: { select: { roles: true } },
-          roles: {
-            select: {
-              id: true,
-              name: true,
-              key: true,
-              _count: { select: { users: true } }
-            }
-          }
-        }
-      });
-      
-      res.json(updatedList);
+
+      res.json(list);
     }
   );
 
@@ -706,12 +672,17 @@ export default function adminRouter(prisma: PrismaClient): Router {
     async (req, res) => {
       const orgId = req.auth!.orgId;
       const adminId = req.auth!.userId;
-      const { email, name, password, roleId, reportsToDirectorId } = req.body as {
+      const { email, name, password, roleId, reportsToDirectorId, jobTitle, employmentType, hireDate, monthlySalary } =
+        req.body as {
         email?: string;
         name?: string;
         password?: string;
         roleId?: string;
         reportsToDirectorId?: string | null;
+        jobTitle?: string | null;
+        employmentType?: string | null;
+        hireDate?: string | null;
+        monthlySalary?: number | string | null;
       };
       if (!email?.trim() || !password) {
         res.status(400).json({ error: "email and password are required" });
@@ -751,7 +722,14 @@ export default function adminRouter(prisma: PrismaClient): Router {
             orgId,
             phoneNumbers: [],
             workEmails: [],
-            reportsToDirectorId: directorId
+            reportsToDirectorId: directorId,
+            jobTitle: jobTitle?.trim() || null,
+            employmentType: employmentType?.trim() || "full_time",
+            hireDate: hireDate ? new Date(hireDate) : new Date(),
+            monthlySalary:
+              monthlySalary != null && monthlySalary !== ""
+                ? new Prisma.Decimal(String(monthlySalary))
+                : null
           }
         });
         if (role) {

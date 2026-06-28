@@ -9,6 +9,7 @@ export const ALL_APP_ROLE_KEYS = [
   "developer",
   "sales",
   "analyst",
+  "hr",
   "client"
 ] as const;
 

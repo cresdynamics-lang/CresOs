@@ -23,6 +23,11 @@ export type DeveloperProjectItem = {
     blocked: number;
     done: number;
   };
+  milestoneSummary?: {
+    total: number;
+    completed: number;
+    pending: number;
+  };
   financeProjectSeq?: number | null;
   financeRefYear?: number | null;
 };
@@ -37,7 +42,10 @@ function taskTotal(ts: DeveloperProjectItem["taskSummary"]): number {
   return ts.done + ts.in_progress + ts.waiting_response + ts.blocked + ts.not_started;
 }
 
-function progressPercent(ts: DeveloperProjectItem["taskSummary"]): number {
+function progressPercent(project: DeveloperProjectItem): number {
+  const ms = project.milestoneSummary;
+  if (ms && ms.total > 0) return Math.round((ms.completed / ms.total) * 100);
+  const ts = project.taskSummary;
   const total = taskTotal(ts);
   if (!ts || total === 0) return 0;
   return Math.round((ts.done / total) * 100);
@@ -100,7 +108,11 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
       if (!ts) return s;
       return s + ts.in_progress + ts.waiting_response + ts.blocked + ts.not_started;
     }, 0);
-    return { total: projects.length, active, completed, tasksDone, tasksOpen };
+    const milestonesDone = projects.reduce((s, p) => s + (p.milestoneSummary?.completed ?? 0), 0);
+    const milestonesTotal = projects.reduce((s, p) => s + (p.milestoneSummary?.total ?? 0), 0);
+    const milestonePct =
+      milestonesTotal > 0 ? Math.round((milestonesDone / milestonesTotal) * 100) : 0;
+    return { total: projects.length, active, completed, tasksDone, tasksOpen, milestonesDone, milestonesTotal, milestonePct };
   }, [projects]);
 
   return (
@@ -135,7 +147,16 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
           <DevStatRow>
             <DevStatInline label="Assigned" value={loading ? "…" : stats.total} hint="Projects on your queue" tone="violet" />
             <DevStatInline label="Active" value={loading ? "…" : stats.active} hint="Planned or in flight" tone="emerald" />
-            <DevStatInline label="Completed" value={loading ? "…" : stats.completed} hint="Marked done" tone="sky" />
+            <DevStatInline
+              label="Milestones"
+              value={loading ? "…" : stats.milestonesTotal > 0 ? `${stats.milestonePct}%` : "—"}
+              hint={
+                stats.milestonesTotal > 0
+                  ? `${stats.milestonesDone} of ${stats.milestonesTotal} done`
+                  : "No milestones yet"
+              }
+              tone="sky"
+            />
             <DevStatInline label="Tasks done" value={loading ? "…" : stats.tasksDone} hint={`${stats.tasksOpen} open`} tone="amber" />
           </DevStatRow>
         </div>
@@ -157,7 +178,8 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
           <ul className="flex w-full flex-col gap-3">
             {projects.map((project) => {
               const ts = project.taskSummary;
-              const pct = progressPercent(ts);
+              const pct = progressPercent(project);
+              const ms = project.milestoneSummary;
               const ref = financeRef(project);
               return (
                 <li key={project.id} className={devNeu.panel}>
@@ -212,7 +234,7 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
 
                       <div className="flex w-full min-w-[12rem] flex-col gap-2 sm:max-w-xs lg:items-end">
                         <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500">
-                          <span>Progress</span>
+                          <span>{ms && ms.total > 0 ? "Milestones" : "Progress"}</span>
                           <span className="font-semibold text-violet-300">{pct}%</span>
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_2px_2px_6px_rgba(0,0,0,0.5)]">

@@ -123,6 +123,80 @@ export function MiniLineTrend({
   );
 }
 
+/** Modern area + line chart with grid and month labels. */
+export function AreaTrendChart({
+  items,
+  stroke = "#fb7185",
+  emptyLabel = "No trend data yet",
+  valueSuffix = ""
+}: {
+  items: { label: string; value: number }[];
+  stroke?: string;
+  emptyLabel?: string;
+  valueSuffix?: string;
+}) {
+  if (items.length === 0) {
+    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+  }
+  const w = 320;
+  const h = 140;
+  const padX = 8;
+  const padY = 12;
+  const max = Math.max(...items.map((i) => i.value), 1);
+  const min = 0;
+  const range = max - min || 1;
+  const gradId = `area-grad-${stroke.replace("#", "")}`;
+
+  const points = items.map((item, i) => {
+    const x = padX + (i / Math.max(items.length - 1, 1)) * (w - padX * 2);
+    const y = padY + (h - padY * 2) - ((item.value - min) / range) * (h - padY * 2);
+    return { x, y, ...item };
+  });
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${h - padY} L ${points[0].x} ${h - padY} Z`;
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-36 w-full sm:h-40" aria-hidden>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((pct) => (
+          <line
+            key={pct}
+            x1={padX}
+            x2={w - padX}
+            y1={padY + (h - padY * 2) * (1 - pct)}
+            y2={padY + (h - padY * 2) * (1 - pct)}
+            stroke="rgba(148,163,184,0.12)"
+            strokeWidth="1"
+          />
+        ))}
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        <path d={linePath} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((p) => (
+          <circle key={p.label} cx={p.x} cy={p.y} r="3.5" fill={stroke} stroke="#0b0f14" strokeWidth="1.5" />
+        ))}
+      </svg>
+      <div className="mt-2 flex justify-between gap-1 text-[9px] text-slate-500 sm:text-[10px]">
+        {items.map((item) => (
+          <span key={item.label} className="min-w-0 truncate text-center" title={`${item.label}: ${item.value}${valueSuffix}`}>
+            {item.label}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-center text-xs font-semibold text-slate-300">
+        Latest: {items[items.length - 1].value.toLocaleString()}
+        {valueSuffix}
+      </p>
+    </div>
+  );
+}
+
 const PIE_COLORS = [
   "#34d399",
   "#38bdf8",
@@ -138,12 +212,16 @@ export function PieChart({
   items,
   emptyLabel = "No data yet",
   size = 140,
-  valuePrefix = ""
+  valuePrefix = "",
+  variant = "pie",
+  centerLabel
 }: {
   items: { label: string; value: number }[];
   emptyLabel?: string;
   size?: number;
   valuePrefix?: string;
+  variant?: "pie" | "donut";
+  centerLabel?: string;
 }) {
   if (items.length === 0) {
     return <p className="text-xs text-slate-500">{emptyLabel}</p>;
@@ -168,12 +246,24 @@ export function PieChart({
 
   return (
     <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
-      <svg width={size} height={size} className="shrink-0" aria-hidden>
-        {slices.map((s) => (
-          <path key={s.label} d={s.d} fill={s.color} opacity={0.92} />
-        ))}
-        <circle cx={cx} cy={cy} r={r * 0.45} className="fill-slate-950/80" />
-      </svg>
+      <div className="relative shrink-0">
+        <svg width={size} height={size} aria-hidden>
+          {slices.map((s) => (
+            <path key={s.label} d={s.d} fill={s.color} opacity={0.92} />
+          ))}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={variant === "donut" ? r * 0.58 : r * 0.45}
+            className="fill-[#0b0f14]"
+          />
+        </svg>
+        {variant === "donut" && centerLabel ? (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span className="text-lg font-bold tabular-nums text-slate-100">{centerLabel}</span>
+          </div>
+        ) : null}
+      </div>
       <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
         {slices.map((s) => (
           <li key={s.label} className="flex items-center justify-between gap-2">
@@ -191,6 +281,62 @@ export function PieChart({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Circular progress ring — org readiness, completion %, etc. */
+export function RadialProgress({
+  value,
+  label,
+  sublabel,
+  color = "#fb7185",
+  size = 132
+}: {
+  value: number;
+  label: string;
+  sublabel?: string;
+  color?: string;
+  size?: number;
+}) {
+  const pct = Math.min(100, Math.max(0, Math.round(value)));
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  const center = size / 2;
+
+  return (
+    <div className="flex flex-col items-center text-center">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" aria-hidden>
+          <circle
+            cx={center}
+            cy={center}
+            r={r}
+            fill="none"
+            stroke="rgba(30,41,59,0.9)"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={center}
+            cy={center}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-700"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold tabular-nums text-slate-100">{pct}%</span>
+        </div>
+      </div>
+      <p className="mt-2 text-sm font-medium text-slate-200">{label}</p>
+      {sublabel ? <p className="mt-0.5 text-[10px] text-slate-500">{sublabel}</p> : null}
     </div>
   );
 }

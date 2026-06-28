@@ -166,16 +166,10 @@ async function sendChatMessageEmailNotification(
       select: { name: true, email: true }
     });
 
-    const isDm = conv.type === "direct";
-    const channelName = conv.name?.trim() || "a channel";
+    if (conv.type !== "direct") return;
 
-    const titleText = isDm
-      ? `${senderName} sent you a message`
-      : `${senderName} sent a message in ${channelName}`;
-
-    const subject = isDm
-      ? `New message from ${senderName}`
-      : `New message in ${channelName}`;
+    const titleText = `${senderName} sent you a message`;
+    const subject = `New message from ${senderName}`;
 
     const preview = messageContent.length > 140 ? `${messageContent.slice(0, 140)}...` : messageContent;
     const escapedPreview = escapeHtml(preview).replace(/\n/g, "<br/>");

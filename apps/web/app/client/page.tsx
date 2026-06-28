@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "../auth-context";
-import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
-import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { formatMoney } from "../format-money";
+import { clientNeu } from "../../components/client/client-theme";
 
 type ClientMilestone = {
   id: string;
@@ -39,7 +39,7 @@ function statusLabel(status: string): string {
 
 function milestoneStatusClass(status: string): string {
   if (status === "completed") return "text-emerald-400";
-  if (status === "in_progress") return "text-sky-400";
+  if (status === "in_progress") return "text-teal-400";
   if (status === "rejected") return "text-rose-400";
   return "text-slate-400";
 }
@@ -74,47 +74,46 @@ export default function ClientPortalPage() {
     void load();
   }, [load]);
 
+  const displayName = auth.userName ?? auth.userEmail ?? "there";
+
   return (
-    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-8 px-3 py-4 sm:px-6 sm:py-5">
-      <WorkspaceDashboardIntro
-        title="My projects"
-        description="Live delivery progress on work linked to your account."
-        eyebrow="Client"
-        showWelcomeBanner
-        welcomeChildren={
-          <>
-            <DashboardSectionLabel roleKeys={auth.roleKeys}>
-              Today&apos;s priorities (your queue)
-            </DashboardSectionLabel>
-            <p className="font-body text-sm leading-relaxed text-slate-400">
-              Track milestone and task progress below. Contact your project lead through Community if you need an
-              update.
-            </p>
-          </>
-        }
-      />
+    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-6">
+      <header className={`${clientNeu.panel} border-teal-500/15`}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-400/80">Client portal</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">
+          Welcome, {displayName}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+          Live delivery progress on projects linked to your account — milestones, tasks, and payment received.
+        </p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-4 rounded-xl border border-white/[0.08] bg-[#101820] px-3 py-2 text-sm text-slate-200 hover:text-white"
+        >
+          Refresh
+        </button>
+      </header>
 
       {loadError && (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
-          {loadError}
-        </p>
+        <p className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{loadError}</p>
       )}
 
-      {loading && !loadError && <p className="text-sm text-slate-500">Loading projects…</p>}
+      {loading && !loadError && <p className="text-sm text-slate-500">Loading your projects…</p>}
 
       {!loading && !loadError && projects.length === 0 && (
-        <p className="text-sm text-slate-400">
-          No projects are linked to your email yet. Ask your account manager to connect your CRM client record and
+        <div className={`${clientNeu.panelInset} text-sm text-slate-400`}>
+          No projects are linked to your email yet. Ask your account manager to connect your CRM client record to a
           project.
-        </p>
+        </div>
       )}
 
-      <div className="flex flex-col gap-8">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         {projects.map((project) => {
           const price = project.price != null ? Number(project.price) : null;
           const received = project.amountReceived != null ? Number(project.amountReceived) : 0;
           return (
-            <article key={project.id} className="border-b border-white/[0.06] pb-8 last:border-0">
+            <article key={project.id} className={clientNeu.panel}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-100">{project.name}</h2>
@@ -123,43 +122,36 @@ export default function ClientPortalPage() {
                     {project.financeProjectSeq != null ? ` · Project #${project.financeProjectSeq}` : ""}
                   </p>
                 </div>
-                <div className="text-right text-sm text-slate-400">
-                  {price != null ? (
-                    <>
-                      <p>
-                        {formatMoney(received)} received
-                        {price > 0 ? ` of ${formatMoney(price)}` : ""}
-                      </p>
-                    </>
-                  ) : null}
-                </div>
+                {price != null && (
+                  <div className="text-right text-sm text-slate-400">
+                    <p className="font-medium text-teal-300">{formatMoney(received)} received</p>
+                    {price > 0 ? <p className="text-xs text-slate-500">of {formatMoney(price)}</p> : null}
+                  </div>
+                )}
               </div>
 
-              <div className="mt-4">
+              <div className={`mt-5 ${clientNeu.panelInset}`}>
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Overall progress</span>
-                  <span className="font-medium text-slate-300">{project.progressPercent}%</span>
+                  <span className="text-lg font-bold tabular-nums text-teal-300">{project.progressPercent}%</span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-sky-600 to-emerald-500 transition-all"
+                    className="h-full rounded-full bg-gradient-to-r from-teal-600 to-emerald-500 transition-all"
                     style={{ width: `${Math.min(100, Math.max(0, project.progressPercent))}%` }}
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-600">
+                <p className="mt-2 text-xs text-slate-500">
                   {project.doneTasks} of {project.taskCount} tasks complete
                 </p>
               </div>
 
               {project.milestones.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Milestones</h3>
+                <div className="mt-5">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Milestones</h3>
                   <ul className="mt-3 space-y-2">
                     {project.milestones.map((m) => (
-                      <li
-                        key={m.id}
-                        className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04] py-2 text-sm last:border-0"
-                      >
+                      <li key={m.id} className={`${clientNeu.listRow} flex flex-wrap items-center justify-between gap-2 text-sm`}>
                         <span className="text-slate-200">{m.name}</span>
                         <span className={`text-xs capitalize ${milestoneStatusClass(m.status)}`}>
                           {m.status.replace(/_/g, " ")}
@@ -170,6 +162,13 @@ export default function ClientPortalPage() {
                   </ul>
                 </div>
               )}
+
+              <Link
+                href="/community"
+                className="mt-4 inline-block text-sm font-medium text-teal-400 hover:text-teal-300"
+              >
+                Message your project team →
+              </Link>
             </article>
           );
         })}

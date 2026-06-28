@@ -37,6 +37,16 @@ import Groq from "groq-sdk";
 import { sendOutboundEmail } from "../lib/resend";
 import { resolveGroqModel } from "../lib/groq-model";
 import { resolveSenderGreeting } from "../lib/sender-greeting";
+import {
+  loadOrgEmailTemplates,
+  mergeTemplates,
+  renderFromTemplate,
+  saveOrgTemplateOverrides
+} from "../lib/email-template-engine";
+import type { EmailTemplateDesign } from "../lib/email-template-design";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import https from "https";
 import http from "http";
 import type { Request, Response, NextFunction } from "express";
@@ -497,18 +507,33 @@ async function sendWhatsAppEditConfirmation(draft: string): Promise<void> {
 
 // ── SMTP reply sending ────────────────────────────────────────────────────────
 
-async function sendEmailReply(params: {
-  toEmail: string;
-  toName: string;
-  subject: string;
-  body: string;
-  originalMessageId?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+async function sendEmailReply(
+  prisma: PrismaClient,
+  orgId: string,
+  params: {
+    toEmail: string;
+    toName: string;
+    subject: string;
+    body: string;
+    originalMessageId?: string | null;
+  }
+): Promise<{ ok: boolean; error?: string }> {
   const subject = params.subject.startsWith("Re:") ? params.subject : `Re: ${params.subject}`;
-  const htmlBody = params.body.replace(/\n/g, "<br>");
-  const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.6;">${htmlBody}</body></html>`;
+  const greeting = params.toName?.trim() ? `Hi ${params.toName.trim()},` : "Hi,";
+  const templates = await loadOrgEmailTemplates(prisma, orgId);
+  const rendered =
+    renderFromTemplate(templates, "reply", {
+      body: params.body,
+      recipient_name: params.toName?.trim() || params.toEmail,
+      subject: params.subject.replace(/^Re:\s*/i, ""),
+      greeting,
+      footer_note: "This message was sent from Cres Dynamics."
+    }) ?? {
+      html: `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.6;">${params.body.replace(/\n/g, "<br>")}</body></html>`,
+      text: params.body
+    };
   const to = params.toName ? `${params.toName} <${params.toEmail}>` : params.toEmail;
-  const result = await sendOutboundEmail({ to, subject, text: params.body, html });
+  const result = await sendOutboundEmail({ to, subject, text: rendered.text, html: rendered.html });
   if (result.ok) {
     console.info(`[email-automation] Reply sent to ${params.toEmail} — ${subject}`);
     return { ok: true };
@@ -724,7 +749,7 @@ async function doApproveAndSend(threadId: string, prisma: PrismaClient): Promise
 
   await prisma.emailThread.update({ where: { id: threadId }, data: { status: "approved" } });
 
-  const result = await sendEmailReply({
+  const result = await sendEmailReply(prisma, thread.orgId, {
     toEmail: thread.fromEmail,
     toName: thread.fromName,
     subject: thread.subject,
@@ -950,14 +975,16 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
   // GET /email-automation/stats
   router.get("/stats", adminOnly, async (req: Request, res: Response) => {
     const orgId = req.auth!.orgId;
-    const [total, pending, sent, failed, ignored] = await Promise.all([
+    const [total, pending, editing, drafting, sent, failed, ignored] = await Promise.all([
       prisma.emailThread.count({ where: { orgId } }),
       prisma.emailThread.count({ where: { orgId, status: "awaiting_approval" } }),
+      prisma.emailThread.count({ where: { orgId, status: "editing" } }),
+      prisma.emailThread.count({ where: { orgId, status: "pending_draft" } }),
       prisma.emailThread.count({ where: { orgId, status: "sent" } }),
       prisma.emailThread.count({ where: { orgId, status: "failed" } }),
       prisma.emailThread.count({ where: { orgId, status: "ignored" } }),
     ]);
-    res.json({ total, pending, sent, failed, ignored });
+    res.json({ total, pending, editing, drafting, sent, failed, ignored });
   });
 
   // GET /email-automation/threads
@@ -1077,6 +1104,83 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
     const updated = await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "ignored" } });
     res.json(updated);
+  });
+
+  // GET /email-automation/templates
+  router.get("/templates", adminOnly, async (req: Request, res: Response) => {
+    const orgId = req.auth!.orgId;
+    const templates = await loadOrgEmailTemplates(prisma, orgId);
+    res.json({ templates });
+  });
+
+  // PUT /email-automation/templates/:key
+  router.put("/templates/:key", adminOnly, async (req: Request, res: Response) => {
+    const orgId = req.auth!.orgId;
+    const key = req.params.key as string;
+    const body = req.body as {
+      htmlBody?: string;
+      textBody?: string;
+      subject?: string;
+      design?: Partial<EmailTemplateDesign>;
+      useCustomHtml?: boolean;
+    };
+    const base = mergeTemplates(undefined).find((t) => t.key === key);
+    if (!base) {
+      res.status(404).json({ error: "Unknown template key" });
+      return;
+    }
+    try {
+      const templates = await saveOrgTemplateOverrides(prisma, orgId, key, {
+        ...(typeof body.subject === "string" && { subject: body.subject }),
+        ...(typeof body.textBody === "string" && { textBody: body.textBody }),
+        ...(typeof body.htmlBody === "string" && { htmlBody: body.htmlBody }),
+        ...(body.design && typeof body.design === "object" && { design: body.design }),
+        ...(typeof body.useCustomHtml === "boolean" && { useCustomHtml: body.useCustomHtml })
+      });
+      const updated = templates.find((t) => t.key === key);
+      res.json({ ok: true, template: updated });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Save failed" });
+    }
+  });
+
+  const assetUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 4 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith("image/")) cb(null, true);
+      else cb(new Error("Only image files are allowed"));
+    }
+  });
+
+  // POST /email-automation/assets — logo / hero images for templates
+  router.post("/assets", adminOnly, assetUpload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const orgId = req.auth!.orgId;
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: "Missing file" });
+        return;
+      }
+      const ext =
+        file.mimetype === "image/png"
+          ? "png"
+          : file.mimetype === "image/webp"
+            ? "webp"
+            : file.mimetype === "image/gif"
+              ? "gif"
+              : file.mimetype === "image/svg+xml"
+                ? "svg"
+                : "jpg";
+      const dir = path.join(process.cwd(), "uploads", "email-assets", orgId);
+      fs.mkdirSync(dir, { recursive: true });
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      fs.writeFileSync(path.join(dir, filename), file.buffer);
+      const urlPath = `/uploads/email-assets/${orgId}/${filename}`;
+      res.json({ ok: true, url: urlPath });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Upload failed" });
+    }
   });
 
   // GET /email-automation/config

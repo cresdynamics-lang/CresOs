@@ -9,7 +9,7 @@ export function shouldUseSalesWorkspace(roleKeys: string[]): boolean {
 export function resolveHomeRouteForUser(roleKeys: string[]): string {
   const isClientOnly =
     roleKeys.includes("client") &&
-    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst"].includes(r));
+    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst", "hr"].includes(r));
   if (isClientOnly) return "/client";
 
   const isDeveloperOnly =
@@ -23,6 +23,11 @@ export function resolveHomeRouteForUser(roleKeys: string[]): string {
     (roleKeys.includes("finance") || roleKeys.includes("analyst")) &&
     !roleKeys.some((r) => ["admin", "director_admin"].includes(r));
   if (isFinanceOnly) return "/finance";
+
+  const isHrOnly =
+    roleKeys.includes("hr") &&
+    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst"].includes(r));
+  if (isHrOnly) return "/hr";
 
   return "/dashboard";
 }

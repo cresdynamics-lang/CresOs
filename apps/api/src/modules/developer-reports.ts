@@ -5,9 +5,24 @@ import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { notifyDirectors, getDirectorAndAdminUserIds } from "./director-notifications";
 import { getDirectorReportSubmitterIds, isAdminRole, isDirectorOnly } from "../lib/user-capabilities";
+import multer from "multer";
 import { queueAutoDirectorReplyForDeveloperReport } from "./director-ai-automation";
+import { polishReportSection, transcribeReportAudio } from "../lib/groq-voice-report";
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const DEVELOPER_REPORT_SECTION_KEYS = [
+  "whatWorked",
+  "blockers",
+  "needsAttention",
+  "implemented",
+  "pending",
+  "nextPlan"
+] as const;
+
+const voiceSectionUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
 const MARKED_REVIEWED_LINE = "Marked reviewed. ✓";
 
 const LEADERSHIP_APPEND_SEP =
@@ -194,6 +209,51 @@ export default function developerReportsRouter(prisma: PrismaClient): Router {
       );
       queueAutoDirectorReplyForDeveloperReport(prisma, report.id);
       res.status(201).json(report);
+    }
+  );
+
+  // Voice → text for one report section (developer only)
+  router.post(
+    "/voice-section",
+    requireRoles([ROLE_KEYS.developer]),
+    voiceSectionUpload.single("audio"),
+    async (req, res) => {
+      const file = req.file;
+      if (!file?.buffer?.length) {
+        res.status(400).json({ error: "Audio recording required" });
+        return;
+      }
+
+      const sectionKey = String(req.body?.sectionKey ?? "").trim();
+      const sectionLabel = String(req.body?.sectionLabel ?? sectionKey).trim();
+      const existingText = String(req.body?.existingText ?? "").trim();
+
+      if (!DEVELOPER_REPORT_SECTION_KEYS.includes(sectionKey)) {
+        res.status(400).json({ error: "Invalid report section" });
+        return;
+      }
+
+      const transcript = await transcribeReportAudio(
+        file.buffer,
+        file.mimetype,
+        file.originalname || "recording.webm"
+      );
+      if (!transcript) {
+        res.status(503).json({
+          error:
+            "Could not transcribe audio. Speak clearly, try again, or type the section manually."
+        });
+        return;
+      }
+
+      const sectionText = await polishReportSection({
+        sectionKey,
+        sectionLabel,
+        transcript,
+        existingText: existingText || undefined
+      });
+
+      res.json({ transcript, sectionText });
     }
   );
 

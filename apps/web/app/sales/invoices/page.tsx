@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
 import { StatCard, StatCardGrid } from "../../../components/stat-card";
@@ -30,7 +30,7 @@ interface Invoice {
   dueDate?: string;
   notes?: string;
   createdAt: string;
-  client: { name: string; email: string | null };
+  client: { name: string; email: string | null } | null;
   project?: { name: string } | null;
   items: InvoiceItem[];
 }
@@ -58,7 +58,49 @@ interface Project {
   approvalStatus?: string;
   price?: number | null;
   amountReceived?: number | null;
-  client: { name: string };
+  clientName?: string | null;
+  client: { id?: string; name: string } | null;
+}
+
+function resolveClientName(
+  client: { name: string } | null | undefined,
+  clientId?: string | null,
+  clients?: Client[],
+  clientName?: string | null
+): string {
+  if (client?.name?.trim()) return client.name.trim();
+  if (clientName?.trim()) return clientName.trim();
+  if (clientId && clients?.length) {
+    const match = clients.find((c) => c.id === clientId);
+    if (match?.name?.trim()) return match.name.trim();
+  }
+  return "No client linked";
+}
+
+function formatMoney(amount: number, currency = "KES"): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+}
+
+function clientOptionLabel(client: Client): string {
+  const name = client.name?.trim() || "Unnamed client";
+  return client.email ? `${name} — ${client.email}` : name;
+}
+
+function projectOptionLabel(project: Project, clients: Client[], currency: string): string {
+  const clientLabel = resolveClientName(project.client, project.clientId, clients, project.clientName);
+  const received = project.amountReceived ?? 0;
+  const price = project.price ?? null;
+  const remaining = price != null ? Math.max(0, price - received) : null;
+  const suffix = remaining != null ? ` — ${formatMoney(remaining, currency)} remaining` : "";
+  const clientPart =
+    project.clientId || project.clientName || project.client
+      ? ` (${clientLabel})`
+      : " (link client on project)";
+  return `${project.name}${clientPart}${suffix}`;
+}
+
+function projectIsInvoiceReady(project: Project): boolean {
+  return Boolean(project.clientId);
 }
 
 export default function SalesInvoicesPage() {
@@ -70,6 +112,7 @@ export default function SalesInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
@@ -119,8 +162,7 @@ export default function SalesInvoicesPage() {
   useEffect(() => {
     if (!auth.accessToken || !canAccessSalesInvoices || activeTab !== "create") return;
     
-    fetchClients();
-    fetchProjects();
+    void loadCreateOptions();
   }, [activeTab, auth.accessToken, canAccessSalesInvoices]);
 
   const fetchDashboard = async () => {
@@ -163,7 +205,7 @@ export default function SalesInvoicesPage() {
       const response = await apiFetch("/sales/clients");
       if (response.ok) {
         const data = await response.json();
-        setClients(data.data);
+        setClients(Array.isArray(data.data) ? data.data : []);
       }
     } catch (error) {
       console.error("Failed to fetch clients:", error);
@@ -175,10 +217,19 @@ export default function SalesInvoicesPage() {
       const response = await apiFetch("/sales/projects");
       if (response.ok) {
         const data = await response.json();
-        setProjects(data.data);
+        setProjects(Array.isArray(data.data) ? data.data : []);
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
+    }
+  };
+
+  const loadCreateOptions = async () => {
+    setOptionsLoading(true);
+    try {
+      await Promise.all([fetchClients(), fetchProjects()]);
+    } finally {
+      setOptionsLoading(false);
     }
   };
 
@@ -206,16 +257,14 @@ export default function SalesInvoicesPage() {
     
     setItems(updatedItems);
     
-    // Update totals
+    // Line items total (no tax applied on invoice)
     const subtotal = updatedItems.reduce((sum, item) => sum + item.total, 0);
-    const taxAmount = subtotal * 0.1; // 10% tax
-    const totalAmount = subtotal + taxAmount;
     
     setFormData({
       ...formData,
       subtotal,
-      taxAmount,
-      totalAmount
+      taxAmount: 0,
+      totalAmount: subtotal
     });
   };
 
@@ -271,12 +320,7 @@ export default function SalesInvoicesPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = "KES") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number, currency: string = "KES") => formatMoney(amount, currency);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -299,9 +343,21 @@ export default function SalesInvoicesPage() {
     }
   };
 
-  const projectsForClient = formData.clientId
-    ? projects.filter((p) => !p.clientId || p.clientId === formData.clientId)
-    : projects;
+  const visibleProjects = useMemo(() => {
+    const base = formData.clientId
+      ? projects.filter((p) => p.clientId === formData.clientId)
+      : projects;
+    return [...base].sort((a, b) => {
+      const aReady = projectIsInvoiceReady(a) ? 0 : 1;
+      const bReady = projectIsInvoiceReady(b) ? 0 : 1;
+      return aReady - bReady || a.name.localeCompare(b.name);
+    });
+  }, [projects, formData.clientId]);
+
+  const invoiceReadyProjects = useMemo(
+    () => visibleProjects.filter((p) => projectIsInvoiceReady(p)),
+    [visibleProjects]
+  );
 
   const projectNeedsSelection = !isAdmin;
   const canSubmitInvoice =
@@ -389,7 +445,9 @@ export default function SalesInvoicesPage() {
                           {invoice.status}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-400">{invoice.client.name}</div>
+                      <div className="text-sm text-slate-400">
+                        {resolveClientName(invoice.client, invoice.clientId, clients)}
+                      </div>
                       <div className="text-xs text-slate-500">{formatDate(invoice.createdAt)}</div>
                     </div>
                     <div className="text-right">
@@ -422,14 +480,22 @@ export default function SalesInvoicesPage() {
                   }
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
                   required
+                  disabled={optionsLoading}
                 >
-                  <option value="">Select a client</option>
+                  <option value="">
+                    {optionsLoading ? "Loading clients…" : "Select a client"}
+                  </option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
-                      {client.name}
+                      {clientOptionLabel(client)}
                     </option>
                   ))}
                 </select>
+                {!optionsLoading && clients.length === 0 ? (
+                  <p className="mt-1 text-xs text-amber-400/90">
+                    No CRM clients yet — add a client in CRM, then link them on the project.
+                  </p>
+                ) : null}
               </div>
               
               <div>
@@ -438,32 +504,52 @@ export default function SalesInvoicesPage() {
                 </label>
                 <select
                   value={formData.projectId}
-                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                  onChange={(e) => {
+                    const projectId = e.target.value;
+                    const proj = projects.find((p) => p.id === projectId);
+                    setFormData({
+                      ...formData,
+                      projectId,
+                      clientId: proj?.clientId || formData.clientId
+                    });
+                  }}
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
                   required={projectNeedsSelection}
+                  disabled={optionsLoading}
                 >
                   <option value="">
-                    {formData.clientId ? "Select a project" : "Select a client first"}
+                    {optionsLoading
+                      ? "Loading projects…"
+                      : formData.clientId
+                        ? "Select a project"
+                        : "Select a client first or pick a ready project"}
                   </option>
-                  {projectsForClient.map((project) => {
-                    const received = project.amountReceived ?? 0;
-                    const price = project.price ?? null;
-                    const remaining =
-                      price != null ? Math.max(0, price - received) : null;
-                    const suffix =
-                      remaining != null
-                        ? ` — ${formatCurrency(remaining, formData.currency)} remaining`
-                        : "";
-                    return (
-                      <option key={project.id} value={project.id}>
-                        {project.name} ({project.client.name}){suffix}
-                      </option>
-                    );
-                  })}
+                  {visibleProjects.map((project) => (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                      disabled={!projectIsInvoiceReady(project)}
+                    >
+                      {projectOptionLabel(project, clients, formData.currency)}
+                      {!projectIsInvoiceReady(project) ? " — link client in CRM" : ""}
+                    </option>
+                  ))}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  Required for sales users so payments can update the correct project balance.
+                  Required for sales users so payments update the correct project balance. Client name
+                  shows in parentheses; remaining contract balance when available.
                 </p>
+                {!optionsLoading && formData.clientId && invoiceReadyProjects.length === 0 ? (
+                  <p className="mt-1 text-xs text-amber-400/90">
+                    No invoice-ready projects for this client — link the project to this client in CRM
+                    first.
+                  </p>
+                ) : null}
+                {!optionsLoading && !formData.clientId && projects.length > 0 && invoiceReadyProjects.length === 0 ? (
+                  <p className="mt-1 text-xs text-amber-400/90">
+                    Your projects are listed above but need a CRM client link before you can invoice.
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -573,20 +659,13 @@ export default function SalesInvoicesPage() {
 
             {/* Totals */}
             <div className="border-t border-slate-700 pt-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Subtotal:</span>
-                  <span className="text-slate-200">{formatCurrency(formData.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Tax (10%):</span>
-                  <span className="text-slate-200">{formatCurrency(formData.taxAmount)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-medium">
-                  <span className="text-slate-200">Total:</span>
-                  <span className="text-brand">{formatCurrency(formData.totalAmount)}</span>
-                </div>
+              <div className="flex justify-between text-lg font-medium">
+                <span className="text-slate-200">Invoice total</span>
+                <span className="text-brand">{formatCurrency(formData.totalAmount)}</span>
               </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Same amount is saved in Finance. Confirm payments there to update project received.
+              </p>
             </div>
 
             {/* Submit Button */}
@@ -628,7 +707,7 @@ export default function SalesInvoicesPage() {
                         </span>
                       </div>
                       <div className="text-sm text-slate-400 mb-1">
-                        Client: {invoice.client.name}
+                        Client: {resolveClientName(invoice.client, invoice.clientId, clients)}
                         {invoice.project && ` • Project: ${invoice.project.name}`}
                       </div>
                       <div className="text-xs text-slate-500">

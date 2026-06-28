@@ -12,8 +12,15 @@ import { WorkspaceAside } from "../components/workspace/workspace-aside";
 import { WorkspaceAccountFooter } from "../components/workspace/workspace-account-footer";
 import { GlobalSideNav } from "../components/workspace/global-side-nav";
 import { workspaceMeta, WorkspaceNavContent } from "../components/workspace/workspace-nav-content";
+import {
+  HrWorkspaceAside,
+  HrWorkspaceAsideFooter
+} from "../components/hr/hr-workspace-aside";
+import { HrSideNav } from "./hr/hr-nav";
+import { HrAsideWorkforceSnapshot } from "../components/hr/hr-aside-workforce";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
+import { sumDirectMessageUnread } from "../lib/community-unread";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { auth, setAuth, apiFetch } = useAuth();
@@ -162,12 +169,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       if (convRes.ok) {
         const j = (await convRes.json()) as {
-          data?: { conversations?: { unreadCount?: number }[] };
+          data?: { conversations?: { type?: string; unreadCount?: number }[] };
         };
         const arr = j.data?.conversations ?? [];
-        setCommunityChatUnread(
-          arr.reduce((sum, c) => sum + (typeof c.unreadCount === "number" ? c.unreadCount : 0), 0)
-        );
+        setCommunityChatUnread(sumDirectMessageUnread(arr));
       } else {
         setCommunityChatUnread(0);
       }
@@ -333,7 +338,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [mobileNavOpen]);
 
   // Check if current page should be fullscreen
-  const isFullscreenPage = pathname === '/community' || pathname.startsWith('/admin/email-automation');
+  const isFullscreenPage = pathname === '/community';
 
   const workspace = useMemo(
     () => resolveWorkspaceForUser(pathname, auth.roleKeys),
@@ -341,16 +346,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const inWorkspace = workspace !== null;
 
-  const hideTopHeader = isFullscreen;
   const isSettingsRoute = pathname.startsWith("/settings");
+  const hideTopHeader = isFullscreen || isSettingsRoute;
   const hideShellChrome = isFullscreenPage && isFullscreen;
 
   const workspaceThemeKey =
     inWorkspace && workspace
-      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "admin" | "client")
+      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr")
       : "global";
 
-  const navFooter = <WorkspaceAccountFooter themeKey="global" onLogout={handleLogout} />;
+  const navFooter = <WorkspaceAccountFooter themeKey="global" onLogout={handleLogout} showIdentity />;
 
   const workspaceFooter = inWorkspace ? (
     <div className="flex flex-col gap-1">
@@ -367,7 +372,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           setMobileNavOpen(false);
           handleLogout();
         }}
-        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales"}
+        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "admin" && workspace !== "client" && workspace !== "hr"}
+        showIdentity={false}
       />
     </div>
   ) : (
@@ -380,11 +386,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const asideTheme = inWorkspace && workspace ? workspaceMeta(workspace).themeKey : "global";
 
   const isWorkspaceFullscreen =
-    inWorkspace && (workspace === "finance" || workspace === "sales" || workspace === "developer");
+    (inWorkspace &&
+      (workspace === "finance" ||
+        workspace === "sales" ||
+        workspace === "developer" ||
+        workspace === "director" ||
+        workspace === "hr")) ||
+    workspace === "admin" ||
+    workspace === "client" ||
+    isSettingsRoute;
 
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-slate-950" : ""}`}>
-      {mobileNavOpen && !hideShellChrome && (
+      {mobileNavOpen && !hideShellChrome && !isSettingsRoute && (
         <div className="fixed inset-0 z-40">
           <button
             type="button"
@@ -392,30 +406,56 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 bg-slate-950/70"
             onClick={() => setMobileNavOpen(false)}
           />
-          <WorkspaceAside
-            title={asideTitle}
-            subtitle={asideSubtitle}
-            themeKey={asideTheme}
-            className="safe-area-top absolute left-0 top-0 z-10 max-w-sm shadow-2xl"
-            footer={workspaceFooter}
-          >
-            <div onClick={() => setMobileNavOpen(false)} role="presentation">
-              {inWorkspace && workspace ? (
-                <WorkspaceNavContent workspace={workspace} />
-              ) : (
-                <GlobalSideNav
-                  sections={visibleSections}
-                  badgeForItem={badgeForItem}
-                  communityChatUnread={communityChatUnread}
-                  onNavClick={() => setMobileNavOpen(false)}
+          {workspace === "hr" ? (
+            <HrWorkspaceAside
+              className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl"
+              footer={
+                <HrWorkspaceAsideFooter
+                  onLogout={() => {
+                    setMobileNavOpen(false);
+                    handleLogout();
+                  }}
                 />
-              )}
-            </div>
-          </WorkspaceAside>
+              }
+            >
+              <HrSideNav onNavClick={() => setMobileNavOpen(false)} />
+            </HrWorkspaceAside>
+          ) : (
+            <WorkspaceAside
+              title={asideTitle}
+              subtitle={asideSubtitle}
+              themeKey={asideTheme}
+              className="safe-area-top absolute left-0 top-0 z-10 max-w-sm shadow-2xl"
+              footer={workspaceFooter}
+            >
+              <div onClick={() => setMobileNavOpen(false)} role="presentation">
+                {inWorkspace && workspace ? (
+                  <WorkspaceNavContent workspace={workspace} />
+                ) : (
+                  <GlobalSideNav
+                    sections={visibleSections}
+                    badgeForItem={badgeForItem}
+                    communityChatUnread={communityChatUnread}
+                    onNavClick={() => setMobileNavOpen(false)}
+                  />
+                )}
+              </div>
+            </WorkspaceAside>
+          )}
         </div>
       )}
 
-      {!inWorkspace && !hideShellChrome && (
+      {inWorkspace && workspace === "hr" && !hideShellChrome && !isSettingsRoute ? (
+        <HrWorkspaceAside
+          className="hidden w-[17.5rem] shrink-0 md:flex"
+          footer={<HrWorkspaceAsideFooter onLogout={handleLogout} />}
+        >
+          <HrAsideWorkforceSnapshot />
+          <HrSideNav />
+        </HrWorkspaceAside>
+      ) : null}
+
+      {!inWorkspace && !hideShellChrome && !isSettingsRoute && (
         <WorkspaceAside
           title="CresOS"
           subtitle="Operating system for growth"

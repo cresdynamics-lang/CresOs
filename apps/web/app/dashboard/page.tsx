@@ -16,11 +16,16 @@ import { PageHeader } from "../page-header";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
+import { sumDirectMessageUnread } from "../../lib/community-unread";
 import { buildWelcomeHeadline, getDisplayFirstName } from "../../lib/personalized-greeting";
 import { shouldUseSalesWorkspace } from "../../lib/resolve-home-route";
 import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
 import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
+import { DirectorOverviewDashboard, AdminOverviewDashboard } from "../../components/director/director-overview-dashboard";
+import { DirectorBriefingPreview } from "../../components/director/director-briefing-view";
+import { isDirectorOnly } from "../../lib/is-director-only";
+import { isAdminOnly } from "../../lib/is-admin-only";
 
 type Summary = {
   leadsThisWeek: number;
@@ -285,8 +290,8 @@ export default function DashboardPage() {
   const { apiFetch, auth, hydrated } = useAuth();
   const router = useRouter();
   const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
-  const isDirectorOnly =
-    auth.roleKeys.includes("director_admin") && !auth.roleKeys.includes("admin");
+  const isDirectorOnlyUser = isDirectorOnly(auth.roleKeys);
+  const isAdminOnlyUser = isAdminOnly(auth.roleKeys);
 
   /** Org-wide analytics metrics (main dashboard tiles) — not shown to sales-only / developer-only roles. */
   const canViewOrgAnalyticsSummary = useMemo(
@@ -498,11 +503,11 @@ export default function DashboardPage() {
       try {
         const convRes = await apiFetch("/chat-community/conversations");
         if (!cancelled && convRes.ok) {
-          const j = (await convRes.json()) as { data?: { conversations?: { unreadCount?: number }[] } };
+          const j = (await convRes.json()) as {
+            data?: { conversations?: { type?: string; unreadCount?: number }[] };
+          };
           const arr = j.data?.conversations ?? [];
-          setCommunityUnread(
-            arr.reduce((s, c) => s + (typeof c.unreadCount === "number" ? c.unreadCount : 0), 0)
-          );
+          setCommunityUnread(sumDirectMessageUnread(arr));
         } else if (!cancelled) {
           setCommunityUnread(0);
         }
@@ -1002,6 +1007,84 @@ export default function DashboardPage() {
       <div className="flex h-64 items-center justify-center">
         <p className="text-slate-400">Opening sales workspace…</p>
       </div>
+    );
+  }
+
+  const refreshDirectorDashboard = () => {
+    void loadSummaryAndAttention();
+    void loadDirectorDashboard();
+    void loadDirectorAiBriefings();
+    void loadDirectorSummaryFeed();
+    void loadProjects();
+    void loadKpis();
+    void loadFocusCoach();
+  };
+
+  if (isDirectorOnlyUser) {
+    return (
+      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
+        <DirectorOverviewDashboard
+          welcomeHeadline={welcomeHeadline}
+          roleKeys={auth.roleKeys}
+          attention={attention}
+          directorDashboard={directorDashboard}
+          kpis={kpis}
+          kpisError={kpisError}
+          canViewFinanceKpis={canViewFinanceKpis}
+          projects={projects}
+          focusTips={focusCoach?.deterministicTips ?? []}
+          aiHint={focusCoach?.aiHint ?? null}
+          directorSummaryFeed={directorSummaryFeed}
+          directorSummaryFeedFailed={directorSummaryFeedFailed}
+          directorAiBriefings={directorAiBriefings}
+          queue={{
+            unreadNotifications: unreadCount,
+            messagesCount,
+            dueToday: dueCount,
+            workProgressPercent: workProgress,
+            reportStreakDays: reportStreak,
+            approvalsPending: attention?.approvalsPending?.length ?? directorDashboard?.approvalQueue.totalPending ?? 0,
+            leadsPendingApproval: attention?.leadsPendingApproval?.length ?? 0,
+            communityUnread
+          }}
+          loading={directorDashboard === null && directorSummaryFeed === null && directorAiBriefings === null}
+          onRefresh={refreshDirectorDashboard}
+        />
+      </section>
+    );
+  }
+
+  if (isAdminOnlyUser) {
+    return (
+      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
+        <AdminOverviewDashboard
+          welcomeHeadline={welcomeHeadline}
+          roleKeys={auth.roleKeys}
+          attention={attention}
+          directorDashboard={directorDashboard}
+          kpis={kpis}
+          kpisError={kpisError}
+          canViewFinanceKpis={canViewFinanceKpis}
+          projects={projects}
+          focusTips={focusCoach?.deterministicTips ?? []}
+          aiHint={focusCoach?.aiHint ?? null}
+          directorSummaryFeed={directorSummaryFeed}
+          directorSummaryFeedFailed={directorSummaryFeedFailed}
+          directorAiBriefings={directorAiBriefings}
+          queue={{
+            unreadNotifications: unreadCount,
+            messagesCount,
+            dueToday: dueCount,
+            workProgressPercent: workProgress,
+            reportStreakDays: reportStreak,
+            approvalsPending: attention?.approvalsPending?.length ?? directorDashboard?.approvalQueue.totalPending ?? 0,
+            leadsPendingApproval: attention?.leadsPendingApproval?.length ?? 0,
+            communityUnread
+          }}
+          loading={directorDashboard === null && directorSummaryFeed === null && directorAiBriefings === null}
+          onRefresh={refreshDirectorDashboard}
+        />
+      </section>
     );
   }
 
@@ -1740,7 +1823,7 @@ export default function DashboardPage() {
             <div className="min-w-0 flex-1">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Director overview — aligned view</h3>
               <p className="mb-4 text-xs text-slate-400">
-                {isDirectorOnly
+                {isDirectorOnlyUser
                   ? "Sales, delivery, and operational signals in one place. Invoice and billing detail live under Finance for Admin."
                   : "Sales, delivery, finance, and approvals in one place. All amounts in Kenyan Shillings (KES)."}
               </p>
@@ -1940,12 +2023,12 @@ export default function DashboardPage() {
                           <td className="whitespace-nowrap px-2 py-2 text-slate-300">{formatBriefingDateLabel(r.dateKey)}</td>
                           <td className="min-w-0 px-2 py-2">
                             <p className="font-medium text-slate-100">{r.subject}</p>
-                            <p className="mt-1 line-clamp-4 break-words text-slate-400">{r.bodyPreview}</p>
+                            <DirectorBriefingPreview body={r.bodyPreview} className="mt-1" />
                             <Link
                               href="/reports/ai"
-                              className="mt-1 inline-block text-sky-400 hover:underline"
+                              className="mt-2 inline-block text-sky-400 hover:underline"
                             >
-                              Open full report →
+                              Open full briefing →
                             </Link>
                           </td>
                         </tr>
@@ -1962,7 +2045,7 @@ export default function DashboardPage() {
 
       {isDirectorOrAdmin && (
         <WorkspaceLiveAnalytics
-          variant={isDirectorOnly ? "director" : "admin"}
+          variant={isDirectorOnlyUser ? "director" : "admin"}
           className="mb-8"
         />
       )}
@@ -1973,7 +2056,7 @@ export default function DashboardPage() {
           <StatCard label="Deals won" value={summary!.dealsWon} tone="emerald" />
           <StatCard label="Active projects" value={summary!.activeProjects} tone="violet" />
           <StatCard label="Revenue received" value={formatMoney(summary!.revenueReceived)} tone="emerald" />
-          {!isDirectorOnly && (
+          {!isDirectorOnlyUser && (
             <StatCard
               label="Invoices outstanding"
               value={formatMoney(summary!.invoiceOutstanding)}

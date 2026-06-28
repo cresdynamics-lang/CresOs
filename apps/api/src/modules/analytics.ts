@@ -2,6 +2,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
+import { listHrEmployees } from "../lib/hr-employment";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1314,6 +1315,40 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
         },
         team,
         aiPredictions: aiPredictions.slice(0, 5)
+      });
+    }
+  );
+
+  /** Workforce / org analytics from HR employee roster — finance, admin, HR, director. */
+  router.get(
+    "/workforce",
+    requireRoles([
+      ROLE_KEYS.admin,
+      ROLE_KEYS.finance,
+      ROLE_KEYS.analyst,
+      ROLE_KEYS.hr,
+      ROLE_KEYS.director
+    ]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const employees = await listHrEmployees(prisma, orgId);
+      const salaryExpenses = await prisma.expense.findMany({
+        where: { orgId, deletedAt: null, category: "salaries" },
+        orderBy: { spentAt: "desc" },
+        take: 200,
+        select: { amount: true, status: true, spentAt: true }
+      });
+      const monthlyPayrollTotal = employees.reduce((sum, e) => sum + (e.monthlySalary ?? 0), 0);
+      res.json({
+        generatedAt: new Date().toISOString(),
+        employees,
+        monthlyPayrollTotal,
+        salaryExpenses: salaryExpenses.map((x) => ({
+          amount: Number(x.amount),
+          status: x.status,
+          spentAt: x.spentAt.toISOString()
+        })),
+        scheduleKpis: null
       });
     }
   );

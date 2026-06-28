@@ -50,7 +50,7 @@ export function DeveloperLayoutClient({ children }: { children: React.ReactNode 
         subtitle="Tasks · reports · delivery"
         themeKey="developer"
         className="hidden w-[15rem] md:flex"
-        footer={<WorkspaceAccountFooter themeKey="developer" onLogout={handleLogout} showAccountLink={false} />}
+        footer={<WorkspaceAccountFooter themeKey="developer" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />}
       >
         <DeveloperSideNav />
       </WorkspaceAside>

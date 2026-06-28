@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
+import { devNeu } from "../../../components/developer/developer-theme";
 import { devGlass } from "../../../components/developer/developer-glass-theme";
 import { formatNairobiDate, formatNairobiDateTime } from "../../../lib/nairobi-datetime";
+import { isDeveloperOnly } from "../../../lib/resolve-workspace-for-user";
 
 type Comment = {
   id: string;
@@ -122,7 +124,7 @@ export default function DeveloperReportDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
-  const { apiFetch, auth } = useAuth();
+  const { apiFetch, auth, hydrated } = useAuth();
   const [report, setReport] = useState<DeveloperReport | null>(null);
   const [newComment, setNewComment] = useState("");
   const [newKind, setNewKind] = useState<"comment" | "question">("comment");
@@ -133,6 +135,7 @@ export default function DeveloperReportDetailPage() {
   const [waitingForAi, setWaitingForAi] = useState(false);
 
   const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const useNeu = isDeveloperOnly(auth.roleKeys);
   const remarkReplacePrefilledRef = useRef(false);
 
   useEffect(() => {
@@ -251,11 +254,11 @@ export default function DeveloperReportDetailPage() {
     }
   };
 
-  if (!report) {
+  if (!hydrated || !report) {
     return (
-      <section className="shell border-cres-border bg-cres-surface/70">
-        <p className="text-cres-muted">Loading…</p>
-      </section>
+      <div className="flex min-h-[12rem] flex-1 items-center justify-center text-sm text-slate-500">
+        Loading…
+      </div>
     );
   }
 
@@ -313,19 +316,33 @@ export default function DeveloperReportDetailPage() {
     }
   };
 
+  const panel = useNeu ? devNeu.panel : "shell border-cres-border bg-cres-card/80";
+  const headerPanel = useNeu ? devNeu.panel : "shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4";
+  const textMain = useNeu ? "text-slate-100" : "text-cres-text";
+  const textMuted = useNeu ? "text-slate-500" : "text-cres-muted";
+  const textMutedSm = useNeu ? "text-slate-400" : "text-cres-text-muted";
+  const linkBack = useNeu ? "text-xs text-violet-300 hover:underline sm:text-sm" : "text-xs text-cres-accent hover:underline sm:text-sm";
+  const inputClass = useNeu
+    ? "w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-100"
+    : "w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text";
+  const btnPrimary = useNeu
+    ? devNeu.btnPrimary
+    : "rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60";
+  const commentBorder = useNeu ? "border-white/[0.06] bg-[#0e1319]" : "border-cres-border bg-cres-surface/50";
+  const questionBorder = useNeu ? "border-violet-500/30 bg-violet-950/20" : "border-cres-accent/40 bg-cres-accent/10";
+
   return (
-    <section className="flex w-full min-w-0 flex-col gap-4 px-3 py-4 max-sm:gap-3 sm:px-6 sm:py-5">
-      <div className="shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4">
+    <section className={`flex w-full min-w-0 flex-col gap-4 ${useNeu ? "pb-8" : "px-3 py-4 max-sm:gap-3 sm:px-6 sm:py-5"}`}>
+      <div className={headerPanel}>
         <div>
-          <Link href="/developer-reports" className="text-xs text-cres-accent hover:underline sm:text-sm">
-            ← Back to developer reports
+          <Link href="/developer-reports" className={linkBack}>
+            ← Back to reports
           </Link>
-          <h2 className="mt-2 text-base font-semibold text-cres-text sm:text-lg">
-            Developer report · {formatNairobiDate(report.reportDate)}
+          <h2 className={`mt-2 text-base font-semibold sm:text-lg ${useNeu ? "font-display text-xl text-slate-100" : textMain}`}>
+            {formatNairobiDate(report.reportDate)}
           </h2>
-          <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-            By {report.submittedBy?.name ?? report.submittedBy?.email ?? "Unknown"}
-            <> · Filed {formatNairobiDateTime(report.createdAt)}</>
+          <p className={`mt-1 text-[11px] sm:text-xs ${textMuted}`}>
+            Filed {formatNairobiDateTime(report.createdAt)}
           </p>
         </div>
         <span
@@ -341,12 +358,12 @@ export default function DeveloperReportDetailPage() {
         </span>
       </div>
 
-      <div className="shell border-cres-border bg-cres-card/80">
+      <div className={panel}>
         <div className="grid gap-4 md:grid-cols-2">
           {FIELDS.map(({ key, label }) => (
             <div key={key}>
-              <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">{label}</p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-cres-text sm:text-sm">
+              <p className={`text-[10px] uppercase tracking-wide sm:text-xs ${textMuted}`}>{label}</p>
+              <p className={`mt-1 whitespace-pre-wrap text-xs sm:text-sm ${textMain}`}>
                 {(report[key] ?? "").trim() ? (report[key] as string).trim() : "—"}
               </p>
             </div>
@@ -355,7 +372,7 @@ export default function DeveloperReportDetailPage() {
       </div>
 
       {!isDirector && isAuthor && waitingForAi && (
-        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${devGlass.alertInfo}`}>
+        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${useNeu ? devNeu.alertInfo : devGlass.alertInfo}`}>
           <p className="text-sm text-sky-200">
             Leadership is reviewing your report. Automated feedback and questions usually appear within a minute.
           </p>
@@ -363,7 +380,7 @@ export default function DeveloperReportDetailPage() {
       )}
 
       {!isDirector && isAuthor && leadershipReplied && openQuestions > 0 && (
-        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${devGlass.alertWarning}`}>
+        <div className={`rounded-2xl px-4 py-3 sm:px-5 ${useNeu ? devNeu.alertWarning : devGlass.alertWarning}`}>
           <p className="font-medium text-amber-200">
             {openQuestions} open question{openQuestions === 1 ? "" : "s"} waiting for your answer
           </p>
@@ -372,7 +389,7 @@ export default function DeveloperReportDetailPage() {
       )}
 
       {isDirector && (
-        <div className="shell border-cres-border bg-cres-card/80">
+        <div className={panel}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">Review status</p>
@@ -439,8 +456,8 @@ export default function DeveloperReportDetailPage() {
       )}
 
       {!isDirector && isAuthor && (
-        <div className="shell border-cres-border bg-cres-card/80">
-          <p className="text-xs uppercase tracking-wide text-cres-muted">Director review</p>
+        <div className={panel}>
+          <p className={`text-xs uppercase tracking-wide ${textMuted}`}>Director review</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span
               className={
@@ -453,7 +470,7 @@ export default function DeveloperReportDetailPage() {
             >
               {report.reviewStatus ?? "pending"}
             </span>
-            <span className="text-xs text-cres-muted">
+            <span className={`text-xs ${textMuted}`}>
               {report.reviewStatus === "checked"
                 ? "Checked — see comments below"
                 : report.reviewStatus === "viewed"
@@ -463,25 +480,25 @@ export default function DeveloperReportDetailPage() {
           </div>
           {report.remarks?.trim() && (
             <div className="mt-3">
-              <p className="text-xs text-cres-text-muted sm:text-sm">Remarks</p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-cres-text sm:text-sm">{report.remarks.trim()}</p>
+              <p className={`text-xs sm:text-sm ${textMutedSm}`}>Remarks</p>
+              <p className={`mt-1 whitespace-pre-wrap text-xs sm:text-sm ${textMain}`}>{report.remarks.trim()}</p>
             </div>
           )}
         </div>
       )}
 
-      <div className="shell border-cres-border bg-cres-card/80">
-        <h3 className="mb-3 text-xs font-semibold text-cres-text sm:text-sm">Comments & questions</h3>
+      <div className={panel}>
+        <h3 className={`mb-3 text-xs font-semibold sm:text-sm ${textMain}`}>Comments & questions</h3>
 
         {topLevel.length === 0 && !isDirector && (
-          <p className="text-xs text-cres-muted sm:text-sm">
+          <p className={`text-xs sm:text-sm ${textMuted}`}>
             {waitingForAi
               ? "Waiting for leadership review…"
               : "No comments yet from director."}
           </p>
         )}
         {topLevel.length === 0 && isDirector && (
-          <p className="text-xs text-cres-muted sm:text-sm">No comments yet. Add a comment or question below.</p>
+          <p className={`text-xs sm:text-sm ${textMuted}`}>No comments yet. Add a comment or question below.</p>
         )}
 
         <ul className="space-y-4">
@@ -493,32 +510,32 @@ export default function DeveloperReportDetailPage() {
               <li
                 key={c.id}
                 className={`rounded-lg border px-3 py-3 ${
-                  c.kind === "question" ? "border-cres-accent/40 bg-cres-accent/10" : "border-cres-border bg-cres-surface/50"
+                  c.kind === "question" ? questionBorder : commentBorder
                 }`}
               >
-                <div className="flex flex-wrap items-center gap-2 text-xs text-cres-muted">
-                  <span className="font-medium text-cres-text-muted">
+                <div className={`flex flex-wrap items-center gap-2 text-xs ${textMuted}`}>
+                  <span className={`font-medium ${textMutedSm}`}>
                     {c.author?.name ?? c.author?.email ?? "User"}
                   </span>
                   <span>{c.kind === "question" ? "asked" : "commented"}</span>
                   <span>{new Date(c.createdAt).toLocaleString()}</span>
                   {deadline && (
-                    <span className={questionOverdue ? "text-cres-accent" : "text-cres-muted"}>
+                    <span className={questionOverdue ? (useNeu ? "text-amber-300" : "text-cres-accent") : textMuted}>
                       {questionOverdue ? "Overdue — answer required" : `Due ${deadline.toLocaleString()}`}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-cres-text sm:text-sm">{c.content}</p>
+                <p className={`mt-1 text-xs sm:text-sm ${textMain}`}>{c.content}</p>
 
                 {replies.map((r) => (
                   <div
                     key={r.id}
-                    className="ml-4 mt-2 rounded border border-cres-border bg-cres-surface/60 px-3 py-2"
+                    className={`ml-4 mt-2 rounded border px-3 py-2 ${useNeu ? "border-white/[0.06] bg-[#121820]" : "border-cres-border bg-cres-surface/60"}`}
                   >
-                    <p className="text-xs text-cres-muted">
+                    <p className={`text-xs ${textMuted}`}>
                       {r.author?.name ?? r.author?.email ?? "User"} answered {new Date(r.createdAt).toLocaleString()}
                     </p>
-                    <p className="mt-1 text-xs text-cres-text sm:text-sm">{r.content}</p>
+                    <p className={`mt-1 text-xs sm:text-sm ${textMain}`}>{r.content}</p>
                   </div>
                 ))}
 
@@ -529,13 +546,13 @@ export default function DeveloperReportDetailPage() {
                       value={responseByParent[c.id] ?? ""}
                       onChange={(e) => setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))}
                       placeholder="Your answer"
-                      className="flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
+                      className={useNeu ? `${devNeu.navIdle} flex-1 rounded-lg px-3 py-2 text-sm text-slate-100` : "flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
                     />
                     <button
                       type="button"
                       disabled={loading}
                       onClick={() => handleAddResponse(c.id)}
-                      className="rounded bg-cres-accent px-3 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                      className={`${btnPrimary} px-3 py-2 text-sm disabled:opacity-60`}
                     >
                       Submit answer
                     </button>
@@ -547,14 +564,14 @@ export default function DeveloperReportDetailPage() {
         </ul>
 
         {isDirector && (
-          <div className="mt-6 border-t border-cres-border pt-4">
+          <div className={`mt-6 border-t pt-4 ${useNeu ? "border-white/[0.06]" : "border-cres-border"}`}>
             <label className="block">
-              <span className="mb-1 block text-sm text-cres-text-muted">Add comment or question</span>
+              <span className={`mb-1 block text-sm ${textMutedSm}`}>Add comment or question</span>
               <textarea
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 rows={3}
-                className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text"
+                className={inputClass}
                 placeholder="Comment or question for the developer..."
               />
             </label>
@@ -562,7 +579,7 @@ export default function DeveloperReportDetailPage() {
               <select
                 value={newKind}
                 onChange={(e) => setNewKind(e.target.value as "comment" | "question")}
-                className="rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
+                className={useNeu ? `${devNeu.navIdle} rounded-lg px-3 py-2 text-sm text-slate-100` : "rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
               >
                 <option value="comment">Comment</option>
                 <option value="question">Question</option>
@@ -571,7 +588,7 @@ export default function DeveloperReportDetailPage() {
                 type="button"
                 disabled={loading || !newComment.trim()}
                 onClick={handleAddComment}
-                className="rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                className={`${btnPrimary} disabled:opacity-60`}
               >
                 Post
               </button>

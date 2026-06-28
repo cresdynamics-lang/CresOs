@@ -12,9 +12,11 @@ import {
 
 const EMPTY_QUEUE: DevQueueStats = {
   assignedProjects: 0,
+  activeProjects: 0,
   overdueTasks: 0,
   blockedTasks: 0,
   avgProgress: 0,
+  milestoneSuccessPercent: 0,
   reportStreakDays: 0,
   workProgressPercent: 0,
   unreadNotifications: 0
@@ -38,9 +40,11 @@ type AnalyticsPayload = {
   projects?: DevProjectRow[];
   totals?: {
     assigned?: number;
+    active?: number;
     overdue?: number;
     blocked?: number;
     avgProgress?: number;
+    milestoneSuccessPercent?: number;
   };
 };
 
@@ -55,6 +59,8 @@ export default function DeveloperPage() {
     { id: string; amount: string | number; spentAt: string; description: string | null; currency?: string }[]
   >([]);
   const [dismissedReminderKeys, setDismissedReminderKeys] = useState<Set<string>>(new Set());
+  const [focusTips, setFocusTips] = useState<string[]>([]);
+  const [aiHint, setAiHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -63,11 +69,12 @@ export default function DeveloperPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [attnRes, analyticsRes, schedRes, payRes] = await Promise.all([
+      const [attnRes, analyticsRes, schedRes, payRes, coachRes] = await Promise.all([
         apiFetch("/dashboard/attention"),
         apiFetch("/dashboard/developer-analytics"),
         apiFetch("/schedule?period=week&completed=all"),
-        apiFetch("/finance/expenses/pending-my-acknowledgment")
+        apiFetch("/finance/expenses/pending-my-acknowledgment"),
+        apiFetch("/dashboard/focus-coach")
       ]);
 
       let analytics: AnalyticsPayload | null = null;
@@ -87,9 +94,11 @@ export default function DeveloperPage() {
           0;
         nextQueue = {
           assignedProjects: analytics?.totals?.assigned ?? analytics?.projects?.length ?? 0,
+          activeProjects: analytics?.totals?.active ?? analytics?.totals?.assigned ?? 0,
           overdueTasks: analytics?.totals?.overdue ?? attention.stats?.tasksOverdue ?? 0,
           blockedTasks: analytics?.totals?.blocked ?? 0,
           avgProgress: analytics?.totals?.avgProgress ?? 0,
+          milestoneSuccessPercent: analytics?.totals?.milestoneSuccessPercent ?? 0,
           reportStreakDays: attention.stats?.developerReportStreakDays ?? 0,
           workProgressPercent: attention.stats?.workProgressPercent ?? 0,
           unreadNotifications: unread
@@ -99,9 +108,11 @@ export default function DeveloperPage() {
       } else if (analytics) {
         nextQueue = {
           assignedProjects: analytics.totals?.assigned ?? analytics.projects?.length ?? 0,
+          activeProjects: analytics.totals?.active ?? analytics.totals?.assigned ?? 0,
           overdueTasks: analytics.totals?.overdue ?? 0,
           blockedTasks: analytics.totals?.blocked ?? 0,
           avgProgress: analytics.totals?.avgProgress ?? 0,
+          milestoneSuccessPercent: analytics.totals?.milestoneSuccessPercent ?? 0,
           reportStreakDays: 0,
           workProgressPercent: 0,
           unreadNotifications: 0
@@ -118,6 +129,15 @@ export default function DeveloperPage() {
       if (payRes.ok) {
         const rows = (await payRes.json()) as typeof pendingPayments;
         setPendingPayments(Array.isArray(rows) ? rows : []);
+      }
+
+      if (coachRes.ok) {
+        const coach = (await coachRes.json()) as {
+          deterministicTips?: string[];
+          aiHint?: string | null;
+        };
+        setFocusTips(coach.deterministicTips ?? []);
+        setAiHint(coach.aiHint ?? null);
       }
 
       if (!attnRes.ok && !analyticsRes.ok) {
@@ -159,6 +179,8 @@ export default function DeveloperPage() {
       reportReminderDue={reportReminderDue}
       progressReminders={progressReminders}
       pendingPayments={pendingPayments}
+      focusTips={focusTips}
+      aiHint={aiHint}
       loading={loading}
       loadError={loadError}
       onRefresh={() => void load()}
