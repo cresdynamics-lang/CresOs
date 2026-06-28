@@ -9,8 +9,8 @@ import { HeaderStatusStrip } from "./header-status";
 import { filterGlobalNavSections } from "../lib/global-nav-sections";
 import { resolveWorkspace } from "../lib/resolve-workspace";
 import { WorkspaceAside } from "../components/workspace/workspace-aside";
+import { WorkspaceAccountFooter } from "../components/workspace/workspace-account-footer";
 import { GlobalSideNav } from "../components/workspace/global-side-nav";
-import { ShellNavFooter } from "../components/workspace/shell-nav-footer";
 import { workspaceMeta, WorkspaceNavContent } from "../components/workspace/workspace-nav-content";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
@@ -342,24 +342,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isSettingsRoute = pathname.startsWith("/settings");
   const hideShellChrome = isFullscreenPage && isFullscreen;
 
-  const navFooter = (
-    <ShellNavFooter
-      roleKeys={roles}
-      onOpenSettings={() => setSettingsOpen(true)}
-      onLogout={handleLogout}
-    />
-  );
+  const workspaceThemeKey =
+    inWorkspace && workspace
+      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "admin" | "client")
+      : "global";
+
+  const navFooter = <WorkspaceAccountFooter themeKey="global" onLogout={handleLogout} />;
 
   const workspaceFooter = inWorkspace ? (
-    <div className="flex flex-col gap-1 px-1">
+    <div className="flex flex-col gap-1">
       <Link
         href="/dashboard"
         onClick={() => setMobileNavOpen(false)}
-        className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+        className="mx-1 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
       >
         App dashboard
       </Link>
-      {navFooter}
+      <WorkspaceAccountFooter
+        themeKey={workspaceThemeKey}
+        onLogout={() => {
+          setMobileNavOpen(false);
+          handleLogout();
+        }}
+        showAccountLink={workspace !== "finance"}
+      />
     </div>
   ) : (
     navFooter

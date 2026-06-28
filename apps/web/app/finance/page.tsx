@@ -6,15 +6,14 @@ import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { formatMoney } from "../format-money";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { FinanceStatInline, FinanceStatRow, FinanceFlatTable, FinanceFlatTableHead, FinanceFlatTableBody, FinanceFlatTableRow, FinanceFlatTh, FinanceFlatTd, FinanceStatusLabel, FinanceTextAction } from "../../components/finance/finance-ui";
+import { FinanceFlatTable, FinanceFlatTableHead, FinanceFlatTableBody, FinanceFlatTableRow, FinanceFlatTh, FinanceFlatTd, FinanceStatusLabel, FinanceTextAction } from "../../components/finance/finance-ui";
 import { financeNeu } from "../../components/finance/finance-theme";
-import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { FINANCE_PAGE_TITLES, type FinanceSection } from "./finance-nav";
+import { FinanceOverviewDashboard } from "./finance-overview-dashboard";
 import { InvoiceCreateModal } from "./invoice-create-modal";
 import { PaymentCreateModal, type PaymentFormState } from "./payment-create-modal";
 import { ExpenseCreateModal, defaultExpenseForm, type ExpenseFormState, EXPENSE_CATEGORIES } from "./expense-create-modal";
-import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
 
 type Invoice = {
   id: string;
@@ -989,23 +988,20 @@ export default function FinancePage() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-6">
-      {section === "overview" ? (
+      {section === "overview" && canSeeMoneyStats ? (
+        <FinanceOverviewDashboard
+          report={report}
+          reportLoading={reportLoading}
+          pendingFallback={pendingFinanceApprovalCount}
+          isAdmin={isAdmin}
+          analyticsVariant={isAdmin ? "admin" : isDirector ? "director" : "finance"}
+        />
+      ) : section === "overview" ? (
         <WorkspaceDashboardIntro
           title={pageMeta.title}
           description={pageMeta.description}
           eyebrow="Finance"
           showWelcomeBanner
-          welcomeChildren={
-            <>
-              <DashboardSectionLabel roleKeys={auth.roleKeys}>
-                Today&apos;s priorities (your queue)
-              </DashboardSectionLabel>
-              <p className="font-body text-sm leading-relaxed text-slate-400">
-                Use <span className="font-medium text-emerald-400/90">Finance mail</span> and the sections below for
-                live data.
-              </p>
-            </>
-          }
         />
       ) : (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
@@ -1074,76 +1070,6 @@ export default function FinancePage() {
         </div>
       )}
 
-      {canSeeMoneyStats && section === "overview" && (
-        <FinanceStatRow>
-          <FinanceStatInline
-            label="Revenue (period)"
-            value={report ? formatMoney(report.revenue.thisMonth) : reportLoading ? "…" : "—"}
-            hint="Confirmed payments this month (UTC)"
-            tone="emerald"
-          />
-          <FinanceStatInline
-            label="Outstanding"
-            value={report ? formatMoney(report.invoices.outstandingAmount) : reportLoading ? "…" : "—"}
-            hint="Unpaid invoice / project balance"
-            tone="amber"
-          />
-          <FinanceStatInline
-            label="Net flow"
-            value={report ? formatMoney(report.cashFlow.netThisMonth) : reportLoading ? "…" : "—"}
-            hint="Inflows minus outflows (UTC month)"
-            tone={!report ? "brand" : report.cashFlow.netThisMonth >= 0 ? "emerald" : "rose"}
-          />
-          <FinanceStatInline
-            label="Pending requests"
-            value={reportLoading ? "…" : report?.pending?.total ?? pendingFinanceApprovalCount}
-            hint={
-              report?.pending != null
-                ? `${report.pending.approvalQueue} approvals · ${report.pending.paymentsPending} payments`
-                : "Expense / payout queue"
-            }
-            tone="violet"
-          />
-        </FinanceStatRow>
-      )}
-
-      {canSeeMoneyStats && section === "overview" && (
-        <WorkspaceLiveAnalytics
-          variant={isAdmin ? "admin" : isDirector ? "director" : "finance"}
-          className="border-b border-white/[0.06] pb-8"
-        />
-      )}
-
-      {isAdmin && section === "overview" && (
-        <div className="shell border border-slate-600/80 bg-slate-900/50">
-          <h3 className="text-sm font-semibold text-slate-200">Admin&apos;s finance access rules</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-emerald-800/40 bg-slate-950/40 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400/90">Can see</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Approved and declined transaction history · Pending request amounts · Cash flow summary (including paid payouts) ·
-                All-transactions ledger · Outstanding invoice totals against active projects
-              </p>
-            </div>
-            <div className="rounded-lg border-l-4 border-rose-500/70 bg-slate-950/40 p-3 pl-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">Limited</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Admin can record and confirm bank payments (with source, account, and transaction reference) and view the unified
-                ledger. Admin cannot create or edit expenses, invoices, or invoice line items — that stays with Finance and Sales.
-              </p>
-            </div>
-            <div className="rounded-lg border border-sky-800/40 bg-slate-950/40 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">How project pricing flows here</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                When Sales marks a project active or demo, its value feeds the revenue pipeline. Admin sees the aggregate — not the
-                client breakdown.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-
       {canSeeMoneyStats &&
         (section === "ledger") && (
           <div className="shell border-slate-700/70 bg-slate-950/40">
@@ -1207,91 +1133,6 @@ export default function FinancePage() {
             </div>
           </div>
         )}
-
-      {canSeeMoneyStats && section === "overview" && (
-        <div className="shell border-emerald-800/40 bg-slate-900/60">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Financial report (real-time)
-            </h3>
-            <button
-              type="button"
-              onClick={fetchReport}
-              disabled={reportLoading}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {reportLoading ? "Loading…" : report ? "Refresh report" : "Load report"}
-            </button>
-          </div>
-          {report && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p className="text-xs text-slate-400">Revenue</p>
-                <p className="text-slate-200">This month: {formatMoney(report.revenue.thisMonth)}</p>
-                <p className="text-xs text-slate-400">All time: {formatMoney(report.revenue.allTime)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Projects & AR</p>
-                <p className="text-amber-400">
-                  Remaining on approved projects: {formatMoney(report.invoices.outstandingAmount)}
-                </p>
-                {report.invoices.openInvoiceRemaining != null && (
-                  <p className="text-xs text-slate-300">
-                    Open invoice balance (unpaid): {formatMoney(report.invoices.openInvoiceRemaining)}
-                  </p>
-                )}
-                {report.projects != null && (
-                  <p className="text-xs text-slate-400">
-                    {report.projects.approvedCount} approved · contract total{" "}
-                    {formatMoney(report.projects.totalContractValue)} · collected{" "}
-                    {formatMoney(report.projects.totalReceived)}
-                  </p>
-                )}
-                <p className="text-xs text-slate-400">Overdue invoices: {report.invoices.overdueCount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Expenses</p>
-                <p className="text-slate-200">This month: {formatMoney(report.expenses.thisMonth)}</p>
-                <p className="text-xs text-slate-400">All time: {formatMoney(report.expenses.allTime)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Cash flow (month)</p>
-                <p className="text-slate-200">In: {formatMoney(report.cashFlow.revenueThisMonth)}</p>
-                <p className="text-slate-200">
-                  Out (expenses): {formatMoney(report.cashFlow.expensesThisMonth)}
-                  {report.cashFlow.payoutsThisMonth != null && report.cashFlow.payoutsThisMonth > 0 && (
-                    <span className="text-slate-400">
-                      {" "}
-                      · payouts paid: {formatMoney(report.cashFlow.payoutsThisMonth)}
-                    </span>
-                  )}
-                </p>
-                {report.cashFlow.totalOutflowsThisMonth != null && (
-                  <p className="text-xs text-slate-400">
-                    Total out: {formatMoney(report.cashFlow.totalOutflowsThisMonth)}
-                  </p>
-                )}
-                <p className={report.cashFlow.netThisMonth >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                  Net: {formatMoney(report.cashFlow.netThisMonth)}
-                </p>
-                {report.derived != null && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    All-time movement: {formatMoney(report.derived.netCashMovementAllTime)} (confirmed in − approved expenses − paid
-                    payouts)
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-          {report && (
-            <p className="mt-3 text-xs text-slate-500">
-              Generated {new Date(report.generatedAt).toLocaleString()} · Pending payouts:{" "}
-              {formatMoney(report.payouts.pendingAmount)}
-              {report.payouts.paidThisMonth != null ? ` · Paid this month: ${formatMoney(report.payouts.paidThisMonth)}` : ""}
-            </p>
-          )}
-        </div>
-      )}
 
       {canSeeMoneyStats && section === "projects" && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">

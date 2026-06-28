@@ -976,7 +976,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
           select: { id: true, status: true, totalAmount: true, clientId: true, dueDate: true, issueDate: true }
         }),
         prisma.payment.findMany({
-          where: { orgId, deletedAt: null, receivedAt: { gte: eightWeeksAgo } },
+          where: { orgId, deletedAt: null, status: "confirmed", receivedAt: { gte: eightWeeksAgo } },
           select: { amount: true, receivedAt: true }
         }),
         prisma.expense.findMany({
@@ -1016,7 +1016,7 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
           select: { id: true, name: true, email: true }
         }),
         prisma.payment.findMany({
-          where: { orgId, deletedAt: null, invoiceId: { not: null } },
+          where: { orgId, deletedAt: null, status: "confirmed", invoiceId: { not: null } },
           select: { invoiceId: true, amount: true }
         }),
         prisma.salesReport.findMany({

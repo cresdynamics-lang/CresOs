@@ -4,11 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { NotificationPreferencesForm } from "./notification-preferences-form";
 import { SettingsAccountForm } from "../components/settings-account-form";
+import { useWorkspaceLogout } from "../lib/use-workspace-logout";
 
-type Props = { open: boolean; onClose: () => void; initialTab?: "preferences" | "account" };
+type TabId = "account" | "preferences";
+
+type Props = { open: boolean; onClose: () => void; initialTab?: TabId };
+
+const TABS: { id: TabId; label: string; description: string }[] = [
+  { id: "account", label: "Account", description: "Profile, name & contact" },
+  { id: "preferences", label: "Preferences", description: "Notifications & alerts" }
+];
 
 export function SettingsPanel({ open, onClose, initialTab }: Props) {
-  const [tab, setTab] = useState<"preferences" | "account">(initialTab ?? "account");
+  const [tab, setTab] = useState<TabId>(initialTab ?? "account");
+  const handleLogout = useWorkspaceLogout();
 
   useEffect(() => {
     if (open && initialTab) setTab(initialTab);
@@ -18,14 +27,24 @@ export function SettingsPanel({ open, onClose, initialTab }: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/50" aria-hidden onClick={onClose} />
-      <div className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-slate-800 bg-slate-950 shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h2 className="font-display text-lg font-semibold text-slate-50">Settings</h2>
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" aria-hidden onClick={onClose} />
+      <div
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-white/[0.08] bg-[#0c1018] shadow-2xl sm:max-w-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-panel-title"
+      >
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Quick settings</p>
+            <h2 id="settings-panel-title" className="font-display text-lg font-semibold text-slate-50">
+              Account
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
             aria-label="Close settings"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,44 +52,53 @@ export function SettingsPanel({ open, onClose, initialTab }: Props) {
             </svg>
           </button>
         </div>
-        <div className="flex min-h-0 flex-1">
-          <nav className="group/hover-nav flex w-14 shrink-0 flex-col border-r border-slate-800 py-2 transition-[width] hover:w-44">
-            {(
-              [
-                { id: "account" as const, label: "Account", icon: "A" },
-                { id: "preferences" as const, label: "Preferences", icon: "P" }
-              ] as const
-            ).map((t) => (
+
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-4 py-3">
+            {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`mx-1 flex items-center rounded-lg px-2 py-2 text-left text-sm ${
+                className={[
+                  "flex-1 rounded-lg px-3 py-2.5 text-left transition-colors",
                   tab === t.id
-                    ? "border border-brand/40 bg-brand/15 text-brand"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                }`}
+                    ? "border border-brand/35 bg-brand/10"
+                    : "border border-transparent hover:bg-white/[0.04]"
+                ].join(" ")}
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800 text-xs font-semibold">
-                  {t.icon}
-                </span>
-                <span className="min-w-0 overflow-hidden whitespace-nowrap opacity-0 w-0 transition-all duration-200 group-hover/hover-nav:ml-2 group-hover/hover-nav:w-auto group-hover/hover-nav:opacity-100">
+                <span className={`block text-sm font-medium ${tab === t.id ? "text-sky-100" : "text-slate-300"}`}>
                   {t.label}
                 </span>
+                <span className="mt-0.5 block text-[11px] text-slate-500">{t.description}</span>
               </button>
             ))}
-          </nav>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {tab === "account" && (
-            <SettingsAccountForm variant="panel" showExtendedLink={false} />
-          )}
-          {tab === "preferences" && <NotificationPreferencesForm />}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            {tab === "account" && <SettingsAccountForm variant="panel" showExtendedLink={false} />}
+            {tab === "preferences" && <NotificationPreferencesForm />}
           </div>
         </div>
-        <div className="shrink-0 border-t border-slate-800 px-4 py-3">
-          <Link href="/settings/account" onClick={onClose} className="text-sm text-sky-400 hover:underline">
-            Open full settings →
+
+        <div className="shrink-0 space-y-2 border-t border-white/[0.06] px-5 py-4">
+          <Link
+            href="/settings/account"
+            onClick={onClose}
+            className="flex w-full items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/[0.07]"
+          >
+            Open full account settings
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              handleLogout();
+            }}
+            className="flex w-full items-center justify-center rounded-lg border border-rose-500/25 bg-rose-950/25 px-4 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-950/40"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </>

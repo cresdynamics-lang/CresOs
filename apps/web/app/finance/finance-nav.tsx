@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { financeNeu } from "../../components/finance/finance-theme";
+import { ALL_APP_ROLE_KEYS } from "../../lib/app-roles";
 
 export type FinanceSection =
   | "overview"
@@ -23,7 +24,7 @@ type NavItem = {
   label: string;
   shortLabel?: string;
   section: FinanceSection;
-  group: "overview" | "records" | "projects" | "review";
+  group: "overview" | "records" | "projects" | "review" | "app";
   roles: string[];
   match?: "exact" | "prefix";
 };
@@ -116,17 +117,49 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
   }
 ];
 
+/** App-wide links — aligned below Review in the finance sidebar. */
+const FINANCE_APP_NAV: NavItem[] = [
+  {
+    href: "/schedule",
+    label: "Tasks",
+    shortLabel: "Tasks",
+    section: "overview",
+    group: "app",
+    roles: [...ALL_APP_ROLE_KEYS]
+  },
+  {
+    href: "/community",
+    label: "Community",
+    shortLabel: "Community",
+    section: "overview",
+    group: "app",
+    roles: [...ALL_APP_ROLE_KEYS]
+  },
+  {
+    href: "/settings/account",
+    label: "Settings",
+    shortLabel: "Settings",
+    section: "overview",
+    group: "app",
+    roles: [...ALL_APP_ROLE_KEYS],
+    match: "prefix"
+  }
+];
+
 const GROUP_LABELS: Record<NavItem["group"], string> = {
   overview: "Workspace",
   records: "Records",
   projects: "Projects",
-  review: "Review"
+  review: "Review",
+  app: "App"
 };
 
-const GROUP_ORDER: NavItem["group"][] = ["overview", "records", "projects", "review"];
+const GROUP_ORDER: NavItem["group"][] = ["overview", "records", "projects", "review", "app"];
 
 export function navForRoles(roleKeys: string[]): NavItem[] {
-  return FINANCE_NAV_ITEMS.filter((item) => item.roles.some((r) => roleKeys.includes(r)));
+  const finance = FINANCE_NAV_ITEMS.filter((item) => item.roles.some((r) => roleKeys.includes(r)));
+  const app = FINANCE_APP_NAV.filter((item) => item.roles.some((r) => roleKeys.includes(r)));
+  return [...finance, ...app];
 }
 
 export function navGroupsForRoles(roleKeys: string[]): { title: string; items: NavItem[] }[] {
@@ -139,7 +172,9 @@ export function navGroupsForRoles(roleKeys: string[]): { title: string; items: N
 
 function isNavActive(pathname: string, item: NavItem): boolean {
   if (item.match === "exact") return pathname === item.href;
+  if (item.match === "prefix") return pathname === item.href || pathname.startsWith(`${item.href}/`);
   if (item.href === "/finance") return pathname === "/finance";
+  if (item.href === "/settings/account") return pathname.startsWith("/settings");
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
@@ -161,6 +196,9 @@ function FinanceNavLinks({ vertical = false }: { vertical?: boolean }) {
       <nav aria-label="Finance sections" className="flex flex-col gap-4 px-2 py-3">
         {groups.map((group) => (
           <div key={group.title}>
+            {group.title === "App" ? (
+              <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
+            ) : null}
             <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               {group.title}
             </p>

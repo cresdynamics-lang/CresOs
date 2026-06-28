@@ -3,12 +3,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { financeNeu } from "../../components/finance/finance-theme";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
+import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
+import { financeNeu } from "../../components/finance/finance-theme";
 import { FinanceSideNav } from "./finance-nav";
+import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 
 export function FinanceLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
   const canAccessFinance =
     auth.canSeeFinance === true ||
@@ -36,6 +39,7 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
         subtitle="Payments in · salaries & ops out"
         themeKey="finance"
         className="hidden w-[15rem] md:flex"
+        footer={<WorkspaceAccountFooter themeKey="finance" onLogout={handleLogout} showAccountLink={false} />}
       >
         <FinanceSideNav />
       </WorkspaceAside>

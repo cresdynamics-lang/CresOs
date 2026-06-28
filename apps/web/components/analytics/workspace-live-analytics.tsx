@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../app/auth-context";
 import { formatMoney } from "../../app/format-money";
+import { subscribeDataRefresh } from "../../app/data-refresh";
 import {
   DualBarChart,
   HorizontalBarChart,
@@ -61,10 +62,13 @@ const POLL_MS = 30_000;
 
 export function WorkspaceLiveAnalytics({
   variant,
-  className = ""
+  className = "",
+  compact = false
 }: {
   variant: "finance" | "director" | "admin";
   className?: string;
+  /** Tighter layout for finance overview — fewer duplicate charts. */
+  compact?: boolean;
 }) {
   const { apiFetch } = useAuth();
   const [data, setData] = useState<LiveInsights | null>(null);
@@ -94,9 +98,11 @@ export function WorkspaceLiveAnalytics({
       if (document.visibilityState === "visible") void load();
     };
     document.addEventListener("visibilitychange", onVis);
+    const unsubRefresh = subscribeDataRefresh(() => void load());
     return () => {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVis);
+      unsubRefresh();
     };
   }, [load]);
 
@@ -104,13 +110,13 @@ export function WorkspaceLiveAnalytics({
 
   return (
     <section className={`space-y-6 ${className}`.trim()}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">
-            Analytics & AI predictions
+            {compact ? "Insights & trends" : "Analytics & AI predictions"}
           </h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Live data · refreshes every 30s
+            Live · updates on payment/expense · 30s refresh
             {data?.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleTimeString()}` : ""}
           </p>
         </div>
@@ -129,7 +135,7 @@ export function WorkspaceLiveAnalytics({
       {data && (
         <>
           {data.aiPredictions.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${compact ? "lg:grid-cols-3" : "sm:grid-cols-2"}`}>
               {data.aiPredictions.map((p) => (
                 <div
                   key={p.label}
@@ -142,8 +148,8 @@ export function WorkspaceLiveAnalytics({
             </div>
           )}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
+          <div className={`grid gap-6 ${compact ? "xl:grid-cols-12" : "lg:grid-cols-2"}`}>
+            <div className={`space-y-4 ${compact ? "xl:col-span-5" : ""}`}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Money · invoice mix</p>
               <PieChart items={data.money.pie} valuePrefix="KES " emptyLabel="No invoice data yet" />
               <div className="grid grid-cols-2 gap-3">
@@ -152,7 +158,7 @@ export function WorkspaceLiveAnalytics({
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className={`space-y-4 ${compact ? "xl:col-span-7" : ""}`}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Cash flow (8 weeks)
               </p>
@@ -169,12 +175,19 @@ export function WorkspaceLiveAnalytics({
           </div>
 
           {(variant === "finance" || variant === "admin") && data.money.debtAlerts.length > 0 && (
-            <div>
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-rose-400/90">
-                Debt alerts · clients due
-              </p>
-              <ul className="space-y-2">
-                {data.money.debtAlerts.map((d) => (
+            <div className={compact ? "rounded-xl border border-rose-500/15 bg-rose-950/10 p-4" : ""}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-400/90">
+                  Clients due
+                </p>
+                {compact && (
+                  <a href="/finance/clients-due" className="text-xs text-rose-300/90 hover:text-rose-200">
+                    View all →
+                  </a>
+                )}
+              </div>
+              <ul className={`space-y-2 ${compact ? "max-h-48 overflow-y-auto pr-1" : ""}`}>
+                {data.money.debtAlerts.slice(0, compact ? 6 : undefined).map((d) => (
                   <li
                     key={d.clientId}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3 py-2 text-sm"
@@ -182,7 +195,7 @@ export function WorkspaceLiveAnalytics({
                     <span className="font-medium text-slate-200">{d.clientName}</span>
                     <span className="text-rose-300">
                       {formatMoney(d.amountDue)} due
-                      {d.overdueInvoices > 0 ? ` · ${d.overdueInvoices} overdue invoice(s)` : ""}
+                      {d.overdueInvoices > 0 ? ` · ${d.overdueInvoices} overdue` : ""}
                     </span>
                   </li>
                 ))}
@@ -190,7 +203,7 @@ export function WorkspaceLiveAnalytics({
             </div>
           )}
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className={`grid gap-6 ${compact ? "lg:grid-cols-2" : "lg:grid-cols-2"}`}>
             <div className="space-y-4">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Projects · status
@@ -204,19 +217,30 @@ export function WorkspaceLiveAnalytics({
               />
             </div>
 
-            <div className="space-y-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Delivery health
-              </p>
-              <PieChart items={data.projects.completionPie} emptyLabel="No active task data" />
-              <VerticalBarChart
-                items={data.projects.byStatus.map((s) => ({
-                  label: s.status.slice(0, 6),
-                  value: s.count,
-                  color: "bg-sky-500"
-                }))}
-              />
-            </div>
+            {!compact && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Delivery health
+                </p>
+                <PieChart items={data.projects.completionPie} emptyLabel="No active task data" />
+                <VerticalBarChart
+                  items={data.projects.byStatus.map((s) => ({
+                    label: s.status.slice(0, 6),
+                    value: s.count,
+                    color: "bg-sky-500"
+                  }))}
+                />
+              </div>
+            )}
+
+            {compact && data.projects.completionPie.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Delivery health
+                </p>
+                <PieChart items={data.projects.completionPie} emptyLabel="No active task data" />
+              </div>
+            )}
           </div>
 
           {data.projects.slowProjects.length > 0 && (
