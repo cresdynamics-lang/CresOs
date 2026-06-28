@@ -51,14 +51,14 @@ const ChatRow = memo(function ChatRow({
     <button
       type="button"
       onClick={() => onSelect(c)}
-      className={`flex w-full items-center gap-3 border-b border-slate-800/80 px-3 py-2.5 text-left transition-colors [content-visibility:auto] ${communityTheme.listHover} ${
+      className={`flex w-full items-center gap-3 border-b border-white/[0.06] px-3 py-2.5 text-left transition-colors [content-visibility:auto] ${communityTheme.listHover} ${
         selected ? communityTheme.listActive : ""
       }`}
     >
-      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/40 to-sky-600/30 text-lg font-semibold text-white shadow-inner">
+      <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-semibold ${communityTheme.avatar}`}>
         {initialsFromLabel(c.name)}
         {c.otherUser?.isOnline && (
-          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-500" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/20 bg-emerald-500" />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -101,7 +101,7 @@ const ChannelRow = memo(function ChannelRow({
     <button
       type="button"
       onClick={() => onSelect(c)}
-      className={`flex w-full items-center gap-3 border-b border-slate-800/80 px-3 py-2.5 text-left transition-colors [content-visibility:auto] ${communityTheme.listHover} ${
+      className={`flex w-full items-center gap-3 border-b border-white/[0.06] px-3 py-2.5 text-left transition-colors [content-visibility:auto] ${communityTheme.listHover} ${
         selected ? communityTheme.listActive : ""
       }`}
     >
@@ -149,7 +149,7 @@ const PersonRow = memo(function PersonRow({
           void onMessage(user);
         }
       }}
-      className={`flex cursor-pointer items-center gap-3 border-b border-slate-800/80 px-3 py-2.5 outline-none [content-visibility:auto] ${communityTheme.listHover} focus-visible:ring-2 focus-visible:ring-violet-500/50`}
+      className={`flex cursor-pointer items-center gap-3 border-b border-white/[0.06] px-3 py-2.5 outline-none [content-visibility:auto] ${communityTheme.listHover} focus-visible:ring-2 focus-visible:ring-violet-500/50`}
     >
       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-600 to-slate-700 text-lg font-medium text-white">
         {av ? (
@@ -158,7 +158,7 @@ const PersonRow = memo(function PersonRow({
           initialsFromLabel(user.name)
         )}
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 ${getStatusColor(user.isOnline ? user.status : "offline")}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/20 ${getStatusColor(user.isOnline ? user.status : "offline")}`}
         />
       </div>
       <div className="min-w-0 flex-1">
@@ -191,7 +191,7 @@ const PersonRow = memo(function PersonRow({
         <button
           type="button"
           onClick={() => void onMessage(user)}
-          className="rounded-full p-2 text-violet-400 hover:bg-slate-800"
+          className="rounded-full p-2 text-violet-300 hover:bg-white/[0.07]"
           title="Open chat"
           aria-label={`Message ${user.name}`}
         >
@@ -202,7 +202,7 @@ const PersonRow = memo(function PersonRow({
         <button
           type="button"
           onClick={() => void onVoice(user)}
-          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+          className="rounded-full p-2 text-slate-500 hover:bg-white/[0.07] hover:text-slate-200"
           title={user.isOnline ? "Voice call" : "Call (they must have Community open)"}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@ const PersonRow = memo(function PersonRow({
         <button
           type="button"
           onClick={() => void onVideo(user)}
-          className="rounded-full p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+          className="rounded-full p-2 text-slate-500 hover:bg-white/[0.07] hover:text-slate-200"
           title={user.isOnline ? "Video call" : "Video call (they must have Community open)"}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,7 +310,7 @@ export function CommunitySidebar({
               if (!open) onToggleSection(section);
             }}
             className={`mx-1 flex w-[calc(100%-0.5rem)] items-center justify-center rounded-xl py-2.5 text-lg ${
-              active ? "bg-violet-600/30" : "hover:bg-slate-800/70"
+              active ? "bg-violet-500/20" : "hover:bg-white/[0.06]"
             }`}
           >
             {meta.icon}
@@ -326,7 +326,7 @@ export function CommunitySidebar({
           <button
             type="button"
             onClick={() => onToggleSection(section)}
-            className={`shrink-0 px-2 py-2.5 text-slate-400 transition-colors hover:bg-slate-800/60 hover:text-slate-200 ${communityTheme.sectionHeader}`}
+            className={`shrink-0 px-2 py-2.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200 ${communityTheme.sectionHeader}`}
             aria-expanded={open}
             aria-label={open ? `Collapse ${meta.label}` : `Expand ${meta.label}`}
           >
@@ -379,7 +379,7 @@ export function CommunitySidebar({
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="rounded-xl p-2 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200"
+          className="${communityTheme.iconBtn}"
           title="Back"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,7 +399,7 @@ export function CommunitySidebar({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="hidden rounded-xl p-2 text-slate-400 hover:bg-slate-800/80 md:inline-flex"
+          className="hidden rounded-xl p-2 text-slate-400 hover:bg-white/[0.07] md:inline-flex"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -449,7 +449,7 @@ export function CommunitySidebar({
               <button
                 type="button"
                 onClick={onOpenNewChannel}
-                className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-slate-600/60 bg-slate-900/80 px-2 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2 text-xs font-medium text-slate-200 backdrop-blur-md hover:bg-white/[0.08]"
               >
                 Channel
               </button>
@@ -533,7 +533,7 @@ export function CommunitySidebar({
                 {channelsLoading ? (
                   <div className="space-y-2 px-3 py-4">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-800/50" />
+                      <div key={i} className="h-14 animate-pulse rounded-xl bg-white/[0.05]" />
                     ))}
                   </div>
                 ) : filteredChannels.length === 0 ? (

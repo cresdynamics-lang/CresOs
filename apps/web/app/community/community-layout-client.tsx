@@ -4,7 +4,7 @@ import { CommunityGlassCanvas } from "../../components/community/community-glass
 
 export function CommunityLayoutClient({ children }: { children: React.ReactNode }) {
   return (
-    <CommunityGlassCanvas className="flex-1 overflow-hidden p-0 sm:p-1 md:p-2">
+    <CommunityGlassCanvas className="flex-1 overflow-hidden p-0">
       {children}
     </CommunityGlassCanvas>
   );

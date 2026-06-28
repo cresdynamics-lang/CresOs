@@ -4,12 +4,16 @@ import type { ReactNode } from "react";
 import { communityGlass } from "./community-glass-theme";
 
 const DROPLETS = [
-  { className: "community-droplet community-droplet-a left-[8%] top-[12%] h-24 w-24" },
-  { className: "community-droplet community-droplet-b left-[72%] top-[8%] h-32 w-32" },
-  { className: "community-droplet community-droplet-c left-[45%] top-[55%] h-20 w-20" },
-  { className: "community-droplet community-droplet-d left-[88%] top-[42%] h-16 w-16" },
-  { className: "community-droplet community-droplet-e left-[18%] top-[68%] h-28 w-28" },
-  { className: "community-droplet community-droplet-f left-[58%] top-[22%] h-14 w-14" }
+  { className: "community-droplet community-droplet-a left-[5%] top-[10%] h-32 w-32" },
+  { className: "community-droplet community-droplet-b left-[76%] top-[6%] h-40 w-40" },
+  { className: "community-droplet community-droplet-c left-[42%] top-[52%] h-24 w-24" },
+  { className: "community-droplet community-droplet-d left-[90%] top-[38%] h-20 w-20" },
+  { className: "community-droplet community-droplet-e left-[12%] top-[70%] h-36 w-36" },
+  { className: "community-droplet community-droplet-f left-[58%] top-[18%] h-16 w-16" },
+  { className: "community-droplet community-droplet-clear community-droplet-g left-[28%] top-[28%] h-14 w-14" },
+  { className: "community-droplet community-droplet-clear community-droplet-h left-[68%] top-[72%] h-12 w-12" },
+  { className: "community-droplet community-droplet-clear community-droplet-i left-[48%] top-[82%] h-10 w-10" },
+  { className: "community-droplet community-droplet-clear community-droplet-j left-[82%] top-[58%] h-8 w-8" }
 ];
 
 export function CommunityDroplets() {

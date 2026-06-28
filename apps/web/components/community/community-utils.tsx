@@ -59,7 +59,7 @@ export function peerSubtitle(conv: Conversation | null, roster: OnlineUser[], my
 export function CommunityChannelBadge({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-500/35 bg-gradient-to-br from-sky-950 to-slate-950 p-0.5 shadow-sm ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-sky-400/20 to-violet-500/15 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-sm ${className}`}
     >
       <img src="/LOGO.jpg" width={40} height={40} alt="" className="h-full w-full rounded-[10px] object-cover" />
     </div>

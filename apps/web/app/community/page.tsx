@@ -137,9 +137,9 @@ function resolveMediaUrl(pathOrUrl: string | null | undefined, apiOrigin: string
 }
 
 function renderMessageTicks(status: string): { glyph: string; className: string } {
-  if (status === "read") return { glyph: "✓✓", className: "text-[#53BDEB] font-bold" };
-  if (status === "delivered") return { glyph: "✓✓", className: "text-[#AEBAC1] font-bold" };
-  return { glyph: "✓", className: "text-[#AEBAC1] font-bold" };
+  if (status === "read") return { glyph: "✓✓", className: "text-sky-300 font-bold" };
+  if (status === "delivered") return { glyph: "✓✓", className: "text-slate-300 font-bold" };
+  return { glyph: "✓", className: "text-slate-300 font-bold" };
 }
 
 function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: string }) {
@@ -159,7 +159,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
   };
 
   if (message.type === "deleted" || message.revokedAt) {
-    return <div className="italic text-[#8696A0]">This message was deleted.</div>;
+    return <div className="italic text-slate-500">This message was deleted.</div>;
   }
 
   const forwarded = isForwardedMessage(message);
@@ -187,7 +187,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       const href = `https://www.google.com/maps?q=${lat},${lng}`;
       return (
-        <a href={href} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+        <a href={href} target="_blank" rel="noreferrer" className="text-sky-300 underline">
           Open location in Maps
         </a>
       );
@@ -198,9 +198,9 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     const name = typeof md.name === "string" ? md.name : "";
     const phone = typeof md.phone === "string" ? md.phone : "";
     return (
-      <div className="rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-1.5 text-xs">
-        <div className="font-medium text-[#E9EDEF]">{name || "Contact"}</div>
-        {phone ? <div className="mt-0.5 text-[#AEBAC1]">{phone}</div> : null}
+      <div className="rounded border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10/60 px-2 py-1.5 text-xs">
+        <div className="font-medium text-slate-100">{name || "Contact"}</div>
+        {phone ? <div className="mt-0.5 text-slate-300">{phone}</div> : null}
       </div>
     );
   }
@@ -209,7 +209,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     return (
       <div className="space-y-1">
         {forwarded ? <ForwardedLabel /> : null}
-        <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
+        <div className="relative overflow-hidden rounded-md border border-white/10 bg-transparent">
           <img
             src={fileUrl}
             alt={fileName ?? ""}
@@ -234,7 +234,7 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     return (
       <div className="space-y-1">
         {forwarded ? <ForwardedLabel /> : null}
-        <div className="relative overflow-hidden rounded-md border border-[#2A3942] bg-[#0B141A]">
+        <div className="relative overflow-hidden rounded-md border border-white/10 bg-transparent">
           <video src={fileUrl} controls className="max-h-56 w-full opacity-80" />
           <a
             href={fileUrl}
@@ -256,10 +256,10 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
       <div className="space-y-1">
         <audio src={fileUrl} controls className="h-9 w-full max-w-[280px]" />
         <div className="flex flex-wrap gap-2 text-xs">
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-[#53BDEB] underline">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-sky-300 underline">
             Open
           </a>
-          <a href={fileUrl} download className="text-[#53BDEB] underline">
+          <a href={fileUrl} download className="text-sky-300 underline">
             Download
           </a>
         </div>
@@ -275,15 +275,15 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     const size = typeof md?.fileSize === "number" ? md.fileSize : null;
     const sizeLabel = prettyBytes(size);
     return (
-      <div className="flex items-center justify-between gap-3 rounded border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs">
+      <div className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10/60 px-2 py-2 text-xs">
         <div className="min-w-0">
-          <div className="font-medium text-[#E9EDEF] break-all">{fn}</div>
-          {sizeLabel ? <div className="mt-0.5 text-[#AEBAC1]">{sizeLabel}</div> : null}
+          <div className="font-medium text-slate-100 break-all">{fn}</div>
+          {sizeLabel ? <div className="mt-0.5 text-slate-300">{sizeLabel}</div> : null}
         </div>
         <a
           href={fileUrl}
           download
-          className="shrink-0 rounded-md bg-[#2A3942] px-3 py-1.5 text-xs font-semibold text-[#E9EDEF] hover:bg-[#324954]"
+          className="shrink-0 rounded-md bg-white/[0.08] backdrop-blur-md px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/[0.1]"
         >
           Download
         </a>
@@ -1762,14 +1762,14 @@ export default function CommunityPage() {
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 font-body">
-        <div className="h-12 w-48 animate-pulse rounded-xl bg-slate-800/60" />
+        <div className="h-12 w-48 animate-pulse rounded-xl bg-white/[0.06]" />
         <div className="flex min-h-0 flex-1 gap-3">
           <div className="hidden w-72 shrink-0 flex-col gap-2 md:flex">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-800/40" />
+              <div key={i} className="h-14 animate-pulse rounded-xl bg-white/[0.05]" />
             ))}
           </div>
-          <div className="min-h-[200px] flex-1 animate-pulse rounded-2xl bg-slate-800/30" />
+          <div className="min-h-[200px] flex-1 animate-pulse rounded-2xl bg-white/[0.04]" />
         </div>
       </div>
     );
@@ -1841,7 +1841,7 @@ export default function CommunityPage() {
             >
               <button
                 type="button"
-                className={`shrink-0 rounded-full p-2 text-[#AEBAC1] hover:bg-[#2A3942] ${listPanelOpen ? "md:hidden" : ""}`}
+                className={`shrink-0 rounded-full p-2 text-slate-300 hover:bg-white/[0.08] backdrop-blur-md ${listPanelOpen ? "md:hidden" : ""}`}
                 onClick={() => setListPanelOpen(true)}
                 aria-label="Back to list"
               >
@@ -1853,12 +1853,12 @@ export default function CommunityPage() {
                 <CommunityChannelBadge className="h-10 w-10" />
               ) : (
               <div
-                className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#6B7B8C] text-sm font-medium text-white"
+                className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400/25 to-violet-500/20 border border-white/15 text-sm font-medium text-white"
               >
                 {initialsFromLabel(selectedConversation.name)}
                 {selectedConversation.type === "direct" && selectedPeer?.isOnline && (
                   <span
-                    className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#202C33]"
+                    className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white/10"
                     style={{ backgroundColor: activeChatUi.accent }}
                   />
                 )}
@@ -1866,9 +1866,9 @@ export default function CommunityPage() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium text-[#E9EDEF]">{selectedConversation.name}</span>
+                  <span className="truncate font-medium text-slate-100">{selectedConversation.name}</span>
                   {isChannelView ? (
-                    <span className="shrink-0 rounded bg-[#2A3942] px-1.5 py-0.5 text-[10px] text-[#8696A0]">
+                    <span className="shrink-0 rounded bg-white/[0.08] backdrop-blur-md px-1.5 py-0.5 text-[10px] text-slate-500">
                       Channel
                     </span>
                   ) : null}
@@ -1878,14 +1878,14 @@ export default function CommunityPage() {
                     {selectedPeer.roles.map((r) => (
                       <span
                         key={r.key}
-                        className="rounded bg-[#2A3942] px-1.5 py-0 text-[10px] text-[#AEBAC1]"
+                        className="rounded bg-white/[0.08] backdrop-blur-md px-1.5 py-0 text-[10px] text-slate-300"
                       >
                         {r.name}
                       </span>
                     ))}
                   </div>
                 )}
-                <div className="truncate text-xs text-[#8696A0]">
+                <div className="truncate text-xs text-slate-500">
                   {peerSubtitle(selectedConversation, onlineUsers, auth.userId)}
                 </div>
               </div>
@@ -1905,7 +1905,7 @@ export default function CommunityPage() {
                   <button
                     type="button"
                     onClick={() => void startCall(selectedPeer, "voice")}
-                    className="rounded-full p-2.5 text-[#AEBAC1] hover:bg-[#2A3942] disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-full p-2.5 text-slate-300 hover:bg-white/[0.08] backdrop-blur-md disabled:cursor-not-allowed disabled:opacity-30"
                     title="Voice call"
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1915,7 +1915,7 @@ export default function CommunityPage() {
                   <button
                     type="button"
                     onClick={() => void startCall(selectedPeer, "video")}
-                    className="rounded-full p-2.5 text-[#AEBAC1] hover:bg-[#2A3942] disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-full p-2.5 text-slate-300 hover:bg-white/[0.08] backdrop-blur-md disabled:cursor-not-allowed disabled:opacity-30"
                     title="Video call"
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1928,12 +1928,12 @@ export default function CommunityPage() {
 
             <div
               className={`min-h-0 flex-1 overflow-y-auto px-3 py-2 sm:px-4 ${
-                isChannelView ? "bg-[#0B141A]" : activeChatUi.wallpaper
+                isChannelView ? "bg-transparent" : activeChatUi.wallpaper
               }`}
               ref={messagesScrollRef}
             >
               {!isChannelView ? (
-                <p className="pointer-events-none mb-2 text-center text-[10px] text-[#8696A0]/70">
+                <p className="pointer-events-none mb-2 text-center text-[10px] text-slate-500/70">
                   Long-press a message for options · swipe right to reply
                 </p>
               ) : null}
@@ -1943,14 +1943,14 @@ export default function CommunityPage() {
                     type="button"
                     onClick={() => void loadOlderMessages()}
                     disabled={loadingOlderMessages}
-                    className="rounded-full border border-[#2A3942] bg-[#111B21]/80 px-3 py-1 text-xs text-[#AEBAC1] hover:bg-[#1B2A33] disabled:opacity-60"
+                    className="rounded-full border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10/80 px-3 py-1 text-xs text-slate-300 hover:bg-white/[0.08] disabled:opacity-60"
                   >
                     {loadingOlderMessages ? "Loading older..." : "Load older messages"}
                   </button>
                 </div>
               ) : null}
               {messages.length === 0 ? (
-                <div className="flex h-full min-h-[200px] flex-col items-center justify-center text-center text-[#8696A0]">
+                <div className="flex h-full min-h-[200px] flex-col items-center justify-center text-center text-slate-500">
                   <p className="mb-1 text-sm">No messages yet</p>
                   <p className="max-w-xs text-xs">Send a message — it delivers even if they’re offline.</p>
                 </div>
@@ -1964,14 +1964,14 @@ export default function CommunityPage() {
                     <div key={message.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_4rem]">
                       {showDay && (
                         <div className="my-3 flex justify-center">
-                          <span className="rounded-lg bg-[#202C33]/90 px-3 py-1 text-xs text-[#AEBAC1] shadow-sm">
+                          <span className="rounded-lg bg-white/[0.06] backdrop-blur-md/90 px-3 py-1 text-xs text-slate-300 shadow-sm">
                             {formatDaySeparator(message.timestamp)}
                           </span>
                         </div>
                       )}
                       {isChannelView ? (
                         <div
-                          className={`group/message mb-4 border-b border-[#2A3942]/40 pb-3 select-none touch-manipulation ${
+                          className={`group/message mb-4 border-b border-white/10/40 pb-3 select-none touch-manipulation ${
                             messageMenuId === message.id ? activeChatUi.selectedRing : ""
                           } ${message.type === "deleted" || message.revokedAt ? "opacity-70" : ""}`}
                           onContextMenu={(e) => {
@@ -1987,16 +1987,16 @@ export default function CommunityPage() {
                           onMouseLeave={cancelLongPress}
                         >
                           <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="text-xs font-medium text-[#E9EDEF]">
+                            <span className="text-xs font-medium text-slate-100">
                               {mine ? "You" : message.senderName}
                             </span>
-                            <span className="text-[11px] text-[#8696A0]">
+                            <span className="text-[11px] text-slate-500">
                               {formatMessageTime(message.timestamp)}
                               {message.editedAt ? " · edited" : ""}
                             </span>
                           </div>
                           {message.replyTo ? (
-                            <div className="mb-2 border-l-2 border-[#8696A0]/60 pl-2 text-[11px] text-[#8696A0]">
+                            <div className="mb-2 border-l-2 border-[#8696A0]/60 pl-2 text-[11px] text-slate-500">
                               {(messages.find((m2) => m2.id === message.replyTo)?.content ?? "").slice(0, 120)}
                             </div>
                           ) : null}
@@ -2056,14 +2056,14 @@ export default function CommunityPage() {
                         >
                           {message.replyTo ? (
                             <div
-                              className={`mb-1 rounded-md bg-black/20 px-2 py-1 text-[11px] text-[#AEBAC1] ${directChatUi.replyBorder}`}
+                              className={`mb-1 rounded-md bg-black/20 px-2 py-1 text-[11px] text-slate-300 ${directChatUi.replyBorder}`}
                             >
                               Replying to{" "}
-                              <span className="font-medium text-[#E9EDEF]">
+                              <span className="font-medium text-slate-100">
                                 {messages.find((m2) => m2.id === message.replyTo)?.senderName ?? "message"}
                               </span>
                               :{" "}
-                              <span className="text-[#8696A0]">
+                              <span className="text-slate-500">
                                 {(messages.find((m2) => m2.id === message.replyTo)?.content ?? "").slice(0, 80)}
                               </span>
                             </div>
@@ -2126,21 +2126,21 @@ export default function CommunityPage() {
               typeof document !== "undefined" &&
               createPortal(
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
-                  <div className="w-full max-w-md rounded-xl border border-[#2A3942] bg-[#111B21] p-4 text-sm text-[#E9EDEF] shadow-xl">
+                  <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10 p-4 text-sm text-slate-100 shadow-xl">
                     <div className="mb-3 flex items-start justify-between gap-2">
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-[#AEBAC1]">Message info</div>
-                        <div className="mt-0.5 text-xs text-[#8696A0]">Status: {messageInfo.data.status}</div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">Message info</div>
+                        <div className="mt-0.5 text-xs text-slate-500">Status: {messageInfo.data.status}</div>
                       </div>
                       <button
                         type="button"
-                        className="rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                        className="rounded px-2 py-1 text-sky-300 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => setMessageInfo(null)}
                       >
                         Close
                       </button>
                     </div>
-                    <div className="space-y-1 text-xs text-[#AEBAC1]">
+                    <div className="space-y-1 text-xs text-slate-300">
                       <div>Sent: {new Date(messageInfo.data.createdAt).toLocaleString()}</div>
                       {messageInfo.data.editedAt ? <div>Edited: {new Date(messageInfo.data.editedAt).toLocaleString()}</div> : null}
                       {messageInfo.data.revokedAt ? <div>Deleted: {new Date(messageInfo.data.revokedAt).toLocaleString()}</div> : null}
@@ -2158,31 +2158,31 @@ export default function CommunityPage() {
               typeof document !== "undefined" &&
               createPortal(
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4">
-                  <div className="w-full max-w-lg rounded-xl border border-[#2A3942] bg-[#111B21] p-4 text-sm text-[#E9EDEF] shadow-xl">
+                  <div className="w-full max-w-lg rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10 p-4 text-sm text-slate-100 shadow-xl">
                     <div className="mb-3 flex items-start justify-between gap-2">
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-[#AEBAC1]">Forward message</div>
-                        <div className="mt-0.5 text-xs text-[#8696A0]">Choose a chat to forward to.</div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">Forward message</div>
+                        <div className="mt-0.5 text-xs text-slate-500">Choose a chat to forward to.</div>
                       </div>
                       <button
                         type="button"
-                        className="rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                        className="rounded px-2 py-1 text-sky-300 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => setForwardingMessage(null)}
                       >
                         Close
                       </button>
                     </div>
 
-                    <div className="max-h-[55vh] overflow-auto rounded-lg border border-[#2A3942]">
+                    <div className="max-h-[55vh] overflow-auto rounded-lg border border-white/10">
                       {filteredConversations.length === 0 ? (
-                        <div className="p-3 text-xs text-[#AEBAC1]">No chats found.</div>
+                        <div className="p-3 text-xs text-slate-300">No chats found.</div>
                       ) : (
                         <ul className="divide-y divide-[#2A3942]">
                           {filteredConversations.map((c) => (
                             <li key={c.id}>
                               <button
                                 type="button"
-                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#202C33]"
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-white/[0.08]"
                                 onClick={async () => {
                                   try {
                                     const meta =
@@ -2217,7 +2217,7 @@ export default function CommunityPage() {
                                 }}
                               >
                                 <span className="min-w-0 truncate">{c.name || c.otherUser?.name || "Chat"}</span>
-                                <span className="text-[11px] text-[#8696A0]">→</span>
+                                <span className="text-[11px] text-slate-500">→</span>
                               </button>
                             </li>
                           ))}
@@ -2230,11 +2230,11 @@ export default function CommunityPage() {
               )}
 
             {editingMessageId && (
-              <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[#2A3942] bg-[#111B21] px-3 py-2 text-xs text-[#AEBAC1]">
+              <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10 px-3 py-2 text-xs text-slate-300">
                 <span>Editing message</span>
                 <button
                   type="button"
-                  className="text-[#53BDEB] hover:underline"
+                  className="text-sky-300 hover:underline"
                   onClick={() => {
                     setEditingMessageId(null);
                     setEditDraft("");
@@ -2248,11 +2248,11 @@ export default function CommunityPage() {
             <div className={`flex flex-shrink-0 flex-col gap-1 border-t border-black/20 px-3 py-2 ${activeChatUi.inputBar}`}>
               {replyToId ? (
                 <div
-                  className={`mb-1 flex items-start justify-between gap-2 rounded-lg bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1] ${activeChatUi.replyBorder}`}
+                  className={`mb-1 flex items-start justify-between gap-2 rounded-lg bg-white/[0.05] backdrop-blur-xl border border-white/10/60 px-2 py-2 text-xs text-slate-300 ${activeChatUi.replyBorder}`}
                 >
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-wide text-[#8696A0]">Replying</div>
-                    <div className="truncate text-[#E9EDEF]">
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Replying</div>
+                    <div className="truncate text-slate-100">
                       {(messages.find((m) => m.id === replyToId)?.senderName ?? "Message")}
                       {": "}
                       {(messages.find((m) => m.id === replyToId)?.content ?? "").slice(0, 90)}
@@ -2260,7 +2260,7 @@ export default function CommunityPage() {
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded px-2 py-1 text-[#53BDEB] hover:bg-[#2A3942]"
+                    className="shrink-0 rounded px-2 py-1 text-sky-300 hover:bg-white/[0.08] backdrop-blur-md"
                     onClick={() => setReplyToId(null)}
                   >
                     Cancel
@@ -2268,14 +2268,14 @@ export default function CommunityPage() {
                 </div>
               ) : null}
               {pendingFiles.length > 0 && (
-                <div className="mb-1 rounded-lg border border-[#2A3942] bg-[#111B21]/60 px-2 py-2 text-xs text-[#AEBAC1]">
+                <div className="mb-1 rounded-lg border border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10/60 px-2 py-2 text-xs text-slate-300">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <span>
                       {pendingFiles.length} attachment{pendingFiles.length !== 1 ? "s" : ""} ready
                     </span>
                     <button
                       type="button"
-                      className="text-[#53BDEB] hover:underline"
+                      className="text-sky-300 hover:underline"
                       onClick={() => setPendingFiles([])}
                     >
                       Clear
@@ -2284,10 +2284,10 @@ export default function CommunityPage() {
                   <div className="flex max-h-28 flex-col gap-1 overflow-auto pr-1">
                     {pendingFiles.slice(0, 12).map((f) => (
                       <div key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-[#E9EDEF]">{f.name}</span>
+                        <span className="min-w-0 truncate text-slate-100">{f.name}</span>
                         <button
                           type="button"
-                          className="shrink-0 rounded px-2 py-0.5 text-[#AEBAC1] hover:bg-[#2A3942]"
+                          className="shrink-0 rounded px-2 py-0.5 text-slate-300 hover:bg-white/[0.08] backdrop-blur-md"
                           onClick={() =>
                             setPendingFiles((prev) =>
                               prev.filter((x) => `${x.name}:${x.size}:${x.lastModified}` !== `${f.name}:${f.size}:${f.lastModified}`)
@@ -2298,17 +2298,17 @@ export default function CommunityPage() {
                         </button>
                       </div>
                     ))}
-                    {pendingFiles.length > 12 ? <div className="text-[#8696A0]">+{pendingFiles.length - 12} more…</div> : null}
+                    {pendingFiles.length > 12 ? <div className="text-slate-500">+{pendingFiles.length - 12} more…</div> : null}
                   </div>
-                  <div className="mt-2 text-[11px] text-[#8696A0]">Tap Send to upload and deliver.</div>
+                  <div className="mt-2 text-[11px] text-slate-500">Tap Send to upload and deliver.</div>
                 </div>
               )}
               {!isChannelView ? (
-              <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-[#8696A0]">
-                <label className="flex cursor-pointer items-center gap-1.5 text-[#AEBAC1]">
+              <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-500">
+                <label className="flex cursor-pointer items-center gap-1.5 text-slate-300">
                   <input
                     type="checkbox"
-                    className="rounded border-[#2A3942] bg-[#111B21]"
+                    className="rounded border-white/10 bg-white/[0.05] backdrop-blur-xl border border-white/10"
                     checked={literalTypingMode}
                     onChange={(e) => {
                       const on = e.target.checked;
@@ -2327,16 +2327,16 @@ export default function CommunityPage() {
               </div>
               ) : null}
               {!isChannelView && assistBusy && !assistPreview ? (
-                <div className="mb-1 text-[11px] text-[#8696A0]">Working on wording…</div>
+                <div className="mb-1 text-[11px] text-slate-500">Working on wording…</div>
               ) : null}
               {!isChannelView && assistPreview ? (
-                <div className="mb-1 rounded-lg border border-[#25D366]/35 bg-[#111B21]/90 px-2 py-2 text-xs text-[#E9EDEF]">
-                  <div className="mb-1 text-[11px] font-medium text-[#53BDEB]">
+                <div className="mb-1 rounded-lg border border-[#25D366]/35 bg-white/[0.05] backdrop-blur-xl border border-white/10/90 px-2 py-2 text-xs text-slate-100">
+                  <div className="mb-1 text-[11px] font-medium text-sky-300">
                     {assistPreview.kind === "translate"
                       ? `Translation preview${assistPreview.note ? ` → ${assistPreview.note}` : ""}`
                       : "Suggested edit (grammar & spelling)"}
                   </div>
-                  <p className="mb-2 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-[#AEBAC1]">{assistPreview.text}</p>
+                  <p className="mb-2 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-slate-300">{assistPreview.text}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -2352,7 +2352,7 @@ export default function CommunityPage() {
                     </button>
                     <button
                       type="button"
-                      className="rounded px-2.5 py-1 text-[11px] text-[#8696A0] hover:bg-[#2A3942]"
+                      className="rounded px-2.5 py-1 text-[11px] text-slate-500 hover:bg-white/[0.08] backdrop-blur-md"
                       onClick={() => setAssistPreview(null)}
                     >
                       Keep what I typed
@@ -2392,7 +2392,7 @@ export default function CommunityPage() {
                   type="button"
                   onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
                   className={`mb-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-                    isRecordingVoice ? "bg-red-600 text-white" : "bg-[#2A3942] text-[#AEBAC1] hover:bg-[#3B4A54]"
+                    isRecordingVoice ? "bg-red-600 text-white" : "bg-white/[0.08] backdrop-blur-md text-slate-300 hover:bg-white/[0.1]"
                   }`}
                   title={
                     isRecordingVoice
@@ -2411,7 +2411,7 @@ export default function CommunityPage() {
                 <div ref={attachWrapRef} className="relative z-10 mb-0.5">
                   <button
                     type="button"
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#2A3942] text-[#AEBAC1] hover:bg-[#3B4A54]"
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/[0.08] backdrop-blur-md text-slate-300 hover:bg-white/[0.1]"
                     title="Attach file, photo, audio, or more"
                     aria-expanded={attachMenuOpen}
                     aria-haspopup="menu"
@@ -2433,7 +2433,7 @@ export default function CommunityPage() {
                     <div
                       ref={attachPortalRef}
                       role="menu"
-                      className="min-w-[200px] rounded-lg border border-[#2A3942] bg-[#202C33] py-1 text-xs shadow-xl"
+                      className="min-w-[200px] rounded-lg border border-white/10 bg-white/[0.06] backdrop-blur-md py-1 text-xs shadow-xl"
                       style={{
                         position: "fixed",
                         left: Math.max(8, attachMenuPos.left),
@@ -2445,7 +2445,7 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => openChatFilePicker("image/*")}
                       >
                         Photos
@@ -2453,7 +2453,7 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => openChatFilePicker("audio/*")}
                       >
                         Audio / voice file
@@ -2461,7 +2461,7 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => openChatFilePicker("")}
                       >
                         Any file
@@ -2469,7 +2469,7 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => {
                           setAttachMenuOpen(false);
                           void sendLocationMessage();
@@ -2480,7 +2480,7 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="block w-full px-3 py-2 text-left text-[#E9EDEF] hover:bg-[#2A3942]"
+                        className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-white/[0.08] backdrop-blur-md"
                         onClick={() => {
                           setAttachMenuOpen(false);
                           void sendContactMessage();
@@ -2508,7 +2508,7 @@ export default function CommunityPage() {
                   />
                   <button
                     type="button"
-                    className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 rounded-full px-1 py-1 text-[#8696A0] hover:bg-[#3B4A54] hover:text-[#E9EDEF]"
+                    className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 rounded-full px-1 py-1 text-slate-500 hover:bg-white/[0.1] hover:text-slate-100"
                     title="Emoji & stickers"
                     onClick={() => setComposerEmojiOpen((o) => !o)}
                   >
@@ -2529,7 +2529,7 @@ export default function CommunityPage() {
                   spellCheck={!literalTypingMode}
                   autoCorrect={literalTypingMode ? "off" : "on"}
                   autoCapitalize="sentences"
-                  className={`max-h-[40vh] min-h-[42px] w-full resize-none border-0 bg-[#2A3942] py-2.5 pl-10 pr-4 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 ${
+                  className={`max-h-[40vh] min-h-[42px] w-full resize-none border-0 bg-white/[0.08] backdrop-blur-md py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 ${
                     isChannelView ? "rounded-lg" : "rounded-3xl"
                   } ${activeChatUi.composerFocus}`}
                 />
@@ -2550,13 +2550,13 @@ export default function CommunityPage() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-            <div className="mb-6 rounded-full bg-[#202C33] p-8">
+            <div className="mb-6 rounded-full bg-white/[0.06] backdrop-blur-md p-8">
               <svg className="h-16 w-16 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
               </svg>
             </div>
-            <h2 className="mb-2 text-xl font-medium text-[#E9EDEF]">CresOS Community</h2>
-            <p className="max-w-md text-sm text-[#8696A0]">
+            <h2 className="mb-2 text-xl font-medium text-slate-100">CresOS Community</h2>
+            <p className="max-w-md text-sm text-slate-500">
               Pick a chat on the left or go to <span className="text-[#25D366]">People</span> to see everyone in your
               organization. Messages work even when someone is offline.
             </p>
@@ -2598,11 +2598,11 @@ export default function CommunityPage() {
             }}
           >
             <div
-              className="flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-[#111B21] shadow-xl"
+              className="flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-white/[0.05] backdrop-blur-xl border border-white/10 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-[#2A3942] px-4 py-3">
-                <h2 id="new-channel-title" className="text-lg font-medium text-[#E9EDEF]">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <h2 id="new-channel-title" className="text-lg font-medium text-slate-100">
                   Create channel
                 </h2>
                 <button
@@ -2611,7 +2611,7 @@ export default function CommunityPage() {
                     setShowNewChannelModal(false);
                     resetNewChannelForm();
                   }}
-                  className="rounded-full p-2 text-[#8696A0] hover:bg-[#2A3942] hover:text-[#E9EDEF]"
+                  className="rounded-full p-2 text-slate-500 hover:bg-white/[0.08] backdrop-blur-md hover:text-slate-100"
                   aria-label="Close"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2621,9 +2621,9 @@ export default function CommunityPage() {
               </div>
 
               {channelsLoading ? (
-                <p className="px-4 py-8 text-center text-sm text-[#8696A0]">Loading projects…</p>
+                <p className="px-4 py-8 text-center text-sm text-slate-500">Loading projects…</p>
               ) : channelDrafts.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-[#8696A0]">
+                <p className="px-4 py-8 text-center text-sm text-slate-500">
                   No projects available for a new channel.
                 </p>
               ) : (
@@ -2635,14 +2635,14 @@ export default function CommunityPage() {
                   }}
                 >
                   <div>
-                    <label htmlFor="channel-project" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                    <label htmlFor="channel-project" className="mb-1 block text-xs font-medium text-slate-300">
                       Project to discuss
                     </label>
                     <select
                       id="channel-project"
                       value={newChannelProjectId}
                       onChange={(e) => setNewChannelProjectId(e.target.value)}
-                      className="w-full rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                      className="w-full rounded-lg border-0 bg-white/[0.08] backdrop-blur-md px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
                     >
                       {channelDrafts.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -2653,7 +2653,7 @@ export default function CommunityPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="channel-name" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                    <label htmlFor="channel-name" className="mb-1 block text-xs font-medium text-slate-300">
                       Channel name
                     </label>
                     <input
@@ -2663,12 +2663,12 @@ export default function CommunityPage() {
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder="e.g. Acme Website — Delivery"
                       maxLength={120}
-                      className="w-full rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
+                      className="w-full rounded-lg border-0 bg-white/[0.08] backdrop-blur-md px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#25D366]/40"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="channel-topics" className="mb-1 block text-xs font-medium text-[#AEBAC1]">
+                    <label htmlFor="channel-topics" className="mb-1 block text-xs font-medium text-slate-300">
                       What will be discussed?
                     </label>
                     <textarea
@@ -2678,13 +2678,13 @@ export default function CommunityPage() {
                       placeholder="Milestones, blockers, handoffs, client updates…"
                       rows={3}
                       maxLength={2000}
-                      className="w-full resize-none rounded-lg border-0 bg-[#2A3942] px-3 py-2.5 text-sm text-[#E9EDEF] placeholder-[#8696A0] focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                      className="w-full resize-none rounded-lg border-0 bg-white/[0.08] backdrop-blur-md px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
                     />
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-[#AEBAC1]">Who can see this channel?</span>
+                      <span className="text-xs font-medium text-slate-300">Who can see this channel?</span>
                       <button
                         type="button"
                         onClick={applyProjectTeamToChannel}
@@ -2729,17 +2729,17 @@ export default function CommunityPage() {
             onClick={() => setShowNewChatModal(false)}
           >
             <div
-              className="flex max-h-[min(85dvh,32rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-950 shadow-xl"
+              className={`flex max-h-[min(85dvh,32rem)] w-full max-w-md flex-col overflow-hidden ${communityTheme.modal}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-slate-700/50 px-4 py-3">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <h2 id="new-chat-title" className="text-lg font-semibold text-white">
                   Start a chat
                 </h2>
                 <button
                   type="button"
                   onClick={() => setShowNewChatModal(false)}
-                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-800"
+                  className={`${communityTheme.iconBtn}`}
                   aria-label="Close"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2759,7 +2759,7 @@ export default function CommunityPage() {
                       key={user.id}
                       type="button"
                       onClick={() => void sendMessageToUser(user)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-800/60"
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${communityTheme.menuItem}`}
                     >
                       <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/40 to-sky-600/30 text-sm font-semibold text-white">
                         {initialsFromLabel(user.name)}
