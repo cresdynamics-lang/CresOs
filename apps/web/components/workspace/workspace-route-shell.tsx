@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { WorkspaceKey } from "../../lib/resolve-workspace";
-import { DeveloperGlassCanvas } from "../developer/developer-glass-ui";
-import { devGlass } from "../developer/developer-glass-theme";
+import { devNeu } from "../developer/developer-theme";
 import { salesNeu } from "../sales/sales-theme";
 import { financeNeu } from "../finance/finance-theme";
 import { WorkspaceAside } from "./workspace-aside";
@@ -52,12 +51,16 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
 
   if (workspace === "developer") {
     return (
-      <DeveloperGlassCanvas className="h-full min-h-0 flex-1 gap-0 p-0">
-        <div className={`${devGlass.content} flex h-full min-h-0 w-full flex-1 overflow-hidden`}>
-          {aside}
-          {content}
+      <div
+        className={`${devNeu.workspace} developer-fullscreen ${devNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
+      >
+        {aside}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
+            {children}
+          </div>
         </div>
-      </DeveloperGlassCanvas>
+      </div>
     );
   }
 

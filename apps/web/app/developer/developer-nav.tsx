@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
-import { devGlass } from "../../components/developer/developer-glass-theme";
+import { devNeu } from "../../components/developer/developer-theme";
 import { ALL_APP_ROLE_KEYS } from "../../lib/app-roles";
 
 export type DeveloperSection =
@@ -126,7 +126,7 @@ function DeveloperNavLinks({ vertical = false }: { vertical?: boolean }) {
       vertical
         ? "min-h-[40px] rounded-lg px-3 py-2 text-[13px] font-medium transition-all touch-manipulation lg:min-h-0"
         : "min-h-[44px] shrink-0 snap-start rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap touch-manipulation sm:min-h-0",
-      active ? devGlass.navActive : devGlass.navIdle
+      active ? devNeu.navActive : devNeu.navIdle
     ].join(" ");
 
   if (vertical) {

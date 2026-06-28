@@ -379,6 +379,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     inWorkspace && workspace ? workspaceMeta(workspace).subtitle : "Operating system for growth";
   const asideTheme = inWorkspace && workspace ? workspaceMeta(workspace).themeKey : "global";
 
+  const isWorkspaceFullscreen =
+    inWorkspace && (workspace === "finance" || workspace === "sales" || workspace === "developer");
+
   return (
     <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-slate-950" : ""}`}>
       {mobileNavOpen && !hideShellChrome && (
@@ -485,15 +488,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? hideTopHeader
                 ? "mx-0 overflow-hidden px-0 py-0"
                 : "mx-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] overflow-hidden px-0 py-0 lg:pt-0"
+              : isWorkspaceFullscreen
+                ? "mx-0 overflow-hidden px-0 py-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
               : ""
           }`}
         >
           <div
             className={`min-h-0 flex-1 overflow-x-hidden ${
-              isFullscreenPage
-                ? hideTopHeader
+              isFullscreenPage || isWorkspaceFullscreen
+                ? hideTopHeader && isFullscreenPage
                   ? "flex flex-col overflow-hidden"
-                  : "flex max-lg:pt-0 flex-col overflow-hidden lg:pt-0"
+                  : "flex min-h-0 flex-1 flex-col overflow-hidden"
                 : isSettingsRoute
                   ? "flex min-h-0 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
                   : "flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"

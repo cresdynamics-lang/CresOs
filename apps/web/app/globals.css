@@ -184,6 +184,55 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+/* Developer neumorphism — mirrors finance-neu with violet accent */
+.developer-neu {
+  --developer-neu-bg: #0b0f14;
+  --developer-neu-surface: #121820;
+  --developer-neu-inset: #0e1319;
+  --developer-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --developer-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.developer-neu .shell {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--developer-neu-surface);
+  box-shadow: var(--developer-neu-raised);
+}
+
+.developer-neu input:not([type="checkbox"]):not([type="radio"]),
+.developer-neu select,
+.developer-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--developer-neu-inset);
+  box-shadow: var(--developer-neu-inset-shadow);
+}
+
+.developer-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.developer-neu select:focus,
+.developer-neu textarea:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: var(--developer-neu-inset-shadow), 0 0 0 2px rgba(139, 92, 246, 0.15);
+}
+
+.developer-fullscreen.developer-neu .shell:first-of-type {
+  padding-top: 0;
+}
+
+.developer-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.developer-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Developer liquid glass workspace */
 .developer-glass {
   --dev-glass-bg: #080b12;
