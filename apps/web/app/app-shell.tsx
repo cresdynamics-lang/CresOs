@@ -504,7 +504,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : "flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
             }`}
           >
-            {children}
+            {inWorkspace ? (
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+            ) : (
+              children
+            )}
           </div>
         </div>
       </main>

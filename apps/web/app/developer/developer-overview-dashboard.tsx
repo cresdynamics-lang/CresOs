@@ -146,11 +146,14 @@ export function DeveloperOverviewDashboard({
 
   const projectBars = projects
     .slice(0, 8)
-    .map((p, idx) => ({
-      label: p.name.length > 22 ? `${p.name.slice(0, 22)}…` : p.name,
-      value: p.progressPercent,
-      color: CHART_COLORS[idx % CHART_COLORS.length]
-    }));
+    .map((p, idx) => {
+      const name = p.name?.trim() || "Project";
+      return {
+        label: name.length > 22 ? `${name.slice(0, 22)}…` : name,
+        value: p.progressPercent ?? 0,
+        color: CHART_COLORS[idx % CHART_COLORS.length]
+      };
+    });
 
   const taskMix = useMemo(() => {
     const done = projects.reduce((s, p) => s + p.doneTasks, 0);
@@ -181,7 +184,7 @@ export function DeveloperOverviewDashboard({
   };
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
+    <div className="flex w-full min-w-0 flex-1 flex-col gap-6 pb-8">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
         <div className="min-w-0">
           <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/90">

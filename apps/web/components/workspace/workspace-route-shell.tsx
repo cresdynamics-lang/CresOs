@@ -52,7 +52,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
   if (workspace === "developer") {
     return (
       <div
-        className={`${devNeu.workspace} developer-fullscreen ${devNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
+        className={`${devNeu.workspace} developer-fullscreen ${devNeu.canvas} flex min-h-0 w-full flex-1 flex-col overflow-hidden md:flex-row`}
       >
         {aside}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

@@ -45,6 +45,7 @@ export default function accountRouter(prisma: PrismaClient): Router {
       ...user,
       capabilityFlags,
       canSeeFinance,
+      roleKeys: req.auth!.roleKeys,
       org: org ?? { id: orgId, name: null, slug: null }
     });
   });

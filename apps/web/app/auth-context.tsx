@@ -104,11 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name?: string | null;
           profilePicture?: string | null;
           canSeeFinance?: boolean;
+          roleKeys?: string[];
         };
         patchAuth({
           userName: data.name ?? undefined,
           profilePicture: data.profilePicture ?? null,
-          canSeeFinance: data.canSeeFinance === true
+          canSeeFinance: data.canSeeFinance === true,
+          ...(Array.isArray(data.roleKeys) && data.roleKeys.length > 0
+            ? { roleKeys: data.roleKeys }
+            : {})
         });
       } catch {
         // ignore
@@ -249,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id?: string;
           name?: string | null;
           email?: string;
+          roleKeys?: string[];
           org?: { id: string; name: string | null; slug: string | null };
         };
         if (cancelled) return;
@@ -258,7 +263,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           userEmail: data.email,
           orgId: data.org?.id,
           orgName: data.org?.name ?? null,
-          orgSlug: data.org?.slug ?? null
+          orgSlug: data.org?.slug ?? null,
+          ...(Array.isArray(data.roleKeys) && data.roleKeys.length > 0
+            ? { roleKeys: data.roleKeys }
+            : {})
         });
       } catch {
         /* offline / API down — avoid noisy console; user can still use app with cached auth */
