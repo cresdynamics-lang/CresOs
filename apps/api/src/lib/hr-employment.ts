@@ -9,6 +9,7 @@ export const HR_MANAGEABLE_ROLE_KEYS = [
   ROLE_KEYS.sales,
   ROLE_KEYS.analyst,
   ROLE_KEYS.hr,
+  ROLE_KEYS.project_manager,
   ROLE_KEYS.admin
 ] as const;
 

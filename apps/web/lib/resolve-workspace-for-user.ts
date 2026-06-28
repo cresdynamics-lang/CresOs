@@ -4,6 +4,7 @@ import { isDirectorOnly } from "./is-director-only";
 import { isAdminOnly } from "./is-admin-only";
 import { isClientOnly } from "./is-client-only";
 import { canAccessHrWorkspace, isHrOnly } from "./is-hr-only";
+import { canAccessPmWorkspace, isPmOnly } from "./is-pm-only";
 
 function hasRole(roleKeys: string[], role: string): boolean {
   return roleKeys.includes(role);
@@ -73,6 +74,14 @@ export function resolveWorkspaceForUser(pathname: string, roleKeys: string[]): W
     return "hr";
   }
 
+  if (path.startsWith("/pm") && canAccessPmWorkspace(roleKeys)) {
+    return "pm";
+  }
+
+  if (isPmOnly(roleKeys) && (path === "/schedule" || path.startsWith("/schedule/") || path === "/community" || path.startsWith("/community/"))) {
+    return "pm";
+  }
+
   if (isDirectorOnly(roleKeys)) {
     return "director";
   }
@@ -83,6 +92,10 @@ export function resolveWorkspaceForUser(pathname: string, roleKeys: string[]): W
 
   if (isHrOnly(roleKeys)) {
     return "hr";
+  }
+
+  if (isPmOnly(roleKeys)) {
+    return "pm";
   }
 
   if (isClientOnly(roleKeys)) {

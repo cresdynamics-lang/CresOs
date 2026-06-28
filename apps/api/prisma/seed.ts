@@ -23,6 +23,7 @@ const USERS = [
   { email: "finance@cresdynamics.com", name: "Finance", roleKey: ROLE_KEYS.finance, password: PASSWORD },
   { email: "salim.sales@cresdynamics.com", name: "Salim Sales", roleKey: ROLE_KEYS.sales, password: PASSWORD },
   { email: "hr@cresdynamics.com", name: "Hannah HR", roleKey: "hr", password: PASSWORD },
+  { email: "pm@cresdynamics.com", name: "Pat PM", roleKey: "project_manager", password: PASSWORD },
   { email: "contact@acme.example", name: "Acme Retail Ltd", roleKey: ROLE_KEYS.client, password: "Acme1" }
 ] as const;
 
@@ -31,6 +32,7 @@ const STANDARD_DEPARTMENTS: { name: string; description: string; roleKeys: strin
   { name: "Development", description: "Engineering delivery and developer reports", roleKeys: [ROLE_KEYS.developer] },
   { name: "Finance", description: "Invoices, payments, and approvals", roleKeys: [ROLE_KEYS.finance] },
   { name: "HR", description: "People operations, onboarding, and org health", roleKeys: ["hr"] },
+  { name: "Project Management", description: "Delivery, milestones, and team success", roleKeys: ["project_manager"] },
   { name: "Marketing", description: "Campaigns and brand growth", roleKeys: [] },
   { name: "Operations", description: "Cross-team coordination and ops", roleKeys: [ROLE_KEYS.admin, ROLE_KEYS.director] }
 ];
@@ -43,7 +45,8 @@ const ROLE_NAMES: Record<string, string> = {
   [ROLE_KEYS.sales]: "Sales",
   [ROLE_KEYS.analyst]: "Analyst",
   [ROLE_KEYS.client]: "Client",
-  hr: "HR"
+  hr: "HR",
+  project_manager: "Project Manager"
 };
 
 async function ensureOrg() {
@@ -58,7 +61,7 @@ async function ensureOrg() {
 }
 
 async function ensureRoles(orgId: string) {
-  const roleKeys = [...Object.values(ROLE_KEYS), "hr"];
+  const roleKeys = [...Object.values(ROLE_KEYS), "hr", "project_manager"];
   let roles = await prisma.role.findMany({ where: { orgId } });
   const existingKeys = new Set(roles.map((r) => r.key));
   for (const key of roleKeys) {

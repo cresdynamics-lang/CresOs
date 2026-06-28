@@ -25,6 +25,7 @@ import userRouter from "./modules/user";
 import emailAutomationRouter, { emailAutomationPublicRouter } from "./modules/email-automation";
 import messagesRouter from "./modules/messages";
 import hrRouter from "./modules/hr";
+import projectManagementRouter from "./modules/project-management";
 import { createAuthMiddleware } from "./modules/auth-middleware";
 
 /**
@@ -94,6 +95,7 @@ export function createApp(prisma: PrismaClient): express.Application {
   app.use("/email-automation", emailAutomationRouter(prisma));
   app.use("/messages", messagesRouter(prisma));
   app.use("/hr", hrRouter(prisma));
+  app.use("/pm", projectManagementRouter(prisma));
 
   return app;
 }

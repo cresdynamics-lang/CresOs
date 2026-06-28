@@ -42,6 +42,7 @@ import {
   initialsFromLabel,
   isChannelConversation
 } from "../../components/community/community-utils";
+import { isPmCheckInMessage, PmCheckInRespond } from "../../components/pm/pm-check-in-respond";
 
 function avatarUrl(pathOrUrl: string | null | undefined): string | null {
   if (!pathOrUrl) return null;
@@ -143,7 +144,17 @@ function renderMessageTicks(status: string): { glyph: string; className: string 
   return { glyph: "✓", className: "text-slate-300 font-bold" };
 }
 
-function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: string }) {
+function ChatMessageBody({
+  message,
+  apiOrigin,
+  viewerId,
+  viewerIsDeveloper
+}: {
+  message: Message;
+  apiOrigin: string;
+  viewerId?: string;
+  viewerIsDeveloper?: boolean;
+}) {
   const md = message.metadata;
   const fileUrl = md && typeof md.url === "string" ? resolveMediaUrl(md.url, apiOrigin) : null;
   const fileName = md && typeof md.fileName === "string" ? md.fileName : null;
@@ -292,10 +303,27 @@ function ChatMessageBody({ message, apiOrigin }: { message: Message; apiOrigin: 
     );
   }
 
+  const pmCheckIn =
+    isPmCheckInMessage(md as Record<string, unknown> | null | undefined) &&
+    md &&
+    (md as { requiresResponse?: boolean }).requiresResponse === true;
+  const showPmReply =
+    pmCheckIn && viewerIsDeveloper && viewerId && message.senderId !== viewerId;
+
   return (
     <div>
       {forwarded ? <ForwardedLabel /> : null}
       <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
+      {showPmReply ? (
+        <PmCheckInRespond
+          messageId={message.id}
+          projectId={
+            md && typeof (md as { projectId?: string }).projectId === "string"
+              ? (md as { projectId: string }).projectId
+              : undefined
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -2001,7 +2029,12 @@ export default function CommunityPage() {
                               {(messages.find((m2) => m2.id === message.replyTo)?.content ?? "").slice(0, 120)}
                             </div>
                           ) : null}
-                          <ChatMessageBody message={message} apiOrigin={apiOrigin} />
+                          <ChatMessageBody
+                            message={message}
+                            apiOrigin={apiOrigin}
+                            viewerId={auth.userId}
+                            viewerIsDeveloper={auth.roleKeys.includes("developer")}
+                          />
                         </div>
                       ) : (
                       <div className={`group/message mb-1.5 flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -2069,7 +2102,12 @@ export default function CommunityPage() {
                               </span>
                             </div>
                           ) : null}
-                          <ChatMessageBody message={message} apiOrigin={apiOrigin} />
+                          <ChatMessageBody
+                            message={message}
+                            apiOrigin={apiOrigin}
+                            viewerId={auth.userId}
+                            viewerIsDeveloper={auth.roleKeys.includes("developer")}
+                          />
                           <div
                             className={`mt-0.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] ${
                               mine ? directChatUi.timeMine : directChatUi.timeTheir

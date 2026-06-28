@@ -236,6 +236,52 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+/* PM workspace — dark neumorphism (teal accent) */
+.pm-neu {
+  --pm-neu-bg: #0b0f14;
+  --pm-neu-surface: #121820;
+  --pm-neu-inset: #0e1319;
+  --pm-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --pm-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.pm-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--pm-neu-raised);
+}
+
+.pm-neu input:not([type="checkbox"]):not([type="radio"]),
+.pm-neu select,
+.pm-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: #0e1319;
+  color: #f1f5f9;
+  box-shadow: var(--pm-neu-inset-shadow);
+}
+
+.pm-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.pm-neu select:focus,
+.pm-neu textarea:focus {
+  border-color: rgba(20, 184, 166, 0.35);
+  outline: none;
+  box-shadow: var(--pm-neu-inset-shadow), 0 0 0 2px rgba(20, 184, 166, 0.15);
+}
+
+.pm-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.pm-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Sales neumorphism — mirrors finance-neu with amber accent */
 .sales-neu {
   --sales-neu-bg: #0b0f14;

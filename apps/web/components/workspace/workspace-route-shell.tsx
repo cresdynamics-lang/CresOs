@@ -13,9 +13,11 @@ import { SalesSideNav } from "../../app/sales/sales-workspace-nav";
 import { DeveloperNav, DeveloperSideNav } from "../../app/developer/developer-nav";
 import { DirectorNav, DirectorSideNav } from "../../app/director/director-nav";
 import { HrNav } from "../../app/hr/hr-nav";
+import { PmNav } from "../../app/pm/pm-nav";
 import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 import { directorNeu } from "../director/director-theme";
 import { hrNeu } from "../hr/hr-theme";
+import { pmNeu } from "../pm/pm-theme";
 
 type WorkspaceRouteShellProps = {
   workspace: WorkspaceKey;
@@ -29,7 +31,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
     <WorkspaceAccountFooter
       themeKey={meta.themeKey}
       onLogout={handleLogout}
-      showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "hr"}
+      showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "hr" && workspace !== "pm"}
       showIdentity={false}
     />
   );
@@ -118,6 +120,19 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
       <div className={`${hrNeu.workspace} hr-fullscreen ${hrNeu.canvas} flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden`}>
         <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1016]/90 px-3 py-2.5 md:hidden">
           <HrNav />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  if (workspace === "pm") {
+    return (
+      <div className={`${pmNeu.workspace} pm-fullscreen ${pmNeu.canvas} flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden`}>
+        <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1016]/90 px-3 py-2.5 md:hidden">
+          <PmNav />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {children}

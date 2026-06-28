@@ -9,6 +9,7 @@ import { DirectorSideNav } from "../../app/director/director-nav";
 import { AdminSideNav } from "../../app/admin/admin-nav";
 import { ClientSideNav } from "../../app/client/client-nav";
 import { HrSideNav } from "../../app/hr/hr-nav";
+import { PmSideNav } from "../../app/pm/pm-nav";
 
 type WorkspaceMeta = { title: string; subtitle?: string; themeKey: WorkspaceKey };
 
@@ -47,6 +48,11 @@ const WORKSPACE_META: Record<WorkspaceKey, WorkspaceMeta> = {
     title: "Human Resources",
     subtitle: "People · payroll · reporting",
     themeKey: "hr"
+  },
+  pm: {
+    title: "Project Management",
+    subtitle: "Delivery · milestones · team",
+    themeKey: "pm"
   }
 };
 
@@ -82,6 +88,8 @@ export function WorkspaceNavContent({
       return wrap(<ClientSideNav />);
     case "hr":
       return wrap(<HrSideNav onNavClick={onNavClick} />);
+    case "pm":
+      return wrap(<PmSideNav onNavClick={onNavClick} />);
     default:
       return null;
   }

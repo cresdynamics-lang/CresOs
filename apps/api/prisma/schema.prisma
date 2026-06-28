@@ -79,6 +79,7 @@ model Org {
   directorReports    DirectorReport[]
 
   projectManagementMonths ProjectManagementMonth[]
+  pmDeveloperCheckIns     PmDeveloperCheckIn[]
 
   emailThreads          EmailThread[]
   emailAutomationConfig EmailAutomationConfig?
@@ -224,6 +225,9 @@ model User {
   expensesAsBeneficiary Expense[] @relation("ExpenseBeneficiary")
   expensesDevAcked      Expense[] @relation("ExpenseDevAck")
   managementMonthsMarked ProjectManagementMonth[]
+  projectsManagedAsPm    Project[]            @relation("ProjectManager")
+  pmCheckInsSent         PmDeveloperCheckIn[] @relation("PmCheckInSender")
+  pmCheckInsReceived     PmDeveloperCheckIn[] @relation("PmCheckInDeveloper")
 
   // Chat System Relations
   chatUser          ChatUser?
@@ -525,6 +529,9 @@ model Project {
   financeRefYear          Int?
   /// Next invoice slot for this project (1 → …/01/…, then incremented).
   nextInvoiceOrdinal      Int       @default(1)
+  successCriteria         String?   @db.Text
+  projectManagerUserId    String?
+  agileSprintNotes        String?   @db.Text
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   deletedAt               DateTime?
@@ -536,6 +543,7 @@ model Project {
   createdBy             User?                        @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id])
   approvedBy            User?                        @relation("ProjectApprovedBy", fields: [approvedById], references: [id])
   assignedDeveloper     User?                        @relation("ProjectAssignedDeveloper", fields: [assignedDeveloperId], references: [id])
+  projectManager        User?                        @relation("ProjectManager", fields: [projectManagerUserId], references: [id])
   milestones            Milestone[]
   tasks                 Task[]
   invoices              Invoice[]
@@ -547,6 +555,35 @@ model Project {
   managementMonthRows   ProjectManagementMonth[]
   communityChannel      ChatCommunityChannel?
   communityConversation Conversation?              @relation("ProjectCommunityConversation")
+  pmCheckIns            PmDeveloperCheckIn[]
+}
+
+/// PM daily check-in / talk prompt to a developer (may mirror a community message).
+model PmDeveloperCheckIn {
+  id             String    @id @default(cuid())
+  orgId          String
+  projectId      String
+  developerId    String
+  sentById       String
+  message        String    @db.Text
+  aiGenerated    Boolean   @default(false)
+  response       String?   @db.Text
+  respondedAt    DateTime?
+  status         String    @default("pending") // pending, answered, overdue
+  dayKey         String
+  messageId      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  org       Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  developer User    @relation("PmCheckInDeveloper", fields: [developerId], references: [id], onDelete: Cascade)
+  sentBy    User    @relation("PmCheckInSender", fields: [sentById], references: [id], onDelete: Cascade)
+
+  @@index([orgId, projectId])
+  @@index([developerId, status])
+  @@index([dayKey])
+  @@unique([projectId, developerId, dayKey])
 }
 
 /// One row per calendar month for management fee tracking (paid checkbox + optional invoice link).

@@ -26,8 +26,13 @@ export function resolveHomeRouteForUser(roleKeys: string[]): string {
 
   const isHrOnly =
     roleKeys.includes("hr") &&
-    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst"].includes(r));
+    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst", "project_manager"].includes(r));
   if (isHrOnly) return "/hr";
+
+  const isPmOnly =
+    roleKeys.includes("project_manager") &&
+    !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst", "hr"].includes(r));
+  if (isPmOnly) return "/pm";
 
   return "/dashboard";
 }

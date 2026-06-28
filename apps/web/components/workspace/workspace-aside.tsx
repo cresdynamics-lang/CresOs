@@ -52,6 +52,12 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
     title: "text-rose-400/90",
     subtitle: "text-slate-500"
   },
+  pm: {
+    panel: "bg-[#0e1319]/95",
+    border: "border-white/[0.04]",
+    title: "text-teal-400/90",
+    subtitle: "text-slate-500"
+  },
   global: {
     panel: "bg-[#0e1319]/95",
     border: "border-white/[0.04]",

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAuth } from "../../app/auth-context";
 import { getDisplayFirstName } from "../../lib/personalized-greeting";
 
-type ThemeKey = "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr" | "global";
+type ThemeKey = "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr" | "pm" | "global";
 
 const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }> = {
   finance: {
@@ -40,6 +40,11 @@ const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }
   hr: {
     ring: "ring-rose-500/20",
     avatar: "bg-rose-500/15 text-rose-300",
+    signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
+  },
+  pm: {
+    ring: "ring-teal-500/20",
+    avatar: "bg-teal-500/15 text-teal-300",
     signOut: "border-white/[0.06] text-slate-400 hover:border-rose-500/30 hover:bg-rose-950/30 hover:text-rose-200"
   },
   global: {

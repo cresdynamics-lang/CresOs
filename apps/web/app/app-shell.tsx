@@ -18,6 +18,12 @@ import {
 } from "../components/hr/hr-workspace-aside";
 import { HrSideNav } from "./hr/hr-nav";
 import { HrAsideWorkforceSnapshot } from "../components/hr/hr-aside-workforce";
+import {
+  PmWorkspaceAside,
+  PmWorkspaceAsideFooter
+} from "../components/pm/pm-workspace-aside";
+import { PmSideNav } from "./pm/pm-nav";
+import { PmAsideDeliverySnapshot } from "../components/pm/pm-aside-delivery";
 import { ring } from "./browser-notify";
 import { shouldPlayBrowserSoundForUser } from "../lib/notification-signals";
 import { sumDirectMessageUnread } from "../lib/community-unread";
@@ -352,7 +358,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const workspaceThemeKey =
     inWorkspace && workspace
-      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr")
+      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr" | "pm")
       : "global";
 
   const navFooter = <WorkspaceAccountFooter themeKey="global" onLogout={handleLogout} showIdentity />;
@@ -372,7 +378,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           setMobileNavOpen(false);
           handleLogout();
         }}
-        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "admin" && workspace !== "client" && workspace !== "hr"}
+        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "admin" && workspace !== "client" && workspace !== "hr" && workspace !== "pm"}
         showIdentity={false}
       />
     </div>
@@ -391,7 +397,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         workspace === "sales" ||
         workspace === "developer" ||
         workspace === "director" ||
-        workspace === "hr")) ||
+        workspace === "hr" ||
+        workspace === "pm")) ||
     workspace === "admin" ||
     workspace === "client" ||
     isSettingsRoute;
@@ -420,6 +427,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <HrSideNav onNavClick={() => setMobileNavOpen(false)} />
             </HrWorkspaceAside>
+          ) : workspace === "pm" ? (
+            <PmWorkspaceAside
+              className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl"
+              footer={
+                <PmWorkspaceAsideFooter
+                  onLogout={() => {
+                    setMobileNavOpen(false);
+                    handleLogout();
+                  }}
+                />
+              }
+            >
+              <PmSideNav onNavClick={() => setMobileNavOpen(false)} />
+            </PmWorkspaceAside>
           ) : (
             <WorkspaceAside
               title={asideTitle}
@@ -453,6 +474,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <HrAsideWorkforceSnapshot />
           <HrSideNav />
         </HrWorkspaceAside>
+      ) : null}
+
+      {inWorkspace && workspace === "pm" && !hideShellChrome && !isSettingsRoute ? (
+        <PmWorkspaceAside
+          className="hidden w-[17.5rem] shrink-0 md:flex"
+          footer={<PmWorkspaceAsideFooter onLogout={handleLogout} />}
+        >
+          <PmAsideDeliverySnapshot />
+          <PmSideNav />
+        </PmWorkspaceAside>
       ) : null}
 
       {!inWorkspace && !hideShellChrome && !isSettingsRoute && (
