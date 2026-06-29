@@ -42,7 +42,7 @@ import {
   initialsFromLabel,
   isChannelConversation
 } from "../../components/community/community-utils";
-import { isPmCheckInMessage, PmCheckInRespond } from "../../components/pm/pm-check-in-respond";
+import { isRoleCheckInMessage, RoleCheckInRespond } from "../../components/pm/role-check-in-respond";
 
 function avatarUrl(pathOrUrl: string | null | undefined): string | null {
   if (!pathOrUrl) return null;
@@ -148,12 +148,14 @@ function ChatMessageBody({
   message,
   apiOrigin,
   viewerId,
-  viewerIsDeveloper
+  viewerIsDeveloper,
+  onCheckInResponded
 }: {
   message: Message;
   apiOrigin: string;
   viewerId?: string;
   viewerIsDeveloper?: boolean;
+  onCheckInResponded?: () => void;
 }) {
   const md = message.metadata;
   const fileUrl = md && typeof md.url === "string" ? resolveMediaUrl(md.url, apiOrigin) : null;
@@ -303,29 +305,59 @@ function ChatMessageBody({
     );
   }
 
-  const pmCheckIn =
-    isPmCheckInMessage(md as Record<string, unknown> | null | undefined) &&
-    md &&
-    (md as { requiresResponse?: boolean }).requiresResponse === true;
-  const showPmReply =
-    pmCheckIn && viewerIsDeveloper && viewerId && message.senderId !== viewerId;
+  const roleCheckIn = parseRoleCheckInFromMeta(md as Record<string, unknown> | null | undefined);
+  const showRoleReply =
+    roleCheckIn &&
+    (md as { requiresResponse?: boolean })?.requiresResponse === true &&
+    viewerIsDeveloper &&
+    viewerId &&
+    message.senderId !== viewerId;
+
+  if (roleCheckIn) {
+    const senderLabel =
+      typeof (md as { senderLabel?: string })?.senderLabel === "string"
+        ? (md as { senderLabel: string }).senderLabel
+        : (md as { senderRole?: string })?.senderRole === "director_admin"
+          ? "Director"
+          : "Project Manager";
+    return (
+      <div>
+        {forwarded ? <ForwardedLabel /> : null}
+        <div className="rounded-2xl border border-teal-400/20 bg-gradient-to-br from-teal-950/30 via-slate-900/50 to-cyan-950/20 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-300/90">
+            {senderLabel} · Community check-in
+          </p>
+          <div className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-100">
+            {message.content}
+          </div>
+        </div>
+        {showRoleReply ? (
+          <RoleCheckInRespond
+            metadata={md as Record<string, unknown>}
+            messageId={message.id}
+            projectId={
+              md && typeof (md as { projectId?: string }).projectId === "string"
+                ? (md as { projectId: string }).projectId
+                : undefined
+            }
+            onResponded={onCheckInResponded}
+            variant="slide"
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div>
       {forwarded ? <ForwardedLabel /> : null}
       <div className="whitespace-pre-wrap break-words text-sm leading-snug">{message.content}</div>
-      {showPmReply ? (
-        <PmCheckInRespond
-          messageId={message.id}
-          projectId={
-            md && typeof (md as { projectId?: string }).projectId === "string"
-              ? (md as { projectId: string }).projectId
-              : undefined
-          }
-        />
-      ) : null}
     </div>
   );
+}
+
+function parseRoleCheckInFromMeta(metadata?: Record<string, unknown> | null) {
+  return isRoleCheckInMessage(metadata);
 }
 
 function formatTimestampShort(timestamp: string): string {

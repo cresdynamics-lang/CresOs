@@ -4,11 +4,25 @@ import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { getAcceptedDeveloperIds } from "../lib/project-access";
-import { generatePmDailyCheckIn } from "../lib/pm-ai-checkin";
+import {
+  extractPriorQuestionsFromRows,
+  formatAnswersAsResponse,
+  formatCheckInDisplayText,
+  generateRoleProjectCheckIn,
+  resolveSenderRole,
+  type CheckInQuestion,
+  type RoleCheckInPayload,
+  type SenderRole
+} from "../lib/role-project-checkin";
 import { generatePmDeliveryBrief, generatePmSprintSuggestion } from "../lib/pm-ai-brief";
 import { buildIntelligencePayload, scoreProjectHealth } from "../lib/pm-delivery-intelligence";
+import { buildPmWorkspaceCompanion } from "../lib/pm-workspace-companion";
 import { PM_PROJECT_LIST_SELECT, sanitizeProjectForPm } from "../lib/pm-project-view";
-import { notifyDirectors } from "./director-notifications";
+import {
+  enrichCheckInsWithConversationIds,
+  postCheckInReplyToCommunity,
+  postCheckInToCommunity
+} from "../lib/pm-checkin-community";
 
 const PM_ACCESS = [ROLE_KEYS.project_manager, ROLE_KEYS.director, ROLE_KEYS.admin];
 const PM_OR_DEV = [...PM_ACCESS, ROLE_KEYS.developer];
@@ -17,68 +31,90 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function postCheckInToTalks(
-  prisma: PrismaClient,
-  orgId: string,
-  senderId: string,
-  developerId: string,
-  projectId: string,
-  projectName: string,
-  content: string
-): Promise<string | null> {
-  let conversation = await prisma.conversation.findFirst({
-    where: { orgId, projectId, type: { in: ["channel", "project", "community"] } }
-  });
+import { notifyDirectors } from "./director-notifications";
 
-  if (!conversation) {
-    const participants = [...new Set([senderId, developerId])];
-    conversation = await prisma.conversation.create({
-      data: {
-        orgId,
-        projectId,
-        type: "project",
-        name: `${projectName} · Talks`,
-        createdBy: senderId,
-        participants,
-        admins: [senderId],
-        unreadCounts: Object.fromEntries(participants.map((id) => [id, id === developerId ? 1 : 0]))
-      }
-    });
-  } else {
-    const participants = [...new Set([...conversation.participants, senderId, developerId])];
-    const unread = { ...(conversation.unreadCounts as Record<string, number>) };
-    unread[developerId] = (unread[developerId] ?? 0) + 1;
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { participants, unreadCounts: unread }
+async function loadPriorQuestions(
+  prisma: PrismaClient,
+  projectId: string,
+  developerId: string,
+  senderRole: SenderRole
+): Promise<string[]> {
+  const rows = await prisma.pmDeveloperCheckIn.findMany({
+    where: { projectId, developerId, senderRole },
+    orderBy: { createdAt: "desc" },
+    take: 14,
+    select: { questionsJson: true, message: true }
+  });
+  return extractPriorQuestionsFromRows(rows);
+}
+
+async function buildCheckInPayload(
+  prisma: PrismaClient,
+  input: {
+    senderRole: SenderRole;
+    project: {
+      name: string;
+      successCriteria: string | null;
+      projectDetails: string | null;
+      milestones: { name: string }[];
+    };
+    developer: { name: string | null };
+    projectId: string;
+    developerId: string;
+    useAi: boolean;
+    customMessage?: string;
+  }
+): Promise<RoleCheckInPayload> {
+  const overdue = await prisma.milestone.count({
+    where: {
+      projectId: input.projectId,
+      status: { in: ["pending", "in_progress"] },
+      dueDate: { lt: new Date() }
+    }
+  });
+  const openTasks = await prisma.task.count({
+    where: {
+      projectId: input.projectId,
+      deletedAt: null,
+      status: { in: ["todo", "in_progress", "blocked"] }
+    }
+  });
+  const priorQuestions = await loadPriorQuestions(
+    prisma,
+    input.projectId,
+    input.developerId,
+    input.senderRole
+  );
+
+  if (input.useAi || !input.customMessage?.trim()) {
+    return generateRoleProjectCheckIn({
+      senderRole: input.senderRole,
+      projectName: input.project.name,
+      successCriteria: input.project.successCriteria || input.project.projectDetails,
+      developerName: input.developer.name,
+      milestoneName: input.project.milestones[0]?.name ?? null,
+      overdueMilestones: overdue,
+      openTasks,
+      priorQuestions
     });
   }
 
-  const message = await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      senderId,
-      content,
-      type: "text",
-      metadata: { pmCheckIn: true, projectId, requiresResponse: true }
-    }
-  });
-
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: {
-      lastMessage: {
-        id: message.id,
-        content: content.slice(0, 200),
-        senderId,
-        timestamp: message.createdAt.toISOString(),
-        type: "text"
+  return {
+    intro: input.customMessage!.trim(),
+    questions: [
+      {
+        id: "q1",
+        text: "What did you complete on this project since we last spoke?",
+        placeholder: "Shipped work or progress…"
       },
-      updatedAt: new Date()
-    }
-  });
-
-  return message.id;
+      {
+        id: "q2",
+        text: "What needs attention or is blocking delivery next?",
+        placeholder: "Blockers or next step…"
+      }
+    ],
+    aiGenerated: false
+  };
 }
 
 export default function projectManagementRouter(prisma: PrismaClient): Router {
@@ -121,6 +157,22 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
       pendingCheckIns,
       reportsToday
     });
+  });
+
+  router.get("/companion", requireRoles(PM_ACCESS), async (req, res) => {
+    try {
+      const payload = await buildPmWorkspaceCompanion(
+        prisma,
+        req.auth!.orgId,
+        req.auth!.userId,
+        req.auth!.sessionId
+      );
+      res.json(payload);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[pm] companion:", e);
+      res.status(500).json({ error: "Failed to load workspace companion" });
+    }
   });
 
   router.get("/intelligence", requireRoles(PM_ACCESS), async (req, res) => {
@@ -495,7 +547,7 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
         sentBy: { select: { id: true, name: true } }
       }
     });
-    res.json(rows);
+    res.json(await enrichCheckInsWithConversationIds(prisma, rows));
   });
 
   router.get("/check-ins/inbox", requireRoles([ROLE_KEYS.developer, ...PM_ACCESS]), async (req, res) => {
@@ -512,12 +564,13 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
         sentBy: { select: { id: true, name: true } }
       }
     });
-    res.json(rows);
+    res.json(await enrichCheckInsWithConversationIds(prisma, rows));
   });
 
   router.post("/check-ins", requireRoles(PM_ACCESS), async (req, res) => {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
+    const senderRole = resolveSenderRole(req.auth!.roleKeys);
     const { projectId, developerId, message, useAi } = req.body as {
       projectId?: string;
       developerId?: string;
@@ -544,41 +597,26 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
 
     const dayKey = todayKey();
     const existing = await prisma.pmDeveloperCheckIn.findUnique({
-      where: { projectId_developerId_dayKey: { projectId, developerId, dayKey } }
+      where: {
+        projectId_developerId_dayKey_senderRole: { projectId, developerId, dayKey, senderRole }
+      }
     });
     if (existing) {
-      res.status(400).json({ error: "Check-in already sent today for this developer on this project" });
+      res.status(400).json({
+        error: `Check-in already sent today for this developer (${senderRole === "director_admin" ? "Director" : "PM"})`
+      });
       return;
     }
 
-    let text = message?.trim() || "";
-    let aiGenerated = false;
-    if (useAi || !text) {
-      const ai = await generatePmDailyCheckIn({
-        projectName: project.name,
-        successCriteria: project.successCriteria || project.projectDetails,
-        developerName: developer.name,
-        milestoneName: project.milestones[0]?.name ?? null,
-        priorToneIndex: new Date().getDate()
-      });
-      if (ai) {
-        text = ai;
-        aiGenerated = true;
-      }
-    }
-    if (!text) {
-      text = `Quick check-in on ${project.name} — what did you ship yesterday and what's blocking you today?`;
-    }
-
-    const messageId = await postCheckInToTalks(
-      prisma,
-      orgId,
-      userId,
-      developerId,
+    const payload = await buildCheckInPayload(prisma, {
+      senderRole,
+      project,
+      developer,
       projectId,
-      project.name,
-      text
-    );
+      developerId,
+      useAi: useAi !== false,
+      customMessage: message
+    });
 
     const row = await prisma.pmDeveloperCheckIn.create({
       data: {
@@ -586,10 +624,11 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
         projectId,
         developerId,
         sentById: userId,
-        message: text,
-        aiGenerated,
+        senderRole,
+        message: formatCheckInDisplayText(payload.intro, payload.questions),
+        questionsJson: payload.questions,
+        aiGenerated: payload.aiGenerated,
         dayKey,
-        messageId,
         status: "pending"
       },
       include: {
@@ -598,12 +637,33 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
       }
     });
 
-    res.status(201).json(row);
+    const posted = await postCheckInToCommunity(prisma, {
+      orgId,
+      senderId: userId,
+      developerId,
+      projectId,
+      projectName: project.name,
+      checkInId: row.id,
+      senderRole,
+      payload
+    });
+
+    const updated = await prisma.pmDeveloperCheckIn.update({
+      where: { id: row.id },
+      data: { messageId: posted.messageId },
+      include: {
+        project: { select: { id: true, name: true } },
+        developer: { select: { id: true, name: true } }
+      }
+    });
+
+    res.status(201).json({ ...updated, conversationId: posted.conversationId });
   });
 
   router.post("/check-ins/daily-batch", requireRoles(PM_ACCESS), async (req, res) => {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
+    const senderRole: SenderRole = "project_manager";
     const projects = await prisma.project.findMany({
       where: { orgId, deletedAt: null, approvalStatus: "approved", status: "active" },
       include: { milestones: { where: { status: { in: ["pending", "in_progress"] } }, take: 1 } }
@@ -614,43 +674,54 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
       const devIds = await getAcceptedDeveloperIds(prisma, project.id);
       for (const developerId of devIds) {
         const exists = await prisma.pmDeveloperCheckIn.findUnique({
-          where: { projectId_developerId_dayKey: { projectId: project.id, developerId, dayKey } }
+          where: {
+            projectId_developerId_dayKey_senderRole: {
+              projectId: project.id,
+              developerId,
+              dayKey,
+              senderRole
+            }
+          }
         });
         if (exists) continue;
         const developer = await prisma.user.findFirst({ where: { id: developerId } });
-        const ai = await generatePmDailyCheckIn({
-          projectName: project.name,
-          successCriteria: project.successCriteria || project.projectDetails,
-          developerName: developer?.name,
-          milestoneName: project.milestones[0]?.name ?? null,
-          priorToneIndex: developerId.length + new Date().getDate()
-        });
-        const text =
-          ai ||
-          `How's delivery on ${project.name} today? Anything we should adjust on milestones or tasks?`;
-        const messageId = await postCheckInToTalks(
-          prisma,
-          orgId,
-          userId,
+        const payload = await buildCheckInPayload(prisma, {
+          senderRole,
+          project,
+          developer: developer ?? { name: null },
+          projectId: project.id,
           developerId,
-          project.id,
-          project.name,
-          text
-        );
+          useAi: true
+        });
         const row = await prisma.pmDeveloperCheckIn.create({
           data: {
             orgId,
             projectId: project.id,
             developerId,
             sentById: userId,
-            message: text,
-            aiGenerated: Boolean(ai),
+            senderRole,
+            message: formatCheckInDisplayText(payload.intro, payload.questions),
+            questionsJson: payload.questions,
+            aiGenerated: payload.aiGenerated,
             dayKey,
-            messageId,
             status: "pending"
           }
         });
-        created.push(row);
+        const posted = await postCheckInToCommunity(prisma, {
+          orgId,
+          senderId: userId,
+          developerId,
+          projectId: project.id,
+          projectName: project.name,
+          checkInId: row.id,
+          senderRole,
+          payload
+        });
+        await prisma.pmDeveloperCheckIn.update({
+          where: { id: row.id },
+          data: { messageId: posted.messageId }
+        });
+        created.push({ ...row, messageId: posted.messageId, conversationId: posted.conversationId });
       }
     }
     res.json({ sent: created.length, checkIns: created });
@@ -660,11 +731,11 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
     const { id } = req.params;
-    const { response } = req.body as { response?: string };
-    if (!response?.trim()) {
-      res.status(400).json({ error: "Response required" });
-      return;
-    }
+    const { response, answers } = req.body as {
+      response?: string;
+      answers?: Record<string, string>;
+    };
+
     const row = await prisma.pmDeveloperCheckIn.findFirst({
       where: { id, orgId },
       include: { project: { select: { name: true } } }
@@ -677,24 +748,56 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
       res.status(403).json({ error: "Only the assigned developer can respond" });
       return;
     }
+
+    const questions = (row.questionsJson as CheckInQuestion[] | null) ?? [];
+    let responseText = response?.trim() ?? "";
+    let answersJson: Record<string, string> | undefined;
+
+    if (answers && typeof answers === "object" && questions.length > 0) {
+      const missing = questions.filter((q) => !(answers[q.id] ?? "").trim());
+      if (missing.length > 0) {
+        res.status(400).json({ error: "Please answer all questions", missingIds: missing.map((q) => q.id) });
+        return;
+      }
+      answersJson = Object.fromEntries(questions.map((q) => [q.id, (answers[q.id] ?? "").trim()]));
+      responseText = formatAnswersAsResponse(questions, answersJson);
+    }
+
+    if (!responseText) {
+      res.status(400).json({ error: "Response required" });
+      return;
+    }
+
     const updated = await prisma.pmDeveloperCheckIn.update({
       where: { id },
       data: {
-        response: response.trim(),
+        response: responseText,
+        answersJson: answersJson ?? undefined,
         respondedAt: new Date(),
         status: "answered"
       }
     });
 
+    const replyMessageId = await postCheckInReplyToCommunity(prisma, {
+      orgId,
+      developerId: userId,
+      checkInMessageId: row.messageId,
+      projectName: row.project.name,
+      checkInId: row.id,
+      questions,
+      answers: answersJson ?? {}
+    });
+
+    const roleLabel = row.senderRole === "director_admin" ? "Director" : "Project Manager";
     await notifyDirectors(
       prisma,
       orgId,
-      `Developer responded: ${row.project.name}`,
-      `${response.trim().slice(0, 500)}`,
+      `Developer answered ${roleLabel} check-in: ${row.project.name}`,
+      `${responseText.trim().slice(0, 500)}`,
       { type: "pm_checkin.answered" }
     );
 
-    res.json(updated);
+    res.json({ ...updated, replyMessageId });
   });
 
   return router;

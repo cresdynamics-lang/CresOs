@@ -31,7 +31,7 @@ function dayHash(date: Date): number {
 }
 
 const TIME_GREETINGS: Record<DayPart, string[]> = {
-  morning: ["Good morning", "Morning", "Hope you're having a good morning"],
+  morning: ["Good morning", "Morning", "Hope you're having a great morning", "Hope you're having a good morning"],
   afternoon: ["Good afternoon", "Good afternoon", "Hope your afternoon's going well"],
   evening: ["Good evening", "Good evening", "Hope your evening's going well"],
   night: ["Good evening", "Working late", "Good to see you this evening"]

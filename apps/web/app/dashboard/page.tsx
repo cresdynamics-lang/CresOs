@@ -6,13 +6,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../data-refresh";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
-import { StatCard, StatCardGrid, type StatTone } from "../../components/stat-card";
+import { StatCard, StatCardGrid } from "../../components/stat-card";
 import {
   DashboardSectionLabel,
-  DashboardWelcomeBanner,
   WelcomeBullet
 } from "../../components/dashboard-welcome-banner";
-import { PageHeader } from "../page-header";
+import { DashboardCommandHero } from "../../components/dashboard/dashboard-command-hero";
+import { usePmWorkspaceCompanion } from "../../components/workspace/interactive-welcome-hero";
 import { formatMoney } from "../format-money";
 import { notify, requestNotificationPermission } from "../browser-notify";
 import { classifyAttentionSignal, shouldPlayBrowserSoundForUser } from "../../lib/notification-signals";
@@ -216,6 +216,7 @@ const ROLE_LABELS: Record<string, string> = {
   developer: "Developer",
   sales: "Sales",
   analyst: "Analyst",
+  project_manager: "Project Manager",
   client: "Client"
 };
 
@@ -288,6 +289,11 @@ export default function DashboardPage() {
   >([]);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const { apiFetch, auth, hydrated } = useAuth();
+  const isPmUser = auth.roleKeys.includes("project_manager");
+  const { companion: pmCompanion, loading: pmCompanionLoading } = usePmWorkspaceCompanion(
+    apiFetch,
+    isPmUser
+  );
   const router = useRouter();
   const isDirectorOrAdmin = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
   const isDirectorOnlyUser = isDirectorOnly(auth.roleKeys);
@@ -1090,24 +1096,35 @@ export default function DashboardPage() {
 
   return (
     <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
-      <DashboardWelcomeBanner
+      <DashboardCommandHero
         firstName={firstName}
         roleLabel={primaryRoleLabel}
         roleKeys={auth.roleKeys}
-        headline={welcomeHeadline}
-      >
-        <DashboardSectionLabel roleKeys={auth.roleKeys}>
-          Today&apos;s priorities (your queue)
-        </DashboardSectionLabel>
-        {welcomeItems.length > 0 ? (
-          <ul className="ml-1 list-disc space-y-2 pl-4">{welcomeItems}</ul>
-        ) : (
-          <p className="font-body text-sm leading-relaxed text-slate-400">
-            <span className="font-medium text-emerald-400/90">You&apos;re caught up</span> on the automatic
-            priority queue. Use the sections below for full detail.
-          </p>
-        )}
-      </DashboardWelcomeBanner>
+        welcomeItems={welcomeItems}
+        description={
+          canViewOrgAnalyticsSummary
+            ? "one place for approvals, delivery signals, and finance health."
+            : isSalesOrDeveloper
+              ? "your queue and work history — org-wide analytics are reserved for leadership roles."
+              : "one place for approvals, delivery signals, and your work."
+        }
+        actionCards={actionCards}
+        unreadCount={unreadCount}
+        messagesCount={messagesCount}
+        dueCount={dueCount}
+        workProgress={workProgress}
+        reportStreak={reportStreak}
+        communityUnread={communityUnread}
+        projectsCount={projects.length}
+        messageJumpHref={messageJumpHref}
+        showReportStreak={!isDeveloper}
+        canViewKpis={canViewKpis}
+        onRefreshAlerts={() => void loadSummaryAndAttention()}
+        onRefreshProjects={() => void loadProjects()}
+        onRefreshKpis={canViewKpis ? () => void loadKpis() : undefined}
+        companion={isPmUser ? pmCompanion : null}
+        companionLoading={isPmUser && pmCompanionLoading}
+      />
 
       {focusCoachReady && focusCoach && (
         <div className="shell min-w-0 border-l-4 border-violet-500/45 bg-gradient-to-br from-violet-950/40 via-slate-900/85 to-fuchsia-950/20 shadow-[0_0_36px_-14px_rgba(139,92,246,0.35)]">
@@ -1139,20 +1156,6 @@ export default function DashboardPage() {
           ) : null}
         </div>
       )}
-
-      <PageHeader
-        title="Dashboard"
-        showWorkspaceProfile={false}
-        eyebrow="Command center"
-        brandLead="Operating System for Growth"
-        description={
-          canViewOrgAnalyticsSummary
-            ? "one place for approvals, delivery signals, and finance health."
-            : isSalesOrDeveloper
-              ? "Your queue and work history — org-wide analytics are reserved for leadership roles. Submitted report history is read-only."
-              : "one place for approvals, delivery signals, and your work."
-        }
-      />
 
       {hasAttentionSignalRow && (
         <div className="shell min-w-0 border-brand/35 bg-brand/5">
@@ -1188,75 +1191,6 @@ export default function DashboardPage() {
                 className={attentionSignalSummary.inquiry === 0 ? "opacity-60" : ""}
               />
             </Link>
-          </StatCardGrid>
-        </div>
-      )}
-
-      <div className="shell min-w-0 flex flex-col gap-2 border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-400">
-          Backlog and reminders are managed in{" "}
-          <Link href="/schedule" className="font-medium text-sky-400 underline-offset-2 hover:underline">
-            Tasks
-          </Link>
-          .
-        </p>
-        <Link
-          href="/schedule"
-          className="shrink-0 self-start rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-900/30 hover:from-sky-500 hover:to-violet-500 sm:self-auto"
-        >
-          Open Tasks →
-        </Link>
-      </div>
-
-      {actionCards.length > 0 && (
-        <div className="shell min-w-0 border-slate-700/70 bg-slate-900/40">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <h3 className="min-w-0 text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Quick actions
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void loadSummaryAndAttention()}
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                Refresh alerts
-              </button>
-              <button
-                type="button"
-                onClick={() => void loadProjects()}
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                Refresh projects
-              </button>
-              {canViewKpis && (
-                <button
-                  type="button"
-                  onClick={() => void loadKpis()}
-                  className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-                >
-                  Refresh KPIs
-                </button>
-              )}
-            </div>
-          </div>
-
-          <StatCardGrid>
-            {actionCards.slice(0, 8).map((c) => {
-              const tone: StatTone =
-                c.tone === "rose"
-                  ? "rose"
-                  : c.tone === "amber"
-                    ? "amber"
-                    : c.tone === "emerald"
-                      ? "emerald"
-                      : "sky";
-              return (
-                <Link key={`${c.href}-${c.title}`} href={c.href} className="block h-full min-h-[5.5rem]">
-                  <StatCard label={c.title} value={c.value} hint={c.sub} tone={tone} />
-                </Link>
-              );
-            })}
           </StatCardGrid>
         </div>
       )}
@@ -1633,17 +1567,6 @@ export default function DashboardPage() {
       )}
 
       {auth.roleKeys.includes("developer") && !isDeveloper && <CurrentFocusPanel apiFetch={apiFetch} />}
-
-      {/* Stats row (hide for developers — replaced by simple cards above) */}
-      {!isDeveloper && (
-        <StatCardGrid>
-          <StatCard label="Notifications" value={unreadCount} hint="Unread" tone="brand" />
-          <StatCard label="Messages" value={messagesCount} hint="To respond" tone="sky" />
-          <StatCard label="Due today" value={dueCount} hint="Follow-ups" tone="amber" />
-          <StatCard label="Work progress" value={`${workProgress}%`} hint="Delivery" tone="violet" />
-          <StatCard label="Report streak" value={reportStreak} hint="Days" tone="emerald" />
-        </StatCardGrid>
-      )}
 
       {!isDeveloper && hasAttention && attention && (
         <div className="shell min-w-0 border-brand/30 bg-brand/5">

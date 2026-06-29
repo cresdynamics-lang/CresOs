@@ -9,6 +9,7 @@ export type RoleThemeKey =
   | "sales"
   | "analyst"
   | "hr"
+  | "project_manager"
   | "client"
   | "default";
 
@@ -94,6 +95,16 @@ const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
     sectionLabel: "text-pink-400",
     dot: "text-rose-400"
   },
+  project_manager: {
+    border: "border-teal-500/40",
+    bg: "from-teal-950/45 via-slate-900/80 to-cyan-950/20",
+    glow: "shadow-[0_0_40px_-12px_rgba(20,184,166,0.32)]",
+    nameGradient: "from-teal-200 via-cyan-100 to-emerald-200",
+    roleText: "text-teal-300",
+    rolePill: "border-teal-500/50 bg-teal-500/15 text-teal-100",
+    sectionLabel: "text-cyan-400",
+    dot: "text-teal-400"
+  },
   client: {
     border: "border-slate-500/40",
     bg: "from-slate-900/90 to-slate-950/90",
@@ -122,6 +133,7 @@ export function resolveRoleTheme(roleKeys: string[]): RoleTheme {
     "director_admin",
     "finance",
     "hr",
+    "project_manager",
     "sales",
     "developer",
     "analyst",
@@ -144,6 +156,8 @@ type Props = {
   /** Override support line under headline. */
   supportLine?: string;
   children?: ReactNode;
+  /** Optional wrapper classes (e.g. embed inside a neu hero without double borders). */
+  className?: string;
 };
 
 export function DashboardWelcomeBanner({
@@ -153,7 +167,8 @@ export function DashboardWelcomeBanner({
   showRoleLabel = true,
   headline,
   supportLine,
-  children
+  children,
+  className = ""
 }: Props) {
   const greeting = headline?.trim() || buildWelcomeHeadlineForName(firstName);
   const subline = supportLine?.trim() || buildWelcomeSupportLine();
@@ -161,7 +176,7 @@ export function DashboardWelcomeBanner({
 
   return (
     <div
-      className={`shell min-w-0 border-l-4 bg-gradient-to-br ${theme.border} ${theme.bg} ${theme.glow}`.trim()}
+      className={`shell min-w-0 border-l-4 bg-gradient-to-br ${theme.border} ${theme.bg} ${theme.glow} ${className}`.trim()}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -223,6 +238,7 @@ const BULLET_MARKER: Record<RoleThemeKey, string> = {
   sales: "marker:text-amber-500",
   analyst: "marker:text-cyan-500",
   hr: "marker:text-rose-500",
+  project_manager: "marker:text-teal-500",
   client: "marker:text-slate-500",
   default: "marker:text-brand"
 };

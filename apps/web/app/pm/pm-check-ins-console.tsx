@@ -12,6 +12,8 @@ type CheckIn = {
   message: string;
   status: string;
   aiGenerated: boolean;
+  senderRole?: string;
+  questionsJson?: { id: string; text: string }[];
   response?: string | null;
   dayKey: string;
   project?: { id: string; name: string };
@@ -117,7 +119,7 @@ export function PmCheckInsConsole() {
       <PmPageHero
         eyebrow="Check-ins"
         title="Daily developer pulse"
-        description="AI varies wording so check-ins feel human. Messages land in Talks; developers reply there."
+        description="AI generates role-specific questions (PM = agile delivery, Director = strategic accountability). Each question gets its own answer field in Talks."
         backHref="/pm"
         actions={
           <button type="button" className={pmNeu.btnPrimary} disabled={batchSending} onClick={() => void sendBatch()}>
@@ -197,18 +199,22 @@ export function PmCheckInsConsole() {
                 <span>{c.developer?.name}</span>
                 <span>·</span>
                 <span>{c.dayKey}</span>
-                {c.aiGenerated ? (
-                  <span className="rounded bg-teal-500/10 px-1 text-teal-400">AI phrasing</span>
-                ) : null}
-                <span
-                  className={
-                    c.status === "answered" ? "text-emerald-400" : "text-amber-400"
-                  }
-                >
-                  {c.status}
+                <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] uppercase">
+                  {c.senderRole === "director_admin" ? "Director" : "PM"}
                 </span>
+                {c.aiGenerated ? (
+                  <span className="rounded bg-teal-500/10 px-1 text-teal-400">AI questions</span>
+                ) : null}
+                <span className={c.status === "answered" ? "text-emerald-400" : "text-amber-400"}>{c.status}</span>
               </div>
               <p className="mt-2 text-sm text-slate-200">{c.message}</p>
+              {Array.isArray(c.questionsJson) && c.questionsJson.length > 0 ? (
+                <ul className="mt-2 space-y-1 text-xs text-slate-500">
+                  {c.questionsJson.map((q) => (
+                    <li key={q.id}>• {q.text}</li>
+                  ))}
+                </ul>
+              ) : null}
               {c.response ? (
                 <p className="mt-2 rounded-lg bg-[#0e1319] p-2 text-sm text-slate-400">Reply: {c.response}</p>
               ) : null}

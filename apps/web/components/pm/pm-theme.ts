@@ -41,5 +41,16 @@ export const pmNeu = {
   sideIconActive:
     "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-teal-500/30 bg-gradient-to-br from-teal-600/25 to-cyan-700/15 text-teal-200 shadow-[0_0_16px_-4px_rgba(20,184,166,0.45)]",
   sideCta:
-    "flex w-full items-center justify-center gap-2 rounded-xl border border-teal-500/25 bg-gradient-to-br from-teal-600/20 to-cyan-700/10 px-3 py-2.5 text-sm font-semibold text-teal-100 transition-all hover:border-teal-400/35 hover:from-teal-600/30 hover:text-white"
+    "flex w-full items-center justify-center gap-2 rounded-xl border border-teal-500/25 bg-gradient-to-br from-teal-600/20 to-cyan-700/10 px-3 py-2.5 text-sm font-semibold text-teal-100 transition-all hover:border-teal-400/35 hover:from-teal-600/30 hover:text-white",
+  chartPanel:
+    "flex min-h-[min(20rem,42vh)] w-full flex-col rounded-2xl border border-white/[0.04] bg-[#121820] p-5 shadow-[6px_6px_14px_rgba(0,0,0,0.55),-4px_-4px_12px_rgba(255,255,255,0.04)] sm:p-6",
+  kpiStrip:
+    "w-full rounded-2xl border border-white/[0.04] bg-[#0e1319] px-4 py-5 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:px-6",
+  statEmerald: "border-emerald-500/20 bg-[#101a16]",
+  statAmber: "border-amber-500/20 bg-[#1a1610]",
+  statRose: "border-rose-500/20 bg-[#1a1014]",
+  statSky: "border-sky-500/20 bg-[#10141a]",
+  statViolet: "border-violet-500/20 bg-[#14101a]",
+  alertDanger:
+    "rounded-2xl border border-rose-500/35 bg-gradient-to-br from-rose-950/40 via-[#121820] to-[#0e1319] shadow-[6px_6px_14px_rgba(0,0,0,0.45)]"
 } as const;

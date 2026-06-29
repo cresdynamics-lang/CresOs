@@ -55,6 +55,23 @@ const config: Config = {
         "fade-in": {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" }
+        },
+        "float-slow": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(2%, -3%) scale(1.04)" },
+          "66%": { transform: "translate(-2%, 2%) scale(0.97)" }
+        },
+        "float-slower": {
+          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)" },
+          "50%": { transform: "translate(-3%, 4%) rotate(3deg)" }
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "200% center" },
+          "100%": { backgroundPosition: "-200% center" }
+        },
+        "glass-reveal": {
+          "0%": { opacity: "0", transform: "translateY(20px) scale(0.98)", filter: "blur(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)", filter: "blur(0)" }
         }
       },
       animation: {
@@ -63,7 +80,11 @@ const config: Config = {
         "slide-in-left": "slide-in-left 0.6s ease-out forwards",
         "slide-in-right": "slide-in-right 0.6s ease-out forwards",
         "bounce-soft": "bounce-soft 2s ease-in-out infinite",
-        "fade-in": "fade-in 0.5s ease-out forwards"
+        "fade-in": "fade-in 0.5s ease-out forwards",
+        "float-slow": "float-slow 14s ease-in-out infinite",
+        "float-slower": "float-slower 20s ease-in-out infinite",
+        "shimmer": "shimmer 6s linear infinite",
+        "glass-reveal": "glass-reveal 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards"
       }
     }
   },

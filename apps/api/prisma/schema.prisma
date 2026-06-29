@@ -567,6 +567,12 @@ model PmDeveloperCheckIn {
   sentById       String
   message        String    @db.Text
   aiGenerated    Boolean   @default(false)
+  /// project_manager | director_admin — who sent this check-in
+  senderRole     String    @default("project_manager")
+  /// [{ id, text, placeholder? }]
+  questionsJson  Json?
+  /// { [questionId]: answer }
+  answersJson    Json?
   response       String?   @db.Text
   respondedAt    DateTime?
   status         String    @default("pending") // pending, answered, overdue
@@ -583,7 +589,7 @@ model PmDeveloperCheckIn {
   @@index([orgId, projectId])
   @@index([developerId, status])
   @@index([dayKey])
-  @@unique([projectId, developerId, dayKey])
+  @@unique([projectId, developerId, dayKey, senderRole])
 }
 
 /// One row per calendar month for management fee tracking (paid checkbox + optional invoice link).
