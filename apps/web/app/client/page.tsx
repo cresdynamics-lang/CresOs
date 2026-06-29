@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
 import { clientNeu } from "../../components/client/client-theme";
+import { ProjectAiPlannerPanel } from "../../components/projects/project-ai-planner-panel";
 
 type ClientMilestone = {
   id: string;
@@ -49,6 +50,7 @@ export default function ClientPortalPage() {
   const [projects, setProjects] = useState<ClientProject[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [remarkProjectId, setRemarkProjectId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,6 +171,26 @@ export default function ClientPortalPage() {
               >
                 Message your project team →
               </Link>
+
+              <button
+                type="button"
+                onClick={() => setRemarkProjectId((cur) => (cur === project.id ? null : project.id))}
+                className="mt-3 block text-sm font-medium text-violet-400 hover:text-violet-300"
+              >
+                {remarkProjectId === project.id ? "Hide voice / text feedback" : "Share feedback (voice or text)"}
+              </button>
+              {remarkProjectId === project.id ? (
+                <div className="mt-3">
+                  <ProjectAiPlannerPanel
+                    apiFetch={apiFetch}
+                    roleKeys={auth.roleKeys}
+                    projectId={project.id}
+                    mode="client"
+                    compact
+                    onApplied={() => void load()}
+                  />
+                </div>
+              ) : null}
             </article>
           );
         })}

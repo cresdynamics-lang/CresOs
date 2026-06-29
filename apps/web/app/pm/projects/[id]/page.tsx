@@ -7,6 +7,7 @@ import { pmNeu } from "../../../../components/pm/pm-theme";
 import { PmFullscreenPage, PmPageHero, PmSection } from "../../../../components/pm/pm-shell";
 import { PmHealthBadge } from "../../../../components/pm/pm-health-badge";
 import { canAccessPmWorkspace } from "../../../../lib/is-pm-only";
+import { ProjectAiPlannerPanel } from "../../../../components/projects/project-ai-planner-panel";
 
 type Milestone = {
   id: string;
@@ -185,6 +186,16 @@ export default function PmProjectDetailPage() {
           {sprintSuggestion}
         </div>
       ) : null}
+
+      <div className="mx-5 mb-4 lg:mx-8">
+        <ProjectAiPlannerPanel
+          apiFetch={apiFetch}
+          roleKeys={auth.roleKeys}
+          projectId={id}
+          mode="project"
+          onApplied={() => void load()}
+        />
+      </div>
 
       <PmSection label="Success criteria">
         <textarea

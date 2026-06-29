@@ -17,6 +17,8 @@ import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-in
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 import { DeveloperProjectsView } from "./developer-projects-view";
 import { DirectorProjectsView } from "./director-projects-view";
+import { ProjectAiPlannerPanel } from "../../components/projects/project-ai-planner-panel";
+import type { ProjectAiPlan } from "../../lib/project-ai-plan-types";
 
 type Developer = { id: string; name: string | null; email: string };
 
@@ -283,6 +285,7 @@ export default function ProjectsPage() {
           <CreateProjectModal
             developers={developers}
             directorMode
+            roleKeys={auth.roleKeys}
             onClose={() => setCreateOpen(false)}
             onCreated={() => {
               setCreateOpen(false);
@@ -489,6 +492,7 @@ export default function ProjectsPage() {
         <CreateProjectModal
           developers={developers}
           directorMode={isDirector}
+          roleKeys={auth.roleKeys}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);
@@ -529,12 +533,14 @@ export default function ProjectsPage() {
 function CreateProjectModal({
   developers,
   directorMode,
+  roleKeys,
   onClose,
   onCreated,
   apiFetch
 }: {
   developers: Developer[];
   directorMode: boolean;
+  roleKeys: string[];
   onClose: () => void;
   onCreated: () => void;
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
@@ -546,6 +552,8 @@ function CreateProjectModal({
   const [email, setEmail] = useState("");
   const [price, setPrice] = useState("");
   const [projectDetails, setProjectDetails] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
+  const [aiPlan, setAiPlan] = useState<ProjectAiPlan | null>(null);
   const [status, setStatus] = useState("planned");
   const [assignedDeveloperId, setAssignedDeveloperId] = useState("");
   const [assignedDeveloperIds, setAssignedDeveloperIds] = useState<string[]>([]);
@@ -569,8 +577,10 @@ function CreateProjectModal({
         email: email.trim() || undefined,
         price: price.trim() ? Number(price) : undefined,
         projectDetails: projectDetails.trim() || undefined,
+        successCriteria: successCriteria.trim() || undefined,
         status,
-        timeline: timeline.length ? timeline : undefined
+        timeline: timeline.length ? timeline : undefined,
+        aiPlan: aiPlan ?? undefined
       };
       if (!directorMode) {
         payload.type = type;
@@ -598,7 +608,7 @@ function CreateProjectModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold text-slate-50">{directorMode ? "New project (Director)" : "New project"}</h3>
         <p className="mb-2 text-xs text-slate-500">
           {directorMode
@@ -639,6 +649,23 @@ function CreateProjectModal({
             <span className="text-xs text-slate-400">Project details</span>
             <textarea value={projectDetails} onChange={(e) => setProjectDetails(e.target.value)} rows={3} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Success criteria</span>
+            <textarea value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} rows={2} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="Filled automatically when you use AI planner below" />
+          </label>
+          <ProjectAiPlannerPanel
+            apiFetch={apiFetch}
+            roleKeys={roleKeys}
+            mode="create"
+            compact
+            onPlanChange={setAiPlan}
+            onSuggestedFields={(fields) => {
+              if (fields.name && !name.trim()) setName(fields.name);
+              if (fields.projectDetails) setProjectDetails(fields.projectDetails);
+              if (fields.successCriteria) setSuccessCriteria(fields.successCriteria);
+              if (fields.timeline?.length) setTimeline(fields.timeline.map((t) => ({ date: t.date ?? "", title: t.title })));
+            }}
+          />
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Status</span>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">

@@ -13,6 +13,7 @@ import {
   DirectorPageHero,
   DirectorSection
 } from "../../../components/director/director-shell";
+import { ProjectAiPlannerPanel } from "../../../components/projects/project-ai-planner-panel";
 
 type TaskComment = {
   id: string;
@@ -161,6 +162,9 @@ export default function ProjectDetailPage() {
   const isDirector = auth.roleKeys.includes("director_admin");
   const canApproveProject = auth.roleKeys.includes("director_admin");
   const isFinance = auth.roleKeys.includes("finance");
+  const canUseAiPlanner = auth.roleKeys.some((r) =>
+    ["director_admin", "sales", "project_manager", "admin"].includes(r)
+  );
   const isSalesOwner = project?.createdBy?.id === auth.userId;
   const isAssignedDev = project?.developerAccess === "active";
   const canCommentOnTasks =
@@ -820,6 +824,22 @@ export default function ProjectDetailPage() {
       {project.projectDetails && (
         <ProjectDetailSection director={isDirector} label="Project details">
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{project.projectDetails}</p>
+        </ProjectDetailSection>
+      )}
+
+      {canUseAiPlanner && (
+        <ProjectDetailSection
+          director={isDirector}
+          label="AI planning"
+          description="Add voice or text clarifications — AI merges new milestones and tasks for the team."
+        >
+          <ProjectAiPlannerPanel
+            apiFetch={apiFetch}
+            roleKeys={auth.roleKeys}
+            projectId={id}
+            mode="project"
+            onApplied={() => void load()}
+          />
         </ProjectDetailSection>
       )}
 

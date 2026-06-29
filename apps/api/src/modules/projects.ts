@@ -15,9 +15,13 @@ import {
   DEFAULT_MANAGEMENT_MONTHLY_KES,
   ymKey
 } from "../lib/management-billing";
+import { registerProjectAiPlanningRoutes } from "./project-ai-planning";
+import { applyProjectAiPlan } from "../lib/apply-project-ai-plan";
 
 export default function projectsRouter(prisma: PrismaClient): Router {
   const router = createRouter();
+
+  registerProjectAiPlanningRoutes(router, prisma);
 
   // List users that can be assigned as developer (developer role in org)
   router.get(
@@ -260,6 +264,8 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         timeline?: { date?: string; title?: string }[];
         startDate?: string;
         endDate?: string;
+        successCriteria?: string;
+        aiPlan?: Record<string, unknown>;
       };
       if (!body.name?.trim()) {
         res.status(400).json({ error: "Name is required" });
@@ -318,6 +324,7 @@ export default function projectsRouter(prisma: PrismaClient): Router {
         email: body.email?.trim() || null,
         price: price ?? null,
         projectDetails: body.projectDetails?.trim() || null,
+        successCriteria: body.successCriteria?.trim() || null,
         approvalStatus,
         approvedById,
         approvedAt,
@@ -414,7 +421,20 @@ export default function projectsRouter(prisma: PrismaClient): Router {
       } catch (e) {
         console.error("syncLeadAndClientFromProject after create:", e);
       }
-      res.status(201).json(project);
+      let planApplied: { milestonesCreated: number; tasksCreated: number } | null = null;
+      if (body.aiPlan && typeof body.aiPlan === "object") {
+        try {
+          planApplied = await applyProjectAiPlan(prisma, {
+            orgId,
+            projectId: project.id,
+            plan: body.aiPlan as any,
+            merge: true
+          });
+        } catch (e) {
+          console.error("[projects] apply aiPlan on create:", e);
+        }
+      }
+      res.status(201).json({ ...project, planApplied });
     }
   );
 

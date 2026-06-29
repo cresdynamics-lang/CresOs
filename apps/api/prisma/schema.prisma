@@ -80,6 +80,7 @@ model Org {
 
   projectManagementMonths ProjectManagementMonth[]
   pmDeveloperCheckIns     PmDeveloperCheckIn[]
+  projectPlanningNotes  ProjectPlanningNote[]
 
   emailThreads          EmailThread[]
   emailAutomationConfig EmailAutomationConfig?
@@ -227,6 +228,7 @@ model User {
   managementMonthsMarked ProjectManagementMonth[]
   projectsManagedAsPm    Project[]            @relation("ProjectManager")
   pmCheckInsSent         PmDeveloperCheckIn[] @relation("PmCheckInSender")
+  projectPlanningNotes   ProjectPlanningNote[] @relation("ProjectPlanningNoteAuthor")
   pmCheckInsReceived     PmDeveloperCheckIn[] @relation("PmCheckInDeveloper")
 
   // Chat System Relations
@@ -556,6 +558,30 @@ model Project {
   communityChannel      ChatCommunityChannel?
   communityConversation Conversation?              @relation("ProjectCommunityConversation")
   pmCheckIns            PmDeveloperCheckIn[]
+  planningNotes         ProjectPlanningNote[]
+}
+
+/// Voice/text/document/client remarks used to generate agile plans (audit + role briefs).
+model ProjectPlanningNote {
+  id           String   @id @default(cuid())
+  orgId        String
+  projectId    String?
+  source       String   // voice | text | document | client_remark
+  authorRole   String
+  authorUserId String?
+  rawText      String   @db.Text
+  aiSummary    String?  @db.Text
+  roleBriefs   Json?
+  planJson     Json?
+  fileName     String?
+  createdAt    DateTime @default(now())
+
+  org     Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User?    @relation("ProjectPlanningNoteAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, projectId])
+  @@index([projectId, createdAt])
 }
 
 /// PM daily check-in / talk prompt to a developer (may mirror a community message).

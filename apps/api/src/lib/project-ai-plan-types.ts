@@ -1,0 +1,67 @@
+export type ProjectAiPlanTask = {
+  title: string;
+  description?: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  dueDate?: string;
+  estimatedHours?: number;
+  dayHint?: string;
+};
+
+export type ProjectAiPlanMilestone = {
+  name: string;
+  dueDate?: string;
+  acceptanceCriteria?: string;
+  tasks: ProjectAiPlanTask[];
+};
+
+export type ProjectAiPlanSprint = {
+  name: string;
+  goal: string;
+  startDate?: string;
+  endDate?: string;
+  milestones: ProjectAiPlanMilestone[];
+};
+
+export type ProjectAiRoleBriefs = {
+  developers: string;
+  sales: string;
+  director: string;
+  projectManager: string;
+};
+
+export type ProjectAiPlan = {
+  projectSummary: string;
+  successCriteria: string;
+  agileSprintNotes: string;
+  timeline: { date?: string; title: string }[];
+  sprints: ProjectAiPlanSprint[];
+  roleBriefs: ProjectAiRoleBriefs;
+  suggestedProjectName?: string;
+};
+
+export function emptyProjectAiPlan(): ProjectAiPlan {
+  return {
+    projectSummary: "",
+    successCriteria: "",
+    agileSprintNotes: "",
+    timeline: [],
+    sprints: [],
+    roleBriefs: {
+      developers: "",
+      sales: "",
+      director: "",
+      projectManager: ""
+    }
+  };
+}
+
+export function countPlanTasks(plan: ProjectAiPlan): number {
+  return plan.sprints.reduce(
+    (sum, s) => sum + s.milestones.reduce((mSum, m) => mSum + m.tasks.length, 0),
+    0
+  );
+}
+
+export function countPlanMilestones(plan: ProjectAiPlan): number {
+  return plan.sprints.reduce((sum, s) => sum + s.milestones.length, 0);
+}
