@@ -6,6 +6,13 @@ import { useParams } from "next/navigation";
 import { formatMoney } from "../../format-money";
 import { useAuth } from "../../auth-context";
 import { emitDataRefresh, subscribeDataRefresh } from "../../data-refresh";
+import { directorNeu } from "../../../components/director/director-theme";
+import {
+  DirectorBanner,
+  DirectorFullscreenPage,
+  DirectorPageHero,
+  DirectorSection
+} from "../../../components/director/director-shell";
 
 type TaskComment = {
   id: string;
@@ -39,6 +46,37 @@ function DevNameTag({ name }: { name: string }) {
 
 function devLabel(u: { name: string | null; email: string } | null | undefined) {
   return u?.name?.trim() || u?.email || null;
+}
+
+function ProjectDetailSection({
+  director,
+  label,
+  description,
+  action,
+  children,
+  shellClassName
+}: {
+  director: boolean;
+  label: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  shellClassName?: string;
+}) {
+  if (director) {
+    return (
+      <DirectorSection label={label} description={description} action={action}>
+        {children}
+      </DirectorSection>
+    );
+  }
+  return (
+    <div className={`shell ${shellClassName ?? ""}`.trim()}>
+      <h3 className="mb-2 text-sm font-medium text-slate-300">{label}</h3>
+      {description ? <p className="mb-2 text-xs text-slate-500">{description}</p> : null}
+      {children}
+    </div>
+  );
 }
 type DevAssignment = {
   id: string;
@@ -466,6 +504,13 @@ export default function ProjectDetailPage() {
   }
 
   if (loading) {
+    if (isDirector) {
+      return (
+        <DirectorFullscreenPage>
+          <p className="px-5 py-8 text-slate-400 lg:px-8">Loading…</p>
+        </DirectorFullscreenPage>
+      );
+    }
     return (
       <section className="shell">
         <p className="text-slate-400">Loading…</p>
@@ -473,6 +518,16 @@ export default function ProjectDetailPage() {
     );
   }
   if (!project) {
+    if (isDirector) {
+      return (
+        <DirectorFullscreenPage>
+          <p className="px-5 py-8 text-slate-400 lg:px-8">Project not found.</p>
+          <Link href="/projects" className="px-5 text-sky-400 hover:underline lg:px-8">
+            Back to projects
+          </Link>
+        </DirectorFullscreenPage>
+      );
+    }
     return (
       <section className="shell">
         <p className="text-slate-400">Project not found.</p>
@@ -514,55 +569,112 @@ export default function ProjectDetailPage() {
     }
   }
 
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="shell flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link href="/projects" className="mb-2 inline-block text-sm text-slate-400 hover:text-slate-200">← Projects</Link>
-          <h2 className="text-xl font-semibold text-slate-50">{project.name}</h2>
-          <p className="text-sm text-slate-400 capitalize">{project.status}</p>
-          {project.type && <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">{project.type === "demo" ? "Demo" : "Project"}</span>}
-          {project.approvalStatus === "pending_approval" && (
-            <span className="ml-2 rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-200">Pending approval</span>
-          )}
-          {project.approvalStatus === "approved" && (
-            <span className="ml-2 rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300">Approved</span>
-          )}
-        </div>
-        {canApproveProject && project.approvalStatus === "pending_approval" && (
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={approving}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {approving ? "Approving…" : "Approve"}
-          </button>
-        )}
-        {isDirector && (
-          <button type="button" onClick={() => setEditOpen(true)} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-            Edit project
-          </button>
-        )}
-        {isAssignedDev && !project.developerReviewedAt && (
-          <button type="button" onClick={handleMarkReviewed} className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">
-            Mark as reviewed
-          </button>
-        )}
-        {isAssignedDev && (
-          <button type="button" onClick={() => setHandoffOpen(true)} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-            Request handoff to another developer
-          </button>
-        )}
-      </div>
+  const inputCls = isDirector
+    ? directorNeu.input
+    : "rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100";
+  const btnPrimary = isDirector
+    ? directorNeu.btnPrimary
+    : "rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50";
+  const btnGhost = isDirector
+    ? directorNeu.btnGhost
+    : "rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800";
+  const taskRowCls = isDirector
+    ? `${directorNeu.dataBlock} text-sm`
+    : "rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm";
 
-      {reviewError && (
-        <div className="shell border-rose-900/40 bg-rose-950/20">
-          <p className="text-sm text-rose-200">{reviewError}</p>
-        </div>
+  const headerBadges = (
+    <>
+      {project.type && (
+        <span className="rounded-full border border-white/[0.08] bg-[#0e1319] px-2.5 py-0.5 text-xs text-slate-300">
+          {project.type === "demo" ? "Demo" : "Project"}
+        </span>
       )}
+      {project.approvalStatus === "pending_approval" && (
+        <span className="rounded-full border border-amber-500/30 bg-amber-950/40 px-2.5 py-0.5 text-xs text-amber-200">
+          Pending approval
+        </span>
+      )}
+      {project.approvalStatus === "approved" && (
+        <span className="rounded-full border border-emerald-500/25 bg-emerald-950/30 px-2.5 py-0.5 text-xs text-emerald-300">
+          Approved
+        </span>
+      )}
+    </>
+  );
 
-      {myPendingAssignment && (
+  const headerActions = (
+    <>
+      {canApproveProject && project.approvalStatus === "pending_approval" && (
+        <button
+          type="button"
+          onClick={handleApprove}
+          disabled={approving}
+          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {approving ? "Approving…" : "Approve"}
+        </button>
+      )}
+      {isDirector && (
+        <button type="button" onClick={() => setEditOpen(true)} className={btnGhost}>
+          Edit project
+        </button>
+      )}
+      {isAssignedDev && !project.developerReviewedAt && (
+        <button type="button" onClick={handleMarkReviewed} className={btnPrimary}>
+          Mark as reviewed
+        </button>
+      )}
+      {isAssignedDev && (
+        <button type="button" onClick={() => setHandoffOpen(true)} className={btnGhost}>
+          Request handoff to another developer
+        </button>
+      )}
+    </>
+  );
+
+  const pageBody = (
+    <>
+
+      {reviewError &&
+        (isDirector ? (
+          <DirectorBanner tone="danger">{reviewError}</DirectorBanner>
+        ) : (
+          <div className="shell border-rose-900/40 bg-rose-950/20">
+            <p className="text-sm text-rose-200">{reviewError}</p>
+          </div>
+        ))}
+
+      {myPendingAssignment &&
+        (isDirector ? (
+          <DirectorBanner
+            tone="warning"
+            action={
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={respondingId === myPendingAssignment.id}
+                  onClick={() => handleRespondAssignment(myPendingAssignment.id, true)}
+                  className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {respondingId === myPendingAssignment.id ? "…" : "Accept"}
+                </button>
+                <button type="button" onClick={() => { setSwapOpen(true); setSwapError(null); }} className={btnGhost}>
+                  Swap to another developer
+                </button>
+                <button
+                  type="button"
+                  disabled={respondingId === myPendingAssignment.id}
+                  onClick={() => handleRespondAssignment(myPendingAssignment.id, false)}
+                  className={btnGhost}
+                >
+                  Decline
+                </button>
+              </div>
+            }
+          >
+            You were invited to work on this project. Accept to edit tasks and comment; decline if you cannot take it.
+          </DirectorBanner>
+        ) : (
         <div className="shell border-amber-900/50 bg-amber-950/30">
           <p className="text-sm text-amber-100">You were invited to work on this project. Accept to edit tasks and comment; decline if you cannot take it.</p>
           <div className="mt-2 flex gap-2">
@@ -591,7 +703,7 @@ export default function ProjectDetailPage() {
             </button>
           </div>
         </div>
-      )}
+        ))}
 
       {swapOpen && (
         <div
@@ -649,15 +761,17 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {isAssignedDev && !project.developerReviewedAt && (
-        <div className="shell border-sky-600/40 bg-sky-950/30">
-          <p className="text-sm text-sky-200">Review this project and add tasks below. When done, click &quot;Mark as reviewed&quot;.</p>
-        </div>
-      )}
+      {isAssignedDev && !project.developerReviewedAt &&
+        (isDirector ? (
+          <DirectorBanner tone="info">Review this project and add tasks below. When done, click &quot;Mark as reviewed&quot;.</DirectorBanner>
+        ) : (
+          <div className="shell border-sky-600/40 bg-sky-950/30">
+            <p className="text-sm text-sky-200">Review this project and add tasks below. When done, click &quot;Mark as reviewed&quot;.</p>
+          </div>
+        ))}
 
       {canSeeContact && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Contact & price</h3>
+        <ProjectDetailSection director={isDirector} label="Contact & price">
           <ul className="space-y-1 text-sm text-slate-200">
             {project.clientOrOwnerName && <li>Name: {project.clientOrOwnerName}</li>}
             {project.phone && <li>Phone: {project.phone}</li>}
@@ -700,32 +814,29 @@ export default function ProjectDetailPage() {
               </li>
             )}
           </ul>
-        </div>
+        </ProjectDetailSection>
       )}
 
       {project.projectDetails && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Project details</h3>
-          <p className="whitespace-pre-wrap text-sm text-slate-200">{project.projectDetails}</p>
-        </div>
+        <ProjectDetailSection director={isDirector} label="Project details">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{project.projectDetails}</p>
+        </ProjectDetailSection>
       )}
 
       {(project.developerAssignments?.length || isDirector) && (
-        <div className="shell">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-slate-300">Team</h3>
-            {isDirector && (
-              <button
-                type="button"
-                onClick={() => setInviteOpen((o) => !o)}
-                className="rounded border border-violet-500/40 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-950/40"
-              >
+        <ProjectDetailSection
+          director={isDirector}
+          label="Team"
+          action={
+            isDirector ? (
+              <button type="button" onClick={() => setInviteOpen((o) => !o)} className={directorNeu.btnGhost}>
                 {inviteOpen ? "Cancel" : "+ Invite developers"}
               </button>
-            )}
-          </div>
+            ) : undefined
+          }
+        >
           {inviteOpen && isDirector && (
-            <form onSubmit={(e) => void handleInviteDevelopers(e)} className="mb-3 rounded-lg border border-violet-800/40 bg-violet-950/20 p-3">
+            <form onSubmit={(e) => void handleInviteDevelopers(e)} className={`${directorNeu.panelInset} mb-3`}>
               <p className="mb-2 text-xs text-slate-400">Select one or more developers. Each must accept before working on tasks.</p>
               <div className="max-h-32 space-y-1 overflow-y-auto">
                 {developers.length === 0 ? (
@@ -774,18 +885,16 @@ export default function ProjectDetailPage() {
           ) : (
             <p className="text-sm text-slate-500">No developers invited yet.</p>
           )}
-        </div>
+        </ProjectDetailSection>
       )}
       {project.assignedDeveloper && (!project.developerAssignments || project.developerAssignments.length === 0) && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Primary contact (developer)</h3>
+        <ProjectDetailSection director={isDirector} label="Primary contact (developer)">
           <p className="text-sm text-slate-200">{project.assignedDeveloper.name || project.assignedDeveloper.email}</p>
-        </div>
+        </ProjectDetailSection>
       )}
 
       {project.timeline && project.timeline.length > 0 && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Timeline</h3>
+        <ProjectDetailSection director={isDirector} label="Timeline">
           <ul className="space-y-2">
             {project.timeline.map((t, i) => (
               <li key={i} className="flex gap-2 text-sm text-slate-200">
@@ -794,12 +903,16 @@ export default function ProjectDetailPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </ProjectDetailSection>
       )}
 
       {project.approvalStatus === "approved" && project.tasks.length > 0 && (
-        <div className="shell border-emerald-900/30 bg-emerald-950/20">
-          <h3 className="mb-2 text-sm font-medium text-emerald-200/90">Delivery snapshot</h3>
+        <ProjectDetailSection
+          director={isDirector}
+          label="Delivery snapshot"
+          description="Task notes below stay in sync with development: blockers and scope issues help Sales coordinate with the client."
+          shellClassName="border-emerald-900/30 bg-emerald-950/20"
+        >
           <p className="text-sm text-slate-300">
             <span className="text-emerald-300">{deliveryCounts.done} done</span>
             {" · "}
@@ -811,14 +924,10 @@ export default function ProjectDetailPage() {
             {" · "}
             <span className="text-slate-500">{deliveryCounts.not_started} not started</span>
           </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Task notes below stay in sync with development: blockers and scope issues help Sales coordinate with the client (APIs, payment, assets).
-          </p>
-        </div>
+        </ProjectDetailSection>
       )}
 
-      <div className="shell">
-        <h3 className="mb-2 text-sm font-medium text-slate-300">Tasks</h3>
+      <ProjectDetailSection director={isDirector} label="Tasks">
         {isAssignedDev && (
           <form onSubmit={handleAddTask} className="mb-3 flex gap-2">
             <input
@@ -826,7 +935,7 @@ export default function ProjectDetailPage() {
               value={addTaskTitle}
               onChange={(e) => setAddTaskTitle(e.target.value)}
               placeholder="New task title"
-              className="flex-1 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100"
+              className={`flex-1 ${inputCls}`}
             />
             <input
               type="number"
@@ -835,7 +944,7 @@ export default function ProjectDetailPage() {
               value={addTaskHours}
               onChange={(e) => setAddTaskHours(e.target.value)}
               placeholder="Hours"
-              className="w-24 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100"
+              className={`w-24 ${inputCls}`}
             />
             <button
               type="submit"
@@ -844,7 +953,7 @@ export default function ProjectDetailPage() {
                 !addTaskTitle.trim() ||
                 (project.status === "active" && !addTaskHours.trim())
               }
-              className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+              className={btnPrimary}
               title={project.status === "active" && !addTaskHours.trim() ? "Hours are required for active projects" : ""}
             >
               {addingTask ? "Adding…" : "Add task"}
@@ -854,9 +963,9 @@ export default function ProjectDetailPage() {
         {project.tasks.length === 0 ? (
           <p className="text-sm text-slate-400">No tasks yet.</p>
         ) : (
-          <ul className="space-y-3">
+          <ul className={isDirector ? "divide-y divide-white/[0.04]" : "space-y-3"}>
             {project.tasks.map((t) => (
-              <li key={t.id} className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
+              <li key={t.id} className={taskRowCls}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1051,10 +1160,9 @@ export default function ProjectDetailPage() {
             ))}
           </ul>
         )}
-      </div>
+      </ProjectDetailSection>
 
-      <div className="shell">
-        <h3 className="mb-2 text-sm font-medium text-slate-300">Milestones</h3>
+      <ProjectDetailSection director={isDirector} label="Milestones">
         {isAssignedDev && (
           <form onSubmit={handleAddMilestone} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="flex flex-1 flex-col gap-1">
@@ -1064,7 +1172,7 @@ export default function ProjectDetailPage() {
                 value={addMilestoneName}
                 onChange={(e) => setAddMilestoneName(e.target.value)}
                 placeholder="e.g. UI complete"
-                className="rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100"
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -1073,13 +1181,13 @@ export default function ProjectDetailPage() {
                 type="date"
                 value={addMilestoneDueDate}
                 onChange={(e) => setAddMilestoneDueDate(e.target.value)}
-                className="w-44 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100"
+                className={`w-44 ${inputCls}`}
               />
             </label>
             <button
               type="submit"
               disabled={addingMilestone || !addMilestoneName.trim()}
-              className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+              className={btnPrimary}
             >
               {addingMilestone ? "Adding…" : "Add milestone"}
             </button>
@@ -1089,9 +1197,9 @@ export default function ProjectDetailPage() {
         {project.milestones.length === 0 ? (
           <p className="text-sm text-slate-400">No milestones yet.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className={isDirector ? "divide-y divide-white/[0.04]" : "space-y-2"}>
             {project.milestones.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm">
+              <li key={m.id} className={isDirector ? `${directorNeu.dataBlock} flex flex-wrap items-center justify-between gap-2 text-sm` : "flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm"}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-slate-100">{m.name}</span>
                   {m.status === "completed" && (
@@ -1118,7 +1226,7 @@ export default function ProjectDetailPage() {
             ))}
           </ul>
         )}
-      </div>
+      </ProjectDetailSection>
 
       {editOpen && isDirector && (
         <EditProjectContactModal
@@ -1158,6 +1266,39 @@ export default function ProjectDetailPage() {
           apiFetch={apiFetch}
         />
       )}
+    </>
+  );
+
+  if (isDirector) {
+    return (
+      <DirectorFullscreenPage>
+        <DirectorPageHero
+          eyebrow="Project"
+          title={project.name}
+          description={project.status}
+          backHref="/projects"
+          badges={headerBadges}
+          actions={headerActions}
+        />
+        {pageBody}
+      </DirectorFullscreenPage>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="shell flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href="/projects" className="mb-2 inline-block text-sm text-slate-400 hover:text-slate-200">
+            ← Projects
+          </Link>
+          <h2 className="text-xl font-semibold text-slate-50">{project.name}</h2>
+          <p className="text-sm text-slate-400 capitalize">{project.status}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">{headerBadges}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">{headerActions}</div>
+      </div>
+      {pageBody}
     </section>
   );
 }

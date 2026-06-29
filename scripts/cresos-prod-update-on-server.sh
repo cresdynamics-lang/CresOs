@@ -11,9 +11,17 @@ git fetch --all
 git pull
 
 if command -v docker >/dev/null 2>&1 && test -f docker-compose.yml; then
-  echo "[cresos] using Docker Compose (rebuild + restart api/web/db stack)"
-  docker compose up --build -d
-  docker ps --format "table {{.Names}}\t{{.Status}}"
+  echo "[cresos] using Docker Compose (production overlay — loopback ports only)"
+  COMPOSE_FILES="-f docker-compose.yml"
+  if [[ -f docker-compose.prod.yml ]]; then
+    COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
+  fi
+  # shellcheck disable=SC2086
+  docker compose $COMPOSE_FILES up --build -d
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  if [[ -f scripts/cresos-prod-harden-ports.sh ]] && [[ "$(id -u)" -eq 0 ]]; then
+    bash scripts/cresos-prod-harden-ports.sh
+  fi
   echo "[cresos] update finished."
   exit 0
 fi

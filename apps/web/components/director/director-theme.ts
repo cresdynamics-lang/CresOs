@@ -35,5 +35,10 @@ export const directorNeu = {
   kpiStrip:
     "w-full rounded-xl border border-white/[0.04] bg-[#0e1319] p-4 shadow-[inset_4px_4px_10px_rgba(0,0,0,0.5),inset_-3px_-3px_8px_rgba(255,255,255,0.03)] sm:p-5",
   listRow:
-    "rounded-xl border border-white/[0.04] bg-[#10161e] px-3 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_8px_rgba(255,255,255,0.03)]"
+    "rounded-xl border border-white/[0.04] bg-[#10161e] px-3 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_8px_rgba(255,255,255,0.03)]",
+  pageHero: "border-b border-white/[0.06] bg-gradient-to-b from-sky-950/25 to-transparent",
+  section: "border-b border-white/[0.06] py-6",
+  dataBlock: "border-b border-white/[0.04] px-5 py-4 last:border-b-0 lg:px-8",
+  input:
+    "rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-100 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45),inset_-2px_-2px_6px_rgba(255,255,255,0.03)] focus:border-sky-500/35 focus:outline-none focus:ring-2 focus:ring-sky-500/15"
 } as const;

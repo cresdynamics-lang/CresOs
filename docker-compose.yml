@@ -10,8 +10,7 @@ services:
       POSTGRES_USER: cresos
       POSTGRES_PASSWORD: cresos
       POSTGRES_DB: cresos
-    ports:
-      - "127.0.0.1:5436:5432"
+    # No host port in production. For local psql: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cresos -d cresos"]
       interval: 5s

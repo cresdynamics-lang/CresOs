@@ -322,6 +322,60 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+/* Director workspace — dark neumorphism (sky accent) */
+.director-neu {
+  --director-neu-bg: #0b0f14;
+  --director-neu-surface: #121820;
+  --director-neu-inset: #0e1319;
+  --director-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
+  --director-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+.director-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--director-neu-raised);
+}
+
+.director-neu input:not([type="checkbox"]):not([type="radio"]),
+.director-neu select,
+.director-neu textarea {
+  border-radius: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.05);
+  background-color: #0e1319;
+  color: #f1f5f9;
+  box-shadow: var(--director-neu-inset-shadow);
+}
+
+.director-neu input:not([type="checkbox"]):not([type="radio"]):focus,
+.director-neu select:focus,
+.director-neu textarea:focus {
+  border-color: rgba(56, 189, 248, 0.35);
+  outline: none;
+  box-shadow: var(--director-neu-inset-shadow), 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.director-neu li[class*="border-slate-700"],
+.director-neu [class*="bg-slate-800/60"],
+.director-neu [class*="bg-slate-900/50"] {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: #10161e !important;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4), -2px -2px 8px rgba(255, 255, 255, 0.03);
+}
+
+.director-fullscreen .shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.director-fullscreen .shell:first-of-type {
+  padding-top: 0;
+}
+
 /* Developer neumorphism — mirrors finance-neu with violet accent */
 .developer-neu {
   --developer-neu-bg: #0b0f14;

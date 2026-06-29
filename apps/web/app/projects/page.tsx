@@ -257,7 +257,7 @@ export default function ProjectsPage() {
         showWelcomeBanner={false}
       />
 
-      {canSeeManagement && (
+      {canSeeManagement && !isDirector && (
         <DashboardCardRow lgCols={2} layout="scroll" className="shrink-0">
           <DashboardScrollCard>
             <div className="min-w-[14rem]">

@@ -1,0 +1,18 @@
+# Production overlay — use on the droplet:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# API and web bind to loopback only (Nginx is the sole public entry).
+# Postgres stays on the internal Docker network (no host port).
+
+services:
+  db:
+    ports: !reset []
+
+  # Base compose already binds api/web to 127.0.0.1; listed here for documentation.
+  api:
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  web:
+    ports:
+      - "127.0.0.1:3000:3000"

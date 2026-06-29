@@ -32,6 +32,9 @@ if ! dpkg -l certbot python3-certbot-nginx >/dev/null 2>&1; then
   apt-get install -y certbot python3-certbot-nginx
 fi
 
+ufw --force reset || true
+ufw default deny incoming || true
+ufw default allow outgoing || true
 ufw allow OpenSSH || true
 ufw allow 80/tcp || true
 ufw allow 443/tcp || true
@@ -79,46 +82,23 @@ if grep -q '^JWT_SECRET=' .env && grep -qE '^JWT_SECRET=(dev-secret|local-docker
   sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
 fi
 
-echo "[cresos] building and starting stack…"
-docker compose up --build -d
+echo "[cresos] building and starting stack (production overlay — loopback ports only)…"
+COMPOSE_FILES="-f docker-compose.yml"
+if [[ -f docker-compose.prod.yml ]]; then
+  COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
+fi
+# shellcheck disable=SC2086
+docker compose $COMPOSE_FILES up --build -d
 
 NGINX_SITE="/etc/nginx/sites-available/cresos.conf"
+NGINX_HTTP_TEMPLATE="$CRESOS_ROOT/deploy/nginx/cresos-site-http.conf"
 echo "[cresos] writing nginx site → $NGINX_SITE"
-cat >"$NGINX_SITE" <<EOF
-server {
-  listen 80;
-  listen [::]:80;
-  server_name ${CRESOS_DOMAIN};
-
-  client_max_body_size 600m;
-
-  location /.well-known/acme-challenge/ {
-    root /var/www/html;
-  }
-
-  # API + WebSocket (NEXT_PUBLIC_API_URL must be https://<domain>/api)
-  location /api/ {
-    proxy_pass http://127.0.0.1:4000/;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 86400;
-  }
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-  }
-}
-EOF
+if [[ -f "$NGINX_HTTP_TEMPLATE" ]]; then
+  sed "s/YOUR_DOMAIN/${CRESOS_DOMAIN}/g" "$NGINX_HTTP_TEMPLATE" >"$NGINX_SITE"
+else
+  echo "[cresos] missing $NGINX_HTTP_TEMPLATE" >&2
+  exit 1
+fi
 
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/cresos.conf
 rm -f /etc/nginx/sites-enabled/default || true
@@ -126,11 +106,23 @@ nginx -t
 systemctl reload nginx
 
 echo "[cresos] obtaining TLS certificate (requires DNS A/AAAA for ${CRESOS_DOMAIN} → this host)…"
-if certbot --nginx -d "$CRESOS_DOMAIN" --non-interactive --agree-tos -m "$CRESOS_CERT_EMAIL" --redirect; then
+if certbot certonly --webroot -w /var/www/html -d "$CRESOS_DOMAIN" --non-interactive --agree-tos -m "$CRESOS_CERT_EMAIL"; then
   echo "[cresos] TLS certificate installed."
+  NGINX_TLS_TEMPLATE="$CRESOS_ROOT/deploy/nginx/cresos-site.conf"
+  if [[ -f "$NGINX_TLS_TEMPLATE" ]]; then
+    sed "s/YOUR_DOMAIN/${CRESOS_DOMAIN}/g" "$NGINX_TLS_TEMPLATE" >"$NGINX_SITE"
+    nginx -t
+    systemctl reload nginx
+  fi
 else
   echo "[cresos] certbot failed (usually DNS not pointed yet). HTTP reverse proxy is still active; re-run:"
-  echo "        certbot --nginx -d \"$CRESOS_DOMAIN\" --non-interactive --agree-tos -m \"$CRESOS_CERT_EMAIL\" --redirect"
+  echo "        certbot certonly --webroot -w /var/www/html -d \"$CRESOS_DOMAIN\" --non-interactive --agree-tos -m \"$CRESOS_CERT_EMAIL\""
+  echo "        sed \"s/YOUR_DOMAIN/${CRESOS_DOMAIN}/g\" deploy/nginx/cresos-site.conf | sudo tee /etc/nginx/sites-available/cresos.conf"
+  echo "        sudo nginx -t && sudo systemctl reload nginx"
+fi
+
+if [[ -f "$CRESOS_ROOT/scripts/cresos-prod-harden-ports.sh" ]]; then
+  CRESOS_DOMAIN="$CRESOS_DOMAIN" bash "$CRESOS_ROOT/scripts/cresos-prod-harden-ports.sh"
 fi
 
 echo "[cresos] done. Checks:"

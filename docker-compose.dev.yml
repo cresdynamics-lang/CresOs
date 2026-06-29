@@ -1,0 +1,7 @@
+# Optional local dev overlay — expose Postgres on loopback for psql clients:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  db:
+    ports:
+      - "127.0.0.1:5436:5432"
