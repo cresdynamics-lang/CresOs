@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { countPlanMilestones, countPlanTasks } from "../src/lib/project-ai-plan-types";
+import { countPlanMilestones, countPlanTasks, resolvePlanProjectDetails } from "../src/lib/project-ai-plan-types";
 import type { ProjectAiPlan } from "../src/lib/project-ai-plan-types";
 
 const samplePlan: ProjectAiPlan = {
   projectSummary: "Retail POS rollout",
+  projectDetails: "## Scope\nCheckout, inventory, reporting",
+  projectType: "ecommerce",
+  documentUnderstanding: "Product requirements for an ecommerce POS.",
   successCriteria: "99% uptime",
   agileSprintNotes: "3 two-week sprints",
   timeline: [{ title: "Go live", date: "2026-08-01" }],
@@ -43,5 +46,9 @@ describe("project-ai-plan-types", () => {
 
   it("counts tasks across milestones", () => {
     expect(countPlanTasks(samplePlan)).toBe(4);
+  });
+
+  it("prefers projectDetails over summary for storage", () => {
+    expect(resolvePlanProjectDetails(samplePlan)).toBe("## Scope\nCheckout, inventory, reporting");
   });
 });

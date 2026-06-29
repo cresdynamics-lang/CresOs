@@ -61,6 +61,8 @@ export function ProjectAiPlannerPanel({
   const [recording, setRecording] = useState(false);
   const [notes, setNotes] = useState<PlanningNote[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(true);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -87,18 +89,78 @@ export function ProjectAiPlannerPanel({
 
   const handlePlanResult = useCallback(
     (next: ProjectAiPlan, extra?: { transcript?: string }) => {
-      setPlan(next);
-      onPlanChange?.(next);
+      const withDetails = {
+        ...next,
+        projectDetails: next.projectDetails?.trim() || next.projectSummary || ""
+      };
+      setPlan(withDetails);
+      setDraftOpen(true);
+      onPlanChange?.(withDetails);
       if (extra?.transcript) setTranscript(extra.transcript);
       onSuggestedFields?.({
-        name: next.suggestedProjectName,
-        projectDetails: next.projectSummary,
-        successCriteria: next.successCriteria,
-        timeline: next.timeline?.length ? next.timeline : undefined
+        name: withDetails.suggestedProjectName,
+        projectDetails: withDetails.projectDetails || withDetails.projectSummary,
+        successCriteria: withDetails.successCriteria,
+        timeline: withDetails.timeline?.length ? withDetails.timeline : undefined
       });
     },
     [onPlanChange, onSuggestedFields]
   );
+
+  const patchPlan = useCallback(
+    (patch: Partial<ProjectAiPlan>) => {
+      setPlan((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, ...patch };
+        onPlanChange?.(next);
+        onSuggestedFields?.({
+          name: next.suggestedProjectName,
+          projectDetails: next.projectDetails || next.projectSummary,
+          successCriteria: next.successCriteria,
+          timeline: next.timeline?.length ? next.timeline : undefined
+        });
+        return next;
+      });
+    },
+    [onPlanChange, onSuggestedFields]
+  );
+
+  const regenerateTasksFromDetails = async () => {
+    if (!plan?.projectDetails?.trim()) {
+      setError("Add or edit project details first.");
+      return;
+    }
+    setRegenerating(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/projects/ai/plan-from-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectDetails: plan.projectDetails,
+          projectType: plan.projectType,
+          successCriteria: plan.successCriteria,
+          projectId
+        })
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; plan?: ProjectAiPlan };
+      if (!res.ok || !data.plan) {
+        setError(data.error ?? "Could not regenerate tasks");
+        return;
+      }
+      patchPlan({
+        sprints: data.plan.sprints,
+        timeline: data.plan.timeline,
+        successCriteria: data.plan.successCriteria || plan.successCriteria,
+        agileSprintNotes: data.plan.agileSprintNotes || plan.agileSprintNotes,
+        roleBriefs: data.plan.roleBriefs
+      });
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const generateFromText = async () => {
     const text = brief.trim();
@@ -299,7 +361,7 @@ export function ProjectAiPlannerPanel({
   const subtitle =
     mode === "client"
       ? "Speak or type remarks — AI updates milestones and tasks for your team."
-      : "Describe the project by voice or text. AI breaks it into agile sprints, milestones, daily tasks, and role briefs.";
+      : "Upload a brief or document. AI understands the scope, drafts editable project details, then maps milestones and developer tasks (pages, admin, cart, etc.).";
 
   return (
     <div className={panelClass}>
@@ -356,7 +418,7 @@ export function ProjectAiPlannerPanel({
             onClick={() => void generateFromText()}
             className="self-start rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
           >
-            {loading ? "AI is planning…" : isClient ? "Send remark" : "Generate agile plan"}
+            {loading ? "AI is planning…" : isClient ? "Send remark" : "Analyze & draft plan"}
           </button>
         </div>
       )}
@@ -404,7 +466,7 @@ export function ProjectAiPlannerPanel({
             }}
             className="text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-700 file:px-3 file:py-2 file:text-sm file:text-white"
           />
-          <p className="text-xs text-slate-500">Upload PDF or Word — AI maps modules, sprints, milestones, and tasks.</p>
+          <p className="text-xs text-slate-500">Upload PDF or Word — AI reads the full document, drafts project details, then breaks out pages/modules and dev tasks.</p>
         </div>
       )}
 
@@ -419,33 +481,147 @@ export function ProjectAiPlannerPanel({
 
       {plan ? (
         <div className="mt-4 space-y-3 rounded-lg border border-emerald-500/20 bg-emerald-950/20 p-4">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
-              {plan.sprints.length} sprints
-            </span>
-            <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
-              {countPlanMilestones(plan)} milestones
-            </span>
-            <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
-              {countPlanTasks(plan)} tasks
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {plan.projectType ? (
+                <span className="rounded-full bg-violet-900/50 px-2 py-0.5 capitalize text-violet-200">
+                  {plan.projectType.replace(/_/g, " ")}
+                </span>
+              ) : null}
+              <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
+                {plan.sprints.length} sprints
+              </span>
+              <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
+                {countPlanMilestones(plan)} milestones
+              </span>
+              <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-emerald-200">
+                {countPlanTasks(plan)} tasks
+              </span>
+            </div>
+            {!isClient ? (
+              <button
+                type="button"
+                onClick={() => setDraftOpen((o) => !o)}
+                className="text-xs text-emerald-300 hover:text-emerald-200"
+              >
+                {draftOpen ? "Collapse draft" : "Edit draft"}
+              </button>
+            ) : null}
           </div>
-          {plan.projectSummary ? (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Summary</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">{plan.projectSummary}</p>
+
+          {plan.documentUnderstanding ? (
+            <div className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">What we understood</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-300">{plan.documentUnderstanding}</p>
             </div>
           ) : null}
-          {plan.successCriteria ? (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Success criteria</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{plan.successCriteria}</p>
+
+          {draftOpen && !isClient ? (
+            <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-950/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300">
+                Editable project details draft
+              </p>
+              <p className="text-xs text-slate-500">
+                This becomes the project details field — edit freely, then refresh tasks or apply.
+              </p>
+              {plan.projectSummary ? (
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-wide text-slate-500">Summary</span>
+                  <textarea
+                    value={plan.projectSummary}
+                    onChange={(e) => patchPlan({ projectSummary: e.target.value })}
+                    rows={2}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100"
+                  />
+                </label>
+              ) : null}
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Project details (scope, pages, modules)</span>
+                <textarea
+                  value={plan.projectDetails}
+                  onChange={(e) => patchPlan({ projectDetails: e.target.value })}
+                  rows={compact ? 8 : 12}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 font-mono text-xs leading-relaxed text-slate-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Success criteria</span>
+                <textarea
+                  value={plan.successCriteria}
+                  onChange={(e) => patchPlan({ successCriteria: e.target.value })}
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Agile / sprint notes (PM)</span>
+                <textarea
+                  value={plan.agileSprintNotes}
+                  onChange={(e) => patchPlan({ agileSprintNotes: e.target.value })}
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <div>
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Project timeline</span>
+                <p className="mt-0.5 text-xs text-slate-600">Key dates saved on the project; tasks and milestones get their own due dates.</p>
+                <div className="mt-2 space-y-2">
+                  {(plan.timeline.length ? plan.timeline : [{ date: "", title: "" }]).map((t, i) => (
+                    <div key={i} className="flex flex-wrap gap-2">
+                      <input
+                        type="date"
+                        value={t.date ?? ""}
+                        onChange={(e) => {
+                          const next = [...(plan.timeline.length ? plan.timeline : [{ date: "", title: "" }])];
+                          next[i] = { ...next[i], date: e.target.value };
+                          patchPlan({ timeline: next.filter((x) => x.title.trim() || x.date) });
+                        }}
+                        className="rounded-lg border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-sm text-slate-100"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Milestone / phase title"
+                        value={t.title}
+                        onChange={(e) => {
+                          const base = plan.timeline.length ? [...plan.timeline] : [{ date: "", title: "" }];
+                          base[i] = { ...base[i], title: e.target.value };
+                          patchPlan({ timeline: base });
+                        }}
+                        className="min-w-[10rem] flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-sm text-slate-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => patchPlan({ timeline: plan.timeline.filter((_, j) => j !== i) })}
+                        className="text-slate-500 hover:text-slate-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => patchPlan({ timeline: [...plan.timeline, { date: "", title: "" }] })}
+                    className="text-xs text-violet-400 hover:text-violet-300"
+                  >
+                    + Add timeline date
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={regenerating || !plan.projectDetails.trim()}
+                onClick={() => void regenerateTasksFromDetails()}
+                className="rounded-lg border border-violet-500/40 bg-violet-900/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-800/50 disabled:opacity-50"
+              >
+                {regenerating ? "Mapping tasks…" : "Regenerate milestones & tasks from details"}
+              </button>
             </div>
           ) : null}
+
           {plan.sprints.length > 0 ? (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Sprint outline</p>
-              <ul className="mt-2 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Delivery breakdown</p>
+              <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">
                 {plan.sprints.map((s, i) => (
                   <li key={i} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2 text-xs text-slate-300">
                     <span className="font-medium text-slate-100">{s.name}</span>
@@ -454,6 +630,17 @@ export function ProjectAiPlannerPanel({
                       ({s.milestones.length} milestones,{" "}
                       {s.milestones.reduce((n, m) => n + m.tasks.length, 0)} tasks)
                     </span>
+                    <ul className="mt-1.5 space-y-0.5 border-t border-white/5 pt-1.5 text-slate-500">
+                      {s.milestones
+                        .flatMap((m) => m.tasks)
+                        .slice(0, 5)
+                        .map((t, ti) => (
+                          <li key={ti}>· {t.title}</li>
+                        ))}
+                      {s.milestones.flatMap((m) => m.tasks).length > 5 ? (
+                        <li className="text-slate-600">…more tasks in this sprint</li>
+                      ) : null}
+                    </ul>
                   </li>
                 ))}
               </ul>
@@ -497,11 +684,11 @@ export function ProjectAiPlannerPanel({
               onClick={() => void applyPlan()}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              {applying ? "Applying…" : "Apply plan to project (add milestones & tasks)"}
+              {applying ? "Applying…" : "Apply — save details, milestones & tasks"}
             </button>
           ) : mode === "create" ? (
             <p className="text-xs text-emerald-300/90">
-              Plan will be included when you create the project — milestones and tasks are added automatically.
+              Edited draft is included when you create the project — details, milestones, and tasks are saved automatically.
             </p>
           ) : null}
         </div>

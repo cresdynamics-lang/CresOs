@@ -7,6 +7,7 @@ import { applyProjectAiPlan } from "../lib/apply-project-ai-plan";
 import { extractPlanningDocumentText } from "../lib/project-document-text";
 import {
   generateProjectPlanFromBrief,
+  generateDeliveryPlanFromDetails,
   transcribeProjectPlanningAudio
 } from "../lib/groq-project-planner";
 import { countPlanMilestones, countPlanTasks } from "../lib/project-ai-plan-types";
@@ -238,7 +239,8 @@ export function registerProjectAiPlanningRoutes(router: Router, prisma: PrismaCl
       const { plan } = await generateProjectPlanFromBrief({
         brief: text.slice(0, 120_000),
         sourceLabel: `document:${file.originalname}`,
-        existingContext
+        existingContext,
+        isDocument: true
       });
 
       await savePlanningNote(prisma, {
@@ -261,6 +263,62 @@ export function registerProjectAiPlanningRoutes(router: Router, prisma: PrismaCl
           sprints: plan.sprints.length,
           milestones: countPlanMilestones(plan),
           tasks: countPlanTasks(plan)
+        }
+      });
+    }
+  );
+
+  router.post(
+    "/ai/plan-from-details",
+    requireRoles(PLANNER_ROLES),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const body = (req.body || {}) as {
+        projectDetails?: string;
+        projectType?: string;
+        successCriteria?: string;
+        projectId?: string;
+      };
+      const projectDetails = body.projectDetails?.trim();
+      if (!projectDetails) {
+        res.status(400).json({ error: "projectDetails is required" });
+        return;
+      }
+
+      let existingContext;
+      if (body.projectId) {
+        const loaded = await loadProjectContext(prisma, orgId, body.projectId);
+        if (!loaded) {
+          res.status(404).json({ error: "Project not found" });
+          return;
+        }
+        existingContext = loaded.existingContext;
+      }
+
+      const delivery = await generateDeliveryPlanFromDetails({
+        projectDetails,
+        projectType: body.projectType,
+        successCriteria: body.successCriteria,
+        existingContext
+      });
+
+      const plan = {
+        projectSummary: "",
+        projectDetails,
+        projectType: body.projectType,
+        successCriteria: delivery.successCriteria || body.successCriteria || "",
+        agileSprintNotes: delivery.agileSprintNotes,
+        timeline: delivery.timeline,
+        sprints: delivery.sprints,
+        roleBriefs: delivery.roleBriefs
+      };
+
+      res.json({
+        plan,
+        stats: {
+          sprints: plan.sprints.length,
+          milestones: countPlanMilestones(plan as any),
+          tasks: countPlanTasks(plan as any)
         }
       });
     }

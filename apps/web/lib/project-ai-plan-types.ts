@@ -31,6 +31,9 @@ export type ProjectAiRoleBriefs = {
 
 export type ProjectAiPlan = {
   projectSummary: string;
+  projectDetails: string;
+  documentUnderstanding?: string;
+  projectType?: string;
   successCriteria: string;
   agileSprintNotes: string;
   timeline: { date?: string; title: string }[];
@@ -59,4 +62,10 @@ export function countPlanTasks(plan: ProjectAiPlan): number {
 
 export function countPlanMilestones(plan: ProjectAiPlan): number {
   return plan.sprints.reduce((sum, s) => sum + s.milestones.length, 0);
+}
+
+export function resolvePlanProjectDetails(plan: ProjectAiPlan): string {
+  const details = plan.projectDetails?.trim();
+  if (details) return details;
+  return plan.projectSummary?.trim() ?? "";
 }

@@ -831,7 +831,7 @@ export default function ProjectDetailPage() {
         <ProjectDetailSection
           director={isDirector}
           label="AI planning"
-          description="Add voice or text clarifications — AI merges new milestones and tasks for the team."
+          description="Voice, text, or document → AI understands scope, drafts project details, then maps milestones and dated tasks."
         >
           <ProjectAiPlannerPanel
             apiFetch={apiFetch}

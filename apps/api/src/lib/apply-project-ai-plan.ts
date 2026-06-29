@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import type { ProjectAiPlan } from "./project-ai-plan-types";
+import { resolvePlanProjectDetails, type ProjectAiPlan } from "./project-ai-plan-types";
 
 function parseDate(value?: string | null): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -58,8 +58,8 @@ export async function applyProjectAiPlan(
       where: { id: projectId },
       data: {
         projectDetails: merge
-          ? appendText(project.projectDetails, plan.projectSummary)
-          : plan.projectSummary || project.projectDetails,
+          ? appendText(project.projectDetails, resolvePlanProjectDetails(plan))
+          : resolvePlanProjectDetails(plan) || project.projectDetails,
         successCriteria: merge
           ? appendText(project.successCriteria, plan.successCriteria)
           : plan.successCriteria || project.successCriteria,
