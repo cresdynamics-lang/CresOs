@@ -16,6 +16,7 @@ import { WorkspaceHubCard } from "../../components/workspace-hub-card";
 import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
 import { DashboardCardRow, DashboardScrollCard } from "../../components/dashboard-card-row";
 import { DeveloperProjectsView } from "./developer-projects-view";
+import { DirectorProjectsView } from "./director-projects-view";
 
 type Developer = { id: string; name: string | null; email: string };
 
@@ -244,6 +245,54 @@ export default function ProjectsPage() {
         loading={loading}
         onRefresh={() => void loadProjects()}
       />
+    );
+  }
+
+  if (isDirector) {
+    return (
+      <>
+        <DirectorProjectsView
+          projects={filteredProjects}
+          filter={filter}
+          onFilterChange={setFilter}
+          emptyMessage={emptyMessage}
+          loading={loading}
+          onNewProject={() => setCreateOpen(true)}
+          onApprove={handleApprove}
+          approvingId={approvingId}
+          onGenerateClientMessage={handleGenerateClientMessage}
+          generatingId={generatingId}
+          linkInput={linkInput}
+          onLinkInputChange={(projectId, value) =>
+            setLinkInput((prev) => ({ ...prev, [projectId]: value }))
+          }
+          clientMessage={
+            clientMessage
+              ? {
+                  projectName: clientMessage.projectName,
+                  message: clientMessage.result.message,
+                  link: clientMessage.result.link
+                }
+              : null
+          }
+          onDismissClientMessage={() => setClientMessage(null)}
+          onCopyClientMessage={copyToClipboard}
+          copyDone={copyDone}
+        />
+        {createOpen && canCreateProject && (
+          <CreateProjectModal
+            developers={developers}
+            directorMode
+            onClose={() => setCreateOpen(false)}
+            onCreated={() => {
+              setCreateOpen(false);
+              loadProjects();
+              emitDataRefresh();
+            }}
+            apiFetch={apiFetch}
+          />
+        )}
+      </>
     );
   }
 

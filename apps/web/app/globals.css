@@ -376,6 +376,27 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
+/* Director workspace stays dark even when user prefers light theme */
+html.theme-light .director-neu,
+html.theme-light .director-neu .shell,
+html.theme-light .director-fullscreen {
+  color: #f1f5f9;
+}
+
+html.theme-light .director-neu .shell {
+  border-color: rgba(255, 255, 255, 0.04);
+  background-color: #121820;
+  box-shadow: var(--director-neu-raised, 6px 6px 14px rgba(0, 0, 0, 0.55));
+}
+
+html.theme-light .director-neu input:not([type="checkbox"]):not([type="radio"]),
+html.theme-light .director-neu select,
+html.theme-light .director-neu textarea {
+  background-color: #0e1319;
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
 /* Developer neumorphism — mirrors finance-neu with violet accent */
 .developer-neu {
   --developer-neu-bg: #0b0f14;
