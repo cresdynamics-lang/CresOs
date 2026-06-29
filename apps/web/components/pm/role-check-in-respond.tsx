@@ -198,7 +198,7 @@ export function RoleCheckInRespond({
         <p className="mt-1 text-xs text-slate-400">Answer in the thread — the conversation stays in Community.</p>
         <button
           type="button"
-          className={`${checkInGlass.btnPrimary} mt-3 w-full sm:w-auto`}
+          className={`${checkInGlass.btnPrimary} mt-3 self-start`}
           onClick={() => setSlideOpen(true)}
         >
           Slide up to reply

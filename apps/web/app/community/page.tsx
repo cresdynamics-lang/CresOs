@@ -149,12 +149,14 @@ function ChatMessageBody({
   apiOrigin,
   viewerId,
   viewerIsDeveloper,
+  isMine,
   onCheckInResponded
 }: {
   message: Message;
   apiOrigin: string;
   viewerId?: string;
   viewerIsDeveloper?: boolean;
+  isMine?: boolean;
   onCheckInResponded?: () => void;
 }) {
   const md = message.metadata;
@@ -321,9 +323,15 @@ function ChatMessageBody({
           ? "Director"
           : "Project Manager";
     return (
-      <div>
+      <div className={`w-full text-left ${isMine ? "items-end" : "items-start"}`}>
         {forwarded ? <ForwardedLabel /> : null}
-        <div className="rounded-2xl border border-teal-400/20 bg-gradient-to-br from-teal-950/30 via-slate-900/50 to-cyan-950/20 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md">
+        <div
+          className={`rounded-2xl border px-3.5 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md ${
+            isMine
+              ? "border-emerald-400/25 bg-gradient-to-br from-emerald-950/35 via-slate-900/50 to-teal-950/25"
+              : "border-teal-400/20 bg-gradient-to-br from-teal-950/30 via-slate-900/50 to-cyan-950/20"
+          }`}
+        >
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-300/90">
             {senderLabel} · Community check-in
           </p>
@@ -955,6 +963,10 @@ export default function CommunityPage() {
       setLoadingOlderMessages(false);
     }
   }, [selectedConversation, loadingOlderMessages, messagesPage, messagesPages, loadConversationMessages]);
+
+  const refreshCurrentMessages = useCallback(() => {
+    void loadConversationMessages(messagesPage, "replace");
+  }, [loadConversationMessages, messagesPage]);
 
   useEffect(() => {
     setEditingMessageId(null);
@@ -2066,16 +2078,22 @@ export default function CommunityPage() {
                             apiOrigin={apiOrigin}
                             viewerId={auth.userId}
                             viewerIsDeveloper={auth.roleKeys.includes("developer")}
+                            isMine={mine}
+                            onCheckInResponded={refreshCurrentMessages}
                           />
                         </div>
                       ) : (
-                      <div className={`group/message mb-1.5 flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`group/message mb-1.5 flex w-full ${mine ? "justify-end" : "justify-start"}`}
+                      >
                         <div
-                          className={`relative max-w-[min(85%,520px)] px-2.5 py-1.5 shadow-md select-none touch-manipulation ${
-                            mine ? directChatUi.outgoingShape : directChatUi.incomingShape
-                          } ${mine ? directChatUi.outgoing : directChatUi.incoming} ${
-                            messageMenuId === message.id ? directChatUi.selectedRing : ""
-                          } ${message.type === "deleted" || message.revokedAt ? "opacity-70" : ""}`}
+                          className={`relative flex max-w-[min(85%,520px)] flex-col px-2.5 py-1.5 shadow-md select-none touch-manipulation ${
+                            mine ? "items-end" : "items-start"
+                          } ${mine ? directChatUi.outgoingShape : directChatUi.incomingShape} ${
+                            mine ? directChatUi.outgoing : directChatUi.incoming
+                          } ${messageMenuId === message.id ? directChatUi.selectedRing : ""} ${
+                            message.type === "deleted" || message.revokedAt ? "opacity-70" : ""
+                          }`}
                           onContextMenu={(e) => {
                             if (message.type === "deleted" || message.revokedAt) return;
                             e.preventDefault();
@@ -2139,10 +2157,12 @@ export default function CommunityPage() {
                             apiOrigin={apiOrigin}
                             viewerId={auth.userId}
                             viewerIsDeveloper={auth.roleKeys.includes("developer")}
+                            isMine={mine}
+                            onCheckInResponded={refreshCurrentMessages}
                           />
                           <div
-                            className={`mt-0.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] ${
-                              mine ? directChatUi.timeMine : directChatUi.timeTheir
+                            className={`mt-0.5 flex w-full flex-wrap items-center gap-1.5 text-[11px] ${
+                              mine ? `justify-end ${directChatUi.timeMine}` : `justify-start ${directChatUi.timeTheir}`
                             }`}
                           >
                             {message.editedAt ? <span className="opacity-80">edited</span> : null}

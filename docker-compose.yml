@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: cresos
       POSTGRES_DB: cresos
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5436:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cresos -d cresos"]
       interval: 5s
@@ -27,11 +27,14 @@ services:
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - cresos_api_uploads:/app/uploads
     environment:
-      DATABASE_URL: postgresql://cresos:cresos@db:5432/cresos
-      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-me}
+      # Use host Postgres when compose `db` is not running (e.g. existing cresos-db-1 on :5435)
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cresos:cresos@host.docker.internal:5435/cresos}
+      JWT_SECRET: ${CRESOS_DOCKER_JWT_SECRET:-local-docker-jwt-secret-change-me-32ch}
       PORT: "4000"
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_API_KEY_SECONDARY: ${GROQ_API_KEY_SECONDARY:-}
@@ -72,6 +75,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false
 
   web:
     restart: unless-stopped
