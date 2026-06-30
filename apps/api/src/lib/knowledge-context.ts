@@ -5,6 +5,8 @@ export type KnowledgeContextOptions = {
   sinceDays?: number;
   limit?: number;
   q?: string;
+  sourceType?: string;
+  kind?: string;
 };
 
 export type KnowledgeChunkRow = {
@@ -24,21 +26,26 @@ export async function fetchKnowledgeChunks(
   orgId: string,
   options?: KnowledgeContextOptions
 ): Promise<KnowledgeChunkRow[]> {
-  const sinceDays = options?.sinceDays ?? 30;
-  const since = new Date(Date.now() - sinceDays * 86_400_000);
-  const limit = Math.min(options?.limit ?? 40, 100);
   const q = options?.q?.trim();
+  const hasQuery = Boolean(q);
+  const sinceDays = options?.sinceDays ?? (hasQuery ? 0 : 30);
+  const since = sinceDays === 0 ? undefined : new Date(Date.now() - sinceDays * 86_400_000);
+  const limit = Math.min(options?.limit ?? (hasQuery ? 80 : 40), 200);
 
   return prisma.knowledgeChunk.findMany({
     where: {
       orgId,
-      occurredAt: { gte: since },
+      ...(since ? { occurredAt: { gte: since } } : {}),
       ...(options?.projectId ? { projectId: options.projectId } : {}),
+      ...(options?.sourceType ? { sourceType: options.sourceType } : {}),
+      ...(options?.kind ? { kind: options.kind } : {}),
       ...(q
         ? {
             OR: [
               { content: { contains: q, mode: "insensitive" } },
-              { title: { contains: q, mode: "insensitive" } }
+              { title: { contains: q, mode: "insensitive" } },
+              { sourceType: { contains: q, mode: "insensitive" } },
+              { kind: { contains: q, mode: "insensitive" } }
             ]
           }
         : {})
@@ -61,11 +68,16 @@ export async function fetchKnowledgeChunks(
 
 export async function getKnowledgePoolStats(prisma: PrismaClient, orgId: string) {
   const since30 = new Date(Date.now() - 30 * 86_400_000);
-  const [total, recent, byKind] = await Promise.all([
+  const [total, recent, byKind, bySource] = await Promise.all([
     prisma.knowledgeChunk.count({ where: { orgId } }),
     prisma.knowledgeChunk.count({ where: { orgId, occurredAt: { gte: since30 } } }),
     prisma.knowledgeChunk.groupBy({
       by: ["kind"],
+      where: { orgId },
+      _count: { _all: true }
+    }),
+    prisma.knowledgeChunk.groupBy({
+      by: ["sourceType"],
       where: { orgId },
       _count: { _all: true }
     })
@@ -73,7 +85,8 @@ export async function getKnowledgePoolStats(prisma: PrismaClient, orgId: string)
   return {
     total,
     recent30Days: recent,
-    byKind: Object.fromEntries(byKind.map((r) => [r.kind, r._count._all]))
+    byKind: Object.fromEntries(byKind.map((r) => [r.kind, r._count._all])),
+    bySource: Object.fromEntries(bySource.map((r) => [r.sourceType, r._count._all]))
   };
 }
 

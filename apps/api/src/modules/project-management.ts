@@ -258,10 +258,12 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
     const q = typeof req.query.q === "string" ? req.query.q : undefined;
-    const sinceDays = Number(req.query.sinceDays) || 30;
+    const sourceType = typeof req.query.sourceType === "string" ? req.query.sourceType : undefined;
+    const kind = typeof req.query.kind === "string" ? req.query.kind : undefined;
+    const sinceDays = req.query.sinceDays != null ? Number(req.query.sinceDays) : undefined;
 
     const [chunks, stats] = await Promise.all([
-      fetchKnowledgeChunks(prisma, orgId, { projectId, q, sinceDays, limit: 60 }),
+      fetchKnowledgeChunks(prisma, orgId, { projectId, q, sourceType, kind, sinceDays, limit: q ? 100 : 60 }),
       getKnowledgePoolStats(prisma, orgId)
     ]);
 
@@ -276,7 +278,8 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
 
   router.post("/knowledge/sync", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
     const orgId = req.auth!.orgId;
-    const sinceDays = Number((req.body as { sinceDays?: number })?.sinceDays) || 120;
+    const body = (req.body || {}) as { sinceDays?: number; fullHistory?: boolean };
+    const sinceDays = body.fullHistory ? 0 : body.sinceDays ?? 0;
     try {
       const result = await syncOrgKnowledgePool(prisma, orgId, { sinceDays });
       const stats = await getKnowledgePoolStats(prisma, orgId);

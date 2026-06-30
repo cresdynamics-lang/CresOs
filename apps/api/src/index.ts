@@ -11,6 +11,7 @@ import { scheduleDeveloperProgressReminders } from "./modules/developer-progress
 import { attachChatCommunityWs } from "./modules/chat-community-ws";
 import { scheduleDeveloperReportAiReviews } from "./modules/director-ai-automation";
 import { scheduleEmailPipeline } from "./modules/email-automation";
+import { attachKnowledgeRealtimeHooks } from "./lib/knowledge-realtime";
 
 // Ensure local `.env` wins over inherited environment variables in dev.
 dotenv.config({
@@ -20,9 +21,11 @@ dotenv.config({
 
 validateEnv();
 
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
-});
+const prisma = attachKnowledgeRealtimeHooks(
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
+  })
+);
 
 const app = createApp(prisma);
 const PORT = Number(process.env.PORT) || 4000;
