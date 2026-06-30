@@ -20,6 +20,8 @@ import { buildPmWorkspaceCompanion } from "../lib/pm-workspace-companion";
 import { fetchKnowledgeChunks, getKnowledgePoolStats } from "../lib/knowledge-context";
 import { syncOrgKnowledgePool } from "../lib/knowledge-backfill";
 import { generateKnowledgeInsights } from "../lib/knowledge-ai-insights";
+import { answerKnowledgeSearch } from "../lib/knowledge-ai-search";
+import { syncOrgTeamKnowledge } from "../lib/knowledge-team-index";
 import { PM_PROJECT_LIST_SELECT, sanitizeProjectForPm } from "../lib/pm-project-view";
 import {
   enrichCheckInsWithConversationIds,
@@ -276,9 +278,42 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
     });
   });
 
+  router.post("/knowledge/ask", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
+    const orgId = req.auth!.orgId;
+    const body = (req.body || {}) as { q?: string };
+    const q = typeof body.q === "string" ? body.q.trim() : "";
+    if (!q) {
+      res.status(400).json({ error: "Query q is required" });
+      return;
+    }
+    const roleKeys = req.auth!.roleKeys;
+    const audience = roleKeys.includes(ROLE_KEYS.sales)
+      ? "sales"
+      : roleKeys.includes(ROLE_KEYS.director)
+        ? "director"
+        : "pm";
+
+    try {
+      const result = await answerKnowledgeSearch(prisma, orgId, q, { audience });
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message || "Knowledge search failed" });
+    }
+  });
+
   router.post("/knowledge/sync", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
     const orgId = req.auth!.orgId;
-    const body = (req.body || {}) as { sinceDays?: number; fullHistory?: boolean };
+    const body = (req.body || {}) as { sinceDays?: number; fullHistory?: boolean; teamOnly?: boolean };
+    if (body.teamOnly) {
+      try {
+        const teamCount = await syncOrgTeamKnowledge(prisma, orgId);
+        const stats = await getKnowledgePoolStats(prisma, orgId);
+        res.json({ ok: true, ingested: teamCount, bySource: { team_member: teamCount }, stats });
+      } catch (e) {
+        res.status(500).json({ error: (e as Error).message || "Team sync failed" });
+      }
+      return;
+    }
     const sinceDays = body.fullHistory ? 0 : body.sinceDays ?? 0;
     try {
       const result = await syncOrgKnowledgePool(prisma, orgId, { sinceDays });

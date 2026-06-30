@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { findOrgUsersForKnowledgeSearch } from "./knowledge-team-index";
 
 export type KnowledgeContextOptions = {
   projectId?: string;
@@ -21,6 +22,39 @@ export type KnowledgeChunkRow = {
   metadata: unknown;
 };
 
+export async function fetchKnowledgeChunksForUsers(
+  prisma: PrismaClient,
+  orgId: string,
+  userIds: string[],
+  options?: { sinceDays?: number; limit?: number }
+): Promise<KnowledgeChunkRow[]> {
+  if (userIds.length === 0) return [];
+  const sinceDays = options?.sinceDays ?? 0;
+  const since = sinceDays === 0 ? undefined : new Date(Date.now() - sinceDays * 86_400_000);
+  const limit = Math.min(options?.limit ?? 60, 200);
+
+  return prisma.knowledgeChunk.findMany({
+    where: {
+      orgId,
+      ...(since ? { occurredAt: { gte: since } } : {}),
+      OR: [{ actorId: { in: userIds } }, { userId: { in: userIds } }]
+    },
+    orderBy: { occurredAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      kind: true,
+      sourceType: true,
+      title: true,
+      content: true,
+      occurredAt: true,
+      projectId: true,
+      actorId: true,
+      metadata: true
+    }
+  });
+}
+
 export async function fetchKnowledgeChunks(
   prisma: PrismaClient,
   orgId: string,
@@ -32,6 +66,23 @@ export async function fetchKnowledgeChunks(
   const since = sinceDays === 0 ? undefined : new Date(Date.now() - sinceDays * 86_400_000);
   const limit = Math.min(options?.limit ?? (hasQuery ? 80 : 40), 200);
 
+  const matchedUsers = hasQuery && q ? await findOrgUsersForKnowledgeSearch(prisma, orgId, q) : [];
+  const matchedUserIds = matchedUsers.map((u) => u.id);
+
+  const textOr = q
+    ? [
+        { content: { contains: q, mode: "insensitive" as const } },
+        { title: { contains: q, mode: "insensitive" as const } },
+        { sourceType: { contains: q, mode: "insensitive" as const } },
+        { kind: { contains: q, mode: "insensitive" as const } }
+      ]
+    : [];
+
+  const searchOr =
+    matchedUserIds.length > 0
+      ? [...textOr, { actorId: { in: matchedUserIds } }, { userId: { in: matchedUserIds } }]
+      : textOr;
+
   return prisma.knowledgeChunk.findMany({
     where: {
       orgId,
@@ -39,16 +90,7 @@ export async function fetchKnowledgeChunks(
       ...(options?.projectId ? { projectId: options.projectId } : {}),
       ...(options?.sourceType ? { sourceType: options.sourceType } : {}),
       ...(options?.kind ? { kind: options.kind } : {}),
-      ...(q
-        ? {
-            OR: [
-              { content: { contains: q, mode: "insensitive" } },
-              { title: { contains: q, mode: "insensitive" } },
-              { sourceType: { contains: q, mode: "insensitive" } },
-              { kind: { contains: q, mode: "insensitive" } }
-            ]
-          }
-        : {})
+      ...(searchOr.length ? { OR: searchOr } : {})
     },
     orderBy: { occurredAt: "desc" },
     take: limit,

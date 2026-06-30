@@ -36,16 +36,67 @@ export default function PmKnowledgePage() {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [sourceFilter, setSourceFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [searchAnswer, setSearchAnswer] = useState<string | null>(null);
+  const [searchAi, setSearchAi] = useState(false);
+  const [searching, setSearching] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const runSearch = useCallback(async () => {
+    setSearching(true);
     setError(null);
+    setSearchAnswer(null);
     try {
       const params = new URLSearchParams();
       if (q.trim()) {
         params.set("q", q.trim());
         params.set("sinceDays", "0");
       }
+      if (sourceFilter) params.set("sourceType", sourceFilter);
+
+      const requests: Promise<Response>[] = [apiFetch(`/pm/knowledge?${params.toString()}`)];
+      if (q.trim()) {
+        requests.push(
+          apiFetch("/pm/knowledge/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ q: q.trim() })
+          })
+        );
+      }
+
+      const [listRes, askRes] = await Promise.all(requests);
+
+      if (!listRes.ok) {
+        setError("Could not load knowledge pool");
+        return;
+      }
+      const data = (await listRes.json()) as { stats: KnowledgeStats; chunks: KnowledgeChunk[] };
+      setStats(data.stats);
+      setChunks(data.chunks);
+
+      if (askRes) {
+        if (askRes.ok) {
+          const askData = (await askRes.json()) as { answer: string; aiGenerated: boolean };
+          setSearchAnswer(askData.answer);
+          setSearchAi(askData.aiGenerated);
+        } else if (data.chunks.length === 0) {
+          setSearchAnswer("No matches yet. Try **Sync full history** to index team profiles, reports, and communications.");
+        }
+      } else {
+        setSearchAnswer(null);
+        setSearchAi(false);
+      }
+    } catch {
+      setError("Could not reach the server");
+    } finally {
+      setSearching(false);
+    }
+  }, [apiFetch, q, sourceFilter]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
       if (sourceFilter) params.set("sourceType", sourceFilter);
       const res = await apiFetch(`/pm/knowledge?${params.toString()}`);
       if (!res.ok) {
@@ -55,12 +106,26 @@ export default function PmKnowledgePage() {
       const data = (await res.json()) as { stats: KnowledgeStats; chunks: KnowledgeChunk[] };
       setStats(data.stats);
       setChunks(data.chunks);
+
+      if (data.stats.total === 0) {
+        await apiFetch("/pm/knowledge/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teamOnly: true })
+        });
+        const refresh = await apiFetch(`/pm/knowledge?${params.toString()}`);
+        if (refresh.ok) {
+          const refreshed = (await refresh.json()) as { stats: KnowledgeStats; chunks: KnowledgeChunk[] };
+          setStats(refreshed.stats);
+          setChunks(refreshed.chunks);
+        }
+      }
     } catch {
       setError("Could not reach the server");
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, q, sourceFilter]);
+  }, [apiFetch, sourceFilter]);
 
   const loadInsights = useCallback(async () => {
     setLoadingInsights(true);
@@ -93,6 +158,7 @@ export default function PmKnowledgePage() {
       }
       await load();
       await loadInsights();
+      setSearchAnswer(null);
     } finally {
       setSyncing(false);
     }
@@ -169,19 +235,19 @@ export default function PmKnowledgePage() {
         </PmSection>
       ) : null}
 
-      <PmSection label="Knowledge feed" description="Search across all indexed copies — tasks, comments, messages, reports, CRM, emails, and platform actions.">
+      <PmSection label="Knowledge feed" description="Search across all indexed copies — team profiles, tasks, comments, messages, reports, CRM, emails, and platform actions.">
         <div className="mb-4 flex flex-wrap gap-2">
           <input
             className="min-w-[12rem] flex-1 rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-200"
-            placeholder="Search anything — project name, dev update, client email…"
+            placeholder="Search — developers, Wilson, project name, blockers…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void load();
+              if (e.key === "Enter") void runSearch();
             }}
           />
-          <button type="button" className={pmNeu.btnGhost} onClick={() => void load()}>
-            Search all history
+          <button type="button" className={pmNeu.btnPrimary} disabled={searching} onClick={() => void runSearch()}>
+            {searching ? "Searching…" : "Search with AI"}
           </button>
           {sourceFilter ? (
             <button type="button" className={pmNeu.btnGhost} onClick={() => { setSourceFilter(""); }}>
@@ -189,6 +255,14 @@ export default function PmKnowledgePage() {
             </button>
           ) : null}
         </div>
+        {searchAnswer ? (
+          <div className={`${pmNeu.panelInset} mb-4 whitespace-pre-wrap border border-teal-500/20 px-4 py-3 text-sm leading-relaxed text-slate-200`}>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-teal-400">
+              {searchAi ? "AI answer from knowledge pool" : "Search summary"}
+            </p>
+            {searchAnswer}
+          </div>
+        ) : null}
         {error ? <p className="mb-3 text-sm text-rose-300">{error}</p> : null}
         {loading ? (
           <p className="text-sm text-slate-500">Loading knowledge…</p>

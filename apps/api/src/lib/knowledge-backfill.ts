@@ -7,6 +7,7 @@ import {
   ingestKnowledgeFromSalesReportComment,
   ingestKnowledgeFromTaskComment
 } from "./knowledge-realtime";
+import { syncOrgTeamKnowledge } from "./knowledge-team-index";
 
 const BATCH = 250;
 
@@ -61,6 +62,10 @@ export async function syncOrgKnowledgePool(
     bySource[source] = (bySource[source] ?? 0) + n;
     ingested += n;
   };
+
+  // —— Team roster (developers, sales, PM, etc.) — searchable by name and role ——
+  const teamCount = await syncOrgTeamKnowledge(prisma, orgId);
+  bump("team_member", teamCount);
 
   // —— Event log (all project/task/milestone/finance actions) ——
   await paginateIds(
@@ -335,17 +340,28 @@ export async function syncOrgKnowledgePool(
         where: { orgId, ...(sinceFilter ? { createdAt: sinceFilter } : {}) },
         orderBy: { id: "asc" },
         take: BATCH,
+        include: { submittedBy: { select: { name: true, email: true } } },
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
       }),
     async (reports) => {
       for (const r of reports) {
+        const who = r.submittedBy?.name?.trim() || r.submittedBy?.email || "Developer";
         await ingestKnowledgeChunk(prisma, {
           orgId,
           sourceType: "developer_report",
           sourceId: r.id,
           kind: "report",
-          title: `Developer report ${r.reportDate.toISOString().slice(0, 10)}`,
-          content: joinParts([r.implemented, r.pending, r.blockers, r.needsAttention, r.whatWorked, r.nextPlan, r.remarks]),
+          title: `Developer report — ${who} (${r.reportDate.toISOString().slice(0, 10)})`,
+          content: joinParts([
+            `Developer: ${who}`,
+            r.implemented,
+            r.pending,
+            r.blockers,
+            r.needsAttention,
+            r.whatWorked,
+            r.nextPlan,
+            r.remarks
+          ]),
           metadata: { reportDate: r.reportDate.toISOString(), reviewStatus: r.reviewStatus },
           occurredAt: r.createdAt,
           userId: r.submittedById,
