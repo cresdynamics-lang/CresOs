@@ -81,6 +81,7 @@ model Org {
   projectManagementMonths ProjectManagementMonth[]
   pmDeveloperCheckIns     PmDeveloperCheckIn[]
   projectPlanningNotes  ProjectPlanningNote[]
+  knowledgeChunks       KnowledgeChunk[]
 
   emailThreads          EmailThread[]
   emailAutomationConfig EmailAutomationConfig?
@@ -559,6 +560,7 @@ model Project {
   communityConversation Conversation?              @relation("ProjectCommunityConversation")
   pmCheckIns            PmDeveloperCheckIn[]
   planningNotes         ProjectPlanningNote[]
+  knowledgeChunks       KnowledgeChunk[]
 }
 
 /// Voice/text/document/client remarks used to generate agile plans (audit + role briefs).
@@ -582,6 +584,31 @@ model ProjectPlanningNote {
 
   @@index([orgId, projectId])
   @@index([projectId, createdAt])
+}
+
+/// Unified org knowledge pool — actions, conversations, plans, reports for PM AI analytics.
+model KnowledgeChunk {
+  id          String   @id @default(cuid())
+  orgId       String
+  sourceType  String
+  sourceId    String
+  kind        String
+  title       String?
+  content     String   @db.Text
+  metadata    Json?
+  occurredAt  DateTime
+  indexedAt   DateTime @default(now())
+  projectId   String?
+  userId      String?
+  actorId     String?
+
+  org     Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([orgId, sourceType, sourceId])
+  @@index([orgId, projectId, occurredAt])
+  @@index([orgId, kind, occurredAt])
+  @@index([orgId, actorId, occurredAt])
 }
 
 /// PM daily check-in / talk prompt to a developer (may mirror a community message).

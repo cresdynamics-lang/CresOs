@@ -73,6 +73,14 @@ const PM_NAV_ITEMS: NavItem[] = [
     icon: PmIconCheckIns
   },
   {
+    href: "/pm/knowledge",
+    label: "Knowledge pool",
+    shortLabel: "Knowledge",
+    description: "Actions, chats & AI analytics",
+    group: "delivery",
+    icon: PmIconReports
+  },
+  {
     href: "/pm/payments",
     label: "Payments",
     shortLabel: "Pay",

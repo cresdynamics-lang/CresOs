@@ -11,6 +11,7 @@ import {
   transcribeProjectPlanningAudio
 } from "../lib/groq-project-planner";
 import { countPlanMilestones, countPlanTasks } from "../lib/project-ai-plan-types";
+import { ingestKnowledgeChunkAsync } from "../lib/knowledge-ingest";
 
 const PLANNER_ROLES = [
   ROLE_KEYS.sales,
@@ -71,7 +72,7 @@ async function savePlanningNote(
     fileName?: string;
   }
 ) {
-  return prisma.projectPlanningNote.create({
+  const note = await prisma.projectPlanningNote.create({
     data: {
       orgId: input.orgId,
       projectId: input.projectId ?? null,
@@ -85,6 +86,21 @@ async function savePlanningNote(
       fileName: input.fileName ?? null
     }
   });
+
+  ingestKnowledgeChunkAsync(prisma, {
+    orgId: input.orgId,
+    sourceType: "planning_note",
+    sourceId: note.id,
+    kind: "plan",
+    title: input.aiSummary?.slice(0, 120) || `Planning (${input.source})`,
+    content: [input.aiSummary, input.rawText?.slice(0, 8000)].filter(Boolean).join("\n\n"),
+    metadata: { source: input.source, authorRole: input.authorRole, fileName: input.fileName },
+    occurredAt: note.createdAt,
+    projectId: input.projectId,
+    actorId: input.authorUserId
+  });
+
+  return note;
 }
 
 export function registerProjectAiPlanningRoutes(router: Router, prisma: PrismaClient): void {

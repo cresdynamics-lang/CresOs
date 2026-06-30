@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import { resolveGroqModel } from "./groq-model";
 import type { PmIntelligencePayload, PmProjectHealth } from "./pm-delivery-intelligence";
+import { buildKnowledgeContextBlock } from "./knowledge-context";
 
 const CHAT_MODEL = resolveGroqModel(
   process.env.GROQ_REMINDER_MODEL,
@@ -36,7 +37,9 @@ function fallbackBrief(intel: Omit<PmIntelligencePayload, "generatedAt"> & { gen
 
 export async function generatePmDeliveryBrief(
   intel: Omit<PmIntelligencePayload, "generatedAt"> & { generatedAt: string },
-  pmName?: string | null
+  pmName?: string | null,
+  prisma?: import("@prisma/client").PrismaClient,
+  orgId?: string
 ): Promise<{ brief: string; aiGenerated: boolean }> {
   const client = getGroq();
   if (!client) {
@@ -57,7 +60,11 @@ Never mention AI. Use agile language (sprint, milestone, unblock, scope).`;
 Org average health: ${intel.orgSummary.averageHealth}/100.
 At-risk projects: ${intel.orgSummary.atRiskCount}. Overdue milestones: ${intel.orgSummary.overdueMilestones}.
 Priority projects:
-${lines.join("\n") || "No urgent items."}`;
+${lines.join("\n") || "No urgent items."}${
+    prisma && orgId
+      ? `\n\nRecent org knowledge (actions, conversations, reports):\n${await buildKnowledgeContextBlock(prisma, orgId, { sinceDays: 14, limit: 15 })}`
+      : ""
+  }`;
 
   try {
     const completion = await client.chat.completions.create({

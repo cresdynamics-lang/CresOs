@@ -322,6 +322,10 @@ export class ChatCommunityService {
         await Promise.all(unreadUpdates);
       }
 
+      void import("../../lib/knowledge-ingest")
+        .then(({ ingestKnowledgeFromMessage }) => ingestKnowledgeFromMessage(this.prisma, message.id))
+        .catch(() => {});
+
       return message;
     } catch (error) {
       console.error('Error sending message:', error);

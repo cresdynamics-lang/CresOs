@@ -17,6 +17,9 @@ import {
 import { generatePmDeliveryBrief, generatePmSprintSuggestion } from "../lib/pm-ai-brief";
 import { buildIntelligencePayload, scoreProjectHealth } from "../lib/pm-delivery-intelligence";
 import { buildPmWorkspaceCompanion } from "../lib/pm-workspace-companion";
+import { fetchKnowledgeChunks, getKnowledgePoolStats } from "../lib/knowledge-context";
+import { syncOrgKnowledgePool } from "../lib/knowledge-backfill";
+import { generateKnowledgeInsights } from "../lib/knowledge-ai-insights";
 import { PM_PROJECT_LIST_SELECT, sanitizeProjectForPm } from "../lib/pm-project-view";
 import {
   enrichCheckInsWithConversationIds,
@@ -25,6 +28,7 @@ import {
 } from "../lib/pm-checkin-community";
 
 const PM_ACCESS = [ROLE_KEYS.project_manager, ROLE_KEYS.director, ROLE_KEYS.admin];
+const KNOWLEDGE_ACCESS = [...PM_ACCESS, ROLE_KEYS.sales];
 const PM_OR_DEV = [...PM_ACCESS, ROLE_KEYS.developer];
 
 function todayKey(): string {
@@ -242,12 +246,84 @@ export default function projectManagementRouter(prisma: PrismaClient): Router {
         where: { id: userId, orgId },
         select: { name: true }
       });
-      const { brief, aiGenerated } = await generatePmDeliveryBrief(payload, user?.name);
+      const { brief, aiGenerated } = await generatePmDeliveryBrief(payload, user?.name, prisma, orgId);
       res.json({ ...payload, brief, briefAiGenerated: aiGenerated });
       return;
     }
 
     res.json(payload);
+  });
+
+  router.get("/knowledge", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
+    const orgId = req.auth!.orgId;
+    const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const sinceDays = Number(req.query.sinceDays) || 30;
+
+    const [chunks, stats] = await Promise.all([
+      fetchKnowledgeChunks(prisma, orgId, { projectId, q, sinceDays, limit: 60 }),
+      getKnowledgePoolStats(prisma, orgId)
+    ]);
+
+    res.json({
+      stats,
+      chunks: chunks.map((c) => ({
+        ...c,
+        occurredAt: c.occurredAt.toISOString()
+      }))
+    });
+  });
+
+  router.post("/knowledge/sync", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
+    const orgId = req.auth!.orgId;
+    const sinceDays = Number((req.body as { sinceDays?: number })?.sinceDays) || 120;
+    try {
+      const result = await syncOrgKnowledgePool(prisma, orgId, { sinceDays });
+      const stats = await getKnowledgePoolStats(prisma, orgId);
+      res.json({ ok: true, ...result, stats });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message || "Knowledge sync failed" });
+    }
+  });
+
+  router.get("/knowledge/insights", requireRoles(KNOWLEDGE_ACCESS), async (req, res) => {
+    const orgId = req.auth!.orgId;
+    const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+    const roleKeys = req.auth!.roleKeys;
+    const audience = roleKeys.includes(ROLE_KEYS.sales)
+      ? "sales"
+      : roleKeys.includes(ROLE_KEYS.director)
+        ? "director"
+        : "pm";
+
+    const projects = await prisma.project.findMany({
+      where: { orgId, deletedAt: null, approvalStatus: "approved" },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        successCriteria: true,
+        managementProgressPercent: true,
+        milestones: { select: { id: true, name: true, dueDate: true, status: true } },
+        tasks: { where: { deletedAt: null }, select: { status: true } }
+      }
+    });
+    const scored = projects.map((p) =>
+      scoreProjectHealth({
+        project: p,
+        pendingCheckIns: 0,
+        reportsLast7Days: 0,
+        developerCount: 0
+      })
+    );
+    const intel = { ...buildIntelligencePayload(scored), generatedAt: new Date().toISOString() };
+
+    const result = await generateKnowledgeInsights(prisma, orgId, {
+      projectId,
+      intel,
+      audience
+    });
+    res.json(result);
   });
 
   router.post("/projects/:id/sprint-suggestion", requireRoles(PM_ACCESS), async (req, res) => {

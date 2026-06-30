@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { pmNeu } from "../../components/pm/pm-theme";
 import { PmNav } from "./pm-nav";
-import { canAccessPmWorkspace } from "../../lib/is-pm-only";
+import { canAccessPmWorkspace, canAccessKnowledgePool } from "../../lib/is-pm-only";
+import { usePathname } from "next/navigation";
 
 export function PmLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { auth, hydrated } = useAuth();
-  const canAccess = canAccessPmWorkspace(auth.roleKeys);
+  const pathname = usePathname();
+  const canAccess =
+    canAccessPmWorkspace(auth.roleKeys) ||
+    (canAccessKnowledgePool(auth.roleKeys) && pathname?.startsWith("/pm/knowledge"));
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
