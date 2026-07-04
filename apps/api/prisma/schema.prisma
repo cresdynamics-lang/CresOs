@@ -1555,6 +1555,8 @@ model EmailThread {
   receivedAt    DateTime @default(now())
   draftReply    String?  @db.Text
   revisionNotes String?  @db.Text
+  draftError    String?  @db.Text
+  hasAttachments Boolean @default(false)
   // status: pending_draft | awaiting_approval | editing | approved | sent | failed | ignored
   status        String   @default("pending_draft")
   // senderType: external (client/prospect → CEO tone) | internal (team member → Director tone)

@@ -20,6 +20,8 @@ export type ThreadSummary = {
   updatedAt: string;
   draftReply: string | null;
   waMessageSid: string | null;
+  hasAttachments: boolean;
+  draftError: string | null;
 };
 
 export type ThreadDetail = ThreadSummary & {

@@ -38,6 +38,12 @@ import { sendOutboundEmail } from "../lib/resend";
 import { resolveGroqModel } from "../lib/groq-model";
 import { resolveSenderGreeting } from "../lib/sender-greeting";
 import {
+  attachmentsHaveExtractedContent,
+  capEmailBodyForAi,
+  formatAttachmentBlockForAi,
+  summarizeEmailAttachments
+} from "../lib/email-attachment-text";
+import {
   loadOrgEmailTemplates,
   mergeTemplates,
   renderFromTemplate,
@@ -129,9 +135,9 @@ HOW TO THINK & RESPOND
    Every reply should end with either a single smart question OR a low-pressure invite:
    "Would it make sense to get on a 20-minute call this week so I can understand your setup properly?"
 
-7. KEEP IT SHORT
+7. KEEP IT SHORT (when the email has no attachments)
    3–5 sentences maximum unless detail is clearly needed.
-   Long replies lose people. Short, sharp replies command attention.
+   When attachments are present, go deeper — combine body + attachment content.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SIGN-OFF
@@ -307,6 +313,8 @@ async function draftEmailReply(params: {
   senderType: "internal" | "external";
   revisionNotes?: string | null;
   customInstructions: string;
+  hasAttachments?: boolean;
+  attachmentsWithContent?: boolean;
 }): Promise<string> {
   const greeting = resolveSenderGreeting({
     fromName: params.fromName,
@@ -355,11 +363,29 @@ ${websiteContext}
 - If NO: acknowledge their need thoughtfully, respond as a CEO would, and where possible redirect to how Cres Dynamics could still add value.`
     : "";
 
+  const attachmentDepthNote = params.hasAttachments
+    ? params.attachmentsWithContent
+      ? `\nATTACHMENT MODE (required):
+- The email includes attachments with EXTRACTED TEXT below the body. Read ALL of it.
+- Combine the email body AND every attachment's extracted content into one understanding before replying.
+- Reference specific details, numbers, names, and requests from the attachments — do not give a generic reply.
+- If attachments clarify scope, pricing, or requirements, address them directly in your answer.
+- You may use 2–4 short paragraphs when attachments need a substantive response.`
+      : `\nATTACHMENT MODE:
+- The email has attachments but text could not be fully extracted (PDF scan, image, etc.).
+- Acknowledge each attachment by filename, respond to what you can from the email body, and ask targeted follow-up questions for anything missing.`
+    : "";
+
+  const brevityNote = params.hasAttachments
+    ? ""
+    : `\n7. KEEP IT SHORT (when no attachments)
+   3–5 sentences maximum unless detail is clearly needed.`;
+
   const systemPrompt = `You are handling emails for Cres Dynamics (info@cresdynamics.com).
 
 ${toneNote}
 
-${baseInstructions}${websiteBlock}${serviceMatchNote}
+${baseInstructions}${websiteBlock}${serviceMatchNote}${attachmentDepthNote}
 
 IMPORTANT RULES:
 - Write ONLY the email reply body. Do not include subject lines, "To:", "From:", or any metadata.
@@ -367,7 +393,7 @@ IMPORTANT RULES:
 - Think and respond like a CEO who is diagnosing business problems, clarifying goals, and guiding the sender toward practical next steps.
 - Be detailed enough to show understanding of the sender's context and propose a clear solution path based on Cres Dynamics services.
 - Keep confidence high but avoid hype; tie recommendations to websites, CresOS/ERP, AI automation, operations systems, and finance platforms where relevant.
-- If the email mentions or contains attachments/documents, acknowledge them naturally in your reply.
+- When attachments are present, your reply MUST reflect their content — not just acknowledge them.${brevityNote}
 - Do not add any preamble, meta-commentary, or explanation of what you are doing.`;
 
   const greetingSourceNote =
@@ -388,11 +414,13 @@ ${params.body}${revisionBlock}`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_tokens: 1200,
+    max_tokens: params.hasAttachments ? 1800 : 1200,
     temperature: 0.45,
   });
 
-  return response.choices[0].message.content?.trim() ?? "";
+  const draft = response.choices[0].message.content?.trim() ?? "";
+  if (!draft) throw new Error("Groq returned an empty draft");
+  return draft;
 }
 
 // ── WhatsApp (Twilio) ─────────────────────────────────────────────────────────
@@ -544,19 +572,12 @@ async function sendEmailReply(
 
 // ── IMAP email fetching ───────────────────────────────────────────────────────
 
-function formatAttachmentBlock(attachments: Array<{ filename: string; contentType: string; size: number; text?: string }>): string {
-  if (!attachments.length) return "";
-  const lines: string[] = ["\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "ATTACHMENTS RECEIVED:"];
-  for (const att of attachments) {
-    const sizeKb = Math.round(att.size / 1024);
-    lines.push(`• ${att.filename || "unnamed"} (${att.contentType}, ${sizeKb}KB)`);
-    if (att.text && att.text.trim().length > 20) {
-      // Include up to 1500 chars of text content from the attachment
-      lines.push(`  [Content preview]: ${att.text.trim().slice(0, 1500)}${att.text.length > 1500 ? "…" : ""}`);
-    }
-  }
-  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  return lines.join("\n");
+function threadHasAttachments(thread: { hasAttachments?: boolean; body?: string | null }): boolean {
+  return Boolean(thread.hasAttachments || thread.body?.includes("ATTACHMENTS"));
+}
+
+function threadAttachmentsHaveContent(body: string | null | undefined): boolean {
+  return Boolean(body?.includes("[Extracted content]"));
 }
 
 async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<number> {
@@ -607,7 +628,9 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
-      const uids: number[] = await client.search({ seen: false }, { uid: true });
+      const lookbackDays = parseInt(process.env.EMAIL_AUTOMATION_IMAP_LOOKBACK_DAYS || "14", 10);
+      const since = new Date(Date.now() - lookbackDays * 86_400_000);
+      const uids: number[] = await client.search({ since }, { uid: true });
       if (uids.length === 0) return 0;
 
       for await (const msg of client.fetch(uids, { uid: true, source: true, envelope: true }, { uid: true })) {
@@ -647,38 +670,21 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
                 .trim();
             }
 
-            // ── Attachments ────────────────────────────────────────────────
+            // ── Attachments (PDF, Word, text, CSV — extracted for AI) ─────
             if (parsed.attachments && parsed.attachments.length > 0) {
               hasAttachments = true;
-              const attSummary: Array<{ filename: string; contentType: string; size: number; text?: string }> = [];
-              for (const att of parsed.attachments as Array<{
-                filename?: string;
-                contentType: string;
-                size: number;
-                content: Buffer;
-              }>) {
-                let attText: string | undefined;
-                // Extract text from plain-text or CSV attachments
-                if (
-                  att.contentType.startsWith("text/") ||
-                  att.contentType === "application/json" ||
-                  att.contentType === "application/csv"
-                ) {
-                  try {
-                    attText = att.content.toString("utf8");
-                  } catch { /* ignore */ }
-                }
-                attSummary.push({
-                  filename: att.filename || "unnamed",
-                  contentType: att.contentType,
-                  size: att.size,
-                  ...(attText ? { text: attText } : {}),
-                });
-              }
-              // Append attachment block to body so AI sees it
-              body += formatAttachmentBlock(attSummary);
+              const attSummary = await summarizeEmailAttachments(
+                parsed.attachments as Array<{
+                  filename?: string;
+                  contentType: string;
+                  size: number;
+                  content: Buffer;
+                }>
+              );
+              body += formatAttachmentBlockForAi(attSummary);
             }
-          } catch {
+          } catch (parseErr) {
+            console.error("[email-automation] Message parse error:", parseErr);
             fromEmail = msg.envelope?.from?.[0]?.address || "";
             fromName = msg.envelope?.from?.[0]?.name || "";
             subject = msg.envelope?.subject || "(no subject)";
@@ -686,13 +692,24 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
           }
         }
 
-        // Hard cap to avoid overwhelming AI context
-        if (body.length > 10000) body = body.slice(0, 10000) + "\n\n[... message truncated ...]";
+        body = capEmailBodyForAi(body);
 
         const senderType = detectSenderType(fromEmail, fromName);
 
         await prisma.emailThread.create({
-          data: { orgId, uid, messageId, fromEmail, fromName, subject, body, senderType, status: "pending_draft" },
+          data: {
+            orgId,
+            uid,
+            messageId,
+            fromEmail,
+            fromName,
+            subject,
+            body,
+            senderType,
+            hasAttachments,
+            status: "pending_draft",
+            draftError: null
+          },
         });
         count++;
         console.info(`[email-automation] New ${senderType} email from ${fromName || fromEmail} — "${subject}"${hasAttachments ? " [+attachments]" : ""}`);
@@ -716,10 +733,19 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
 // ── Send draft to WhatsApp for approval ──────────────────────────────────────
 
 async function dispatchDraft(
-  thread: { id: string; fromName: string; fromEmail: string; subject: string; senderType: string; draftReply: string | null; body?: string },
+  thread: {
+    id: string;
+    fromName: string;
+    fromEmail: string;
+    subject: string;
+    senderType: string;
+    draftReply: string | null;
+    hasAttachments?: boolean;
+    body?: string | null;
+  },
   prisma: PrismaClient
 ): Promise<void> {
-  const hasAttachments = !!(thread.body && thread.body.includes("ATTACHMENTS RECEIVED:"));
+  const hasAttachments = threadHasAttachments(thread);
   const sid = await sendWhatsAppDraft({
     threadId: thread.id,
     fromName: thread.fromName,
@@ -734,6 +760,7 @@ async function dispatchDraft(
     where: { id: thread.id },
     data: {
       status: "awaiting_approval",
+      draftError: null,
       ...(sid ? { waMessageSid: sid } : {}),
     },
   });
@@ -774,10 +801,43 @@ async function doApproveAndSend(threadId: string, prisma: PrismaClient): Promise
 
 // ── Email pipeline ────────────────────────────────────────────────────────────
 
+async function draftReplyForThread(
+  thread: {
+    fromName: string;
+    fromEmail: string;
+    subject: string;
+    body: string;
+    senderType: string;
+    revisionNotes?: string | null;
+    hasAttachments?: boolean;
+  },
+  customInstructions: string
+): Promise<string> {
+  const hasAttachments = threadHasAttachments(thread);
+  return draftEmailReply({
+    fromName: thread.fromName,
+    fromEmail: thread.fromEmail,
+    subject: thread.subject,
+    body: thread.body,
+    senderType: thread.senderType as "internal" | "external",
+    revisionNotes: thread.revisionNotes,
+    customInstructions,
+    hasAttachments,
+    attachmentsWithContent: hasAttachments && threadAttachmentsHaveContent(thread.body),
+  });
+}
+
 export async function runEmailPipeline(prisma: PrismaClient): Promise<void> {
+  if (process.env.EMAIL_AUTOMATION_ENABLED === "false") return;
+
   const orgId = await resolveOrgId(prisma);
   if (!orgId) {
     console.warn("[email-automation] No org found — set EMAIL_AUTOMATION_ORG_ID or create an org");
+    return;
+  }
+
+  const config = await prisma.emailAutomationConfig.findUnique({ where: { orgId } });
+  if (config?.isEnabled === false) {
     return;
   }
 
@@ -793,24 +853,15 @@ export async function runEmailPipeline(prisma: PrismaClient): Promise<void> {
 
   if (pending.length === 0) return;
 
-  const config = await prisma.emailAutomationConfig.findUnique({ where: { orgId } });
   const customInstructions = config?.instructions || "";
 
   for (const thread of pending) {
     try {
-      const draft = await draftEmailReply({
-        fromName: thread.fromName,
-        fromEmail: thread.fromEmail,
-        subject: thread.subject,
-        body: thread.body,
-        senderType: thread.senderType as "internal" | "external",
-        revisionNotes: thread.revisionNotes,
-        customInstructions,
-      });
+      const draft = await draftReplyForThread(thread, customInstructions);
 
       await prisma.emailThread.update({
         where: { id: thread.id },
-        data: { draftReply: draft },
+        data: { draftReply: draft, draftError: null },
       });
 
       await dispatchDraft({ ...thread, draftReply: draft }, prisma);
@@ -824,8 +875,12 @@ export async function runEmailPipeline(prisma: PrismaClient): Promise<void> {
         `[email-automation] Draft dispatched for ${thread.fromEmail} — greeting "${g.greetingName}" (from ${g.source})`
       );
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error(`[email-automation] Pipeline error for thread ${thread.id}:`, err);
-      await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "failed" } });
+      await prisma.emailThread.update({
+        where: { id: thread.id },
+        data: { status: "failed", draftError: message.slice(0, 2000) },
+      });
     }
   }
 }
@@ -1003,7 +1058,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
         select: {
           id: true, fromEmail: true, fromName: true, subject: true,
           status: true, senderType: true, receivedAt: true, updatedAt: true,
-          draftReply: true, waMessageSid: true,
+          draftReply: true, waMessageSid: true, hasAttachments: true, draftError: true,
         },
       }),
       prisma.emailThread.count({ where }),
@@ -1033,27 +1088,26 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     try {
       await prisma.emailThread.update({
         where: { id: thread.id },
-        data: { status: "pending_draft", ...(revisionNotes !== null && { revisionNotes }) },
+        data: { status: "pending_draft", draftError: null, ...(revisionNotes !== null && { revisionNotes }) },
       });
 
-      const draft = await draftEmailReply({
-        fromName: thread.fromName,
-        fromEmail: thread.fromEmail,
-        subject: thread.subject,
-        body: thread.body,
-        senderType: thread.senderType as "internal" | "external",
-        revisionNotes,
-        customInstructions: config?.instructions || "",
-      });
+      const draft = await draftReplyForThread(
+        { ...thread, revisionNotes },
+        config?.instructions || ""
+      );
 
-      await prisma.emailThread.update({ where: { id: thread.id }, data: { draftReply: draft } });
+      await prisma.emailThread.update({ where: { id: thread.id }, data: { draftReply: draft, draftError: null } });
       await dispatchDraft({ ...thread, draftReply: draft }, prisma);
 
       const updated = await prisma.emailThread.findUnique({ where: { id: thread.id } });
       res.json(updated);
     } catch (err) {
-      await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "failed" } });
-      res.status(500).json({ error: err instanceof Error ? err.message : "Draft generation failed" });
+      const message = err instanceof Error ? err.message : "Draft generation failed";
+      await prisma.emailThread.update({
+        where: { id: thread.id },
+        data: { status: "failed", draftError: message.slice(0, 2000) },
+      });
+      res.status(500).json({ error: message });
     }
   });
 
@@ -1210,9 +1264,51 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     res.json({ ok: true, config });
   });
 
+  // POST /email-automation/threads/:id/retry — re-queue failed draft generation
+  router.post("/threads/:id/retry", adminOnly, async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const orgId = req.auth!.orgId;
+    const thread = await prisma.emailThread.findFirst({ where: { id, orgId } });
+    if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
+    if (!["failed", "pending_draft"].includes(thread.status)) {
+      res.status(400).json({ error: "Only failed or pending threads can be retried" });
+      return;
+    }
+
+    const config = await prisma.emailAutomationConfig.findUnique({ where: { orgId } });
+    if (config?.isEnabled === false) {
+      res.status(400).json({ error: "Email automation is disabled in admin settings" });
+      return;
+    }
+
+    try {
+      await prisma.emailThread.update({
+        where: { id: thread.id },
+        data: { status: "pending_draft", draftError: null },
+      });
+      const draft = await draftReplyForThread(thread, config?.instructions || "");
+      await prisma.emailThread.update({ where: { id: thread.id }, data: { draftReply: draft, draftError: null } });
+      await dispatchDraft({ ...thread, draftReply: draft }, prisma);
+      const updated = await prisma.emailThread.findUnique({ where: { id: thread.id } });
+      res.json(updated);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Retry failed";
+      await prisma.emailThread.update({
+        where: { id: thread.id },
+        data: { status: "failed", draftError: message.slice(0, 2000) },
+      });
+      res.status(500).json({ error: message });
+    }
+  });
+
   // POST /email-automation/poll  — manual inbox check
   router.post("/poll", adminOnly, async (req: Request, res: Response) => {
     const orgId = req.auth!.orgId;
+    const config = await prisma.emailAutomationConfig.findUnique({ where: { orgId } });
+    if (config?.isEnabled === false) {
+      res.status(400).json({ ok: false, error: "Email automation is disabled in admin settings" });
+      return;
+    }
     try {
       const newEmails = await fetchNewEmails(orgId, prisma);
       await runEmailPipeline(prisma);

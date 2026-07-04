@@ -95,6 +95,7 @@ export function EmailAutomationConsole() {
   const [showConfig, setShowConfig] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [configInstructions, setConfigInstructions] = useState("");
+  const [configEnabled, setConfigEnabled] = useState(true);
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [showDefaultCeo, setShowDefaultCeo] = useState(false);
@@ -146,9 +147,14 @@ export function EmailAutomationConsole() {
     try {
       const res = await apiFetch("/email-automation/config");
       if (res.ok) {
-        const d = (await res.json()) as { instructions: string; ceoDefaultInstructions: string };
+        const d = (await res.json()) as {
+          instructions: string;
+          ceoDefaultInstructions: string;
+          isEnabled: boolean;
+        };
         setConfigInstructions(d.instructions);
         setCeoDefault(d.ceoDefaultInstructions);
+        setConfigEnabled(d.isEnabled ?? true);
       }
     } finally {
       setConfigLoading(false);
@@ -275,19 +281,41 @@ export function EmailAutomationConsole() {
     }
   }, [selected, apiFetch]);
 
+  const doRetry = useCallback(async () => {
+    if (!selected) return;
+    clearAction();
+    setActionBusy(true);
+    try {
+      const res = await apiFetch(`/email-automation/threads/${selected.id}/retry`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as ThreadDetail & { error?: string };
+      if (res.ok) {
+        setSelected({ ...selected, ...data });
+        setDraftText(data.draftReply || "");
+        setActionSuccess("Draft generated successfully.");
+        await loadThreads(offset);
+        await loadStats();
+      } else {
+        setActionError(data.error ?? "Retry failed");
+        if (data.draftError) setSelected((p) => (p ? { ...p, draftError: data.draftError, status: "failed" } : p));
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }, [selected, apiFetch, loadThreads, offset, loadStats]);
+
   const saveConfig = useCallback(async () => {
     setConfigSaving(true);
     try {
       await apiFetch("/email-automation/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instructions: configInstructions })
+        body: JSON.stringify({ instructions: configInstructions, isEnabled: configEnabled })
       });
-      setActionSuccess("AI instructions saved.");
+      setActionSuccess("Email AI settings saved.");
     } finally {
       setConfigSaving(false);
     }
-  }, [apiFetch, configInstructions]);
+  }, [apiFetch, configInstructions, configEnabled]);
 
   const doPoll = useCallback(async () => {
     setPolling(true);
@@ -319,6 +347,10 @@ export function EmailAutomationConsole() {
   }, [threads, search]);
 
   const canAct = selected && ["awaiting_approval", "editing", "failed"].includes(selected.status) && !actionBusy;
+  const canRetryDraft =
+    selected &&
+    (selected.status === "failed" || (selected.status === "pending_draft" && !selected.draftReply)) &&
+    !actionBusy;
 
   return (
     <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-4">
@@ -328,7 +360,7 @@ export function EmailAutomationConsole() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-400">Command · Email AI</p>
             <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Inbox &amp; automated replies</h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Inbound mail is drafted by AI, reviewed here, and sent using your editable email templates.
+              Inbound mail is drafted by AI using the email body plus extracted PDF/Word/text attachments, then reviewed here.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -357,14 +389,23 @@ export function EmailAutomationConsole() {
 
         {showConfig ? (
           <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#0e1319] p-4">
-            <p className="text-sm font-medium text-slate-200">Custom AI reply instructions</p>
+            <p className="text-sm font-medium text-slate-200">Email AI settings</p>
             <p className="mt-1 text-xs text-slate-500">
-              Overrides CEO / Director tone defaults for all inbound drafts.
+              Enable automation and optionally override CEO / Director tone defaults for all inbound drafts.
             </p>
             {configLoading ? (
               <p className="mt-3 text-xs text-slate-500">Loading…</p>
             ) : (
               <>
+                <label className="mt-4 flex cursor-pointer items-center gap-3 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={configEnabled}
+                    onChange={(e) => setConfigEnabled(e.target.checked)}
+                    className="rounded border-white/20 bg-[#121820]"
+                  />
+                  Email automation enabled (IMAP fetch + AI drafts)
+                </label>
                 <textarea
                   rows={5}
                   value={configInstructions}
@@ -374,7 +415,7 @@ export function EmailAutomationConsole() {
                 />
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <button type="button" onClick={() => void saveConfig()} disabled={configSaving} className={adminNeu.btnPrimary}>
-                    {configSaving ? "Saving…" : "Save instructions"}
+                    {configSaving ? "Saving…" : "Save settings"}
                   </button>
                   <button type="button" onClick={() => setShowDefaultCeo((v) => !v)} className="text-xs text-slate-400 hover:text-slate-300">
                     {showDefaultCeo ? "Hide" : "View"} CEO default
@@ -470,6 +511,9 @@ export function EmailAutomationConsole() {
                           <span className="text-[10px] text-slate-600">
                             {t.senderType === "external" ? "Client" : "Internal"}
                           </span>
+                          {t.hasAttachments ? (
+                            <span className="text-[10px] text-amber-500/90">📎 Attachments</span>
+                          ) : null}
                         </div>
                       </div>
                     </button>
@@ -524,9 +568,17 @@ export function EmailAutomationConsole() {
                     </span>
                     <p className="mt-2 text-xs text-slate-500">
                       {selected.senderType === "external" ? "External sender · CEO tone" : "Internal · Director tone"}
+                      {selected.hasAttachments ? " · Attachments included in AI context" : ""}
                     </p>
                   </div>
                 </div>
+
+                {selected.draftError ? (
+                  <div className={`${adminNeu.alertDanger} px-4 py-3 text-sm text-rose-300`}>
+                    <p className="font-medium">Draft failed</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-rose-200/90">{selected.draftError}</p>
+                  </div>
+                ) : null}
 
                 <EmailMessageCard
                   label="Received"
@@ -582,6 +634,17 @@ export function EmailAutomationConsole() {
                 ) : null}
                 {actionSuccess ? (
                   <div className={`${adminNeu.alertInfo} px-4 py-3 text-sm text-emerald-300`}>{actionSuccess}</div>
+                ) : null}
+
+                {canRetryDraft ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void doRetry()} disabled={actionBusy} className={adminNeu.btnPrimary}>
+                      {actionBusy ? "Generating…" : "Retry AI draft"}
+                    </button>
+                    <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnGhost}>
+                      Regenerate with notes
+                    </button>
+                  </div>
                 ) : null}
 
                 {["awaiting_approval", "editing", "failed"].includes(selected.status) ? (
