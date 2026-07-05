@@ -15,6 +15,7 @@ type NavItem = {
 /** Full admin workspace navigation — side panel is the single source of truth. */
 const ADMIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Command center", shortLabel: "Home", group: "command", match: "exact" },
+  { href: "/admin/ai-command", label: "AI Command", shortLabel: "AI Command", group: "command", match: "prefix" },
   { href: "/admin/email-automation", label: "Email AI", shortLabel: "Email AI", group: "command", match: "prefix" },
   { href: "/analytics", label: "Analytics", group: "command", match: "prefix" },
   { href: "/activity", label: "Activity log", shortLabel: "Activity", group: "command", match: "prefix" },

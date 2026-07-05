@@ -12,6 +12,7 @@ import { notifyAdminsInApp } from "./director-notifications";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
 import { deleteOrgUserHard } from "../lib/delete-org-user";
 import { mergeCapabilityFlags } from "../lib/user-capabilities";
+import adminAssistantRouter from "./admin-assistant";
 
 const OVERSIGHT_24H_MS = 24 * 60 * 60 * 1000;
 
@@ -1986,6 +1987,8 @@ export default function adminRouter(prisma: PrismaClient): Router {
       res.json(updated);
     }
   );
+
+  router.use("/assistant", adminAssistantRouter(prisma));
 
   return router;
 }
