@@ -19,6 +19,7 @@ import {
   type WorkspacePriorityItem
 } from "../workspace/workspace-dashboard-primitives";
 import { formatMoney } from "../../app/format-money";
+import { AdminAiCommandWidget } from "../assistant/admin-ai-command-widget";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -45,6 +46,7 @@ const ADMIN_QUICK_LINKS = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/org", label: "Departments" },
   { href: "/admin/roles", label: "Roles" },
+  { href: "/admin/ai-command", label: "AI Command" },
   { href: "/admin/email-automation", label: "Email AI" },
   { href: "/analytics", label: "Analytics" },
   { href: "/approvals", label: "Approvals" },
@@ -402,6 +404,8 @@ export function DirectorOverviewDashboard({
           {loading ? "Refreshing…" : "Refresh all"}
         </button>
       </header>
+
+      {variant === "admin" ? <AdminAiCommandWidget /> : null}
 
       {alertItems.length > 0 ? (
         <WorkspaceDashboardSection label="Today's priorities" roleKeys={roleKeys}>

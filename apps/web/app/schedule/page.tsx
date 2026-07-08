@@ -95,7 +95,7 @@ export default function SchedulePage() {
   const canDeleteOrEditHistory = canDeleteScheduleItems(roleKeys);
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter">("week");
   const [completedFilter, setCompletedFilter] = useState<"all" | "done" | "pending">("all");
-  const [orgSchedule, setOrgSchedule] = useState(false);
+  const [orgSchedule, setOrgSchedule] = useState(showOrgToggle);
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);

@@ -17,7 +17,8 @@ export type FinanceSection =
   | "project_analysis"
   | "clients_due"
   | "approvals"
-  | "reports";
+  | "reports"
+  | "assistant";
 
 type NavItem = {
   href: string;
@@ -66,6 +67,14 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
     href: "/finance/expenses",
     label: "Expenses",
     section: "expenses",
+    group: "records",
+    roles: ["admin", "finance"]
+  },
+  {
+    href: "/finance/assistant",
+    label: "AI Assistant",
+    shortLabel: "AI",
+    section: "assistant",
     group: "records",
     roles: ["admin", "finance"]
   },
@@ -302,5 +311,9 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
     title: "Financial reports",
     description:
       "Download or email period reports (weekly, monthly, 6 months, yearly, custom). Payments in vs HR salaries & project ops out."
+  },
+  assistant: {
+    title: "Finance AI Assistant",
+    description: "Voice or text to record expenses and payments, or ask about cash flow and invoices."
   }
 };

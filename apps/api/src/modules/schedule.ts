@@ -3,6 +3,7 @@ import type { Router } from "express";
 import { Router as createRouter } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { requireRoles, ROLE_KEYS, ALL_APP_ROLE_KEYS } from "./auth-middleware";
+import { processScheduleReminders } from "./schedule-reminders";
 
 const SCHEDULE_ROLES = ALL_APP_ROLE_KEYS;
 
@@ -74,6 +75,8 @@ export default function scheduleRouter(prisma: PrismaClient): Router {
     "/",
     requireRoles(SCHEDULE_ROLES),
     async (req, res) => {
+      await processScheduleReminders(prisma).catch(() => undefined);
+
       const orgId = req.auth!.orgId;
       const userId = req.auth!.userId;
       const roleKeys = req.auth!.roleKeys;

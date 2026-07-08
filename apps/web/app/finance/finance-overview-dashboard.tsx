@@ -10,6 +10,7 @@ import { WorkforceAnalyticsPanel } from "../../components/analytics/workforce-an
 import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { FinanceNeuPanel, FinanceStatCard, FinanceStatGrid } from "../../components/finance/finance-ui";
 import { financeNeu } from "../../components/finance/finance-theme";
+import { FinanceAiAssistantWidget } from "../../components/assistant/finance-ai-assistant-widget";
 import {
   WorkspaceAlignedTips,
   WorkspaceDashboardSection,
@@ -193,6 +194,10 @@ export function FinanceOverviewDashboard({
           </p>
         </div>
       </header>
+
+      {auth.roleKeys.includes("finance") || auth.roleKeys.includes("admin") ? (
+        <FinanceAiAssistantWidget />
+      ) : null}
 
       {alertItems.length > 0 ? (
         <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>

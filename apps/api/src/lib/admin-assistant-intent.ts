@@ -1,38 +1,26 @@
-import Groq from "groq-sdk";
 import { randomUUID } from "crypto";
 import type { PrismaClient } from "@prisma/client";
-import { resolveGroqModel } from "./groq-model";
+import { groqChatWithFallback } from "./groq-chat-fallback";
+import { listGroqApiKeys } from "./groq-model";
 import { buildAdminAssistantContextBlock } from "./admin-assistant-context";
+import {
+  detectIntelligenceFocus,
+  intelligenceSystemAddon,
+  parseIntelligenceFocus,
+  type IntelligenceFocus
+} from "./admin-assistant-focus";
+import { buildIntelligenceFocusBlock } from "./admin-assistant-intelligence-context";
 import type {
   AdminAssistantMode,
   AdminAssistantResponse,
+  HoursInsight,
   PersonInsight,
   ProjectBrief,
   ProposedAction
 } from "./admin-assistant-types";
 
-const CHAT_MODEL = resolveGroqModel(
-  process.env.GROQ_DIRECTOR_MODEL,
-  process.env.GROQ_REMINDER_MODEL,
-  process.env.GROQ_EMAIL_MODEL
-);
-
-let groqClient: Groq | null = null;
-let groqKey: string | null = null;
-
-function getGroq(): Groq | null {
-  const candidates = [
-    process.env.GROQ_API_KEY,
-    process.env.GROQ_API_KEY_SECONDARY,
-    process.env.GROQ_API_KEY_TERTIARY
-  ];
-  const key = candidates.find((k) => typeof k === "string" && k.trim().length > 0)?.trim();
-  if (!key) return null;
-  if (!groqClient || groqKey !== key) {
-    groqClient = new Groq({ apiKey: key });
-    groqKey = key;
-  }
-  return groqClient;
+function hasGroqKeys(): boolean {
+  return listGroqApiKeys().length > 0;
 }
 
 function parseJsonFromModel(raw: string): unknown {
@@ -112,28 +100,85 @@ function normalizePersonInsights(raw: unknown): PersonInsight[] {
     const roles = o.roleHints ?? o.role_hints;
     out.push({
       personHint,
+      userId: asString(o.userId ?? o.user_id) || undefined,
       ...(Array.isArray(roles) ? { roleHints: roles.map((r) => asString(r)).filter(Boolean) } : {}),
+      summary: asString(o.summary) || "",
+      reportDaysLast30: asNumber(o.reportDaysLast30 ?? o.report_days_last_30) ?? undefined,
+      estimatedHours: asNumber(o.estimatedHours ?? o.estimated_hours) ?? undefined,
+      actualHours: asNumber(o.actualHours ?? o.actual_hours) ?? undefined
+    });
+  }
+  return out;
+}
+
+function normalizeHoursInsights(raw: unknown): HoursInsight[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HoursInsight[] = [];
+  for (const item of raw) {
+    const o = item as Record<string, unknown>;
+    const subject = asString(o.subject ?? o.personHint ?? o.person_hint);
+    if (!subject) continue;
+    out.push({
+      subject,
+      daysMentioned: asNumber(o.daysMentioned ?? o.days_mentioned) ?? undefined,
+      estimatedHours: asNumber(o.estimatedHours ?? o.estimated_hours) ?? undefined,
+      actualHours: asNumber(o.actualHours ?? o.actual_hours) ?? undefined,
       summary: asString(o.summary) || ""
     });
   }
   return out;
 }
 
-function fallbackResponse(mode: AdminAssistantMode, message: string): AdminAssistantResponse {
+function fallbackResponse(
+  mode: AdminAssistantMode,
+  message: string,
+  poolEmpty?: boolean
+): AdminAssistantResponse {
+  const poolHint = poolEmpty
+    ? " Knowledge pool is empty — sync PM → Knowledge pool for richer context."
+    : "";
+  const isExecute = mode === "execute";
   return {
     mode,
     reply:
-      mode === "execute"
-        ? `I understood: "${message.slice(0, 200)}". Groq is not configured — set GROQ_API_KEY to preview tasks and meetings. Execution is not available in Phase 1.`
-        : `I would analyze org data for: "${message.slice(0, 200)}". Configure GROQ_API_KEY for AI answers. Try syncing the knowledge pool for richer context.`,
-    aiGenerated: false
+      isExecute
+        ? `I understood: "${message.slice(0, 200)}". Groq is not configured — set GROQ_API_KEY to preview tasks and meetings.${poolHint}`
+        : `I would analyze org data for: "${message.slice(0, 200)}". Configure GROQ_API_KEY for AI answers.${poolHint}`,
+    aiGenerated: false,
+    ...(isExecute
+      ? { proposedActions: [] as ProposedAction[] }
+      : {
+          projectBriefs: [] as ProjectBrief[],
+          personInsights: [] as PersonInsight[],
+          hoursInsights: [] as HoursInsight[]
+        })
+  };
+}
+
+function enrichResponse(
+  response: AdminAssistantResponse,
+  options: {
+    mode: AdminAssistantMode;
+    focus?: IntelligenceFocus;
+    transcript?: string;
+  }
+): AdminAssistantResponse {
+  return {
+    ...response,
+    ...(options.mode !== "execute" && options.focus ? { focus: options.focus } : {}),
+    ...(options.transcript ? { transcript: options.transcript } : {})
   };
 }
 
 export async function runAdminAssistant(
   prisma: PrismaClient,
   orgId: string,
-  options: { message: string; mode: AdminAssistantMode; transcript?: string }
+  options: {
+    message: string;
+    mode: AdminAssistantMode;
+    transcript?: string;
+    focus?: IntelligenceFocus;
+  }
 ): Promise<AdminAssistantResponse> {
   const message = options.message.trim();
   if (!message) {
@@ -145,13 +190,22 @@ export async function runAdminAssistant(
   }
 
   const contextBlock = await buildAdminAssistantContextBlock(prisma, orgId, message);
-  const client = getGroq();
-  if (!client) return fallbackResponse(options.mode, message);
-
+  const poolEmpty = contextBlock.includes("KNOWLEDGE POOL (0 indexed items)");
   const isExecute = options.mode === "execute";
+  const focus = !isExecute
+    ? detectIntelligenceFocus(message, parseIntelligenceFocus(options.focus))
+    : undefined;
+  const enrichOpts = { mode: options.mode, focus, transcript: options.transcript };
+
+  if (!hasGroqKeys()) return enrichResponse(fallbackResponse(options.mode, message, poolEmpty), enrichOpts);
+
+  const focusBlock =
+    focus && focus !== "general"
+      ? await buildIntelligenceFocusBlock(prisma, orgId, focus, message)
+      : "";
 
   const system = isExecute
-    ? `You are CresOS Admin Command — parse the admin's request into PREVIEW actions only (nothing is executed yet).
+    ? `You are CresOS Admin Command — parse the admin's request into actions to schedule meetings, tasks, or project tasks.
 Use org context, knowledge pool, and Cres Dynamics capabilities from cresdynamics.com.
 Return JSON only:
 {
@@ -177,20 +231,21 @@ Rules:
 - Split multiple meetings/tasks into separate proposedActions
 - Do not invent people or projects not suggested by context`
     : `You are CresOS Admin Intelligence — answer the admin using ONLY org context below.
+${focus ? intelligenceSystemAddon(focus) : ""}
 Return JSON only:
 {
   "reply": "detailed markdown-friendly answer",
   "projectBriefs": [{ "projectId", "projectName", "status", "healthScore", "riskLevel", "summary" }],
-  "personInsights": [{ "personHint", "roleHints", "summary" }]
+  "personInsights": [{ "personHint", "userId", "roleHints", "summary", "reportDaysLast30", "estimatedHours", "actualHours" }],
+  "hoursInsights": [{ "subject", "daysMentioned", "estimatedHours", "actualHours", "summary" }]
 }
 Cover when asked: project status, who is working on what, days active, hours vs days on tasks/reports, risks, and how needs map to Cres Dynamics services.
-If knowledge is thin, say what to sync. No invented facts.`;
+If knowledge is thin, suggest syncing the knowledge pool at PM → Knowledge pool. No invented facts.`;
 
-  const user = `Admin message:\n${message}\n\n--- ORG CONTEXT ---\n${contextBlock}`;
+  const user = `Admin message:\n${message}\n\n--- ORG CONTEXT ---\n${contextBlock}${focusBlock ? `\n\n--- FOCUS DATA ---\n${focusBlock}` : ""}`;
 
   try {
-    const completion = await client.chat.completions.create({
-      model: CHAT_MODEL,
+    const { raw } = await groqChatWithFallback({
       messages: [
         { role: "system", content: system },
         { role: "user", content: user }
@@ -199,9 +254,7 @@ If knowledge is thin, say what to sync. No invented facts.`;
       temperature: 0.35,
       response_format: { type: "json_object" }
     });
-
-    const raw = completion.choices[0]?.message?.content?.trim();
-    if (!raw) return fallbackResponse(options.mode, message);
+    if (!raw) return enrichResponse(fallbackResponse(options.mode, message, poolEmpty), enrichOpts);
 
     const parsed = parseJsonFromModel(raw) as Record<string, unknown>;
     const reply = asString(parsed.reply) || "Here is what I found.";
@@ -209,6 +262,7 @@ If knowledge is thin, say what to sync. No invented facts.`;
       mode: options.mode,
       reply,
       aiGenerated: true,
+      ...(focus ? { focus } : {}),
       ...(options.transcript ? { transcript: options.transcript } : {})
     };
 
@@ -217,15 +271,20 @@ If knowledge is thin, say what to sync. No invented facts.`;
     } else {
       base.projectBriefs = normalizeProjectBriefs(parsed.projectBriefs ?? parsed.project_briefs);
       base.personInsights = normalizePersonInsights(parsed.personInsights ?? parsed.person_insights);
+      base.hoursInsights = normalizeHoursInsights(parsed.hoursInsights ?? parsed.hours_insights);
     }
 
     return base;
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error("[admin-assistant] Groq failed:", e);
-    return {
-      ...fallbackResponse(options.mode, message),
-      reply: `AI temporarily unavailable: ${e instanceof Error ? e.message : "unknown error"}. ${fallbackResponse(options.mode, message).reply}`
-    };
+    const fallback = fallbackResponse(options.mode, message, poolEmpty);
+    return enrichResponse(
+      {
+        ...fallback,
+        reply: `AI temporarily unavailable: ${e instanceof Error ? e.message : "unknown error"}. ${fallback.reply}`
+      },
+      enrichOpts
+    );
   }
 }

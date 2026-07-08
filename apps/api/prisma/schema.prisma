@@ -82,6 +82,7 @@ model Org {
   pmDeveloperCheckIns     PmDeveloperCheckIn[]
   projectPlanningNotes  ProjectPlanningNote[]
   knowledgeChunks       KnowledgeChunk[]
+  assistantSessions     AssistantSession[]
 
   emailThreads          EmailThread[]
   emailAutomationConfig EmailAutomationConfig?
@@ -231,6 +232,7 @@ model User {
   pmCheckInsSent         PmDeveloperCheckIn[] @relation("PmCheckInSender")
   projectPlanningNotes   ProjectPlanningNote[] @relation("ProjectPlanningNoteAuthor")
   pmCheckInsReceived     PmDeveloperCheckIn[] @relation("PmCheckInDeveloper")
+  assistantSessions      AssistantSession[]
 
   // Chat System Relations
   chatUser          ChatUser?
@@ -609,6 +611,29 @@ model KnowledgeChunk {
   @@index([orgId, projectId, occurredAt])
   @@index([orgId, kind, occurredAt])
   @@index([orgId, actorId, occurredAt])
+}
+
+/// Audit trail for Admin / Finance AI assistant interactions.
+model AssistantSession {
+  id              String   @id @default(cuid())
+  orgId           String
+  userId          String
+  assistantKind   String // admin | finance
+  mode            String // execute | intelligence
+  focus           String?
+  message         String   @db.Text
+  transcript      String?  @db.Text
+  reply           String?  @db.Text
+  proposedActions Json?
+  executedResults Json?
+  aiGenerated     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  org  Org  @relation(fields: [orgId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([orgId, userId, createdAt])
 }
 
 /// PM daily check-in / talk prompt to a developer (may mirror a community message).

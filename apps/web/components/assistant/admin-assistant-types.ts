@@ -1,5 +1,15 @@
 export type AdminAssistantMode = "execute" | "intelligence";
 
+export type IntelligenceFocus = "projects" | "person" | "hours" | "services" | "general";
+
+export const INTELLIGENCE_FOCUS_OPTIONS: { id: IntelligenceFocus; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "projects", label: "Projects" },
+  { id: "person", label: "People" },
+  { id: "hours", label: "Hours vs days" },
+  { id: "services", label: "Services fit" }
+];
+
 export type ProposedAction = {
   id: string;
   kind: "schedule_meeting" | "create_task" | "create_project_task";
@@ -23,18 +33,64 @@ export type ProjectBrief = {
 
 export type PersonInsight = {
   personHint: string;
+  userId?: string;
   roleHints?: string[];
+  summary: string;
+  reportDaysLast30?: number;
+  estimatedHours?: number;
+  actualHours?: number;
+};
+
+export type HoursInsight = {
+  subject: string;
+  daysMentioned?: number;
+  estimatedHours?: number;
+  actualHours?: number;
   summary: string;
 };
 
 export type AdminAssistantResponse = {
-  mode: AdminAssistantMode;
+  mode: "execute" | "intelligence";
   reply: string;
   aiGenerated: boolean;
+  focus?: IntelligenceFocus;
+  sessionId?: string;
   transcript?: string;
   proposedActions?: ProposedAction[];
   projectBriefs?: ProjectBrief[];
   personInsights?: PersonInsight[];
+  hoursInsights?: HoursInsight[];
+};
+
+export type ExecutedActionResult = {
+  actionId: string;
+  kind: ProposedAction["kind"];
+  success: boolean;
+  error?: string;
+  candidates?: { id: string; label: string }[];
+  scheduleItemId?: string;
+  taskId?: string;
+  resolvedAssignee?: string;
+  resolvedProject?: string;
+};
+
+export type ExecuteActionsResponse = {
+  results: ExecutedActionResult[];
+  succeeded: number;
+  failed: number;
+  sessionId?: string;
+};
+
+export type AssistantSessionRow = {
+  id: string;
+  assistantKind: string;
+  mode: string;
+  focus: string | null;
+  message: string;
+  reply: string | null;
+  aiGenerated: boolean;
+  createdAt: string;
+  user: { id: string; name: string | null; email: string };
 };
 
 export const EXECUTE_PROMPTS = [
@@ -46,6 +102,6 @@ export const EXECUTE_PROMPTS = [
 export const INTELLIGENCE_PROMPTS = [
   "Summarize all active projects and flag risks",
   "How is Wilson doing in the last 30 days?",
-  "Convert latest developer reports from days to hours estimates",
+  "Convert Wilson's latest report from days to hours estimates",
   "Which projects map to CresOS vs website services?"
 ];

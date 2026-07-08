@@ -23,6 +23,7 @@ import {
   resolveReportPeriod
 } from "../services/finance/financial-report";
 import { generateFinancialReportPdf } from "../services/finance/financial-report-pdf";
+import financeAssistantRouter from "./finance-assistant";
 
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
@@ -3591,6 +3592,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
       }
     }
   );
+
+  router.use("/assistant", financeAssistantRouter(prisma));
 
   return router;
 }
