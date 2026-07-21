@@ -26,6 +26,11 @@ function getGroq(): Groq | null {
   return groqClient;
 }
 
+/** True when at least one Groq API key is configured (required for Whisper transcription). */
+export function isTranscriptionConfigured(): boolean {
+  return getGroq() !== null;
+}
+
 export async function transcribeReportAudio(
   buffer: Buffer,
   mimeType: string,

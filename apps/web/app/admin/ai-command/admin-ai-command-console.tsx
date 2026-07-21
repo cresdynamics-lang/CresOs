@@ -177,6 +177,35 @@ export function AdminAiCommandConsole() {
     [apiFetch, tab, focus, loadSessions]
   );
 
+  const runAudioFile = useCallback(
+    async (file: File) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const form = new FormData();
+        form.append("audio", file, file.name || "admin-audio-entry");
+        form.append("mode", tab);
+        if (tab === "intelligence" && focus !== "general") form.append("focus", focus);
+        const res = await apiFetch("/admin/assistant/from-audio", { method: "POST", body: form });
+        const data = (await res.json().catch(() => ({}))) as AdminAssistantResponse & { error?: string };
+        if (!res.ok) {
+          setError(data.error ?? "Audio upload failed");
+          return;
+        }
+        if (data.transcript) setMessage(data.transcript);
+        setResult(data);
+        setExecutionResults([]);
+        setExecuteMessage(null);
+        void loadSessions();
+      } catch {
+        setError("Could not reach the server");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiFetch, tab, focus, loadSessions]
+  );
+
   const resolveCandidate = useCallback(
     (action: ProposedAction, field: "assignee" | "project", candidateId: string) => {
       setOverrides((prev) => ({
@@ -264,6 +293,7 @@ export function AdminAiCommandConsole() {
               onChange={setMessage}
               onSubmit={() => void runChat(message, tab)}
               onVoiceResult={(blob, mime) => void runVoice(blob, mime)}
+              onAudioFile={(file) => void runAudioFile(file)}
               loading={loading}
               placeholder={
                 tab === "execute"

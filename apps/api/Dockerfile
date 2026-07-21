@@ -7,6 +7,8 @@ RUN npm ci
 COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
+# Small droplets (1GB) OOM during tsc without an explicit heap + swap.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN npx prisma generate && npm run build
 
 FROM node:20-bookworm-slim

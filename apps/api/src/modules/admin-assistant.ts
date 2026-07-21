@@ -8,6 +8,7 @@ import { parseIntelligenceFocus } from "../lib/admin-assistant-focus";
 import { logAssistantSession, listAssistantSessions } from "../lib/assistant-session";
 import type { AdminAssistantMode, ProposedAction } from "../lib/admin-assistant-types";
 import { transcribeProjectPlanningAudio } from "../lib/groq-project-planner";
+import { isTranscriptionConfigured } from "../lib/groq-voice-report";
 
 const EXECUTE_ROLES = [ROLE_KEYS.admin];
 const INTELLIGENCE_ROLES = [ROLE_KEYS.admin, ROLE_KEYS.director];
@@ -15,6 +16,12 @@ const INTELLIGENCE_ROLES = [ROLE_KEYS.admin, ROLE_KEYS.director];
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 }
+});
+
+// Uploaded voice notes / meeting clips can be larger than a quick mic capture.
+const uploadAudioFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
 });
 
 function parseMode(raw: unknown): AdminAssistantMode {
@@ -170,6 +177,106 @@ export default function adminAssistantRouter(prisma: PrismaClient): Router {
     }
   });
 
+  /**
+   * Data-entry API 1 — transcription only.
+   * Turns spoken audio into text so the user can review/edit the transcript
+   * before anything is parsed or executed (the "conversational confirm" step).
+   */
+  router.post(
+    "/transcribe",
+    requireRoles(INTELLIGENCE_ROLES),
+    uploadAudioFile.single("audio"),
+    async (req, res) => {
+      const file = req.file;
+      if (!file?.buffer?.length) {
+        res.status(400).json({ error: "audio file is required" });
+        return;
+      }
+      if (!isTranscriptionConfigured()) {
+        res.status(503).json({ error: "Voice transcription is not configured (GROQ_API_KEY missing)" });
+        return;
+      }
+      const transcript =
+        (await transcribeProjectPlanningAudio(file.buffer, file.mimetype, file.originalname)) ?? "";
+      if (!transcript.trim()) {
+        res.status(422).json({ error: "Could not transcribe audio. Try again or type your request." });
+        return;
+      }
+      res.json({ transcript });
+    }
+  );
+
+  /**
+   * Data-entry API 2 — audio file entry.
+   * Accepts a pre-recorded audio file (voice note, meeting clip), transcribes it,
+   * runs the assistant, and optionally executes the proposed actions in one call
+   * when autoExecute=true (admin only). Response always includes the transcript
+   * and a confirmation summary of what was done.
+   */
+  router.post(
+    "/from-audio",
+    requireRoles(INTELLIGENCE_ROLES),
+    uploadAudioFile.single("audio"),
+    async (req, res) => {
+      const file = req.file;
+      if (!file?.buffer?.length) {
+        res.status(400).json({ error: "audio file is required" });
+        return;
+      }
+      if (!isTranscriptionConfigured()) {
+        res.status(503).json({ error: "Voice transcription is not configured (GROQ_API_KEY missing)" });
+        return;
+      }
+
+      const mode = parseMode(req.body?.mode);
+      const autoExecute = req.body?.autoExecute === "true" || req.body?.autoExecute === true;
+      const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+      if ((mode === "execute" || autoExecute) && !isAdmin) {
+        res.status(403).json({ error: "Execute mode requires admin role" });
+        return;
+      }
+
+      const transcript =
+        (await transcribeProjectPlanningAudio(file.buffer, file.mimetype, file.originalname)) ?? "";
+      if (!transcript.trim()) {
+        res.status(422).json({ error: "Could not transcribe audio. Try again or type your request." });
+        return;
+      }
+
+      const focus = parseIntelligenceFocus(req.body?.focus);
+
+      try {
+        const result = await runAdminAssistant(prisma, req.auth!.orgId, {
+          message: transcript,
+          mode,
+          transcript,
+          focus
+        });
+
+        let executedResults: Awaited<ReturnType<typeof executeProposedActions>> | undefined;
+        if (autoExecute && mode === "execute" && result.proposedActions?.length) {
+          executedResults = await executeProposedActions(
+            prisma,
+            req.auth!.orgId,
+            req.auth!.userId,
+            result.proposedActions
+          );
+          result.reply =
+            `${result.reply}\n\nConfirmation: ${executedResults.succeeded} action(s) executed` +
+            (executedResults.failed > 0 ? `, ${executedResults.failed} need review.` : ".");
+        }
+
+        await attachSession(prisma, req.auth!.orgId, req.auth!.userId, mode, transcript, result, {
+          transcript,
+          executedResults: executedResults?.results
+        });
+        res.json({ ...result, executed: executedResults ?? null });
+      } catch (e) {
+        res.status(500).json({ error: (e as Error).message || "Audio assistant failed" });
+      }
+    }
+  );
+
   router.post(
     "/from-voice",
     requireRoles(INTELLIGENCE_ROLES),
@@ -184,6 +291,10 @@ export default function adminAssistantRouter(prisma: PrismaClient): Router {
       const mode = parseMode(req.body?.mode);
       if (mode === "execute" && !req.auth!.roleKeys.includes(ROLE_KEYS.admin)) {
         res.status(403).json({ error: "Execute mode requires admin role" });
+        return;
+      }
+      if (!isTranscriptionConfigured()) {
+        res.status(503).json({ error: "Voice transcription is not configured (GROQ_API_KEY missing)" });
         return;
       }
 

@@ -256,12 +256,13 @@ async function run8pmAiReportForOrg(prisma: PrismaClient, orgId: string, orgName
       }
     });
 
+    // In-app only — director briefing stays internal (no email / no info@ mailbox traffic).
     await notifyDirectors(
       prisma,
       orgId,
       subject,
       `${body}\n\nReport ID: ${created.id}`,
-      { type: "admin_ai_report.generated" }
+      { type: "admin_ai_report.generated", email: false }
     );
 
     await notifyAdminsInApp(

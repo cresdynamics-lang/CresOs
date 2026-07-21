@@ -36,12 +36,26 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
   const org = await prisma.org.findUnique({ where: { id: orgId }, select: { name: true } });
   const orgName = org?.name ?? "Cres Dynamics";
 
+  /** Digests/briefings must stay internal; never send outbound (also blocks info@ via aliases). */
+  const INTERNAL_ONLY_TYPES = new Set(["developer.daily_digest", "admin_ai_report.generated"]);
+
   for (const n of rows) {
     const to = (n.to ?? "").trim();
     if (!to) {
       await prisma.notification.update({
         where: { id: n.id },
         data: { status: "failed", error: "Missing recipient", sentAt: new Date() }
+      });
+      continue;
+    }
+    if (INTERNAL_ONLY_TYPES.has(n.type) || to.toLowerCase() === "info@cresdynamics.com") {
+      await prisma.notification.update({
+        where: { id: n.id },
+        data: {
+          status: "cancelled",
+          error: "Suppressed: digest/briefing kept internal (no outbound email)",
+          sentAt: new Date()
+        }
       });
       continue;
     }

@@ -10,11 +10,32 @@ function pickRecorderMime(): string {
   return "";
 }
 
+function describeMicError(err: unknown): string {
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return "Microphone needs HTTPS. Open the site via its https:// address.";
+  }
+  const name = err instanceof DOMException ? err.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Microphone blocked. Allow mic access for this site in your browser (padlock icon → Site settings → Microphone).";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "No microphone found. Plug one in or check your input device.";
+    case "NotReadableError":
+      return "Microphone is busy in another app. Close it and try again.";
+    default:
+      return "Could not start recording. Check browser microphone permissions and try again.";
+  }
+}
+
 type AssistantInputPanelProps = {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   onVoiceResult: (blob: Blob, mimeType: string) => void;
+  /** Optional: upload a pre-recorded audio file (voice note, meeting clip, etc.). */
+  onAudioFile?: (file: File) => void;
   loading?: boolean;
   placeholder?: string;
   submitLabel?: string;
@@ -25,14 +46,17 @@ export function AssistantInputPanel({
   onChange,
   onSubmit,
   onVoiceResult,
+  onAudioFile,
   loading = false,
   placeholder = "Speak or type your request…",
   submitLabel = "Send"
 }: AssistantInputPanelProps) {
   const [recording, setRecording] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -41,7 +65,11 @@ export function AssistantInputPanel({
 
   const startRecording = async () => {
     if (loading || recording) return;
-    if (!navigator.mediaDevices?.getUserMedia) return;
+    setMicError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicError(describeMicError(null));
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -60,8 +88,9 @@ export function AssistantInputPanel({
       mediaRecorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-    } catch {
+    } catch (err) {
       stopStream();
+      setMicError(describeMicError(err));
     }
   };
 
@@ -70,6 +99,15 @@ export function AssistantInputPanel({
     if (rec && rec.state !== "inactive") rec.stop();
     mediaRecorderRef.current = null;
     setRecording(false);
+  };
+
+  const handleFilePick = (files: FileList | null) => {
+    const file = files?.[0];
+    if (file && onAudioFile) {
+      setMicError(null);
+      onAudioFile(file);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -109,8 +147,32 @@ export function AssistantInputPanel({
         >
           {recording ? "Stop recording" : "🎤 Voice"}
         </button>
+        {onAudioFile ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*,video/webm,.m4a,.mp3,.wav,.ogg,.webm"
+              className="hidden"
+              onChange={(e) => handleFilePick(e.target.files)}
+            />
+            <button
+              type="button"
+              disabled={loading || recording}
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-xl border border-white/[0.08] bg-[#121820] px-4 py-2 text-sm font-medium text-slate-200 disabled:opacity-50"
+            >
+              📎 Audio file
+            </button>
+          </>
+        ) : null}
         <span className="text-[11px] text-slate-500">⌘/Ctrl + Enter to send</span>
       </div>
+      {micError ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {micError}
+        </p>
+      ) : null}
     </div>
   );
 }

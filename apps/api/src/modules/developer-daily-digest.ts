@@ -180,8 +180,10 @@ async function runDigestForDeveloper(
   const body = lines.join("\n");
 
   try {
+    // In-app only — do not email digests (aliases like info@ flooded the shared inbox).
     await notifyDirectors(prisma, orgId, `EOD platform digest — ${developerName} (${dateKey})`, body, {
-      type: "developer.daily_digest"
+      type: "developer.daily_digest",
+      email: false
     });
   } catch (e) {
     await prisma.developerDailyDigestSent

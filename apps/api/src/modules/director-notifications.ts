@@ -93,51 +93,77 @@ export async function notifyAdminsInApp(
 }
 
 /**
- * Notify all directors (Director role) by in-app + email; mirror the same message to Admin in-app.
+ * Notify all directors (Director role) by in-app (+ optional email); mirror the same message to Admin in-app.
  * Admins receive structural-tier visibility without duplicate email (see notifyAdminsInApp).
+ * Set `email: false` for digests/briefings that should stay internal (avoids mailbox noise / aliases like info@).
  */
 export async function notifyDirectors(
   prisma: PrismaClient,
   orgId: string,
   subject: string,
   body: string,
-  options?: { type?: string }
+  options?: { type?: string; email?: boolean }
 ): Promise<void> {
   const directors = await getDirectorUsers(prisma, orgId);
   const type = options?.type ?? NOTIFICATION_TYPE;
+  const sendEmail = options?.email !== false;
   const emailSubject = `[CresOS] ${subject}`;
   if (directors.length > 0) {
     await prisma.notification.createMany({
-      data: directors.flatMap((d) => [
-        {
-          orgId,
-          channel: "in_app",
-          to: d.id,
-          subject,
-          body,
-          status: "sent",
-          type,
-          tier: "governance"
-        },
-        {
-          orgId,
-          channel: "email",
-          to: d.email,
-          subject: emailSubject,
-          body,
-          status: "queued",
-          type,
-          tier: "governance"
+      data: directors.flatMap((d) => {
+        const rows: {
+          orgId: string;
+          channel: string;
+          to: string;
+          subject: string;
+          body: string;
+          status: string;
+          type: string;
+          tier: string;
+        }[] = [
+          {
+            orgId,
+            channel: "in_app",
+            to: d.id,
+            subject,
+            body,
+            status: "sent",
+            type,
+            tier: "governance"
+          }
+        ];
+        if (sendEmail) {
+          rows.push({
+            orgId,
+            channel: "email",
+            to: d.email,
+            subject: emailSubject,
+            body,
+            status: "queued",
+            type,
+            tier: "governance"
+          });
         }
-      ])
+        return rows;
+      })
     });
-    await logAdminActivity(prisma, {
-      orgId,
-      type: "email_sent",
-      summary: `Email to ${directors.length} director(s): ${subject}`,
-      body: body.slice(0, 300) + (body.length > 300 ? "…" : ""),
-      metadata: { type, recipientCount: directors.length }
-    });
+    if (sendEmail) {
+      await logAdminActivity(prisma, {
+        orgId,
+        type: "email_sent",
+        summary: `Email to ${directors.length} director(s): ${subject}`,
+        body: body.slice(0, 300) + (body.length > 300 ? "…" : ""),
+        metadata: { type, recipientCount: directors.length }
+      });
+    } else {
+      await logAdminActivity(prisma, {
+        orgId,
+        type: "director.internal",
+        summary: `In-app to ${directors.length} director(s): ${subject}`,
+        body: body.slice(0, 300) + (body.length > 300 ? "…" : ""),
+        metadata: { type, recipientCount: directors.length, email: false }
+      });
+    }
   }
   await notifyAdminsInApp(prisma, orgId, subject, body, {
     type,

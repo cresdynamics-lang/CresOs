@@ -104,6 +104,34 @@ export function FinanceAssistantConsole() {
     [apiFetch, tab, loadSessions]
   );
 
+  const runAudioFile = useCallback(
+    async (file: File) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const form = new FormData();
+        form.append("audio", file, file.name || "finance-audio-entry");
+        form.append("mode", tab);
+        const res = await apiFetch("/finance/assistant/from-audio", { method: "POST", body: form });
+        const data = (await res.json().catch(() => ({}))) as FinanceAssistantResponse & { error?: string };
+        if (!res.ok) {
+          setError(data.error ?? "Audio upload failed");
+          return;
+        }
+        if (data.transcript) setMessage(data.transcript);
+        setResult(data);
+        setExecutionResults([]);
+        setExecuteMessage(null);
+        void loadSessions();
+      } catch {
+        setError("Could not reach the server");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiFetch, tab, loadSessions]
+  );
+
   const runExecute = useCallback(
     async (actions: FinanceProposedAction[]) => {
       if (actions.length === 0) return;
@@ -200,6 +228,7 @@ export function FinanceAssistantConsole() {
             onChange={setMessage}
             onSubmit={() => void runChat(message, tab)}
             onVoiceResult={(blob, mime) => void runVoice(blob, mime)}
+            onAudioFile={(file) => void runAudioFile(file)}
             loading={loading}
             placeholder={
               tab === "execute"
