@@ -11,6 +11,7 @@ export type DeveloperSection =
   | "tasks"
   | "reports"
   | "projects"
+  | "onboarding"
   | "community"
   | "settings";
 
@@ -58,6 +59,15 @@ const DEVELOPER_NAV_ITEMS: NavItem[] = [
     shortLabel: "Projects",
     section: "projects",
     group: "delivery",
+    roles: ["developer"],
+    match: "prefix"
+  },
+  {
+    href: "/developer/onboarding",
+    label: "Onboarding",
+    shortLabel: "Onboard",
+    section: "onboarding",
+    group: "workspace",
     roles: ["developer"],
     match: "prefix"
   }
@@ -209,6 +219,10 @@ export const DEVELOPER_PAGE_TITLES: Record<DeveloperSection, { title: string; de
   projects: {
     title: "Projects",
     description: "View assigned projects, milestones, and delivery status."
+  },
+  onboarding: {
+    title: "Developer onboarding",
+    description: "Ask AI what’s expected of you, who to go to when blocked, and how Cres Dynamics delivery works."
   },
   community: {
     title: "Community",

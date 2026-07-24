@@ -5,6 +5,7 @@ export function resolveWorkspace(pathname: string): WorkspaceKey | null {
   const path = pathname.split("?")[0] ?? pathname;
   if (path.startsWith("/finance") || path.startsWith("/approvals")) return "finance";
   if (path.startsWith("/admin")) return "admin";
+  if (path.startsWith("/director")) return "director";
   if (path.startsWith("/hr")) return "hr";
   if (path.startsWith("/pm")) return "pm";
   if (

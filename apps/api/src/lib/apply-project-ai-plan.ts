@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { resolvePlanProjectDetails, type ProjectAiPlan } from "./project-ai-plan-types";
+import { normalizeProjectAiPlanDates } from "./normalize-project-ai-plan-dates";
 
 function parseDate(value?: string | null): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -37,7 +38,8 @@ export async function applyProjectAiPlan(
     merge?: boolean;
   }
 ): Promise<{ milestonesCreated: number; tasksCreated: number }> {
-  const { orgId, projectId, plan, merge = true } = input;
+  const { orgId, projectId, plan: rawPlan, merge = true } = input;
+  const plan = normalizeProjectAiPlanDates(rawPlan);
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, orgId, deletedAt: null }

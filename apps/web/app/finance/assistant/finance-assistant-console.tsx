@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../auth-context";
 import { financeNeu } from "../../../components/finance/finance-theme";
 import { AssistantInputPanel } from "../../../components/assistant/assistant-input-panel";
+import { AssistantStreamPanel } from "../../../components/assistant/assistant-stream-panel";
 import { FinanceActionChips } from "../../../components/assistant/finance-action-chips";
+import { useAssistantStream } from "../../../hooks/use-assistant-stream";
 import {
   FINANCE_EXECUTE_PROMPTS,
   FINANCE_INTELLIGENCE_PROMPTS,
@@ -20,6 +22,15 @@ type Tab = "execute" | "intelligence";
 
 export function FinanceAssistantConsole() {
   const { apiFetch } = useAuth();
+  const {
+    start: startStream,
+    reset: resetStream,
+    phase: streamPhase,
+    statusMessage: streamStatus,
+    reply: streamReply,
+    loading: streamLoading,
+    error: streamError
+  } = useAssistantStream();
   const [tab, setTab] = useState<Tab>("execute");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,30 +60,33 @@ export function FinanceAssistantConsole() {
     async (text: string, mode: Tab) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      setLoading(true);
       setError(null);
-      try {
-        const res = await apiFetch("/finance/assistant/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmed, mode })
-        });
-        const data = (await res.json().catch(() => ({}))) as FinanceAssistantResponse & { error?: string };
-        if (!res.ok) {
-          setError(data.error ?? "Assistant request failed");
-          return;
-        }
-        setResult(data);
-        setExecutionResults([]);
-        setExecuteMessage(null);
-        void loadSessions();
-      } catch {
-        setError("Could not reach the server");
-      } finally {
-        setLoading(false);
+      setResult(null);
+      setExecutionResults([]);
+      setExecuteMessage(null);
+      setLoading(true);
+
+      const out = await startStream("/finance/assistant/stream", { message: trimmed, mode });
+      setLoading(false);
+
+      if (out.error && out.error !== "aborted") {
+        setError(out.error);
+        return;
       }
+      if (!out.reply && !out.donePayload) return;
+
+      const payload = (out.donePayload ?? {}) as Partial<FinanceAssistantResponse>;
+      const reply = out.reply || payload.reply || "";
+      setResult({
+        mode,
+        reply,
+        aiGenerated: payload.aiGenerated ?? true,
+        proposedActions: (payload.proposedActions as FinanceProposedAction[]) ?? [],
+        sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined
+      });
+      void loadSessions();
     },
-    [apiFetch, loadSessions]
+    [startStream, loadSessions]
   );
 
   const runVoice = useCallback(
@@ -169,114 +183,141 @@ export function FinanceAssistantConsole() {
   );
 
   const prompts = tab === "execute" ? FINANCE_EXECUTE_PROMPTS : FINANCE_INTELLIGENCE_PROMPTS;
+  const busy = loading || streamLoading;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
-      <div className={`${financeNeu.panel} p-4 sm:p-6`}>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Finance · AI</p>
-        <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Finance AI Assistant</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Voice or text to record expenses and payments, or ask about cash flow and invoices.
-        </p>
-
-        <div className="mt-4 flex gap-2 border-b border-white/[0.06] pb-3">
-          <button
-            type="button"
-            onClick={() => {
-              setTab("execute");
-              setResult(null);
-              setError(null);
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              tab === "execute" ? financeNeu.navActive : financeNeu.navIdle
-            }`}
-          >
-            Record
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab("intelligence");
-              setResult(null);
-              setError(null);
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              tab === "intelligence" ? financeNeu.navActive : financeNeu.navIdle
-            }`}
-          >
-            Ask
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {prompts.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setMessage(p)}
-              className="rounded-full border border-white/[0.06] bg-[#0e1319] px-3 py-1.5 text-left text-[11px] text-slate-400 hover:border-emerald-500/30 hover:text-slate-200"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4">
-          <AssistantInputPanel
-            value={message}
-            onChange={setMessage}
-            onSubmit={() => void runChat(message, tab)}
-            onVoiceResult={(blob, mime) => void runVoice(blob, mime)}
-            onAudioFile={(file) => void runAudioFile(file)}
-            loading={loading}
-            placeholder={
-              tab === "execute"
-                ? "e.g. Paid Wilson 8000 transport yesterday, client sent 50k M-Pesa for invoice 12…"
-                : "e.g. How much did we spend on salaries this month?"
-            }
-            submitLabel={tab === "execute" ? "Preview" : "Ask"}
-          />
-        </div>
-
-        {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-      </div>
-
-      {result ? (
         <div className={`${financeNeu.panel} p-4 sm:p-6`}>
-          {tab === "execute" ? (
-            <div className="space-y-4">
-              <p className="whitespace-pre-wrap text-sm text-slate-300">{result.reply}</p>
-              {executeMessage ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-emerald-300">{executeMessage}</p>
-                  {executeMessage.includes("recorded") ? (
-                    <div className="flex flex-wrap gap-3 text-xs font-medium">
-                      <Link href="/finance/ledger" className="text-emerald-300 hover:text-emerald-200">
-                        All transactions →
-                      </Link>
-                      <Link href="/finance/projects" className="text-emerald-300 hover:text-emerald-200">
-                        Project balances →
-                      </Link>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <FinanceActionChips
-                actions={result.proposedActions ?? []}
-                executing={executing}
-                executionResults={executionResults}
-                onExecuteAll={() => void runExecute(result.proposedActions ?? [])}
-                onExecuteOne={(a) => void runExecute([a])}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Finance · AI</p>
+          <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Finance AI Assistant</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Ask streams live from the ledger + knowledge pool. Record mode previews expenses/payments for confirmation.
+          </p>
+
+          <div className="mt-4 flex gap-2 border-b border-white/[0.06] pb-3">
+            <button
+              type="button"
+              onClick={() => {
+                setTab("execute");
+                setResult(null);
+                setError(null);
+                resetStream();
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                tab === "execute" ? financeNeu.navActive : financeNeu.navIdle
+              }`}
+            >
+              Record
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab("intelligence");
+                setResult(null);
+                setError(null);
+                resetStream();
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                tab === "intelligence" ? financeNeu.navActive : financeNeu.navIdle
+              }`}
+            >
+              Ask
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {prompts.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setMessage(p)}
+                className="rounded-full border border-white/[0.06] bg-[#0e1319] px-3 py-1.5 text-left text-[11px] text-slate-400 hover:border-emerald-500/30 hover:text-slate-200"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <AssistantInputPanel
+              value={message}
+              onChange={setMessage}
+              onSubmit={() => void runChat(message, tab)}
+              onVoiceResult={(blob, mime) => void runVoice(blob, mime)}
+              onAudioFile={(file) => void runAudioFile(file)}
+              loading={busy}
+              placeholder={
+                tab === "execute"
+                  ? "e.g. Paid Wilson 8000 transport yesterday, client sent 50k M-Pesa for invoice 12…"
+                  : "e.g. How much did we spend on salaries this month?"
+              }
+              submitLabel={tab === "execute" ? "Preview" : "Ask"}
+            />
+          </div>
+
+          {(busy || streamReply) && !result ? (
+            <div className="mt-4">
+              <AssistantStreamPanel
+                phase={streamPhase}
+                statusMessage={streamStatus}
+                reply={streamReply}
+                loading={streamLoading}
+                accentClass="text-emerald-400"
               />
             </div>
-          ) : (
-            <div className={`${financeNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-slate-200`}>
-              {result.reply}
-            </div>
-          )}
+          ) : null}
+
+          {error || streamError ? (
+            <p className="mt-3 text-sm text-rose-300">{error || streamError}</p>
+          ) : null}
         </div>
-      ) : null}
+
+        {result ? (
+          <div className={`${financeNeu.panel} p-4 sm:p-6`}>
+            {tab === "execute" ? (
+              <div className="space-y-4">
+                <AssistantStreamPanel
+                  phase={streamPhase === "idle" ? "done" : streamPhase}
+                  statusMessage={streamStatus}
+                  reply={result.reply}
+                  loading={false}
+                  accentClass="text-emerald-400"
+                />
+                {executeMessage ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-emerald-300">{executeMessage}</p>
+                    {executeMessage.includes("recorded") ? (
+                      <div className="flex flex-wrap gap-3 text-xs font-medium">
+                        <Link href="/finance/ledger" className="text-emerald-300 hover:text-emerald-200">
+                          All transactions →
+                        </Link>
+                        <Link href="/finance/projects" className="text-emerald-300 hover:text-emerald-200">
+                          Project balances →
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <FinanceActionChips
+                  actions={result.proposedActions ?? []}
+                  executing={executing}
+                  executionResults={executionResults}
+                  onExecuteAll={() => void runExecute(result.proposedActions ?? [])}
+                  onExecuteOne={(a) => void runExecute([a])}
+                />
+              </div>
+            ) : (
+              <AssistantStreamPanel
+                phase={streamPhase === "idle" ? "done" : streamPhase}
+                statusMessage={streamStatus}
+                reply={result.reply}
+                loading={false}
+                accentClass="text-emerald-400"
+              />
+            )}
+          </div>
+        ) : null}
       </div>
 
       {sessions.length > 0 ? (
@@ -288,7 +329,10 @@ export function FinanceAssistantConsole() {
                 <p className="font-medium text-slate-300">{s.mode}</p>
                 <p className="mt-1 line-clamp-2 text-slate-500">{s.message}</p>
                 <p className="mt-1 text-[10px] text-slate-600">
-                  {new Date(s.createdAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                  {new Date(s.createdAt).toLocaleString(undefined, {
+                    dateStyle: "short",
+                    timeStyle: "short"
+                  })}
                 </p>
               </li>
             ))}

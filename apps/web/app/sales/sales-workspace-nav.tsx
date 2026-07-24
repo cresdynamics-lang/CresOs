@@ -74,6 +74,14 @@ const SALES_NAV_ITEMS: NavItem[] = [
     group: "review",
     roles: ["admin", "director_admin", "finance"],
     match: "prefix"
+  },
+  {
+    href: "/sales/onboarding",
+    label: "Onboarding",
+    shortLabel: "Onboard",
+    group: "workspace",
+    roles: ["admin", "sales", "director_admin"],
+    match: "prefix"
   }
 ];
 

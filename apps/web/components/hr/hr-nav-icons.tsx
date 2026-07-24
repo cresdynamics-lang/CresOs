@@ -78,6 +78,18 @@ export function HrIconAnalytics({ className = "h-[18px] w-[18px]" }: IconProps) 
   );
 }
 
+export function HrIconOnboarding({ className = "h-[18px] w-[18px]" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path
+        d="M12 3l2.2 4.5L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.7L12 3z"
+        strokeLinejoin="round"
+      />
+      <path d="M5 20h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function HrBrandMark({ className = "" }: { className?: string }) {
   return (
     <span

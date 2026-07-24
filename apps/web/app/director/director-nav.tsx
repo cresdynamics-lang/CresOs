@@ -14,6 +14,7 @@ type NavItem = {
 
 const DIRECTOR_NAV: NavItem[] = [
   { href: "/dashboard", label: "Command center", shortLabel: "Home", group: "command", match: "exact" },
+  { href: "/director/onboarding", label: "Onboarding", shortLabel: "Onboard", group: "command", match: "prefix" },
   { href: "/analytics", label: "Analytics", group: "command", match: "prefix" },
   { href: "/activity", label: "Activity log", shortLabel: "Activity", group: "command", match: "prefix" },
   { href: "/leads", label: "Leads", group: "pipeline", match: "prefix" },

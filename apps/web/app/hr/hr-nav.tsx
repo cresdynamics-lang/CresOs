@@ -10,6 +10,7 @@ import {
   HrIconAnalytics,
   HrIconCommunity,
   HrIconOverview,
+  HrIconOnboarding,
   HrIconPayroll,
   HrIconPeople,
   HrIconSettings,
@@ -65,6 +66,15 @@ const HR_NAV_ITEMS: NavItem[] = [
     description: "Salaries & finance sync",
     group: "people",
     icon: HrIconPayroll
+  },
+  {
+    href: "/hr/onboarding",
+    label: "Onboarding",
+    shortLabel: "Onboard",
+    description: "Role AI — expectations & who to ask",
+    group: "people",
+    icon: HrIconOnboarding,
+    match: "prefix"
   }
 ];
 

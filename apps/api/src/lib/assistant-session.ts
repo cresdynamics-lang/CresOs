@@ -5,7 +5,7 @@ import type { FinanceAssistantResponse } from "./finance-assistant-types";
 export type LogAssistantSessionInput = {
   orgId: string;
   userId: string;
-  assistantKind: "admin" | "finance";
+  assistantKind: "admin" | "finance" | "onboarding";
   mode: string;
   focus?: string | null;
   message: string;

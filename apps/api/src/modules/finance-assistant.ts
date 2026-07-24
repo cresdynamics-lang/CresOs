@@ -9,6 +9,8 @@ import { logAssistantSession, listAssistantSessions } from "../lib/assistant-ses
 import type { FinanceAssistantMode, FinanceProposedAction } from "../lib/finance-assistant-types";
 import { transcribeProjectPlanningAudio } from "../lib/groq-project-planner";
 import { isTranscriptionConfigured } from "../lib/groq-voice-report";
+import { createAssistantSseWriter } from "../lib/assistant-sse";
+import { streamFinanceAssistant } from "../lib/finance-assistant-stream";
 
 const FINANCE_ASSISTANT_ROLES = [ROLE_KEYS.finance, ROLE_KEYS.admin];
 
@@ -71,6 +73,32 @@ export default function financeAssistantRouter(prisma: PrismaClient): Router {
     } catch (e) {
       res.status(500).json({ error: (e as Error).message || "Assistant failed" });
     }
+  });
+
+  /** Async SSE stream — status phases + token-by-token reply (micro-transport). */
+  router.post("/stream", requireRoles(FINANCE_ASSISTANT_ROLES), async (req, res) => {
+    const body = (req.body || {}) as { message?: string; mode?: string };
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const mode = parseMode(body.mode);
+    if (!message) {
+      res.status(400).json({ error: "message is required" });
+      return;
+    }
+    const sse = createAssistantSseWriter(res);
+    req.on("close", () => {
+      try {
+        res.end();
+      } catch {
+        /* already closed */
+      }
+    });
+    await streamFinanceAssistant(
+      prisma,
+      req.auth!.orgId,
+      req.auth!.userId,
+      { message, mode },
+      sse
+    );
   });
 
   router.post("/parse", requireRoles(FINANCE_ASSISTANT_ROLES), async (req, res) => {

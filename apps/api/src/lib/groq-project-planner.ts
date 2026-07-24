@@ -6,6 +6,7 @@ import {
   type ProjectAiPlan,
   type ProjectAiPlanSprint
 } from "./project-ai-plan-types";
+import { normalizeProjectAiPlanDates } from "./normalize-project-ai-plan-dates";
 
 const CHAT_MODEL = resolveGroqModel(
   process.env.GROQ_DIRECTOR_MODEL,
@@ -319,7 +320,10 @@ export async function generateProjectPlanFromBrief(input: {
     const raw = completion.choices[0]?.message?.content?.trim();
     if (!raw) throw new Error("Empty model response");
     const parsed = parseJsonFromModel(raw) as Record<string, unknown>;
-    return { plan: normalizePlan(parsed), transcript: brief };
+    return {
+      plan: normalizeProjectAiPlanDates(normalizePlan(parsed)),
+      transcript: brief
+    };
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error("[project-planner] Groq plan failed:", e);
@@ -344,15 +348,19 @@ export async function generateDeliveryPlanFromDetails(input: {
     existingMilestones?: string[];
     existingTaskTitles?: string[];
   };
-}): Promise<Pick<ProjectAiPlan, "sprints" | "timeline" | "successCriteria" | "agileSprintNotes" | "roleBriefs">> {
+}): Promise<ProjectAiPlan> {
   const details = input.projectDetails.trim();
   if (!details) {
-    return { sprints: [], timeline: [], successCriteria: "", agileSprintNotes: "", roleBriefs: emptyProjectAiPlan().roleBriefs };
+    return normalizeProjectAiPlanDates(emptyProjectAiPlan());
   }
 
   const client = getGroq();
   if (!client) {
-    return { sprints: [], timeline: [], successCriteria: input.successCriteria ?? "", agileSprintNotes: "", roleBriefs: emptyProjectAiPlan().roleBriefs };
+    return normalizeProjectAiPlanDates({
+      ...emptyProjectAiPlan(),
+      projectDetails: details,
+      successCriteria: input.successCriteria ?? ""
+    });
   }
 
   const contextBlock = buildContextBlock(input.existingContext);
@@ -379,16 +387,29 @@ export async function generateDeliveryPlanFromDetails(input: {
     if (!raw) throw new Error("Empty model response");
     const parsed = parseJsonFromModel(raw) as Record<string, unknown>;
     const normalized = normalizePlan({ ...parsed, projectDetails: details, projectSummary: "" });
-    return {
+    const delivery = {
       sprints: normalized.sprints,
       timeline: normalized.timeline,
       successCriteria: normalized.successCriteria || input.successCriteria || "",
       agileSprintNotes: normalized.agileSprintNotes,
       roleBriefs: normalized.roleBriefs
     };
+    return normalizeProjectAiPlanDates({
+      projectSummary: "",
+      projectDetails: details,
+      successCriteria: delivery.successCriteria,
+      agileSprintNotes: delivery.agileSprintNotes,
+      timeline: delivery.timeline,
+      sprints: delivery.sprints,
+      roleBriefs: delivery.roleBriefs
+    });
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error("[project-planner] delivery from details failed:", e);
-    return { sprints: [], timeline: [], successCriteria: input.successCriteria ?? "", agileSprintNotes: "", roleBriefs: emptyProjectAiPlan().roleBriefs };
+    return normalizeProjectAiPlanDates({
+      ...emptyProjectAiPlan(),
+      projectDetails: details,
+      successCriteria: input.successCriteria ?? ""
+    });
   }
 }

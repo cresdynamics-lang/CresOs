@@ -10,6 +10,7 @@ import {
   PmIconCheckIns,
   PmIconCommunity,
   PmIconOverview,
+  PmIconOnboarding,
   PmIconPayments,
   PmIconProjects,
   PmIconReports,
@@ -87,6 +88,15 @@ const PM_NAV_ITEMS: NavItem[] = [
     description: "Your compensation outlook",
     group: "delivery",
     icon: PmIconPayments
+  },
+  {
+    href: "/pm/onboarding",
+    label: "Onboarding",
+    shortLabel: "Onboard",
+    description: "Role AI — expectations & who to ask",
+    group: "delivery",
+    icon: PmIconOnboarding,
+    match: "prefix"
   }
 ];
 

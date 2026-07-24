@@ -105,7 +105,7 @@ export async function runFinanceAssistant(
   }
 
   const contextBlock = await buildFinanceAssistantContextBlock(prisma, orgId, message);
-  const poolEmpty = contextBlock.includes("Knowledge pool items: 0");
+  const poolEmpty = /Knowledge pool items \(org total\): 0/.test(contextBlock);
   if (!hasGroqKeys()) return fallbackResponse(options.mode, message, poolEmpty);
 
   const isExecute = options.mode === "execute";
@@ -136,13 +136,13 @@ Return JSON only:
   }]
 }
 Rules:
-- create_expense needs amount, category, beneficiaryHint, spentAt (default today Africa/Nairobi)
-- create_payment needs amount, method, receivedAt; invoiceHint when client paid an invoice
+- create_expense: amount, category, beneficiaryHint, spentAt (default today Africa/Nairobi). Expenses are saved as pending and submitted for admin approval.
+- create_payment: amount, method, receivedAt, projectHint when client paid for a project. invoiceHint when they cite an invoice number — if none exists, the system auto-creates an invoice for that project and records the payment against it.
 - Use KES unless stated otherwise
 - Split multiple items into separate proposedActions`
-    : `You are CresOS Finance Intelligence — answer using ONLY org finance context below.
+    : `You are CresOS Finance Intelligence — answer using ONLY org finance context and knowledge pool excerpts below.
 Return JSON only: { "reply": "markdown-friendly answer" }
-Cover expenses, payments, invoices, project cash flow. No invented numbers.`;
+Cover expenses, payments, invoices, project cash flow, and relevant knowledge-pool notes. No invented numbers.`;
 
   const user = `Finance message:\n${message}\n\n--- ORG FINANCE CONTEXT ---\n${contextBlock}`;
 

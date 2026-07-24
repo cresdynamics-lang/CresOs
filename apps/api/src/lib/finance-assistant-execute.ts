@@ -18,6 +18,7 @@ import {
   findDuplicatePayment
 } from "./finance-assistant-guardrails";
 import { confirmAssistantPayment } from "./finance-payment-confirm";
+import { ensureInvoiceForAssistantPayment } from "./finance-assistant-invoice";
 import { ingestKnowledgeFromEventLog } from "./knowledge-from-event";
 import { sendPaymentReceiptToClient } from "./finance-workflow";
 
@@ -25,29 +26,6 @@ const DEFAULT_ACCOUNT = process.env.FINANCE_DEFAULT_ACCOUNT?.trim() || "Operatio
 
 function defaultTransactionCode(): string {
   return `AI-${Date.now()}`;
-}
-
-async function resolveInvoiceHint(
-  prisma: PrismaClient,
-  orgId: string,
-  hint: string | null | undefined
-): Promise<{ ok: true; id: string; label: string } | { ok: false; error: string }> {
-  const trimmed = hint?.trim();
-  if (!trimmed) return { ok: false, error: "No invoice specified" };
-  const num = trimmed.replace(/^INV-?/i, "");
-  const invoice = await prisma.invoice.findFirst({
-    where: {
-      orgId,
-      deletedAt: null,
-      OR: [
-        { number: { contains: num, mode: "insensitive" } },
-        { id: trimmed }
-      ]
-    },
-    select: { id: true, number: true }
-  });
-  if (!invoice) return { ok: false, error: `No invoice matched "${trimmed}"` };
-  return { ok: true, id: invoice.id, label: `INV-${invoice.number}` };
 }
 
 export async function executeFinanceProposedActions(
@@ -233,24 +211,37 @@ export async function executeFinanceProposedActions(
         }
 
         const receivedAt = parseActionDate(action.receivedAt, today);
-        let invoiceId: string | null = null;
-        let invoiceLabel: string | undefined;
-        if (override?.invoiceId) {
-          invoiceId = override.invoiceId;
-        } else if (action.invoiceHint?.trim()) {
-          const inv = await resolveInvoiceHint(prisma, orgId, action.invoiceHint);
-          if (!inv.ok) {
-            results.push({ ...base, error: inv.error });
-            continue;
-          }
-          invoiceId = inv.id;
-          invoiceLabel = inv.label;
-        }
-
         let projectId: string | null = override?.projectId ?? null;
         if (!projectId && action.projectHint?.trim()) {
           const proj = await resolveProjectHint(prisma, orgId, action.projectHint);
           if (proj.ok) projectId = proj.id;
+        }
+
+        let invoiceId: string | null = override?.invoiceId ?? null;
+        let invoiceLabel: string | undefined;
+        let invoiceAutoCreated = false;
+        if (!invoiceId) {
+          const invoiceResult = await ensureInvoiceForAssistantPayment(prisma, orgId, {
+            invoiceHint: action.invoiceHint,
+            projectId,
+            amount,
+            currency: action.currency?.trim() || "KES",
+            title: action.title.trim(),
+            receivedAt
+          });
+          if (!invoiceResult.ok) {
+            results.push({ ...base, error: invoiceResult.error });
+            continue;
+          }
+          invoiceId = invoiceResult.id;
+          invoiceLabel = invoiceResult.label;
+          invoiceAutoCreated = invoiceResult.created;
+        } else {
+          const inv = await prisma.invoice.findFirst({
+            where: { id: invoiceId, orgId, deletedAt: null },
+            select: { number: true }
+          });
+          invoiceLabel = inv ? `INV-${inv.number}` : undefined;
         }
 
         const reference = action.transactionCode?.trim() || defaultTransactionCode();
@@ -281,10 +272,16 @@ export async function executeFinanceProposedActions(
             method,
             reference,
             mpesaRef: method === "mpesa" ? reference : null,
-            notes: action.notes?.trim() || (invoiceLabel ? `Payment for ${invoiceLabel}` : null),
+            notes:
+              action.notes?.trim() ||
+              (invoiceLabel
+                ? `${invoiceAutoCreated ? "Auto-created invoice · " : ""}Payment for ${invoiceLabel}`
+                : null),
             source,
             account,
-            howToProceed: invoiceLabel ? `Matched to ${invoiceLabel}` : "Recorded via Finance AI",
+            howToProceed: invoiceLabel
+              ? `${invoiceAutoCreated ? "Auto-created invoice · " : ""}Matched to ${invoiceLabel}`
+              : "Recorded via Finance AI",
             receivedAt,
             status: "pending"
           }
@@ -294,7 +291,9 @@ export async function executeFinanceProposedActions(
           source: source || "Finance AI",
           account: account || DEFAULT_ACCOUNT,
           reference,
-          howToProceed: invoiceLabel ? `Matched to ${invoiceLabel}` : "Auto-confirmed via Finance AI",
+          howToProceed: invoiceLabel
+            ? `${invoiceAutoCreated ? "Auto-created invoice · " : ""}Matched to ${invoiceLabel}`
+            : "Auto-confirmed via Finance AI",
           projectId
         });
 
@@ -324,7 +323,9 @@ export async function executeFinanceProposedActions(
           ...base,
           success: true,
           paymentId: payment.id,
-          resolvedProject: projectId ?? undefined
+          invoiceId: invoiceId ?? undefined,
+          resolvedProject: projectId ?? undefined,
+          resolvedInvoice: invoiceLabel
         });
         continue;
       }

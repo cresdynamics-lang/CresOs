@@ -89,4 +89,18 @@ export function PmIconSettings({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+export function PmIconOnboarding({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M12 3l2.2 4.5L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.7L12 3z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 20h14" />
+    </svg>
+  );
+}
+
 export type PmNavIconComponent = typeof PmIconOverview;

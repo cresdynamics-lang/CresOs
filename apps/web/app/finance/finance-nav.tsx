@@ -18,7 +18,8 @@ export type FinanceSection =
   | "clients_due"
   | "approvals"
   | "reports"
-  | "assistant";
+  | "assistant"
+  | "onboarding";
 
 type NavItem = {
   href: string;
@@ -77,6 +78,15 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
     section: "assistant",
     group: "records",
     roles: ["admin", "finance"]
+  },
+  {
+    href: "/finance/onboarding",
+    label: "Onboarding",
+    shortLabel: "Onboard",
+    section: "onboarding",
+    group: "overview",
+    roles: ["admin", "finance", "analyst", "director_admin"],
+    match: "prefix"
   },
   {
     href: "/finance/ledger",
@@ -315,5 +325,9 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
   assistant: {
     title: "Finance AI Assistant",
     description: "Voice or text to record expenses and payments, or ask about cash flow and invoices."
+  },
+  onboarding: {
+    title: "Finance onboarding",
+    description: "Ask AI what’s expected in Finance, who to escalate to, and how Cres Dynamics money flows work."
   }
 };

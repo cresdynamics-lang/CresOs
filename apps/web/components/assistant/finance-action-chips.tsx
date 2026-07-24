@@ -113,6 +113,12 @@ export function FinanceActionChips({
                     ))
                   : null}
                 {failed && result.error ? <div className="text-rose-300">{result.error}</div> : null}
+                {done && a.kind === "create_expense" ? (
+                  <div className="text-emerald-300">Submitted for admin approval</div>
+                ) : null}
+                {done && result?.resolvedInvoice ? (
+                  <div className="text-emerald-300">Recorded against {result.resolvedInvoice}</div>
+                ) : null}
               </dl>
               {onExecuteOne && !done && !executing ? (
                 <button

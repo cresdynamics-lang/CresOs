@@ -47,8 +47,10 @@ export type FinanceExecutedAction = {
   candidates?: { id: string; label: string }[];
   expenseId?: string;
   paymentId?: string;
+  invoiceId?: string;
   resolvedBeneficiary?: string;
   resolvedProject?: string;
+  resolvedInvoice?: string;
 };
 
 export type FinanceExecuteResponse = {
