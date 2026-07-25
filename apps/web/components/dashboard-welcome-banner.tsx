@@ -17,7 +17,7 @@ type RoleTheme = {
   border: string;
   bg: string;
   glow: string;
-  nameGradient: string;
+  nameColor: string;
   roleText: string;
   rolePill: string;
   sectionLabel: string;
@@ -26,104 +26,104 @@ type RoleTheme = {
 
 const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
   finance: {
-    border: "border-emerald-200",
-    bg: "from-emerald-50 via-white to-amber-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-emerald-700 via-teal-700 to-amber-700",
-    roleText: "text-emerald-700",
-    rolePill: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    sectionLabel: "text-amber-700",
-    dot: "text-emerald-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   admin: {
-    border: "border-brand/30",
-    bg: "from-brand-light via-white to-sky-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-brand via-sky-600 to-indigo-600",
-    roleText: "text-brand",
-    rolePill: "border-brand/30 bg-brand/10 text-brand",
-    sectionLabel: "text-sky-700",
-    dot: "text-brand"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   director_admin: {
-    border: "border-[#E5E9EF]",
-    bg: "from-sky-50 via-white to-brand-light/40",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-sky-700 via-cyan-700 to-brand",
-    roleText: "text-sky-700",
-    rolePill: "border-[#E5E9EF] bg-sky-50 text-sky-800",
-    sectionLabel: "text-cyan-700",
-    dot: "text-sky-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   developer: {
-    border: "border-violet-200",
-    bg: "from-violet-50 via-white to-sky-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-violet-700 via-fuchsia-700 to-sky-700",
-    roleText: "text-violet-700",
-    rolePill: "border-violet-200 bg-violet-50 text-violet-800",
-    sectionLabel: "text-violet-700",
-    dot: "text-violet-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   sales: {
-    border: "border-amber-200",
-    bg: "from-amber-50 via-white to-rose-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-amber-700 via-orange-700 to-rose-700",
-    roleText: "text-amber-800",
-    rolePill: "border-amber-200 bg-amber-50 text-amber-900",
-    sectionLabel: "text-rose-700",
-    dot: "text-amber-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   analyst: {
-    border: "border-cyan-200",
-    bg: "from-cyan-50 via-white to-slate-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-cyan-700 to-slate-700",
-    roleText: "text-cyan-700",
-    rolePill: "border-cyan-200 bg-cyan-50 text-cyan-800",
-    sectionLabel: "text-cyan-700",
-    dot: "text-cyan-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   hr: {
-    border: "border-rose-200",
-    bg: "from-rose-50 via-white to-pink-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-rose-700 via-pink-700 to-fuchsia-700",
-    roleText: "text-rose-700",
-    rolePill: "border-rose-200 bg-rose-50 text-rose-800",
-    sectionLabel: "text-pink-700",
-    dot: "text-rose-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   project_manager: {
-    border: "border-teal-200",
-    bg: "from-teal-50 via-white to-cyan-50",
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
     glow: "shadow-sm",
-    nameGradient: "from-teal-700 via-cyan-700 to-emerald-700",
-    roleText: "text-teal-700",
-    rolePill: "border-teal-200 bg-teal-50 text-teal-800",
-    sectionLabel: "text-cyan-700",
-    dot: "text-teal-600"
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#2D5A5A]",
+    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   },
   client: {
-    border: "border-slate-200",
-    bg: "from-slate-50 to-white",
-    glow: "",
-    nameGradient: "from-slate-800 to-slate-600",
-    roleText: "text-slate-700",
-    rolePill: "border-slate-200 bg-slate-50 text-slate-700",
-    sectionLabel: "text-slate-500",
-    dot: "text-slate-500"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    glow: "shadow-sm",
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#5B6472]",
+    rolePill: "border-[#E5E9EF] bg-[#F4F7F9] text-[#5B6472]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#5B6472]"
   },
   default: {
-    border: "border-brand/25",
-    bg: "from-white via-[#eef4fb] to-brand-light/40",
-    glow: "",
-    nameGradient: "from-slate-900 to-brand",
-    roleText: "text-slate-600",
-    rolePill: "border-[#E5E9EF] bg-[#F4F7F9] text-slate-700",
-    sectionLabel: "text-slate-500",
-    dot: "text-brand"
+    border: "border-[#2D5A5A]",
+    bg: "bg-white",
+    glow: "shadow-sm",
+    nameColor: "text-[#1A1D26]",
+    roleText: "text-[#5B6472]",
+    rolePill: "border-[#E5E9EF] bg-[#F4F7F9] text-[#5B6472]",
+    sectionLabel: "text-[#5B6472]",
+    dot: "text-[#2D5A5A]"
   }
 };
 
@@ -176,12 +176,12 @@ export function DashboardWelcomeBanner({
 
   return (
     <div
-      className={`shell min-w-0 border-l-4 bg-gradient-to-br ${theme.border} ${theme.bg} ${theme.glow} ${className}`.trim()}
+      className={`shell min-w-0 border-l-4 ${theme.border} ${theme.bg} ${theme.glow} ${className}`.trim()}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2
-            className={`font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl lg:text-4xl bg-gradient-to-r ${theme.nameGradient} bg-clip-text text-transparent`}
+            className={`font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl lg:text-4xl ${theme.nameColor}`}
           >
             {greeting}
           </h2>
@@ -198,7 +198,7 @@ export function DashboardWelcomeBanner({
         </div>
       </div>
       {children ? (
-        <div className="mt-5 border-t border-slate-700/50 pt-5">{children}</div>
+        <div className="mt-5 border-t border-[#E5E9EF] pt-5">{children}</div>
       ) : null}
     </div>
   );
@@ -216,9 +216,9 @@ export function DashboardSectionLabel({
   const theme = resolveRoleTheme(roleKeys);
   const color =
     tone === "focus"
-      ? "text-violet-400"
+      ? "text-[#2D5A5A]"
       : tone === "dashboard"
-        ? "text-brand"
+        ? "text-[#2D5A5A]"
         : theme.sectionLabel;
 
   return (
@@ -231,16 +231,16 @@ export function DashboardSectionLabel({
 }
 
 const BULLET_MARKER: Record<RoleThemeKey, string> = {
-  finance: "marker:text-emerald-500",
-  admin: "marker:text-brand",
-  director_admin: "marker:text-sky-500",
-  developer: "marker:text-violet-500",
-  sales: "marker:text-amber-500",
-  analyst: "marker:text-cyan-500",
-  hr: "marker:text-rose-500",
-  project_manager: "marker:text-teal-500",
-  client: "marker:text-slate-500",
-  default: "marker:text-brand"
+  finance: "marker:text-[#2D5A5A]",
+  admin: "marker:text-[#2D5A5A]",
+  director_admin: "marker:text-[#2D5A5A]",
+  developer: "marker:text-[#2D5A5A]",
+  sales: "marker:text-[#2D5A5A]",
+  analyst: "marker:text-[#2D5A5A]",
+  hr: "marker:text-[#2D5A5A]",
+  project_manager: "marker:text-[#2D5A5A]",
+  client: "marker:text-[#5B6472]",
+  default: "marker:text-[#2D5A5A]"
 };
 
 export function WelcomeBullet({ children, roleKeys = [] }: { children: ReactNode; roleKeys?: string[] }) {
@@ -248,7 +248,7 @@ export function WelcomeBullet({ children, roleKeys = [] }: { children: ReactNode
   const marker = BULLET_MARKER[key ?? "default"];
   return (
     <li
-      className={`font-body text-sm leading-relaxed text-slate-200 ${marker} [&_a]:font-semibold [&_a]:text-sky-400 [&_a]:underline-offset-2 [&_a]:hover:text-sky-300 [&_a]:hover:underline`}
+      className={`font-body text-sm leading-relaxed text-[#5B6472] ${marker} [&_a]:font-semibold [&_a]:text-[#2D5A5A] [&_a]:underline-offset-2 [&_a]:hover:underline`}
     >
       {children}
     </li>
@@ -265,18 +265,16 @@ export function DashboardIntroHeader({ title, description, roleKeys = [] }: Dash
   const theme = resolveRoleTheme(roleKeys);
 
   return (
-    <div className="mb-4 min-w-0 border-b border-slate-800/80 pb-5 sm:mb-6">
-      <p className="font-label text-[10px] font-medium uppercase tracking-[0.3em] text-slate-500">
+    <div className="mb-4 min-w-0 border-b border-[#E5E9EF] pb-5 sm:mb-6">
+      <p className="font-label text-[10px] font-medium uppercase tracking-[0.3em] text-[#5B6472]">
         Workspace
       </p>
-      <h1
-        className={`mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl bg-gradient-to-r ${theme.nameGradient} bg-clip-text text-transparent`}
-      >
+      <h1 className={`mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl ${theme.nameColor}`}>
         {title}
       </h1>
-      <p className="mt-3 max-w-3xl font-body text-sm leading-relaxed text-slate-400 sm:text-[15px]">
+      <p className="mt-3 max-w-3xl font-body text-sm leading-relaxed text-[#5B6472] sm:text-[15px]">
         <span className={`font-semibold ${theme.roleText}`}>Operating System for Growth</span>
-        <span className="text-slate-500"> — </span>
+        <span className="text-[#5B6472]"> — </span>
         {description.replace(/^Operating System for Growth\s*[—–-]\s*/i, "")}
       </p>
     </div>

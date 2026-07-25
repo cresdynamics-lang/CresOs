@@ -79,9 +79,9 @@ export function PmProjectsConsole() {
 
       <PmDataBlock>
         {loading ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">Loading projects…</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">Loading projects…</p>
         ) : sorted.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">No approved projects.</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">No approved projects.</p>
         ) : (
           sorted.map((p) => {
             const h = healthMap[p.id];
@@ -93,18 +93,18 @@ export function PmProjectsConsole() {
                   ) : null}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-100">{p.name}</p>
+                      <p className="font-medium text-[#1A1D26]">{p.name}</p>
                       {h ? <PmRiskPill riskLevel={h.riskLevel} /> : null}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                    <p className="mt-1 text-xs text-[#5B6472] line-clamp-2">
                       {p.successCriteria?.trim() || h?.signals[0]?.message || "Add success criteria"}
                     </p>
-                    <p className="mt-2 text-[11px] text-slate-600">
+                    <p className="mt-2 text-[11px] text-[#5B6472]">
                       {h?.openTasks ?? p._count?.tasks ?? 0} open tasks · {h?.overdueMilestones ?? 0} overdue
                       {p.managementProgressPercent != null ? ` · ${p.managementProgressPercent}%` : ""}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs uppercase tracking-wide text-teal-400/80">{p.status}</span>
+                  <span className="shrink-0 text-xs uppercase tracking-wide text-[#2D5A5A]/80">{p.status}</span>
                 </div>
               </Link>
             );

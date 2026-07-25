@@ -44,7 +44,7 @@ export function ActionChips({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
+        <p className="font-label text-[10px] font-bold uppercase tracking-[0.14em] text-[#2D5A5A]">
           Proposed actions
         </p>
         {onExecuteAll && anyPending ? (
@@ -52,7 +52,7 @@ export function ActionChips({
             type="button"
             disabled={executing}
             onClick={onExecuteAll}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            className="rounded-lg bg-[#2D5A5A] px-3 py-1.5 font-label text-xs font-semibold text-white hover:bg-[#244848] disabled:opacity-50"
           >
             {executing ? "Executing…" : "Execute all"}
           </button>
@@ -69,75 +69,75 @@ export function ActionChips({
               key={a.id}
               className={`rounded-xl border px-4 py-3 text-sm ${
                 done
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  ? "border-[#A7D7B8] bg-[#E8F5EE] text-[#2E7D4F]"
                   : failed
-                    ? "border-rose-200 bg-rose-50 text-rose-800"
-                    : "border-brand/20 bg-brand/5 text-slate-700"
+                    ? "border-[#F5B5B5] bg-[#FEF2F2] text-[#C62828]"
+                    : "border-[#E5E9EF] bg-[#F4F7F9] text-[#1A1D26]"
               }`}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-brand">
+                <span className="rounded-md border border-[#2D5A5A]/30 bg-[#E8F0F0] px-2 py-0.5 font-label text-[10px] font-bold uppercase text-[#2D5A5A]">
                   {KIND_LABELS[a.kind]}
                 </span>
-                <span className="font-medium text-slate-900">{a.title}</span>
+                <span className="font-body font-semibold text-[#1A1D26]">{a.title}</span>
                 {done ? (
-                  <span className="text-[10px] font-semibold uppercase text-emerald-700">Created</span>
+                  <span className="font-label text-[10px] font-bold uppercase text-[#2E7D4F]">Created</span>
                 ) : null}
                 {done && result.scheduleItemId ? (
-                  <a href="/schedule" className="text-[10px] text-emerald-700 hover:underline">
+                  <a href="/schedule" className="font-label text-[10px] font-bold text-[#2E7D4F] hover:underline">
                     View schedule
                   </a>
                 ) : null}
               </div>
-              <dl className="mt-2 grid gap-1 text-xs text-slate-400">
+              <dl className="mt-2 grid gap-1 font-body text-xs text-[#5B6472]">
                 {a.scheduledAt ? (
                   <div>
-                    <dt className="inline text-slate-500">When: </dt>
+                    <dt className="inline text-[#8B93A1]">When: </dt>
                     <dd className="inline">{new Date(a.scheduledAt).toLocaleString()}</dd>
                   </div>
                 ) : null}
                 {a.dueDate ? (
                   <div>
-                    <dt className="inline text-slate-500">Due: </dt>
+                    <dt className="inline text-[#8B93A1]">Due: </dt>
                     <dd className="inline">{new Date(a.dueDate).toLocaleDateString()}</dd>
                   </div>
                 ) : null}
                 {a.assigneeHint ? (
                   <div>
-                    <dt className="inline text-slate-500">Person: </dt>
+                    <dt className="inline text-[#8B93A1]">Person: </dt>
                     <dd className="inline">{a.assigneeHint}</dd>
                   </div>
                 ) : null}
                 {a.projectHint ? (
                   <div>
-                    <dt className="inline text-slate-500">Project: </dt>
+                    <dt className="inline text-[#8B93A1]">Project: </dt>
                     <dd className="inline">{a.projectHint}</dd>
                   </div>
                 ) : null}
                 {a.estimatedHours != null ? (
                   <div>
-                    <dt className="inline text-slate-500">Est. hours: </dt>
+                    <dt className="inline text-[#8B93A1]">Est. hours: </dt>
                     <dd className="inline">{a.estimatedHours}</dd>
                   </div>
                 ) : null}
                 {result?.resolvedAssignee ? (
                   <div>
-                    <dt className="inline text-slate-500">Assigned: </dt>
+                    <dt className="inline text-[#8B93A1]">Assigned: </dt>
                     <dd className="inline">{result.resolvedAssignee}</dd>
                   </div>
                 ) : null}
                 {result?.resolvedProject ? (
                   <div>
-                    <dt className="inline text-slate-500">Project: </dt>
+                    <dt className="inline text-[#8B93A1]">Project: </dt>
                     <dd className="inline">{result.resolvedProject}</dd>
                   </div>
                 ) : null}
                 {failed && result.error ? (
-                  <div className="text-rose-300">{result.error}</div>
+                  <div className="font-semibold text-[#C62828]">{result.error}</div>
                 ) : null}
                 {failed && result.candidates && result.candidates.length > 0 && onResolveCandidate ? (
                   <div className="mt-2">
-                    <p className="text-[10px] text-slate-500">Pick {field}:</p>
+                    <p className="font-label text-[10px] font-bold text-[#5B6472]">Pick {field}:</p>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {result.candidates.map((c) => (
                         <button
@@ -145,7 +145,7 @@ export function ActionChips({
                           type="button"
                           disabled={executing}
                           onClick={() => onResolveCandidate(a, field, c.id)}
-                          className="rounded-lg border border-indigo-500/40 bg-brand/10 px-2 py-1 text-[10px] text-brand hover:bg-brand/10"
+                          className="rounded-lg border border-[#2D5A5A]/30 bg-[#E8F0F0] px-2 py-1 font-label text-[10px] font-bold text-[#2D5A5A] hover:bg-[#2D5A5A] hover:text-white"
                         >
                           {c.label}
                         </button>
@@ -158,7 +158,7 @@ export function ActionChips({
                 <button
                   type="button"
                   onClick={() => onExecuteOne(a)}
-                  className="mt-3 rounded-lg border border-indigo-500/40 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
+                  className="mt-3 rounded-lg border border-[#2D5A5A]/40 bg-white px-3 py-1.5 font-label text-xs font-semibold text-[#2D5A5A] hover:bg-[#E8F0F0]"
                 >
                   Execute
                 </button>

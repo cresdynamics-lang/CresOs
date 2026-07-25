@@ -54,31 +54,29 @@ export function PageHeader({
   const label = eyebrow ?? "Workspace";
 
   return (
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-5 sm:mb-6 sm:gap-4">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5 sm:mb-6 sm:gap-4">
       <div className="min-w-0 flex-1">
-        <p className="font-label text-[10px] font-medium uppercase tracking-[0.28em] text-slate-500">
+        <p className="font-label text-[10px] font-medium uppercase tracking-[0.28em] text-[#5B6472]">
           {label}
         </p>
-        <h1
-          className={`mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl bg-gradient-to-r ${theme.nameGradient} bg-clip-text text-transparent`}
-        >
+        <h1 className={`mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl ${theme.nameColor}`}>
           {title}
         </h1>
         {showWorkspaceProfile && (
-          <p className="mt-2 font-body text-xs text-slate-400 sm:text-sm">
+          <p className="mt-2 font-body text-xs text-[#5B6472] sm:text-sm">
             Signed in as{" "}
-            <span className="font-medium text-slate-200">{displayName}</span>
-            {roleLine ? <span className="text-slate-500"> ({roleLine})</span> : null}
+            <span className="font-medium text-[#1A1D26]">{displayName}</span>
+            {roleLine ? <span className="text-[#5B6472]"> ({roleLine})</span> : null}
             {" · "}
-            <span className="text-slate-300">{orgLabel}</span>
+            <span className="text-[#1A1D26]">{orgLabel}</span>
           </p>
         )}
         {description && (
-          <p className="mt-3 max-w-3xl font-body text-sm leading-relaxed text-slate-400 sm:text-[15px]">
+          <p className="mt-3 max-w-3xl font-body text-sm leading-relaxed text-[#5B6472] sm:text-[15px]">
             {brandLead ? (
               <>
                 <span className={`font-semibold ${theme.roleText}`}>{brandLead}</span>
-                <span className="text-slate-500"> — </span>
+                <span className="text-[#5B6472]"> — </span>
               </>
             ) : null}
             {description.replace(/^Operating System for Growth\s*[—–-]\s*/i, "")}

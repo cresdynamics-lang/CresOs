@@ -256,7 +256,7 @@ export default function DeveloperReportDetailPage() {
 
   if (!hydrated || !report) {
     return (
-      <div className="flex min-h-[12rem] flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex min-h-[12rem] flex-1 items-center justify-center text-sm text-[#5B6472]">
         Loading…
       </div>
     );
@@ -318,18 +318,18 @@ export default function DeveloperReportDetailPage() {
 
   const panel = useNeu ? devNeu.panel : "shell border-cres-border bg-cres-card/80";
   const headerPanel = useNeu ? devNeu.panel : "shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4";
-  const textMain = useNeu ? "text-slate-100" : "text-cres-text";
-  const textMuted = useNeu ? "text-slate-500" : "text-cres-muted";
-  const textMutedSm = useNeu ? "text-slate-400" : "text-cres-text-muted";
-  const linkBack = useNeu ? "text-xs text-violet-300 hover:underline sm:text-sm" : "text-xs text-cres-accent hover:underline sm:text-sm";
+  const textMain = useNeu ? "text-[#1A1D26]" : "text-cres-text";
+  const textMuted = useNeu ? "text-[#5B6472]" : "text-cres-muted";
+  const textMutedSm = useNeu ? "text-[#5B6472]" : "text-cres-text-muted";
+  const linkBack = useNeu ? "text-xs text-[#6D28D9] hover:underline sm:text-sm" : "text-xs text-cres-accent hover:underline sm:text-sm";
   const inputClass = useNeu
-    ? "w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-100"
+    ? "w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26]"
     : "w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text";
   const btnPrimary = useNeu
     ? devNeu.btnPrimary
     : "rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60";
-  const commentBorder = useNeu ? "border-white/[0.06] bg-[#0e1319]" : "border-cres-border bg-cres-surface/50";
-  const questionBorder = useNeu ? "border-violet-500/30 bg-violet-950/20" : "border-cres-accent/40 bg-cres-accent/10";
+  const commentBorder = useNeu ? "border-[#E5E9EF] bg-white" : "border-cres-border bg-cres-surface/50";
+  const questionBorder = useNeu ? "border-violet-500/30 bg-[#F9F0FB]" : "border-cres-accent/40 bg-cres-accent/10";
 
   return (
     <section className={`flex w-full min-w-0 flex-col gap-4 ${useNeu ? "pb-8" : "px-3 py-4 max-sm:gap-3 sm:px-6 sm:py-5"}`}>
@@ -338,7 +338,7 @@ export default function DeveloperReportDetailPage() {
           <Link href="/developer-reports" className={linkBack}>
             ← Back to reports
           </Link>
-          <h2 className={`mt-2 text-base font-semibold sm:text-lg ${useNeu ? "font-display text-xl text-slate-100" : textMain}`}>
+          <h2 className={`mt-2 text-base font-semibold sm:text-lg ${useNeu ? "font-display text-xl text-[#1A1D26]" : textMain}`}>
             {formatNairobiDate(report.reportDate)}
           </h2>
           <p className={`mt-1 text-[11px] sm:text-xs ${textMuted}`}>
@@ -348,10 +348,10 @@ export default function DeveloperReportDetailPage() {
         <span
           className={
             report.reviewStatus === "checked"
-              ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300 sm:px-3 sm:py-1 sm:text-sm"
+              ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-[#1B6B3A] sm:px-3 sm:py-1 sm:text-sm"
               : report.reviewStatus === "viewed"
-                ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300 sm:px-3 sm:py-1 sm:text-sm"
-                : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200 sm:px-3 sm:py-1 sm:text-sm"
+                ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-[#2563EB] sm:px-3 sm:py-1 sm:text-sm"
+                : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-[#92400E] sm:px-3 sm:py-1 sm:text-sm"
           }
         >
           {report.reviewStatus ?? "pending"}
@@ -381,10 +381,10 @@ export default function DeveloperReportDetailPage() {
 
       {!isDirector && isAuthor && leadershipReplied && openQuestions > 0 && (
         <div className={`rounded-2xl px-4 py-3 sm:px-5 ${useNeu ? devNeu.alertWarning : devGlass.alertWarning}`}>
-          <p className="font-medium text-amber-200">
+          <p className="font-medium text-[#92400E]">
             {openQuestions} open question{openQuestions === 1 ? "" : "s"} waiting for your answer
           </p>
-          <p className="mt-1 text-sm text-slate-300">Scroll to Comments & questions below to respond.</p>
+          <p className="mt-1 text-sm text-[#5B6472]">Scroll to Comments & questions below to respond.</p>
         </div>
       )}
 
@@ -462,10 +462,10 @@ export default function DeveloperReportDetailPage() {
             <span
               className={
                 report.reviewStatus === "checked"
-                  ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
+                  ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-[#1B6B3A]"
                   : report.reviewStatus === "viewed"
-                    ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300"
-                    : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200"
+                    ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-[#2563EB]"
+                    : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-[#92400E]"
               }
             >
               {report.reviewStatus ?? "pending"}
@@ -520,7 +520,7 @@ export default function DeveloperReportDetailPage() {
                   <span>{c.kind === "question" ? "asked" : "commented"}</span>
                   <span>{new Date(c.createdAt).toLocaleString()}</span>
                   {deadline && (
-                    <span className={questionOverdue ? (useNeu ? "text-amber-300" : "text-cres-accent") : textMuted}>
+                    <span className={questionOverdue ? (useNeu ? "text-[#B45309]" : "text-cres-accent") : textMuted}>
                       {questionOverdue ? "Overdue — answer required" : `Due ${deadline.toLocaleString()}`}
                     </span>
                   )}
@@ -530,7 +530,7 @@ export default function DeveloperReportDetailPage() {
                 {replies.map((r) => (
                   <div
                     key={r.id}
-                    className={`ml-4 mt-2 rounded border px-3 py-2 ${useNeu ? "border-white/[0.06] bg-[#121820]" : "border-cres-border bg-cres-surface/60"}`}
+                    className={`ml-4 mt-2 rounded border px-3 py-2 ${useNeu ? "border-[#E5E9EF] bg-white" : "border-cres-border bg-cres-surface/60"}`}
                   >
                     <p className={`text-xs ${textMuted}`}>
                       {r.author?.name ?? r.author?.email ?? "User"} answered {new Date(r.createdAt).toLocaleString()}
@@ -546,7 +546,7 @@ export default function DeveloperReportDetailPage() {
                       value={responseByParent[c.id] ?? ""}
                       onChange={(e) => setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))}
                       placeholder="Your answer"
-                      className={useNeu ? `${devNeu.navIdle} flex-1 rounded-lg px-3 py-2 text-sm text-slate-100` : "flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
+                      className={useNeu ? `${devNeu.navIdle} flex-1 rounded-lg px-3 py-2 text-sm text-[#1A1D26]` : "flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
                     />
                     <button
                       type="button"
@@ -564,7 +564,7 @@ export default function DeveloperReportDetailPage() {
         </ul>
 
         {isDirector && (
-          <div className={`mt-6 border-t pt-4 ${useNeu ? "border-white/[0.06]" : "border-cres-border"}`}>
+          <div className={`mt-6 border-t pt-4 ${useNeu ? "border-[#E5E9EF]" : "border-cres-border"}`}>
             <label className="block">
               <span className={`mb-1 block text-sm ${textMutedSm}`}>Add comment or question</span>
               <textarea
@@ -579,7 +579,7 @@ export default function DeveloperReportDetailPage() {
               <select
                 value={newKind}
                 onChange={(e) => setNewKind(e.target.value as "comment" | "question")}
-                className={useNeu ? `${devNeu.navIdle} rounded-lg px-3 py-2 text-sm text-slate-100` : "rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
+                className={useNeu ? `${devNeu.navIdle} rounded-lg px-3 py-2 text-sm text-[#1A1D26]` : "rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"}
               >
                 <option value="comment">Comment</option>
                 <option value="question">Question</option>

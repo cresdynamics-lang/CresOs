@@ -19,7 +19,7 @@ export function AssistantStreamPanel({
   statusMessage,
   reply,
   loading,
-  accentClass = "text-emerald-400",
+  accentClass = "text-[#1B6B3A]",
   variant = "dark"
 }: {
   phase: StreamPhase;
@@ -34,14 +34,14 @@ export function AssistantStreamPanel({
   const light = variant === "light";
   const chipBg = light
     ? "border-[#E5E9EF] bg-white"
-    : "border-white/[0.08] bg-[#0e1319]";
-  const statusMuted = light ? "text-slate-500" : "text-slate-500";
+    : "border-[#E5E9EF] bg-white";
+  const statusMuted = light ? "text-[#5B6472]" : "text-[#5B6472]";
   const replyBox = light
     ? "border-[#E5E9EF] bg-[#F4F7F9] text-slate-800"
-    : "border-white/[0.06] bg-[#0e1319] text-slate-200";
+    : "border-[#E5E9EF] bg-white text-[#1A1D26]";
   const pendingBox = light
-    ? "border-[#E5E9EF] bg-sky-50/80 text-slate-500"
-    : "border-white/[0.08] bg-[#0e1319]/60 text-slate-500";
+    ? "border-[#E5E9EF] bg-sky-50/80 text-[#5B6472]"
+    : "border-[#E5E9EF] bg-white/60 text-[#5B6472]";
   const caret = light ? "bg-sky-600" : "bg-slate-400";
 
   return (

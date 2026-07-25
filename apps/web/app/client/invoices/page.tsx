@@ -47,19 +47,19 @@ export default function ClientInvoicesPage() {
   return (
     <section className="flex flex-col gap-5">
       <header className={clientNeu.panel}>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-400/80">Billing</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#2D5A5A]/80">Billing</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-50">Your invoices</h1>
-        <p className="mt-2 text-sm text-slate-400">Invoices issued for your projects with Cres Dynamics.</p>
-        <button type="button" onClick={() => void load()} className="mt-4 rounded-xl border border-white/[0.08] bg-[#101820] px-3 py-2 text-sm text-slate-200">
+        <p className="mt-2 text-sm text-[#5B6472]">Invoices issued for your projects with Cres Dynamics.</p>
+        <button type="button" onClick={() => void load()} className="mt-4 rounded-xl border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26]">
           Refresh
         </button>
       </header>
 
-      {error ? <p className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
-      {loading ? <p className="text-sm text-slate-500">Loading invoices…</p> : null}
+      {error ? <p className="rounded-xl border border-rose-500/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#C62828]">{error}</p> : null}
+      {loading ? <p className="text-sm text-[#5B6472]">Loading invoices…</p> : null}
 
       {!loading && !error && invoices.length === 0 ? (
-        <div className={`${clientNeu.panelInset} text-sm text-slate-400`}>No invoices on file yet.</div>
+        <div className={`${clientNeu.panelInset} text-sm text-[#5B6472]`}>No invoices on file yet.</div>
       ) : null}
 
       <ul className="space-y-3">
@@ -67,14 +67,14 @@ export default function ClientInvoicesPage() {
           <li key={inv.id} className={clientNeu.panel}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-semibold text-slate-100">{inv.number}</p>
-                <p className="mt-1 text-xs capitalize text-slate-500">{inv.status.replace(/_/g, " ")}</p>
+                <p className="font-semibold text-[#1A1D26]">{inv.number}</p>
+                <p className="mt-1 text-xs capitalize text-[#5B6472]">{inv.status.replace(/_/g, " ")}</p>
               </div>
-              <p className="text-lg font-semibold text-teal-300">
+              <p className="text-lg font-semibold text-[#2D5A5A]">
                 {inv.totalAmount != null ? formatMoney(Number(inv.totalAmount)) : "—"}
               </p>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-[#5B6472]">
               Issued {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : "—"}
               {inv.dueDate ? ` · Due ${new Date(inv.dueDate).toLocaleDateString()}` : ""}
             </p>

@@ -42,13 +42,13 @@ export function PmReportsConsole() {
       />
       <PmDataBlock>
         {reports.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">No developer reports yet.</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">No developer reports yet.</p>
         ) : (
           reports.map((r) => (
             <div key={r.id} className={pmNeu.listRow}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-medium text-slate-100">{r.submittedBy?.name ?? "Developer"}</p>
-                <p className="text-xs text-slate-500">
+                <p className="font-medium text-[#1A1D26]">{r.submittedBy?.name ?? "Developer"}</p>
+                <p className="text-xs text-[#5B6472]">
                   {new Date(r.reportDate).toLocaleDateString("en-KE", {
                     weekday: "short",
                     month: "short",
@@ -57,10 +57,10 @@ export function PmReportsConsole() {
                 </p>
               </div>
               {r.whatWorked || r.nextPlan ? (
-                <p className="mt-2 text-sm text-slate-300">{r.whatWorked || r.nextPlan}</p>
+                <p className="mt-2 text-sm text-[#5B6472]">{r.whatWorked || r.nextPlan}</p>
               ) : null}
               {r.blockers ? (
-                <p className="mt-1 text-xs text-amber-400/90">Blockers: {r.blockers}</p>
+                <p className="mt-1 text-xs text-[#B45309]/90">Blockers: {r.blockers}</p>
               ) : null}
             </div>
           ))

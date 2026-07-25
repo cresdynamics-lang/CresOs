@@ -62,16 +62,16 @@ function statusTone(status: string): "violet" | "emerald" | "amber" | "sky" | "r
 function StatusBadge({ label, tone }: { label: string; tone: "violet" | "emerald" | "amber" | "sky" | "slate" | "rose" }) {
   const cls =
     tone === "emerald"
-      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+      ? "border-emerald-500/25 bg-emerald-500/10 text-[#1B6B3A]"
       : tone === "amber"
-        ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
+        ? "border-amber-500/25 bg-amber-500/10 text-[#B45309]"
         : tone === "sky"
-          ? "border-sky-500/25 bg-sky-500/10 text-sky-300"
+          ? "border-sky-500/25 bg-sky-500/10 text-[#2563EB]"
           : tone === "rose"
-            ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
+            ? "border-rose-500/25 bg-rose-500/10 text-[#C62828]"
           : tone === "violet"
-            ? "border-violet-500/25 bg-violet-500/10 text-violet-300"
-            : "border-white/10 bg-white/[0.04] text-slate-400";
+            ? "border-violet-500/25 bg-violet-500/10 text-[#6D28D9]"
+            : "border-[#E5E9EF] bg-white/[0.04] text-[#5B6472]";
   return (
     <span className={`rounded-lg border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
       {label}
@@ -82,10 +82,10 @@ function StatusBadge({ label, tone }: { label: string; tone: "violet" | "emerald
 function TaskChip({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
     <span
-      className={`rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1 text-[10px] font-medium tabular-nums ${tone ?? "text-slate-400"}`}
+      className={`rounded-lg border border-[#E5E9EF] bg-black/20 px-2 py-1 text-[10px] font-medium tabular-nums ${tone ?? "text-[#5B6472]"}`}
     >
-      <span className="text-slate-500">{label}</span>{" "}
-      <span className="text-slate-200">{value}</span>
+      <span className="text-[#5B6472]">{label}</span>{" "}
+      <span className="text-[#1A1D26]">{value}</span>
     </span>
   );
 }
@@ -117,15 +117,15 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/90">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#6D28D9]/90">
             Delivery
           </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Projects</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">Projects</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
             Assigned delivery work only — accept invites when directors add you. Daily progress lives in{" "}
-            <Link href="/developer-reports" className="font-medium text-violet-300 hover:underline">
+            <Link href="/developer-reports" className="font-medium text-[#6D28D9] hover:underline">
               Developer reports
             </Link>
             .
@@ -135,7 +135,7 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${devNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+          className={`${devNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
@@ -165,13 +165,13 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
       <section aria-label="Project list" className="w-full flex-1">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>Project directory</DashboardSectionLabel>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#5B6472]">
             {loading ? "Loading…" : `${projects.length} project${projects.length === 1 ? "" : "s"}`}
           </p>
         </div>
 
         {projects.length === 0 && !loading ? (
-          <DevNeuPanel inset className="text-center text-sm text-slate-500">
+          <DevNeuPanel inset className="text-center text-sm text-[#5B6472]">
             No assigned projects yet. Accept an invite from your director to get started.
           </DevNeuPanel>
         ) : (
@@ -205,15 +205,15 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
                           <StatusBadge label="Pending" tone="amber" />
                         ) : null}
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#5B6472]">
                         {project.clientOrOwnerName ? (
                           <span>
-                            Client <span className="text-slate-300">{project.clientOrOwnerName}</span>
+                            Client <span className="text-[#5B6472]">{project.clientOrOwnerName}</span>
                           </span>
                         ) : null}
                         {project.price != null && project.price > 0 ? (
                           <span>
-                            Value <span className="text-emerald-400/90">{formatMoney(project.price)}</span>
+                            Value <span className="text-[#1B6B3A]/90">{formatMoney(project.price)}</span>
                           </span>
                         ) : null}
                       </div>
@@ -222,22 +222,22 @@ export function DeveloperProjectsView({ projects, loading, onRefresh }: Develope
                     <div className="flex min-w-0 flex-col gap-3 sm:min-w-[14rem] lg:items-end">
                       {ts && project.approvalStatus === "approved" ? (
                         <div className={`flex flex-wrap gap-1.5 ${devNeu.panelInset}`}>
-                          <TaskChip label="Done" value={ts.done} tone="text-emerald-400" />
-                          <TaskChip label="IP" value={ts.in_progress} tone="text-violet-400" />
-                          <TaskChip label="Wait" value={ts.waiting_response} tone="text-amber-400" />
-                          <TaskChip label="Blk" value={ts.blocked} tone="text-rose-400" />
+                          <TaskChip label="Done" value={ts.done} tone="text-[#1B6B3A]" />
+                          <TaskChip label="IP" value={ts.in_progress} tone="text-[#6D28D9]" />
+                          <TaskChip label="Wait" value={ts.waiting_response} tone="text-[#B45309]" />
+                          <TaskChip label="Blk" value={ts.blocked} tone="text-[#C62828]" />
                           <TaskChip label="NS" value={ts.not_started} />
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500">Delivery metrics appear after approval.</p>
+                        <p className="text-xs text-[#5B6472]">Delivery metrics appear after approval.</p>
                       )}
 
                       <div className="flex w-full min-w-[12rem] flex-col gap-2 sm:max-w-xs lg:items-end">
-                        <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                        <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-[#5B6472]">
                           <span>{ms && ms.total > 0 ? "Milestones" : "Progress"}</span>
-                          <span className="font-semibold text-violet-300">{pct}%</span>
+                          <span className="font-semibold text-[#6D28D9]">{pct}%</span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_2px_2px_6px_rgba(0,0,0,0.5)]">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-black/30 shadow-[inset_2px_2px_6px_rgba(15,23,42,0.06)]">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 transition-all"
                             style={{ width: `${Math.max(pct > 0 ? 4 : 0, pct)}%` }}

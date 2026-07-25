@@ -51,15 +51,15 @@ export function FinanceAiAssistantWidget() {
     <div className={`${financeNeu.panel} p-4 sm:p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Finance AI</p>
-          <h2 className="mt-1 text-base font-semibold text-slate-100">Record by voice or text</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1B6B3A]">Finance AI</p>
+          <h2 className="mt-1 text-base font-semibold text-[#1A1D26]">Record by voice or text</h2>
+          <p className="mt-1 text-xs text-[#5B6472]">
             Preview expenses and payments before recording — full console for batch actions.
           </p>
         </div>
         <Link
           href="/finance/assistant"
-          className="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/10"
+          className="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-[#1B6B3A] hover:bg-emerald-500/10"
         >
           Open Finance AI →
         </Link>
@@ -71,7 +71,7 @@ export function FinanceAiAssistantWidget() {
             key={p}
             type="button"
             onClick={() => setMessage(p)}
-            className="rounded-full border border-white/[0.06] bg-[#0e1319] px-2.5 py-1 text-[10px] text-slate-400 hover:border-emerald-500/30"
+            className="rounded-full border border-[#E5E9EF] bg-white px-2.5 py-1 text-[10px] text-[#5B6472] hover:border-emerald-500/30"
           >
             {p.slice(0, 52)}…
           </button>
@@ -84,7 +84,7 @@ export function FinanceAiAssistantWidget() {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void preview()}
           placeholder="e.g. Client paid 50k M-Pesa for Acme invoice today"
-          className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-[#0e1319] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600"
+          className="min-w-0 flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26] placeholder:text-[#5B6472]"
         />
         <button
           type="button"
@@ -97,7 +97,7 @@ export function FinanceAiAssistantWidget() {
       </div>
 
       {reply ? (
-        <div className={`${financeNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-300`}>
+        <div className={`${financeNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-[#5B6472]`}>
           {reply}
         </div>
       ) : null}

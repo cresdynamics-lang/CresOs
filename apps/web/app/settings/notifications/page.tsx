@@ -210,7 +210,7 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <div className="px-4 py-12 sm:px-6 lg:px-8">
-        <p className="text-sm text-slate-500">Loading notification settings…</p>
+        <p className="text-sm text-[#5B6472]">Loading notification settings…</p>
       </div>
     );
   }
@@ -252,11 +252,11 @@ export default function NotificationsPage() {
                         type="checkbox"
                         checked={inApp.mutedTiers.includes(t.id)}
                         onChange={() => toggleTier(t.id)}
-                        className="mt-1 rounded border-slate-600"
+                        className="mt-1 rounded border-[#D0D5DD]"
                       />
                       <span>
-                        <span className="block text-sm text-slate-200">{t.label}</span>
-                        <span className="text-xs text-slate-500">{t.hint}</span>
+                        <span className="block text-sm text-[#1A1D26]">{t.label}</span>
+                        <span className="text-xs text-[#5B6472]">{t.hint}</span>
                       </span>
                     </label>
                   </li>

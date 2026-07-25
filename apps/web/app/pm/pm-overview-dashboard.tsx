@@ -288,8 +288,8 @@ export function PmOverviewDashboard({
               <h2 className="mt-1 font-display text-xl font-bold tracking-tight text-slate-50 sm:text-2xl">
                 Delivery cockpit
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
-                <span className="font-medium text-teal-300">Operating System for Growth</span> — delivery signals,
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5B6472]">
+                <span className="font-medium text-[#2D5A5A]">Operating System for Growth</span> — delivery signals,
                 check-ins, and project health without financial noise.
               </p>
             </div>
@@ -377,9 +377,9 @@ export function PmOverviewDashboard({
           </div>
 
           <div className={`mt-4 ${dashboardNeu.tasksStrip}`}>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-[#5B6472]">
               Open tasks across approved projects:{" "}
-              <span className="font-semibold tabular-nums text-teal-300">{loading ? "…" : queue.openTasks}</span>
+              <span className="font-semibold tabular-nums text-[#2D5A5A]">{loading ? "…" : queue.openTasks}</span>
               {" — "}backlog and reminders live in Tasks.
             </p>
             <Link href="/schedule" className={`${dashboardNeu.btnPrimary} shrink-0 text-center`}>
@@ -389,7 +389,7 @@ export function PmOverviewDashboard({
         </section>
       </div>
 
-      <section className="border-b border-white/[0.06] px-3 py-6 sm:px-6">
+      <section className="border-b border-[#E5E9EF] px-3 py-6 sm:px-6">
         <WorkspaceDashboardSection label="Your delivery queue" roleKeys={auth.roleKeys}>
           <div className={`mt-3 ${pmNeu.kpiStrip}`}>
             <PmStatRow>
@@ -422,7 +422,7 @@ export function PmOverviewDashboard({
                 tone={queue.atRiskCount > 0 ? "amber" : "emerald"}
               />
             </PmStatRow>
-            <PmStatRow className="mt-6 border-t border-white/[0.06] pt-6">
+            <PmStatRow className="mt-6 border-t border-[#E5E9EF] pt-6">
               <Link href="/pm/check-ins" className="min-w-0 hover:opacity-90">
                 <PmStatInline
                   label="Check-ins"
@@ -456,7 +456,7 @@ export function PmOverviewDashboard({
         </WorkspaceDashboardSection>
       </section>
 
-      <section className="border-b border-white/[0.06] px-3 py-6 sm:px-6">
+      <section className="border-b border-[#E5E9EF] px-3 py-6 sm:px-6">
         <DashboardSectionLabel roleKeys={auth.roleKeys}>Visual delivery metrics</DashboardSectionLabel>
         <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ChartPanel title="Org health">
@@ -479,7 +479,7 @@ export function PmOverviewDashboard({
             {workloadBars.length > 0 ? (
               <VerticalBarChart items={workloadBars} />
             ) : (
-              <p className="text-sm text-slate-500">{loading ? "Loading…" : "No open workload signals"}</p>
+              <p className="text-sm text-[#5B6472]">{loading ? "Loading…" : "No open workload signals"}</p>
             )}
           </ChartPanel>
           <ChartPanel title="Risk mix">
@@ -513,7 +513,7 @@ export function PmOverviewDashboard({
 
       <nav
         aria-label="PM quick links"
-        className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] px-3 py-4 sm:px-6"
+        className="flex w-full flex-wrap gap-2 border-b border-[#E5E9EF] px-3 py-4 sm:px-6"
       >
         {QUICK_LINKS.map((link) => (
           <Link
@@ -530,7 +530,7 @@ export function PmOverviewDashboard({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
           {scheduleKpis ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#5B6472]">
               Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending
             </p>
           ) : null}
@@ -576,7 +576,7 @@ export function PmOverviewDashboard({
             {taskBars.length > 0 ? (
               <VerticalBarChart items={taskBars} />
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#5B6472]">
                 {loading ? "Loading schedule…" : "No tasks scheduled this week"}
               </p>
             )}
@@ -584,9 +584,9 @@ export function PmOverviewDashboard({
 
           <ChartPanel title="Priority delivery queue">
             {intelLoading ? (
-              <p className="text-sm text-slate-500">Loading priorities…</p>
+              <p className="text-sm text-[#5B6472]">Loading priorities…</p>
             ) : (intel?.priorities ?? []).length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#5B6472]">
                 {intel?.orgSummary.averageHealth === 100
                   ? "All projects look healthy."
                   : "No approved projects yet."}
@@ -596,9 +596,9 @@ export function PmOverviewDashboard({
                 {(intel?.priorities ?? []).slice(0, 6).map((p) => (
                   <li
                     key={p.projectId}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[#E5E9EF] bg-black/20 px-3 py-2"
                   >
-                    <Link href={`/pm/projects/${p.projectId}`} className="truncate text-teal-300 hover:underline">
+                    <Link href={`/pm/projects/${p.projectId}`} className="truncate text-[#2D5A5A] hover:underline">
                       {p.projectName}
                     </Link>
                     <PmHealthBadge score={p.healthScore} riskLevel={p.riskLevel} size="sm" />
@@ -613,9 +613,9 @@ export function PmOverviewDashboard({
       <PmSection label="Full priority queue" description="Sorted by health — lowest scores need you first.">
         <PmDataBlock>
           {intelLoading ? (
-            <p className="px-5 py-6 text-sm text-slate-500 lg:px-8">Loading priorities…</p>
+            <p className="px-5 py-6 text-sm text-[#5B6472] lg:px-8">Loading priorities…</p>
           ) : (intel?.priorities ?? []).length === 0 ? (
-            <p className="px-5 py-6 text-sm text-slate-500 lg:px-8">
+            <p className="px-5 py-6 text-sm text-[#5B6472] lg:px-8">
               {intel?.orgSummary.averageHealth === 100
                 ? "All projects look healthy. Keep check-ins flowing."
                 : "No approved projects yet."}
@@ -626,8 +626,8 @@ export function PmOverviewDashboard({
                 <div className="flex items-center gap-4">
                   <PmHealthBadge score={p.healthScore} riskLevel={p.riskLevel} />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-100">{p.projectName}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                    <p className="font-medium text-[#1A1D26]">{p.projectName}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-[#5B6472]">
                       {p.recommendedActions[0] ?? p.signals[0]?.message}
                     </p>
                   </div>
@@ -644,7 +644,7 @@ export function PmOverviewDashboard({
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={pmNeu.chartPanel}>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-400/80">{title}</h3>
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#2D5A5A]/80">{title}</h3>
       <div className="mt-5 flex w-full flex-1 flex-col items-center justify-center">{children}</div>
     </div>
   );

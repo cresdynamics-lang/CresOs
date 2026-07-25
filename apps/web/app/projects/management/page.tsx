@@ -214,14 +214,14 @@ export default function ProjectsManagementPage() {
   };
 
   if (!hydrated) {
-    return <section className="p-4 text-slate-400">Loading…</section>;
+    return <section className="p-4 text-[#5B6472]">Loading…</section>;
   }
 
   if (!canView) {
     return (
       <section className="p-4">
-        <p className="text-slate-400">You don&apos;t have access to management billing.</p>
-        <Link href="/projects" className="text-sky-400 hover:underline">
+        <p className="text-[#5B6472]">You don&apos;t have access to management billing.</p>
+        <Link href="/projects" className="text-[#2563EB] hover:underline">
           Back to projects
         </Link>
       </section>
@@ -237,27 +237,27 @@ export default function ProjectsManagementPage() {
         showWelcomeBanner={false}
       />
       <div className="flex flex-wrap gap-3 text-sm">
-        <Link href="/projects" className="text-sky-400 hover:underline">
+        <Link href="/projects" className="text-[#2563EB] hover:underline">
           ← All projects
         </Link>
         {canFinanceActions && (
-          <Link href="/finance" className="text-sky-400 hover:underline">
+          <Link href="/finance" className="text-[#2563EB] hover:underline">
             Finance overview
           </Link>
         )}
       </div>
 
       {isDirector && (
-        <div className="shell border-sky-800/40 bg-slate-900/50">
-          <h3 className="text-sm font-semibold text-slate-200">Add project to management</h3>
-          <p className="mt-1 text-xs text-slate-500">
+        <div className="shell border-sky-800/40 bg-white">
+          <h3 className="text-sm font-semibold text-[#1A1D26]">Add project to management</h3>
+          <p className="mt-1 text-xs text-[#5B6472]">
             Only approved projects. Default fee is {formatMoney(defaultMonthly)}/month until you change it.
           </p>
           <form onSubmit={enroll} className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
             <select
               value={enrollProjectId}
               onChange={(e) => setEnrollProjectId(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-800 px-2 py-2 text-sm text-slate-100 md:min-w-[220px]"
+              className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-2 text-sm text-[#1A1D26] md:min-w-[220px]"
               required
             >
               <option value="">Select approved project</option>
@@ -267,7 +267,7 @@ export default function ProjectsManagementPage() {
                 </option>
               ))}
             </select>
-            <label className="flex flex-col text-xs text-slate-400">
+            <label className="flex flex-col text-xs text-[#5B6472]">
               KES / month
               <input
                 type="number"
@@ -275,19 +275,19 @@ export default function ProjectsManagementPage() {
                 step={1}
                 value={enrollMonthly}
                 onChange={(e) => setEnrollMonthly(e.target.value)}
-                className="mt-0.5 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                className="mt-0.5 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               />
             </label>
-            <label className="flex flex-col text-xs text-slate-400">
+            <label className="flex flex-col text-xs text-[#5B6472]">
               Management started
               <input
                 type="date"
                 value={enrollStarted}
                 onChange={(e) => setEnrollStarted(e.target.value)}
-                className="mt-0.5 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                className="mt-0.5 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               />
             </label>
-            <label className="flex flex-col text-xs text-slate-400">
+            <label className="flex flex-col text-xs text-[#5B6472]">
               Duration (months, optional)
               <input
                 type="number"
@@ -295,7 +295,7 @@ export default function ProjectsManagementPage() {
                 placeholder="Ongoing if empty"
                 value={enrollMonths}
                 onChange={(e) => setEnrollMonths(e.target.value)}
-                className="mt-0.5 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                className="mt-0.5 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               />
             </label>
             <button
@@ -310,23 +310,23 @@ export default function ProjectsManagementPage() {
       )}
 
       {loading ? (
-        <p className="text-slate-500">Loading management projects…</p>
+        <p className="text-[#5B6472]">Loading management projects…</p>
       ) : rows.length === 0 ? (
-        <p className="text-slate-500">No projects on management yet.</p>
+        <p className="text-[#5B6472]">No projects on management yet.</p>
       ) : (
         <ul className="space-y-4">
           {rows.map((p) => (
-            <li key={p.id} className="shell border-slate-700/80">
+            <li key={p.id} className="shell border-[#E5E9EF]/80">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <Link href={`/projects/${p.id}`} className="text-lg font-medium text-sky-300 hover:underline">
+                  <Link href={`/projects/${p.id}`} className="text-lg font-medium text-[#2563EB] hover:underline">
                     {p.name}
                   </Link>
-                  <p className="text-xs capitalize text-slate-500">
+                  <p className="text-xs capitalize text-[#5B6472]">
                     {p.status}
                     {p.client?.name ? ` · Client: ${p.client.name}` : ""}
                   </p>
-                  <p className="mt-2 text-sm text-slate-300">
+                  <p className="mt-2 text-sm text-[#5B6472]">
                     {formatMoney(p.managementMonthlyAmount)}/month · Started{" "}
                     {p.managementStartedAt
                       ? new Date(p.managementStartedAt).toLocaleDateString()
@@ -334,19 +334,19 @@ export default function ProjectsManagementPage() {
                     {p.managementMonths != null ? ` · Planned ${p.managementMonths} month(s)` : " · Ongoing"}
                   </p>
                   <p className="mt-1 text-sm">
-                    <span className="text-amber-300">Pending (unpaid months): {formatMoney(p.pendingAmount)}</span>
+                    <span className="text-[#B45309]">Pending (unpaid months): {formatMoney(p.pendingAmount)}</span>
                     {" · "}
-                    <span className="text-slate-400">
+                    <span className="text-[#5B6472]">
                       Paid months: {p.paidMonthsCount}/{p.totalBillableMonths}
                     </span>
                   </p>
                   {p.managementProgressPercent != null && (
                     <div className="mt-2 max-w-md">
-                      <div className="flex justify-between text-xs text-slate-500">
+                      <div className="flex justify-between text-xs text-[#5B6472]">
                         <span>Director progress</span>
                         <span>{p.managementProgressPercent}%</span>
                       </div>
-                      <div className="mt-1 h-2 overflow-hidden rounded bg-slate-800">
+                      <div className="mt-1 h-2 overflow-hidden rounded bg-[#E5E9EF]">
                         <div
                           className="h-full bg-emerald-600"
                           style={{ width: `${Math.min(100, Math.max(0, p.managementProgressPercent))}%` }}
@@ -361,7 +361,7 @@ export default function ProjectsManagementPage() {
                       <button
                         type="button"
                         onClick={() => openEdit(p)}
-                        className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        className="rounded border border-[#D0D5DD] px-3 py-1 text-xs text-[#1A1D26] hover:bg-[#E5E9EF]"
                       >
                         Edit / progress
                       </button>
@@ -369,7 +369,7 @@ export default function ProjectsManagementPage() {
                         type="button"
                         onClick={() => void removeManagement(p.id)}
                         disabled={busyId === p.id}
-                        className="rounded border border-rose-700 px-3 py-1 text-xs text-rose-300 hover:bg-rose-950/40 disabled:opacity-50"
+                        className="rounded border border-rose-700 px-3 py-1 text-xs text-[#C62828] hover:bg-[#FEF2F2] disabled:opacity-50"
                       >
                         Remove from management
                       </button>
@@ -379,10 +379,10 @@ export default function ProjectsManagementPage() {
               </div>
 
               {editFor === p.id && isDirector && (
-                <div className="mt-4 rounded border border-slate-700 bg-slate-950/50 p-3">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Update management</p>
+                <div className="mt-4 rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#5B6472]">Update management</p>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <label className="text-xs text-slate-400">
+                    <label className="text-xs text-[#5B6472]">
                       Started (date)
                       <input
                         type="date"
@@ -390,10 +390,10 @@ export default function ProjectsManagementPage() {
                         onChange={(e) =>
                           setEditDraft((d) => ({ ...d, managementStartedAt: e.target.value }))
                         }
-                        className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                       />
                     </label>
-                    <label className="text-xs text-slate-400">
+                    <label className="text-xs text-[#5B6472]">
                       Progress %
                       <input
                         type="number"
@@ -403,10 +403,10 @@ export default function ProjectsManagementPage() {
                         onChange={(e) =>
                           setEditDraft((d) => ({ ...d, managementProgressPercent: e.target.value }))
                         }
-                        className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                       />
                     </label>
-                    <label className="text-xs text-slate-400">
+                    <label className="text-xs text-[#5B6472]">
                       KES / month
                       <input
                         type="number"
@@ -415,10 +415,10 @@ export default function ProjectsManagementPage() {
                         onChange={(e) =>
                           setEditDraft((d) => ({ ...d, managementMonthlyAmount: e.target.value }))
                         }
-                        className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                       />
                     </label>
-                    <label className="text-xs text-slate-400">
+                    <label className="text-xs text-[#5B6472]">
                       Duration (months)
                       <input
                         type="number"
@@ -428,7 +428,7 @@ export default function ProjectsManagementPage() {
                         onChange={(e) =>
                           setEditDraft((d) => ({ ...d, managementMonths: e.target.value }))
                         }
-                        className="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                       />
                     </label>
                   </div>
@@ -444,7 +444,7 @@ export default function ProjectsManagementPage() {
                     <button
                       type="button"
                       onClick={() => setEditFor(null)}
-                      className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-300"
+                      className="rounded border border-[#D0D5DD] px-3 py-1 text-xs text-[#5B6472]"
                     >
                       Cancel
                     </button>
@@ -455,7 +455,7 @@ export default function ProjectsManagementPage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500">
+                    <tr className="border-b border-[#E5E9EF] text-xs uppercase tracking-wide text-[#5B6472]">
                       <th className="pb-2 pr-2">Month</th>
                       <th className="pb-2 pr-2">Status</th>
                       <th className="pb-2 pr-2">Paid</th>
@@ -466,18 +466,18 @@ export default function ProjectsManagementPage() {
                     {p.monthDetails.map((m) => {
                       const b = `${p.id}-${m.year}-${m.month}`;
                       return (
-                        <tr key={m.key} className="border-b border-slate-800/80">
-                          <td className="py-2 pr-2 text-slate-200">{m.key}</td>
+                        <tr key={m.key} className="border-b border-[#E5E9EF]/80">
+                          <td className="py-2 pr-2 text-[#1A1D26]">{m.key}</td>
                           <td className="py-2 pr-2">
                             {m.paid ? (
-                              <span className="text-emerald-400">Paid</span>
+                              <span className="text-[#1B6B3A]">Paid</span>
                             ) : (
-                              <span className="text-amber-300">Pending</span>
+                              <span className="text-[#B45309]">Pending</span>
                             )}
                           </td>
                           <td className="py-2 pr-2">
                             {canFinanceActions ? (
-                              <label className="inline-flex items-center gap-2 text-xs text-slate-300">
+                              <label className="inline-flex items-center gap-2 text-xs text-[#5B6472]">
                                 <input
                                   type="checkbox"
                                   checked={m.paid}
@@ -487,18 +487,18 @@ export default function ProjectsManagementPage() {
                                 Mark paid
                               </label>
                             ) : (
-                              <span className="text-slate-500">{m.paid ? "Yes" : "No"}</span>
+                              <span className="text-[#5B6472]">{m.paid ? "Yes" : "No"}</span>
                             )}
                           </td>
                           <td className="py-2 pr-2">
                             {m.invoiceId ? (
-                              <span className="text-xs text-slate-400">Linked</span>
+                              <span className="text-xs text-[#5B6472]">Linked</span>
                             ) : !m.paid && canFinanceActions ? (
                               <button
                                 type="button"
                                 disabled={invoiceBusy === `${p.id}-inv-${m.year}-${m.month}`}
                                 onClick={() => void createInvoice(p.id, m.year, m.month)}
-                                className="rounded border border-sky-700 px-2 py-0.5 text-xs text-sky-300 hover:bg-sky-950/50 disabled:opacity-50"
+                                className="rounded border border-sky-700 px-2 py-0.5 text-xs text-[#2563EB] hover:bg-[#F0F6FC] disabled:opacity-50"
                               >
                                 Generate invoice
                               </button>

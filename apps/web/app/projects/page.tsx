@@ -347,7 +347,7 @@ export default function ProjectsPage() {
       >
         <div className="min-h-0 flex-1 overflow-auto">
         <CrmDataTable emptyMessage={emptyMessage} isEmpty={filteredProjects.length === 0}>
-          <table className="min-w-[64rem] w-full text-left text-sm text-slate-200">
+          <table className="min-w-[64rem] w-full text-left text-sm text-[#1A1D26]">
             <CrmTableHead>
               <th className="px-3 py-2.5 font-medium">Project</th>
               <th className="whitespace-nowrap px-3 py-2.5 font-medium">Finance ref</th>
@@ -372,41 +372,41 @@ export default function ProjectsPage() {
                   ? `Done ${ts.done} · IP ${ts.in_progress} · Wait ${ts.waiting_response} · Blk ${ts.blocked} · NS ${ts.not_started ?? (ts as { todo?: number }).todo ?? 0}`
                   : "—";
               return (
-                <tr key={project.id} className="border-b border-slate-800/60 align-top transition-colors hover:bg-emerald-500/5">
-                  <td className="max-w-[14rem] px-3 py-2.5 font-medium text-slate-100">
+                <tr key={project.id} className="border-b border-[#E5E9EF]/60 align-top transition-colors hover:bg-emerald-500/5">
+                  <td className="max-w-[14rem] px-3 py-2.5 font-medium text-[#1A1D26]">
                     {isDeveloperOnly ? (
                       <span className="line-clamp-2">{project.name}</span>
                     ) : (
-                      <Link href={`/projects/${project.id}`} className="font-medium text-emerald-300 hover:underline line-clamp-2">
+                      <Link href={`/projects/${project.id}`} className="font-medium text-[#1B6B3A] hover:underline line-clamp-2">
                         {project.name}
                       </Link>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-violet-300/90">{financeRef}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-[#6D28D9]/90">{financeRef}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     {project.type === "demo" ? (
-                      <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-xs text-violet-300">
+                      <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-xs text-[#6D28D9]">
                         Demo
                       </span>
                     ) : project.type === "project" ? (
-                      <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
+                      <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs text-[#2563EB]">
                         Project
                       </span>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="max-w-[10rem] px-3 py-2.5 text-slate-400">
+                  <td className="max-w-[10rem] px-3 py-2.5 text-[#5B6472]">
                     <span className="line-clamp-2">{project.clientOrOwnerName ?? "—"}</span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-emerald-400/90">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-[#1B6B3A]/90">
                     {project.price != null && project.price > 0
                       ? typeof project.price === "number"
                         ? formatMoney(project.price)
                         : project.price
                       : "—"}
                   </td>
-                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-slate-500">
+                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-[#5B6472]">
                     {project.developerAssignments && project.developerAssignments.length > 0 ? (
                       <span className="line-clamp-2" title={project.developerAssignments.map((a) => a.user.name || a.user.email).join(", ")}>
                         {project.developerAssignments
@@ -419,25 +419,25 @@ export default function ProjectsPage() {
                       "—"
                     )}
                   </td>
-                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-slate-500">
+                  <td className="max-w-[12rem] px-3 py-2.5 text-xs text-[#5B6472]">
                     <span className="line-clamp-2" title={deliveryShort}>
                       {deliveryShort}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     {project.approvalStatus === "pending_approval" && (
-                      <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-200">Pending</span>
+                      <span className="rounded bg-[#FFF6E5] px-2 py-0.5 text-xs text-[#92400E]">Pending</span>
                     )}
                     {project.approvalStatus === "approved" && (
-                      <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-300">Approved</span>
+                      <span className="rounded bg-[#F2F9EF] px-2 py-0.5 text-xs text-[#1B6B3A]">Approved</span>
                     )}
                     {project.approvalStatus && !["pending_approval", "approved"].includes(project.approvalStatus) && (
-                      <span className="text-xs capitalize text-slate-400">{project.approvalStatus}</span>
+                      <span className="text-xs capitalize text-[#5B6472]">{project.approvalStatus}</span>
                     )}
-                    {!project.approvalStatus && <span className="text-slate-500">—</span>}
+                    {!project.approvalStatus && <span className="text-[#5B6472]">—</span>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 capitalize text-slate-300">
-                    <span className="rounded-full border border-slate-600/50 bg-slate-800/60 px-2 py-0.5 text-xs">
+                  <td className="whitespace-nowrap px-3 py-2.5 capitalize text-[#5B6472]">
+                    <span className="rounded-full border border-[#D0D5DD]/50 bg-[#F4F7F9] px-2 py-0.5 text-xs">
                       {project.status}
                     </span>
                   </td>
@@ -465,7 +465,7 @@ export default function ProjectsPage() {
                             placeholder="Link"
                             value={linkInput[project.id] ?? ""}
                             onChange={(e) => setLinkInput((prev) => ({ ...prev, [project.id]: e.target.value }))}
-                            className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-100"
+                            className="min-w-0 flex-1 rounded border border-[#E5E9EF] bg-[#F4F7F9] px-2 py-1 text-xs text-[#1A1D26]"
                           />
                           <button
                             type="button"
@@ -505,22 +505,22 @@ export default function ProjectsPage() {
 
       {clientMessage && (
         <CrmSectionPanel title={`Client message — ${clientMessage.projectName}`} tone="violet">
-          <p className="whitespace-pre-wrap rounded-xl border border-violet-500/20 bg-slate-950/50 p-3 text-sm text-slate-200">
+          <p className="whitespace-pre-wrap rounded-xl border border-violet-500/20 bg-[#F4F7F9] p-3 text-sm text-[#1A1D26]">
             {clientMessage.result.message}
             {clientMessage.result.link && (
               <>
                 {"\n\n"}
-                <a href={clientMessage.result.link} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+                <a href={clientMessage.result.link} target="_blank" rel="noopener noreferrer" className="text-[#2563EB] hover:underline">
                   View status: {clientMessage.result.link}
                 </a>
               </>
             )}
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={copyToClipboard} className="rounded bg-slate-600 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-500">
+            <button type="button" onClick={copyToClipboard} className="rounded bg-slate-600 px-3 py-1.5 text-sm font-medium text-[#1A1D26] hover:bg-slate-500">
               {copyDone ? "Copied" : "Copy message (with link)"}
             </button>
-            <button type="button" onClick={() => setClientMessage(null)} className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
+            <button type="button" onClick={() => setClientMessage(null)} className="rounded border border-[#D0D5DD] px-3 py-1.5 text-sm text-[#5B6472] hover:bg-[#E5E9EF]">
               Close
             </button>
           </div>
@@ -608,50 +608,50 @@ function CreateProjectModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[#E5E9EF] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold text-slate-50">{directorMode ? "New project (Director)" : "New project"}</h3>
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-2 text-xs text-[#5B6472]">
           {directorMode
             ? "Creates approved immediately. Invite one or more developers — each must accept before working tasks."
             : "Submitted for director approval unless your org policy differs."}
         </p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Project name *</span>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Project name *</span>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           {!directorMode && (
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Type</span>
-              <select value={type} onChange={(e) => setType(e.target.value as "demo" | "project")} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+              <span className="text-xs text-[#5B6472]">Type</span>
+              <select value={type} onChange={(e) => setType(e.target.value as "demo" | "project")} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
                 <option value="demo">Demo</option>
                 <option value="project">Project</option>
               </select>
             </label>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Client / project owner name</span>
-            <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Client / project owner name</span>
+            <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Phone</span>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Phone</span>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Email</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Price {type === "demo" ? "(optional)" : ""}</span>
-            <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Price {type === "demo" ? "(optional)" : ""}</span>
+            <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Project details</span>
-            <textarea value={projectDetails} onChange={(e) => setProjectDetails(e.target.value)} rows={3} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Project details</span>
+            <textarea value={projectDetails} onChange={(e) => setProjectDetails(e.target.value)} rows={3} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Success criteria</span>
-            <textarea value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} rows={2} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="Filled automatically when you use AI planner below" />
+            <span className="text-xs text-[#5B6472]">Success criteria</span>
+            <textarea value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} rows={2} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" placeholder="Filled automatically when you use AI planner below" />
           </label>
           <ProjectAiPlannerPanel
             apiFetch={apiFetch}
@@ -667,8 +667,8 @@ function CreateProjectModal({
             }}
           />
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Status</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+            <span className="text-xs text-[#5B6472]">Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
               <option value="planned">Planned</option>
               <option value="active">Active</option>
               <option value="paused">Paused</option>
@@ -678,13 +678,13 @@ function CreateProjectModal({
           </label>
           {directorMode ? (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Invite developers (accept required)</span>
-              <div className="max-h-36 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-800/80 p-2">
+              <span className="text-xs text-[#5B6472]">Invite developers (accept required)</span>
+              <div className="max-h-36 space-y-1 overflow-y-auto rounded border border-[#E5E9EF] bg-[#F4F7F9] p-2">
                 {developers.length === 0 ? (
-                  <p className="text-xs text-slate-500">No developers in org.</p>
+                  <p className="text-xs text-[#5B6472]">No developers in org.</p>
                 ) : (
                   developers.map((d) => (
-                    <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+                    <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#1A1D26]">
                       <input
                         type="checkbox"
                         checked={assignedDeveloperIds.includes(d.id)}
@@ -702,8 +702,8 @@ function CreateProjectModal({
             </div>
           ) : (
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Assign developer</span>
-              <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+              <span className="text-xs text-[#5B6472]">Assign developer</span>
+              <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
                 <option value="">—</option>
                 {developers.map((d) => (
                   <option key={d.id} value={d.id}>{d.name || d.email}</option>
@@ -712,24 +712,24 @@ function CreateProjectModal({
             </label>
           )}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Timeline (optional)</span>
+            <span className="text-xs text-[#5B6472]">Timeline (optional)</span>
             {timeline.map((t, i) => (
               <div key={i} className="flex gap-2">
-                <input type="date" value={t.date} onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100" />
-                <input type="text" placeholder="Title" value={t.title} onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100" />
-                <button type="button" onClick={() => setTimeline((prev) => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-slate-200">×</button>
+                <input type="date" value={t.date} onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]" />
+                <input type="text" placeholder="Title" value={t.title} onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="flex-1 rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]" />
+                <button type="button" onClick={() => setTimeline((prev) => prev.filter((_, j) => j !== i))} className="text-[#5B6472] hover:text-[#1A1D26]">×</button>
               </div>
             ))}
-            <button type="button" onClick={() => setTimeline((prev) => [...prev, { date: "", title: "" }])} className="mt-1 text-xs text-sky-400 hover:underline">
+            <button type="button" onClick={() => setTimeline((prev) => [...prev, { date: "", title: "" }])} className="mt-1 text-xs text-[#2563EB] hover:underline">
               + Add timeline item
             </button>
           </div>
-          {error && <p className="text-sm text-amber-400">{error}</p>}
+          {error && <p className="text-sm text-[#B45309]">{error}</p>}
           <div className="mt-2 flex gap-2">
             <button type="submit" disabled={submitting} className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
               {submitting ? "Creating…" : "Create"}
             </button>
-            <button type="button" onClick={onClose} className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
+            <button type="button" onClick={onClose} className="rounded border border-[#D0D5DD] px-4 py-2 text-sm text-[#5B6472] hover:bg-[#E5E9EF]">
               Cancel
             </button>
           </div>

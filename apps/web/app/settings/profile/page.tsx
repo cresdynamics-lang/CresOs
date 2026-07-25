@@ -149,7 +149,7 @@ export default function ProfileSettingsPage() {
   if (loading || !profile) {
     return (
       <div className="px-4 py-12 sm:px-6 lg:px-8">
-        <p className="text-sm text-slate-500">Loading contact details…</p>
+        <p className="text-sm text-[#5B6472]">Loading contact details…</p>
       </div>
     );
   }
@@ -157,7 +157,7 @@ export default function ProfileSettingsPage() {
   return (
     <SettingsPage>
       <SettingsPanel className="!py-5">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-[#5B6472]">
           <Link href="/settings/account" className={`${theme.accentText} hover:underline`}>
             ← Account
           </Link>
@@ -238,7 +238,7 @@ export default function ProfileSettingsPage() {
         >
           <div className="max-w-4xl space-y-4">
             {profile.nextOfKin.map((kin, index) => (
-              <div key={index} className="grid gap-3 border-b border-white/[0.06] pb-5 last:border-b-0 last:pb-0 sm:grid-cols-3">
+              <div key={index} className="grid gap-3 border-b border-[#E5E9EF] pb-5 last:border-b-0 last:pb-0 sm:grid-cols-3">
                 <SettingsField label={`Contact ${index + 1} — name`}>
                   <input
                     type="text"

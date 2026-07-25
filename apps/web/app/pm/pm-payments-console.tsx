@@ -61,18 +61,18 @@ export function PmPaymentsConsole() {
 
       <PmDataBlock>
         {(data?.payouts ?? []).length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">No payouts recorded yet.</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">No payouts recorded yet.</p>
         ) : (
           data!.payouts.map((p) => (
             <div key={p.id} className={`${pmNeu.listRow} flex justify-between gap-2`}>
               <div>
-                <p className="text-sm font-medium text-slate-100">{formatKes(p.amount)}</p>
-                <p className="text-xs text-slate-500">
+                <p className="text-sm font-medium text-[#1A1D26]">{formatKes(p.amount)}</p>
+                <p className="text-xs text-[#5B6472]">
                   {new Date(p.createdAt).toLocaleDateString()} · {p.status}
                 </p>
               </div>
               {p.paidAt ? (
-                <span className="text-xs text-emerald-400">
+                <span className="text-xs text-[#1B6B3A]">
                   Paid {new Date(p.paidAt).toLocaleDateString()}
                 </span>
               ) : null}

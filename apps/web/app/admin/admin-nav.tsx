@@ -37,8 +37,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/roles", label: "Roles", group: "administration", match: "prefix", icon: "shield" },
   { href: "/admin/client-portal", label: "Client portal", shortLabel: "Clients", group: "portal", match: "prefix", icon: "globe" },
   { href: "/schedule", label: "Tasks", group: "app", match: "prefix", icon: "calendar" },
-  { href: "/community", label: "Community", group: "app", match: "prefix", icon: "chat" },
-  { href: "/settings/account", label: "Settings", group: "app", match: "prefix", icon: "settings" }
+  { href: "/community", label: "Community", group: "app", match: "prefix", icon: "chat" }
 ];
 
 const GROUP_LABELS: Record<NavItem["group"], string> = {
@@ -97,7 +96,6 @@ function NavIcon({ name }: { name: NavItem["icon"] }) {
 
 function isActive(pathname: string, item: NavItem): boolean {
   if (item.match === "exact") return pathname === item.href || (item.href === "/admin" && pathname === "/admin/");
-  if (item.href === "/settings/account") return pathname.startsWith("/settings");
   if (item.href === "/reports") {
     return (
       (pathname === "/reports" || pathname.startsWith("/reports/")) && !pathname.startsWith("/reports/ai")

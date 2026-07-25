@@ -8,14 +8,14 @@ export default function SimpleSettingsPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-200 mb-2">Settings</h1>
-        <p className="text-slate-400">
+        <h1 className="text-3xl font-bold text-[#1A1D26] mb-2">Settings</h1>
+        <p className="text-[#5B6472]">
           Manage your preferences and account details. Your notification email is used to send you reminders and alerts.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-800 pb-2 mb-6">
+      <div className="flex gap-2 border-b border-[#E5E9EF] pb-2 mb-6">
         {["profile", "preferences", "notifications", "security"].map((tab) => (
           <button
             key={tab}
@@ -23,7 +23,7 @@ export default function SimpleSettingsPage() {
             className={`rounded-lg px-3 py-2 text-sm font-medium capitalize ${
               activeTab === tab
                 ? "bg-brand/15 text-brand border border-brand/40"
-                : "text-slate-300 hover:bg-slate-800"
+                : "text-[#5B6472] hover:bg-[#E5E9EF]"
             }`}
           >
             {tab}
@@ -32,11 +32,11 @@ export default function SimpleSettingsPage() {
       </div>
 
       {/* Content */}
-      <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
+      <div className="bg-white rounded-lg border border-[#E5E9EF] p-6">
         {activeTab === "profile" && (
           <div>
-            <h2 className="text-xl font-semibold text-slate-200 mb-4">Profile Settings</h2>
-            <div className="text-slate-400">
+            <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">Profile Settings</h2>
+            <div className="text-[#5B6472]">
               <p>Profile management features:</p>
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Basic information editing (name, role, department)</li>
@@ -51,8 +51,8 @@ export default function SimpleSettingsPage() {
 
         {activeTab === "preferences" && (
           <div>
-            <h2 className="text-xl font-semibold text-slate-200 mb-4">Preferences</h2>
-            <div className="text-slate-400">
+            <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">Preferences</h2>
+            <div className="text-[#5B6472]">
               <p>Preferences features:</p>
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Theme customization (dark, light, auto)</li>
@@ -67,8 +67,8 @@ export default function SimpleSettingsPage() {
 
         {activeTab === "notifications" && (
           <div>
-            <h2 className="text-xl font-semibold text-slate-200 mb-4">Notifications</h2>
-            <div className="text-slate-400">
+            <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">Notifications</h2>
+            <div className="text-[#5B6472]">
               <p>Notification settings:</p>
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Email notifications control</li>
@@ -83,8 +83,8 @@ export default function SimpleSettingsPage() {
 
         {activeTab === "security" && (
           <div>
-            <h2 className="text-xl font-semibold text-slate-200 mb-4">Security</h2>
-            <div className="text-slate-400">
+            <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">Security</h2>
+            <div className="text-[#5B6472]">
               <p>Security settings:</p>
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Password change</li>
@@ -98,8 +98,8 @@ export default function SimpleSettingsPage() {
         )}
       </div>
 
-      <div className="mt-6 p-4 bg-slate-800/50 rounded-lg">
-        <p className="text-sm text-slate-400">
+      <div className="mt-6 p-4 bg-[#F4F7F9] rounded-lg">
+        <p className="text-sm text-[#5B6472]">
           <strong>Note:</strong> Full settings functionality is implemented. The detailed forms are available in the respective settings pages.
           This simplified view shows all available settings options.
         </p>

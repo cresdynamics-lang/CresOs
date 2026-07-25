@@ -84,21 +84,21 @@ export function ExpenseCreateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#F4F7F9] p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="expense-modal-title"
     >
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.06] bg-[#121820] shadow-[8px_8px_24px_rgba(0,0,0,0.65),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
+      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E5E9EF] bg-white shadow-[8px_8px_24px_rgba(15,23,42,0.06),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E5E9EF] px-4 py-3 sm:px-5">
           <h2 id="expense-modal-title" className="text-lg font-semibold text-amber-100">
             New expense
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200"
+            className="rounded-lg px-2 py-1 text-sm text-[#5B6472] hover:bg-white/5 hover:text-[#1A1D26]"
           >
             Close
           </button>
@@ -106,13 +106,13 @@ export function ExpenseCreateModal({
 
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
-            <p className="text-xs leading-relaxed text-slate-400">
+            <p className="text-xs leading-relaxed text-[#5B6472]">
               Record money out — salaries (HR), developer project payments, or other ops. A receipt PDF is emailed to
               the beneficiary; admins are notified to approve.
             </p>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-400">Category</span>
+              <span className="mb-1 block text-xs font-medium text-[#5B6472]">Category</span>
               <select
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -128,7 +128,7 @@ export function ExpenseCreateModal({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-400">Description</span>
+              <span className="mb-1 block text-xs font-medium text-[#5B6472]">Description</span>
               <input
                 type="text"
                 placeholder="e.g. AWS January, client visit fuel"
@@ -141,7 +141,7 @@ export function ExpenseCreateModal({
 
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-400">Amount (KES)</span>
+                <span className="mb-1 block text-xs font-medium text-[#5B6472]">Amount (KES)</span>
                 <input
                   type="number"
                   min="0"
@@ -153,7 +153,7 @@ export function ExpenseCreateModal({
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-400">Date spent</span>
+                <span className="mb-1 block text-xs font-medium text-[#5B6472]">Date spent</span>
                 <input
                   type="date"
                   value={form.spentAt}
@@ -165,7 +165,7 @@ export function ExpenseCreateModal({
             </div>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-400">Vendor / paid to</span>
+              <span className="mb-1 block text-xs font-medium text-[#5B6472]">Vendor / paid to</span>
               <input
                 type="text"
                 placeholder="Supplier or payee name"
@@ -177,7 +177,7 @@ export function ExpenseCreateModal({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-400">Receipt / transaction code</span>
+              <span className="mb-1 block text-xs font-medium text-[#5B6472]">Receipt / transaction code</span>
               <input
                 type="text"
                 placeholder="M-Pesa code, bank ref, invoice #"
@@ -190,7 +190,7 @@ export function ExpenseCreateModal({
 
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-400">Account paid from</span>
+                <span className="mb-1 block text-xs font-medium text-[#5B6472]">Account paid from</span>
                 <input
                   type="text"
                   placeholder="Business bank / M-Pesa"
@@ -201,7 +201,7 @@ export function ExpenseCreateModal({
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-400">Payment method</span>
+                <span className="mb-1 block text-xs font-medium text-[#5B6472]">Payment method</span>
                 <select
                   value={form.paymentMethod}
                   onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
@@ -217,7 +217,7 @@ export function ExpenseCreateModal({
             </div>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-400">Receipt sent to</span>
+              <span className="mb-1 block text-xs font-medium text-[#5B6472]">Receipt sent to</span>
               <select
                 value={form.beneficiaryUserId}
                 onChange={(e) => setForm((f) => ({ ...f, beneficiaryUserId: e.target.value }))}
@@ -235,7 +235,7 @@ export function ExpenseCreateModal({
 
             {showToolField ? (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-400">Tool or service (optional)</span>
+                <span className="mb-1 block text-xs font-medium text-[#5B6472]">Tool or service (optional)</span>
                 <input
                   type="text"
                   placeholder="e.g. GitHub, Vercel"
@@ -247,13 +247,13 @@ export function ExpenseCreateModal({
             ) : null}
 
             {submitError ? (
-              <p className="rounded-lg border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
+              <p className="rounded-lg border border-rose-500/30 bg-[#FEF2F2] px-3 py-2 text-sm text-[#C62828]">
                 {submitError}
               </p>
             ) : null}
           </div>
 
-          <div className="flex shrink-0 gap-2 border-t border-white/[0.06] px-4 py-3 sm:px-5">
+          <div className="flex shrink-0 gap-2 border-t border-[#E5E9EF] px-4 py-3 sm:px-5">
             <button type="button" onClick={onClose} className={`${financeNeu.btnGhost} flex-1`}>
               Cancel
             </button>

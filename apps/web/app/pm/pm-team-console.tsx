@@ -42,15 +42,15 @@ export function PmTeamConsole() {
       />
       <PmDataBlock>
         {team.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">No developers on active projects.</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">No developers on active projects.</p>
         ) : (
           team.map((m) => (
             <div key={m.id} className={`${pmNeu.listRow} flex flex-wrap items-center justify-between gap-2`}>
               <div>
-                <p className="font-medium text-slate-100">{m.name}</p>
-                <p className="text-xs text-slate-500">{m.jobTitle || m.email}</p>
+                <p className="font-medium text-[#1A1D26]">{m.name}</p>
+                <p className="text-xs text-[#5B6472]">{m.jobTitle || m.email}</p>
                 {m.currentFocusProject ? (
-                  <p className="mt-1 text-xs text-teal-400/80">Focus: {m.currentFocusProject.name}</p>
+                  <p className="mt-1 text-xs text-[#2D5A5A]/80">Focus: {m.currentFocusProject.name}</p>
                 ) : null}
               </div>
               <Link href={`/pm/check-ins?developer=${m.id}`} className={pmNeu.btnGhost}>

@@ -166,7 +166,7 @@ export default function DeveloperPage() {
   if (!hydrated || !auth.accessToken) {
     return (
       <div className="flex min-h-[16rem] items-center justify-center">
-        <p className="text-sm text-slate-400">Loading developer dashboard…</p>
+        <p className="text-sm text-[#5B6472]">Loading developer dashboard…</p>
       </div>
     );
   }

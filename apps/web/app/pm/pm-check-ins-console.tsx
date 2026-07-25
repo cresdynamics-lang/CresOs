@@ -138,10 +138,10 @@ export function PmCheckInsConsole() {
       ) : null}
 
       <div className={`${pmNeu.panel} mx-5 mb-6 lg:mx-8`}>
-        <p className="mb-3 text-sm font-medium text-slate-200">Send check-in</p>
+        <p className="mb-3 text-sm font-medium text-[#1A1D26]">Send check-in</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <select
-            className="rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
@@ -152,7 +152,7 @@ export function PmCheckInsConsole() {
             ))}
           </select>
           <select
-            className="rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             value={developerId}
             onChange={(e) => setDeveloperId(e.target.value)}
           >
@@ -164,13 +164,13 @@ export function PmCheckInsConsole() {
             ))}
           </select>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-slate-400">
+        <label className="mt-3 flex items-center gap-2 text-sm text-[#5B6472]">
           <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
           Use AI to vary daily wording
         </label>
         {!useAi ? (
           <textarea
-            className="mt-2 w-full rounded-lg border border-white/[0.06] bg-[#0e1319] p-3 text-sm"
+            className="mt-2 w-full rounded-lg border border-[#E5E9EF] bg-white p-3 text-sm"
             rows={3}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -189,11 +189,11 @@ export function PmCheckInsConsole() {
 
       <PmDataBlock>
         {checkIns.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 lg:px-8">No check-ins yet.</p>
+          <p className="px-5 py-8 text-sm text-[#5B6472] lg:px-8">No check-ins yet.</p>
         ) : (
           checkIns.map((c) => (
             <div key={c.id} className={pmNeu.listRow}>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[#5B6472]">
                 <span>{c.project?.name}</span>
                 <span>·</span>
                 <span>{c.developer?.name}</span>
@@ -203,20 +203,20 @@ export function PmCheckInsConsole() {
                   {c.senderRole === "director_admin" ? "Director" : "PM"}
                 </span>
                 {c.aiGenerated ? (
-                  <span className="rounded bg-teal-500/10 px-1 text-teal-400">AI questions</span>
+                  <span className="rounded bg-teal-500/10 px-1 text-[#2D5A5A]">AI questions</span>
                 ) : null}
-                <span className={c.status === "answered" ? "text-emerald-400" : "text-amber-400"}>{c.status}</span>
+                <span className={c.status === "answered" ? "text-[#1B6B3A]" : "text-[#B45309]"}>{c.status}</span>
               </div>
-              <p className="mt-2 text-sm text-slate-200">{c.message}</p>
+              <p className="mt-2 text-sm text-[#1A1D26]">{c.message}</p>
               {Array.isArray(c.questionsJson) && c.questionsJson.length > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-slate-500">
+                <ul className="mt-2 space-y-1 text-xs text-[#5B6472]">
                   {c.questionsJson.map((q) => (
                     <li key={q.id}>• {q.text}</li>
                   ))}
                 </ul>
               ) : null}
               {c.response ? (
-                <p className="mt-2 rounded-lg bg-[#0e1319] p-2 text-sm text-slate-400">Reply: {c.response}</p>
+                <p className="mt-2 rounded-lg bg-white p-2 text-sm text-[#5B6472]">Reply: {c.response}</p>
               ) : null}
             </div>
           ))

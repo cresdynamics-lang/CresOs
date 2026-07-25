@@ -205,15 +205,15 @@ export function DeveloperOverviewDashboard({
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/90">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#6D28D9]/90">
             Developer
           </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
             {welcomeHeadline}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
             Your delivery queue and milestone progress — use the sidebar for tasks, reports, and projects.
           </p>
         </div>
@@ -221,7 +221,7 @@ export function DeveloperOverviewDashboard({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${devNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+          className={`${devNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
@@ -229,7 +229,7 @@ export function DeveloperOverviewDashboard({
 
       {loadError ? (
         <div className={`${devNeu.alertWarning} px-4 py-3 sm:px-5`}>
-          <p className="text-sm text-amber-200">{loadError}</p>
+          <p className="text-sm text-[#92400E]">{loadError}</p>
         </div>
       ) : null}
 
@@ -243,7 +243,7 @@ export function DeveloperOverviewDashboard({
                     <p className="font-display text-base font-semibold leading-snug text-amber-100 sm:text-lg">
                       Finance payment recorded
                     </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                    <p className="mt-1.5 text-sm leading-relaxed text-[#5B6472]">
                       {formatMoney(Number(row.amount))}
                       {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
                       {row.description?.trim() || "Developer payment"} ·{" "}
@@ -274,7 +274,7 @@ export function DeveloperOverviewDashboard({
                 <button
                   type="button"
                   onClick={() => onDismissReminder(id)}
-                  className="mt-2 text-xs text-slate-500 hover:text-slate-300"
+                  className="mt-2 text-xs text-[#5B6472] hover:text-[#5B6472]"
                 >
                   Dismiss
                 </button>
@@ -323,7 +323,7 @@ export function DeveloperOverviewDashboard({
               tone="amber"
             />
           </DevStatRow>
-          <DevStatRow className="mt-6 border-t border-white/[0.06] pt-6">
+          <DevStatRow className="mt-6 border-t border-[#E5E9EF] pt-6">
             <DevStatInline
               label="Blocked"
               value={loading ? "…" : queue.blockedTasks}
@@ -351,7 +351,7 @@ export function DeveloperOverviewDashboard({
         </div>
       </WorkspaceDashboardSection>
 
-      <nav aria-label="Developer quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">
+      <nav aria-label="Developer quick links" className="flex w-full flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
@@ -367,7 +367,7 @@ export function DeveloperOverviewDashboard({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
           {scheduleKpis ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#5B6472]">
               Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending
             </p>
           ) : null}
@@ -394,7 +394,7 @@ export function DeveloperOverviewDashboard({
             {taskBars.length > 0 ? (
               <VerticalBarChart items={taskBars} />
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#5B6472]">
                 {loading ? "Loading schedule…" : "No tasks scheduled this week — plan in Tasks"}
               </p>
             )}
@@ -407,11 +407,11 @@ export function DeveloperOverviewDashboard({
                   .filter((p) => p.overdueTasks > 0 || p.blockedTasks > 0)
                   .slice(0, 6)
                   .map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
-                      <Link href={`/projects/${p.id}`} className="truncate text-violet-300 hover:underline">
+                    <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#E5E9EF] bg-black/20 px-3 py-2">
+                      <Link href={`/projects/${p.id}`} className="truncate text-[#6D28D9] hover:underline">
                         {p.name}
                       </Link>
-                      <span className="shrink-0 text-xs text-slate-500">
+                      <span className="shrink-0 text-xs text-[#5B6472]">
                         {p.overdueTasks > 0 ? `${p.overdueTasks} overdue` : ""}
                         {p.overdueTasks > 0 && p.blockedTasks > 0 ? " · " : ""}
                         {p.blockedTasks > 0 ? `${p.blockedTasks} blocked` : ""}
@@ -420,7 +420,7 @@ export function DeveloperOverviewDashboard({
                   ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-500">{loading ? "Loading…" : "All clear on assigned projects"}</p>
+              <p className="text-sm text-[#5B6472]">{loading ? "Loading…" : "All clear on assigned projects"}</p>
             )}
           </ChartPanel>
         </div>
@@ -432,7 +432,7 @@ export function DeveloperOverviewDashboard({
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={devNeu.chartPanel}>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-400/80">{title}</h3>
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6D28D9]/80">{title}</h3>
       <div className="mt-5 flex flex-1 flex-col items-center justify-center w-full">{children}</div>
     </div>
   );

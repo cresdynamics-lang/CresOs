@@ -52,12 +52,12 @@ function pillClass(active: boolean) {
 }
 
 function typeAccent(tone: StatTone): string {
-  if (tone === "sky") return "text-sky-400";
-  if (tone === "emerald") return "text-emerald-400";
-  if (tone === "violet") return "text-violet-400";
-  if (tone === "amber") return "text-amber-400";
-  if (tone === "rose") return "text-rose-400";
-  return "text-brand";
+  if (tone === "sky") return "text-[#2D5A5A]";
+  if (tone === "emerald") return "text-[#1B6B3A]";
+  if (tone === "violet") return "text-[#2D5A5A]";
+  if (tone === "amber") return "text-[#B45309]";
+  if (tone === "rose") return "text-[#C62828]";
+  return "text-[#2D5A5A]";
 }
 
 type DeveloperScheduleViewProps = {
@@ -120,17 +120,17 @@ export function DeveloperScheduleView({
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col gap-5 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0 flex-1">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/90">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#2D5A5A]">
             Workspace
           </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
             Tasks & schedule
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
             Plan standups, reviews, and report deadlines alongside delivery work. Times are in{" "}
-            <span className="text-violet-300/90">Nairobi (EAT)</span> — now {nairobiNow}.
+            <span className="text-[#2D5A5A]">Nairobi (EAT)</span> — now {nairobiNow}.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -138,7 +138,7 @@ export function DeveloperScheduleView({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className={`${devNeu.navIdle} rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+            className={`${devNeu.navIdle} rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -149,7 +149,7 @@ export function DeveloperScheduleView({
       </header>
 
       {notificationDenied ? (
-        <div className={`${devNeu.alertWarning} px-4 py-3 text-sm text-amber-200 sm:px-5`}>
+        <div className={`${devNeu.alertWarning} px-4 py-3 text-sm text-[#92400E] sm:px-5`}>
           Browser notifications are off — enable them for meeting and call reminders.
         </div>
       ) : null}
@@ -168,7 +168,7 @@ export function DeveloperScheduleView({
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Review period</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5B6472]">Review period</p>
           <nav className="mt-2 flex flex-wrap gap-2" aria-label="Review period">
             {PERIODS.map((p) => (
               <button
@@ -183,7 +183,7 @@ export function DeveloperScheduleView({
           </nav>
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Show</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5B6472]">Show</p>
           <nav className="mt-2 flex flex-wrap gap-2" aria-label="Completion filter">
             {FILTER_OPTIONS.map((f) => (
               <button
@@ -202,19 +202,19 @@ export function DeveloperScheduleView({
       <section aria-label="Schedule items" className="flex min-h-0 w-full flex-1 flex-col">
         <div className="mb-3 flex items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>{periodLabel}</DashboardSectionLabel>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#5B6472]">
             {loading ? "Loading…" : `${list.length} item${list.length === 1 ? "" : "s"}`}
           </p>
         </div>
 
         {!items ? (
-          <DevNeuPanel inset className="flex min-h-[12rem] items-center justify-center text-sm text-slate-500">
+          <DevNeuPanel inset className="flex min-h-[12rem] items-center justify-center text-sm text-[#5B6472]">
             Loading your schedule…
           </DevNeuPanel>
         ) : list.length === 0 ? (
           <DevNeuPanel inset className="flex min-h-[12rem] flex-col items-center justify-center gap-3 text-center">
-            <p className="font-display text-lg font-semibold text-slate-200">Nothing scheduled in this period</p>
-            <p className="max-w-sm text-sm text-slate-500">Add meetings, calls, reports, or tasks to stay accountable.</p>
+            <p className="font-display text-lg font-semibold text-[#1A1D26]">Nothing scheduled in this period</p>
+            <p className="max-w-sm text-sm text-[#5B6472]">Add meetings, calls, reports, or tasks to stay accountable.</p>
             <button type="button" onClick={onAddOpen} className={devNeu.btnPrimary}>
               Add your first item
             </button>
@@ -229,26 +229,26 @@ export function DeveloperScheduleView({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-black/25 text-base font-semibold ${typeAccent(meta.tone)}`}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E5E9EF] bg-[#E8F0F0] text-base font-semibold ${typeAccent(meta.tone)}`}
                       >
                         {meta.icon}
                       </span>
                       <div className="min-w-0">
                         <p
-                          className={`font-display text-base font-semibold text-slate-100 ${done ? "line-through text-slate-500" : ""}`}
+                          className={`font-display text-base font-semibold text-[#1A1D26] ${done ? "line-through text-[#5B6472]" : ""}`}
                         >
                           {item.title}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-[#5B6472]">
                           <span className={`font-medium ${typeAccent(meta.tone)}`}>{meta.label}</span>
                           {" · "}
                           {formatNairobiDateTime(item.scheduledAt)}
                           {item.reminderMinutesBefore != null ? (
-                            <span className="text-violet-400"> · Reminder {item.reminderMinutesBefore}m before</span>
+                            <span className="text-[#2D5A5A]"> · Reminder {item.reminderMinutesBefore}m before</span>
                           ) : null}
                         </p>
                         {item.notes ? (
-                          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{item.notes}</p>
+                          <p className="mt-1.5 text-xs leading-relaxed text-[#5B6472]">{item.notes}</p>
                         ) : null}
                       </div>
                     </div>
@@ -258,8 +258,8 @@ export function DeveloperScheduleView({
                       disabled={togglingId === item.id}
                       className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 ${
                         done
-                          ? `${devNeu.navIdle} text-slate-300`
-                          : "bg-emerald-600/90 text-white shadow-[0_4px_14px_rgba(16,185,129,0.25)] hover:bg-emerald-500"
+                          ? `${devNeu.navIdle} text-[#5B6472]`
+                          : "bg-[#2D5A5A] text-white shadow-sm hover:bg-[#244848]"
                       }`}
                     >
                       {togglingId === item.id ? "…" : done ? "Undo" : "Mark done"}
@@ -274,35 +274,35 @@ export function DeveloperScheduleView({
 
       {addOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1A1D26]/40 p-4 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dev-schedule-add-title"
         >
           <div className={`${devNeu.panel} w-full max-w-lg`}>
-            <h3 id="dev-schedule-add-title" className="font-display text-xl font-bold text-violet-200">
+            <h3 id="dev-schedule-add-title" className="font-display text-xl font-bold text-[#1A1D26]">
               Schedule something
             </h3>
-            <p className="mt-1 text-sm text-slate-400">Meetings, calls, reports, and tasks — optional reminders.</p>
+            <p className="mt-1 text-sm text-[#5B6472]">Meetings, calls, reports, and tasks — optional reminders.</p>
             <form onSubmit={onSubmitAdd} className="mt-5 flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Title</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Title</span>
                 <input
                   type="text"
                   value={form.title}
                   onChange={(e) => onFormChange({ title: e.target.value })}
                   placeholder="Team standup, client call, daily report…"
-                  className="developer-neu w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-slate-100 placeholder:text-slate-600"
+                  className="developer-neu w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] placeholder:text-[#5B6472]/60"
                   required
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Type</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Type</span>
                   <select
                     value={form.type}
                     onChange={(e) => onFormChange({ type: e.target.value })}
-                    className="developer-neu w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-slate-100"
+                    className="developer-neu w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26]"
                   >
                     {types.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -312,17 +312,17 @@ export function DeveloperScheduleView({
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">When (Nairobi)</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">When (Nairobi)</span>
                   <input
                     type="datetime-local"
                     value={form.scheduledAt}
                     onChange={(e) => onFormChange({ scheduledAt: e.target.value })}
-                    className="developer-neu w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-slate-100"
+                    className="developer-neu w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26]"
                   />
                 </label>
               </div>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Remind me</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Remind me</span>
                 <select
                   value={form.reminderMinutesBefore === "" ? "" : form.reminderMinutesBefore}
                   onChange={(e) =>
@@ -330,7 +330,7 @@ export function DeveloperScheduleView({
                       reminderMinutesBefore: e.target.value === "" ? "" : Number(e.target.value)
                     })
                   }
-                  className="developer-neu w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-slate-100"
+                  className="developer-neu w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26]"
                 >
                   {REMINDER_OPTIONS.map((r) => (
                     <option key={r.value === "" ? "none" : r.value} value={r.value}>
@@ -340,22 +340,22 @@ export function DeveloperScheduleView({
                 </select>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Notes</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Notes</span>
                 <textarea
                   value={form.notes}
                   onChange={(e) => onFormChange({ notes: e.target.value })}
                   rows={3}
-                  className="developer-neu w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-slate-100"
+                  className="developer-neu w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26]"
                 />
               </label>
-              <div className="flex flex-wrap gap-2 border-t border-white/[0.06] pt-4">
+              <div className="flex flex-wrap gap-2 border-t border-[#E5E9EF] pt-4">
                 <button type="submit" disabled={submitting} className={devNeu.btnPrimary}>
                   {submitting ? "Adding…" : "Add to schedule"}
                 </button>
                 <button
                   type="button"
                   onClick={onAddClose}
-                  className={`${devNeu.navIdle} rounded-lg px-4 py-2 text-sm text-slate-300`}
+                  className={`${devNeu.navIdle} rounded-lg px-4 py-2 text-sm text-[#5B6472]`}
                 >
                   Cancel
                 </button>

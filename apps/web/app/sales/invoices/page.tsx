@@ -333,13 +333,13 @@ export default function SalesInvoicesPage() {
       case "sent":
       case "partial":
       case "overdue":
-        return "text-sky-400 bg-sky-900/20";
+        return "text-[#2563EB] bg-[#F0F6FC]";
       case "paid":
         return "text-green-400 bg-green-900/20";
       case "cancelled":
         return "text-red-400 bg-red-900/20";
       default:
-        return "text-slate-400 bg-slate-900/20";
+        return "text-[#5B6472] bg-white";
     }
   };
 
@@ -375,19 +375,19 @@ export default function SalesInvoicesPage() {
       />
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/30">
-          <p className="text-slate-400">Loading…</p>
+        <div className="flex h-48 items-center justify-center rounded-xl border border-[#E5E9EF] bg-white">
+          <p className="text-[#5B6472]">Loading…</p>
         </div>
       ) : (
         <>
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 mb-6">
+      <div className="flex border-b border-[#E5E9EF] mb-6">
         <button
           onClick={() => setActiveTab("dashboard")}
           className={`px-6 py-3 text-sm font-medium transition-colors ${
             activeTab === "dashboard"
               ? "border-b-2 border-brand text-brand"
-              : "text-slate-400 hover:text-slate-200"
+              : "text-[#5B6472] hover:text-[#1A1D26]"
           }`}
         >
           Dashboard
@@ -397,7 +397,7 @@ export default function SalesInvoicesPage() {
           className={`px-6 py-3 text-sm font-medium transition-colors ${
             activeTab === "create"
               ? "border-b-2 border-brand text-brand"
-              : "text-slate-400 hover:text-slate-200"
+              : "text-[#5B6472] hover:text-[#1A1D26]"
           }`}
         >
           Create Invoice
@@ -407,7 +407,7 @@ export default function SalesInvoicesPage() {
           className={`px-6 py-3 text-sm font-medium transition-colors ${
             activeTab === "invoices"
               ? "border-b-2 border-brand text-brand"
-              : "text-slate-400 hover:text-slate-200"
+              : "text-[#5B6472] hover:text-[#1A1D26]"
           }`}
         >
           My Invoices
@@ -425,33 +425,33 @@ export default function SalesInvoicesPage() {
           </StatCardGrid>
 
           {/* Recent Invoices */}
-          <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-            <h2 className="text-xl font-semibold text-slate-200 mb-4">Recent Invoices</h2>
+          <div className="bg-white rounded-lg border border-[#E5E9EF] p-6">
+            <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">Recent Invoices</h2>
             {invoices.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
+              <div className="text-center py-8 text-[#5B6472]">
                 <div className="mb-2">📄</div>
                 <div>No invoices yet</div>
               </div>
             ) : (
               <div className="space-y-4">
                 {invoices.map((invoice) => (
-                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
+                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-[#F4F7F9] rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        <div className="font-medium text-slate-200">
+                        <div className="font-medium text-[#1A1D26]">
                           {invoice.invoiceNumber || invoice.number}
                         </div>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {invoice.status}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-400">
+                      <div className="text-sm text-[#5B6472]">
                         {resolveClientName(invoice.client, invoice.clientId, clients)}
                       </div>
-                      <div className="text-xs text-slate-500">{formatDate(invoice.createdAt)}</div>
+                      <div className="text-xs text-[#5B6472]">{formatDate(invoice.createdAt)}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-medium text-slate-200">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
+                      <div className="font-medium text-[#1A1D26]">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
                     </div>
                   </div>
                 ))}
@@ -463,14 +463,14 @@ export default function SalesInvoicesPage() {
 
       {/* Create Invoice Tab */}
       {activeTab === "create" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Create New Invoice</h2>
+        <div className="bg-white rounded-lg border border-[#E5E9EF] p-6">
+          <h2 className="text-xl font-semibold text-[#1A1D26] mb-6">Create New Invoice</h2>
           
           <div className="space-y-6">
             {/* Client Selection */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[#5B6472] mb-2">
                   Client *
                 </label>
                 <select
@@ -478,7 +478,7 @@ export default function SalesInvoicesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, clientId: e.target.value, projectId: "" })
                   }
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                  className="w-full px-4 py-2 bg-[#E5E9EF] border border-[#E5E9EF] rounded-lg text-[#1A1D26] focus:outline-none focus:border-brand"
                   required
                   disabled={optionsLoading}
                 >
@@ -492,14 +492,14 @@ export default function SalesInvoicesPage() {
                   ))}
                 </select>
                 {!optionsLoading && clients.length === 0 ? (
-                  <p className="mt-1 text-xs text-amber-400/90">
+                  <p className="mt-1 text-xs text-[#B45309]/90">
                     No CRM clients yet — add a client in CRM, then link them on the project.
                   </p>
                 ) : null}
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[#5B6472] mb-2">
                   Project {projectNeedsSelection ? "*" : "(optional)"}
                 </label>
                 <select
@@ -513,7 +513,7 @@ export default function SalesInvoicesPage() {
                       clientId: proj?.clientId || formData.clientId
                     });
                   }}
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                  className="w-full px-4 py-2 bg-[#E5E9EF] border border-[#E5E9EF] rounded-lg text-[#1A1D26] focus:outline-none focus:border-brand"
                   required={projectNeedsSelection}
                   disabled={optionsLoading}
                 >
@@ -535,18 +535,18 @@ export default function SalesInvoicesPage() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[#5B6472]">
                   Required for sales users so payments update the correct project balance. Client name
                   shows in parentheses; remaining contract balance when available.
                 </p>
                 {!optionsLoading && formData.clientId && invoiceReadyProjects.length === 0 ? (
-                  <p className="mt-1 text-xs text-amber-400/90">
+                  <p className="mt-1 text-xs text-[#B45309]/90">
                     No invoice-ready projects for this client — link the project to this client in CRM
                     first.
                   </p>
                 ) : null}
                 {!optionsLoading && !formData.clientId && projects.length > 0 && invoiceReadyProjects.length === 0 ? (
-                  <p className="mt-1 text-xs text-amber-400/90">
+                  <p className="mt-1 text-xs text-[#B45309]/90">
                     Your projects are listed above but need a CRM client link before you can invoice.
                   </p>
                 ) : null}
@@ -556,30 +556,30 @@ export default function SalesInvoicesPage() {
             {/* Due Date and Notes */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[#5B6472] mb-2">
                   Issue date *
                 </label>
                 <input
                   type="date"
                   value={formData.issueDate}
                   onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                  className="w-full px-4 py-2 bg-[#E5E9EF] border border-[#E5E9EF] rounded-lg text-[#1A1D26] focus:outline-none focus:border-brand"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[#5B6472] mb-2">
                   Due Date
                 </label>
                 <input
                   type="date"
                   value={formData.dueDate}
                   onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-brand"
+                  className="w-full px-4 py-2 bg-[#E5E9EF] border border-[#E5E9EF] rounded-lg text-[#1A1D26] focus:outline-none focus:border-brand"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[#5B6472] mb-2">
                   Notes
                 </label>
                 <input
@@ -587,7 +587,7 @@ export default function SalesInvoicesPage() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Payment terms, etc."
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand"
+                  className="w-full px-4 py-2 bg-[#E5E9EF] border border-[#E5E9EF] rounded-lg text-[#1A1D26] placeholder-slate-400 focus:outline-none focus:border-brand"
                 />
               </div>
             </div>
@@ -595,7 +595,7 @@ export default function SalesInvoicesPage() {
             {/* Invoice Items */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-slate-200">Invoice Items</h3>
+                <h3 className="text-lg font-medium text-[#1A1D26]">Invoice Items</h3>
                 <button
                   onClick={addItem}
                   className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand/80 transition-colors"
@@ -606,14 +606,14 @@ export default function SalesInvoicesPage() {
               
               <div className="space-y-4">
                 {items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-slate-800/50 rounded-lg">
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-[#F4F7F9] rounded-lg">
                     <div className="md:col-span-2">
                       <input
                         type="text"
                         placeholder="Description"
                         value={item.description}
                         onChange={(e) => updateItem(index, "description", e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand"
+                        className="w-full px-3 py-2 bg-slate-700 border border-[#D0D5DD] rounded text-[#1A1D26] placeholder-slate-400 focus:outline-none focus:border-brand"
                       />
                     </div>
                     <div>
@@ -623,7 +623,7 @@ export default function SalesInvoicesPage() {
                         value={item.quantity}
                         onChange={(e) => updateItem(index, "quantity", parseFloat(e.target.value) || 0)}
                         min="1"
-                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand"
+                        className="w-full px-3 py-2 bg-slate-700 border border-[#D0D5DD] rounded text-[#1A1D26] placeholder-slate-400 focus:outline-none focus:border-brand"
                       />
                     </div>
                     <div>
@@ -634,11 +634,11 @@ export default function SalesInvoicesPage() {
                         onChange={(e) => updateItem(index, "unitPrice", parseFloat(e.target.value) || 0)}
                         min="0"
                         step="0.01"
-                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand"
+                        className="w-full px-3 py-2 bg-slate-700 border border-[#D0D5DD] rounded text-[#1A1D26] placeholder-slate-400 focus:outline-none focus:border-brand"
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-slate-200">
+                      <div className="text-sm font-medium text-[#1A1D26]">
                         {formatCurrency(item.total)}
                       </div>
                       {items.length > 1 && (
@@ -658,12 +658,12 @@ export default function SalesInvoicesPage() {
             </div>
 
             {/* Totals */}
-            <div className="border-t border-slate-700 pt-4">
+            <div className="border-t border-[#E5E9EF] pt-4">
               <div className="flex justify-between text-lg font-medium">
-                <span className="text-slate-200">Invoice total</span>
+                <span className="text-[#1A1D26]">Invoice total</span>
                 <span className="text-brand">{formatCurrency(formData.totalAmount)}</span>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-[#5B6472]">
                 Same amount is saved in Finance. Confirm payments there to update project received.
               </p>
             </div>
@@ -684,40 +684,40 @@ export default function SalesInvoicesPage() {
 
       {/* My Invoices Tab */}
       {activeTab === "invoices" && (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-6">
-          <h2 className="text-xl font-semibold text-slate-200 mb-4">My Invoices</h2>
+        <div className="bg-white rounded-lg border border-[#E5E9EF] p-6">
+          <h2 className="text-xl font-semibold text-[#1A1D26] mb-4">My Invoices</h2>
           
           {invoices.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-[#5B6472]">
               <div className="mb-2">📄</div>
               <div>No invoices found</div>
             </div>
           ) : (
             <div className="space-y-4">
               {invoices.map((invoice) => (
-                <div key={invoice.id} className="p-4 bg-slate-800/50 rounded-lg">
+                <div key={invoice.id} className="p-4 bg-[#F4F7F9] rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="font-medium text-slate-200">
+                        <div className="font-medium text-[#1A1D26]">
                           {invoice.invoiceNumber || invoice.number}
                         </div>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {invoice.status}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-400 mb-1">
+                      <div className="text-sm text-[#5B6472] mb-1">
                         Client: {resolveClientName(invoice.client, invoice.clientId, clients)}
                         {invoice.project && ` • Project: ${invoice.project.name}`}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-[#5B6472]">
                         {invoice.issueDate && `Issued: ${formatDate(invoice.issueDate)} • `}
                         Created: {formatDate(invoice.createdAt)}
                         {invoice.dueDate && ` • Due: ${formatDate(invoice.dueDate)}`}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-medium text-slate-200 mb-1">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
+                      <div className="font-medium text-[#1A1D26] mb-1">{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
                     </div>
                   </div>
                 </div>

@@ -1097,12 +1097,12 @@ export default function FinancePage() {
           showWelcomeBanner
         />
       ) : (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-4">
           <div className="min-w-0">
             <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">Finance</p>
-            <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{pageMeta.title}</h1>
+            <h1 className="mt-1 text-xl font-semibold text-[#1A1D26] sm:text-2xl">{pageMeta.title}</h1>
             {pageMeta.description ? (
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{pageMeta.description}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">{pageMeta.description}</p>
             ) : null}
           </div>
           {section === "invoices" && canCreateInvoice && (isFinance || isAdmin) && clients.length > 0 && (
@@ -1143,49 +1143,49 @@ export default function FinancePage() {
 
 
       {paymentNotice && section === "payments" ? (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-lg border border-emerald-500/30 bg-[#F2F9EF] px-4 py-3 text-sm text-[#1B6B3A]">
           {paymentNotice}
         </div>
       ) : null}
 
       {expenseNotice && section === "expenses" ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+        <div className="rounded-lg border border-amber-500/30 bg-[#FFF6E5] px-4 py-3 text-sm text-amber-100">
           {expenseNotice}
         </div>
       ) : null}
 
       {!canSeeMoneyStats && section === "overview" && (
-        <div className="shell border border-slate-600/80 bg-slate-900/50 text-sm text-slate-400">
+        <div className="shell border border-[#D0D5DD]/80 bg-white text-sm text-[#5B6472]">
           Dashboard revenue, outstanding, and net-flow summaries are visible to{" "}
-          <span className="font-medium text-slate-200">Finance</span> and{" "}
-          <span className="font-medium text-slate-200">Admin</span> only. Other finance workspace features below still apply
+          <span className="font-medium text-[#1A1D26]">Finance</span> and{" "}
+          <span className="font-medium text-[#1A1D26]">Admin</span> only. Other finance workspace features below still apply
           based on your role.
         </div>
       )}
 
       {canSeeMoneyStats &&
         (section === "ledger") && (
-          <div className="shell border-slate-700/70 bg-slate-950/40">
+          <div className="shell border-[#E5E9EF]/70 bg-[#F4F7F9]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#5B6472]">
                 All transactions (ledger)
               </h3>
               <button
                 type="button"
                 onClick={() => void loadLedger()}
                 disabled={ledgerLoading}
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                className="rounded border border-[#D0D5DD] px-3 py-1.5 text-sm text-[#1A1D26] hover:bg-[#E5E9EF] disabled:opacity-50"
               >
                 {ledgerLoading ? "Loading…" : "Refresh"}
               </button>
             </div>
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 text-xs text-[#5B6472]">
               Newest first — payments (in), expenses and payouts (out). Pending payments and unapproved expenses appear with their
               current status.
             </p>
-            <div className="max-h-[480px] overflow-auto rounded border border-slate-800">
+            <div className="max-h-[480px] overflow-auto rounded border border-[#E5E9EF]">
               <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-slate-900/95 text-[10px] uppercase tracking-wide text-slate-500">
+                <thead className="sticky top-0 bg-white text-[10px] uppercase tracking-wide text-[#5B6472]">
                   <tr>
                     <th className="px-2 py-2">Date</th>
                     <th className="px-2 py-2">Type</th>
@@ -1197,23 +1197,23 @@ export default function FinancePage() {
                 </thead>
                 <tbody>
                   {ledgerRows.map((row) => (
-                    <tr key={`${row.kind}-${row.id}`} className="border-t border-slate-800/80">
-                      <td className="whitespace-nowrap px-2 py-1.5 text-slate-400">
+                    <tr key={`${row.kind}-${row.id}`} className="border-t border-[#E5E9EF]/80">
+                      <td className="whitespace-nowrap px-2 py-1.5 text-[#5B6472]">
                         {new Date(row.at).toLocaleString()}
                       </td>
-                      <td className="px-2 py-1.5 text-slate-200">{row.label}</td>
+                      <td className="px-2 py-1.5 text-[#1A1D26]">{row.label}</td>
                       <td
                         className={
-                          row.direction === "in" ? "px-2 py-1.5 text-emerald-400" : "px-2 py-1.5 text-amber-300"
+                          row.direction === "in" ? "px-2 py-1.5 text-[#1B6B3A]" : "px-2 py-1.5 text-[#B45309]"
                         }
                       >
                         {row.direction === "in" ? "In" : "Out"}
                       </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-100">
+                      <td className="px-2 py-1.5 text-right tabular-nums text-[#1A1D26]">
                         {formatMoney(row.amount)}
                       </td>
-                      <td className="px-2 py-1.5 text-xs text-slate-400">{row.status}</td>
-                      <td className="max-w-[240px] truncate px-2 py-1.5 text-xs text-slate-500" title={row.detail ?? ""}>
+                      <td className="px-2 py-1.5 text-xs text-[#5B6472]">{row.status}</td>
+                      <td className="max-w-[240px] truncate px-2 py-1.5 text-xs text-[#5B6472]" title={row.detail ?? ""}>
                         {row.detail ?? "—"}
                       </td>
                     </tr>
@@ -1221,7 +1221,7 @@ export default function FinancePage() {
                 </tbody>
               </table>
               {!ledgerLoading && ledgerRows.length === 0 && (
-                <p className="p-4 text-sm text-slate-500">No rows yet.</p>
+                <p className="p-4 text-sm text-[#5B6472]">No rows yet.</p>
               )}
             </div>
           </div>
@@ -1229,10 +1229,10 @@ export default function FinancePage() {
 
       {canSeeMoneyStats && section === "projects" && projectFinancials.length > 0 && (
         <div className="shell border-sky-800/50">
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#5B6472]">
             Projects finance status
           </h3>
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-3 text-xs text-[#5B6472]">
             Allocated (contract) vs received (sum of confirmed invoice payments). Sales and Finance share the same
             invoice list — record payments against invoices to update received automatically.
           </p>
@@ -1250,7 +1250,7 @@ export default function FinancePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
+                <tr className="border-b border-[#E5E9EF] text-[#5B6472]">
                   <th className="pb-2 pr-2">Project</th>
                   <th className="pb-2 pr-2">Status</th>
                   <th className="pb-2 pr-2 text-right">Allocated</th>
@@ -1262,18 +1262,18 @@ export default function FinancePage() {
               </thead>
               <tbody>
                 {projectFinancials.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-800">
+                  <tr key={p.id} className="border-b border-[#E5E9EF]">
                     <td className="py-2 pr-2">
-                      <a href={`/projects/${p.id}`} className="text-sky-400 hover:underline">
+                      <a href={`/projects/${p.id}`} className="text-[#2563EB] hover:underline">
                         {p.name}
                       </a>
                     </td>
-                    <td className="py-2 pr-2 capitalize text-slate-300">{p.status}</td>
-                    <td className="py-2 pr-2 text-right text-slate-200">
+                    <td className="py-2 pr-2 capitalize text-[#5B6472]">{p.status}</td>
+                    <td className="py-2 pr-2 text-right text-[#1A1D26]">
                       {editingProjectId === p.id ? (
                         <input
                           type="number"
-                          className="w-28 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-right text-slate-100"
+                          className="w-28 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-1 py-0.5 text-right text-[#1A1D26]"
                           value={projectMoneyDraft.allocated}
                           onChange={(e) =>
                             setProjectMoneyDraft((d) => ({ ...d, allocated: e.target.value }))
@@ -1285,30 +1285,30 @@ export default function FinancePage() {
                         "—"
                       )}
                     </td>
-                    <td className="py-2 pr-2 text-right text-emerald-400">
+                    <td className="py-2 pr-2 text-right text-[#1B6B3A]">
                       <div className="flex flex-col items-end gap-1">
                         <span>{formatMoney(p.received)}</span>
                         {canEditProjectMoney && editingProjectId === p.id ? (
                           <button
                             type="button"
                             onClick={() => void syncProjectReceipts(p.id)}
-                            className="text-[10px] text-sky-400 hover:underline"
+                            className="text-[10px] text-[#2563EB] hover:underline"
                           >
                             Sync from payments
                           </button>
                         ) : null}
                       </div>
                     </td>
-                    <td className="py-2 pr-2 text-right text-amber-400">
+                    <td className="py-2 pr-2 text-right text-[#B45309]">
                       {p.remaining != null ? formatMoney(p.remaining) : "—"}
                     </td>
-                    <td className="py-2 pr-2 text-slate-300">
+                    <td className="py-2 pr-2 text-[#5B6472]">
                       {editingProjectId === p.id ? (
                         <div className="flex flex-col gap-1">
                           <input
                             type="number"
                             placeholder="/ month"
-                            className="w-32 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-100"
+                            className="w-32 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-1 py-0.5 text-xs text-[#1A1D26]"
                             value={projectMoneyDraft.managementMonthlyAmount}
                             onChange={(e) =>
                               setProjectMoneyDraft((d) => ({
@@ -1320,7 +1320,7 @@ export default function FinancePage() {
                           <input
                             type="number"
                             placeholder="months"
-                            className="w-24 rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-100"
+                            className="w-24 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-1 py-0.5 text-xs text-[#1A1D26]"
                             value={projectMoneyDraft.managementMonths}
                             onChange={(e) =>
                               setProjectMoneyDraft((d) => ({ ...d, managementMonths: e.target.value }))
@@ -1332,7 +1332,7 @@ export default function FinancePage() {
                           {formatMoney(p.managementMonthlyAmount)}/month for {p.managementMonths} month
                           {p.managementMonths !== 1 ? "s" : ""}
                           {p.managementMonths > 0 && (
-                            <span className="ml-1 text-xs text-slate-500">
+                            <span className="ml-1 text-xs text-[#5B6472]">
                               (total {formatMoney(p.managementMonthlyAmount * p.managementMonths)})
                             </span>
                           )}
@@ -1355,7 +1355,7 @@ export default function FinancePage() {
                             <button
                               type="button"
                               onClick={cancelEditProjectMoney}
-                              className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300"
+                              className="rounded border border-[#D0D5DD] px-2 py-0.5 text-xs text-[#5B6472]"
                             >
                               Cancel
                             </button>
@@ -1364,7 +1364,7 @@ export default function FinancePage() {
                           <button
                             type="button"
                             onClick={() => startEditProjectMoney(p)}
-                            className="rounded border border-sky-600 px-2 py-0.5 text-xs text-sky-300 hover:bg-sky-950/60"
+                            className="rounded border border-sky-600 px-2 py-0.5 text-xs text-[#2563EB] hover:bg-[#F0F6FC]"
                           >
                             Update money
                           </button>
@@ -1380,31 +1380,31 @@ export default function FinancePage() {
       )}
 
       {canSeeMoneyStats && section === "project_analysis" && (
-        <div className="shell border border-slate-700/70 bg-slate-900/50">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        <div className="shell border border-[#E5E9EF]/70 bg-white">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#5B6472]">
             Project finance analysis
           </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Approved projects tracked</p>
-              <p className="mt-1 text-xl font-semibold text-slate-100">{projectFinanceAnalysis.activeApprovedProjects}</p>
+            <div className="rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Approved projects tracked</p>
+              <p className="mt-1 text-xl font-semibold text-[#1A1D26]">{projectFinanceAnalysis.activeApprovedProjects}</p>
             </div>
-            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Allocated total</p>
-              <p className="mt-1 text-xl font-semibold text-slate-200">{formatMoney(projectFinanceAnalysis.allocated)}</p>
+            <div className="rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Allocated total</p>
+              <p className="mt-1 text-xl font-semibold text-[#1A1D26]">{formatMoney(projectFinanceAnalysis.allocated)}</p>
             </div>
-            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received total</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-400">{formatMoney(projectFinanceAnalysis.received)}</p>
+            <div className="rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Received total</p>
+              <p className="mt-1 text-xl font-semibold text-[#1B6B3A]">{formatMoney(projectFinanceAnalysis.received)}</p>
             </div>
-            <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Remaining total</p>
-              <p className="mt-1 text-xl font-semibold text-amber-300">{formatMoney(projectFinanceAnalysis.remaining)}</p>
+            <div className="rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Remaining total</p>
+              <p className="mt-1 text-xl font-semibold text-[#B45309]">{formatMoney(projectFinanceAnalysis.remaining)}</p>
             </div>
           </div>
-          <div className="mt-3 rounded border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-300">
+          <div className="mt-3 rounded border border-[#E5E9EF] bg-[#F4F7F9] p-3 text-sm text-[#5B6472]">
             Expected management total (across projects):{" "}
-            <span className="font-semibold text-slate-100">
+            <span className="font-semibold text-[#1A1D26]">
               {formatMoney(projectFinanceAnalysis.managementExpectedTotal)}
             </span>
           </div>
@@ -1413,22 +1413,22 @@ export default function FinancePage() {
 
       {canSeeMoneyStats && section === "clients_due" && clientsDue.length > 0 && (
         <div className="shell border-amber-800/40">
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#5B6472]">
             Amount due per client
           </h3>
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-3 text-xs text-[#5B6472]">
             Set reminder day (1–28) to remind each client on that day every month. Every shilling tracked.
           </p>
           <ul className="space-y-2 text-sm">
             {clientsDue.map((c) => (
               <li
                 key={c.clientId}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2"
               >
                 <div>
-                  <p className="text-slate-100">{c.name}</p>
-                  {c.email && <p className="text-xs text-slate-400">{c.email}</p>}
-                  <p className="text-amber-400">{formatMoney(c.amountDue)} due</p>
+                  <p className="text-[#1A1D26]">{c.name}</p>
+                  {c.email && <p className="text-xs text-[#5B6472]">{c.email}</p>}
+                  <p className="text-[#B45309]">{formatMoney(c.amountDue)} due</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {reminderDayEdit?.clientId === c.clientId ? (
@@ -1444,7 +1444,7 @@ export default function FinancePage() {
                             day: e.target.value === "" ? null : parseInt(e.target.value, 10)
                           }))
                         }
-                        className="w-14 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
+                        className="w-14 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-xs text-[#1A1D26]"
                       />
                       <button
                         type="button"
@@ -1456,7 +1456,7 @@ export default function FinancePage() {
                       <button
                         type="button"
                         onClick={() => setReminderDayEdit(null)}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300"
+                        className="rounded border border-[#D0D5DD] px-2 py-1 text-xs text-[#5B6472]"
                       >
                         Cancel
                       </button>
@@ -1470,13 +1470,13 @@ export default function FinancePage() {
                           day: c.reminderDayOfMonth ?? null
                         })
                       }
-                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                      className="rounded border border-[#D0D5DD] px-2 py-1 text-xs text-[#5B6472] hover:bg-[#E5E9EF]"
                     >
                       Remind day: {c.reminderDayOfMonth ?? "—"}
                     </button>
                   )}
                   {c.lastReminderAt && (
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-[#5B6472]">
                       Last: {new Date(c.lastReminderAt).toLocaleDateString()}
                     </span>
                   )}
@@ -1515,23 +1515,23 @@ export default function FinancePage() {
               <FinanceFlatTableRow key={inv.id}>
                 <FinanceFlatTd>
                   <div className="min-w-[8rem]">
-                    <span className="font-medium text-slate-100">{inv.number}</span>
-                    <p className="mt-0.5 text-xs text-slate-500">Issued {formatShortDate(inv.issueDate)}</p>
+                    <span className="font-medium text-[#1A1D26]">{inv.number}</span>
+                    <p className="mt-0.5 text-xs text-[#5B6472]">Issued {formatShortDate(inv.issueDate)}</p>
                   </div>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   <div className="min-w-[9rem]">
-                    <span className="text-violet-300/90">{invoiceClientLabel(inv)}</span>
+                    <span className="text-[#6D28D9]/90">{invoiceClientLabel(inv)}</span>
                     {inv.client?.email ? (
-                      <p className="mt-0.5 truncate text-xs text-slate-500">{inv.client.email}</p>
+                      <p className="mt-0.5 truncate text-xs text-[#5B6472]">{inv.client.email}</p>
                     ) : null}
                   </div>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   {inv.project ? (
-                    <span className="text-sky-400/90">{inv.project.name}</span>
+                    <span className="text-[#2563EB]/90">{inv.project.name}</span>
                   ) : (
-                    <span className="text-slate-500">No project</span>
+                    <span className="text-[#5B6472]">No project</span>
                   )}
                 </FinanceFlatTd>
                 <FinanceFlatTd>
@@ -1548,34 +1548,34 @@ export default function FinancePage() {
                         : undefined
                     }
                   >
-                    <p className="text-sm text-slate-300">{invoiceItemsSummary(inv.items)}</p>
+                    <p className="text-sm text-[#5B6472]">{invoiceItemsSummary(inv.items)}</p>
                     {inv.items.length > 0 ? (
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-[#5B6472]">
                         {inv.items.length} line{inv.items.length === 1 ? "" : "s"} ·{" "}
                         {formatMoney(inv.items.reduce((s, it) => s + it.lineTotal, 0))}
                       </p>
                     ) : null}
                     {inv.notes?.trim() ? (
-                      <p className="mt-0.5 truncate text-xs text-slate-500" title={inv.notes}>
+                      <p className="mt-0.5 truncate text-xs text-[#5B6472]" title={inv.notes}>
                         Note: {inv.notes}
                       </p>
                     ) : null}
                   </div>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="whitespace-nowrap text-slate-300">{formatShortDate(inv.dueDate)}</span>
+                  <span className="whitespace-nowrap text-[#5B6472]">{formatShortDate(inv.dueDate)}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
-                  <span className="font-medium tabular-nums text-emerald-400">
+                  <span className="font-medium tabular-nums text-[#1B6B3A]">
                     {formatMoney(inv.totalAmount)}
                   </span>
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
                   <div className="tabular-nums text-right text-sm">
-                    <p className="text-emerald-300/90">{formatMoney(inv.paidAmount)}</p>
+                    <p className="text-[#1B6B3A]/90">{formatMoney(inv.paidAmount)}</p>
                     <p
                       className={
-                        inv.amountRemaining > 0 ? "text-amber-300/90" : "text-slate-500"
+                        inv.amountRemaining > 0 ? "text-[#B45309]/90" : "text-[#5B6472]"
                       }
                     >
                       {inv.amountRemaining > 0
@@ -1605,7 +1605,7 @@ export default function FinancePage() {
             ))}
             {invoices.length === 0 && (
               <FinanceFlatTableRow>
-                <FinanceFlatTd className="py-8 text-slate-500" colSpan={9}>
+                <FinanceFlatTd className="py-8 text-[#5B6472]" colSpan={9}>
                   No invoices yet.
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
@@ -1633,7 +1633,7 @@ export default function FinancePage() {
             {payments.map((p) => (
               <FinanceFlatTableRow key={p.id}>
                 <FinanceFlatTd>
-                  <span className="whitespace-nowrap text-slate-300">
+                  <span className="whitespace-nowrap text-[#5B6472]">
                     {new Date(p.receivedAt).toLocaleString(undefined, {
                       dateStyle: "short",
                       timeStyle: "short"
@@ -1641,29 +1641,29 @@ export default function FinancePage() {
                   </span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="text-violet-300/90">{p.invoice?.client?.name ?? "—"}</span>
+                  <span className="text-[#6D28D9]/90">{p.invoice?.client?.name ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="font-medium text-slate-100">{p.invoice?.number ?? "—"}</span>
+                  <span className="font-medium text-[#1A1D26]">{p.invoice?.number ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   {p.invoice?.project ? (
-                    <span className="text-sky-400/90">{p.invoice.project.name}</span>
+                    <span className="text-[#2563EB]/90">{p.invoice.project.name}</span>
                   ) : (
-                    <span className="text-slate-500">—</span>
+                    <span className="text-[#5B6472]">—</span>
                   )}
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
-                  <span className="font-medium tabular-nums text-emerald-400">{formatMoney(p.amount)}</span>
+                  <span className="font-medium tabular-nums text-[#1B6B3A]">{formatMoney(p.amount)}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="text-slate-300">{p.source ?? "—"}</span>
+                  <span className="text-[#5B6472]">{p.source ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="text-slate-400">{p.account ?? "—"}</span>
+                  <span className="text-[#5B6472]">{p.account ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
-                  <span className="font-mono text-xs text-slate-400">{p.reference ?? "—"}</span>
+                  <span className="font-mono text-xs text-[#5B6472]">{p.reference ?? "—"}</span>
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   <FinanceStatusLabel status={p.status} />
@@ -1684,7 +1684,7 @@ export default function FinancePage() {
             ))}
             {payments.length === 0 && (
               <FinanceFlatTableRow>
-                <FinanceFlatTd className="py-8 text-slate-500" colSpan={10}>
+                <FinanceFlatTd className="py-8 text-[#5B6472]" colSpan={10}>
                   No payments yet. Use New payment to record one.
                 </FinanceFlatTd>
               </FinanceFlatTableRow>
@@ -1696,10 +1696,10 @@ export default function FinancePage() {
       {section === "expenses" && (
         <>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#5B6472]">
             Total {expenseCategoryFilter === "all" ? "" : `(${expenseCategoryFilter}) `} (all statuses):{" "}
             {formatMoney(expensesTotal)}
-            <span className="ml-2 text-slate-400">
+            <span className="ml-2 text-[#5B6472]">
               Approved/paid: {formatMoney(expensesApprovedInFilter)}
             </span>
           </p>
@@ -1707,7 +1707,7 @@ export default function FinancePage() {
             <select
               value={expenseCategoryFilter}
               onChange={(e) => setExpenseCategoryFilter(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200"
+              className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-xs text-[#1A1D26]"
             >
               <option value="all">All categories</option>
               {EXPENSE_CATEGORIES.map((c) => (
@@ -1753,11 +1753,11 @@ export default function FinancePage() {
                 <FinanceFlatTd>
                   {exp.beneficiary ? (exp.beneficiary.name || exp.beneficiary.email).trim() : "—"}
                 </FinanceFlatTd>
-                <FinanceFlatTd className="text-amber-400">{formatMoney(exp.amount)}</FinanceFlatTd>
+                <FinanceFlatTd className="text-[#B45309]">{formatMoney(exp.amount)}</FinanceFlatTd>
                 <FinanceFlatTd>
                   <FinanceStatusLabel status={exp.status} />
                   {pendingApprovalIds.has(exp.id) ? (
-                    <span className="mt-0.5 block text-[10px] text-amber-400">Awaiting admin</span>
+                    <span className="mt-0.5 block text-[10px] text-[#B45309]">Awaiting admin</span>
                   ) : null}
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
@@ -1784,7 +1784,7 @@ export default function FinancePage() {
             {filteredExpenses.length === 0 ? (
               <FinanceFlatTableRow>
                 <FinanceFlatTd colSpan={8} className="py-10 text-center">
-                  <p className="text-slate-400">
+                  <p className="text-[#5B6472]">
                     {expenses.length === 0 ? "No expenses yet." : "No expenses in this category."}
                   </p>
                   {canRecordExpenses && expenses.length === 0 ? (
@@ -1803,15 +1803,15 @@ export default function FinancePage() {
         </FinanceFlatTable>
 
         {canRecordExpenses && editingExpenseId && editExpenseForm ? (
-          <div className="shell mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="shell mt-4 rounded-lg border border-[#E5E9EF] bg-[#F4F7F9] p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#5B6472]">
               Edit pending expense
             </p>
             <div className="grid gap-2 md:grid-cols-2">
               <select
                 value={editExpenseForm.category}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, category: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               >
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
@@ -1822,18 +1822,18 @@ export default function FinancePage() {
                 placeholder="Amount (KES)"
                 value={editExpenseForm.amount}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, amount: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               />
               <input
                 type="date"
                 value={editExpenseForm.spentAt}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, spentAt: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               />
               <select
                 value={editExpenseForm.paymentMethod}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, paymentMethod: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
               >
                 <option value="bank">Bank</option>
                 <option value="card">Card</option>
@@ -1847,35 +1847,35 @@ export default function FinancePage() {
                 placeholder="Description"
                 value={editExpenseForm.description}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, description: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26] placeholder:text-[#5B6472]"
               />
               <input
                 type="text"
                 placeholder="Vendor"
                 value={editExpenseForm.source}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, source: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26] placeholder:text-[#5B6472]"
               />
               <input
                 type="text"
                 placeholder="Receipt / transaction code"
                 value={editExpenseForm.transactionCode}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, transactionCode: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26] placeholder:text-[#5B6472]"
               />
               <input
                 type="text"
                 placeholder="Account"
                 value={editExpenseForm.account}
                 onChange={(e) => setEditExpenseForm((f) => ({ ...f!, account: e.target.value }))}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26] placeholder:text-[#5B6472]"
               />
               <select
                 value={editExpenseForm.beneficiaryUserId}
                 onChange={(e) =>
                   setEditExpenseForm((f) => ({ ...f!, beneficiaryUserId: e.target.value }))
                 }
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 md:col-span-2"
+                className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26] md:col-span-2"
               >
                 <option value="">Beneficiary</option>
                 {expenseOrgUsers.map((u) => (

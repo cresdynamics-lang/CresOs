@@ -52,10 +52,10 @@ export type LiveInsights = {
 };
 
 const toneBorder: Record<string, string> = {
-  emerald: "border-emerald-500/30 bg-emerald-950/20",
-  amber: "border-amber-500/30 bg-amber-950/20",
-  rose: "border-rose-500/30 bg-rose-950/20",
-  sky: "border-sky-500/30 bg-sky-950/20"
+  emerald: "border-emerald-500/30 bg-[#F2F9EF]",
+  amber: "border-amber-500/30 bg-[#FFF6E5]",
+  rose: "border-rose-500/30 bg-[#FEF2F2]",
+  sky: "border-sky-500/30 bg-[#F0F6FC]"
 };
 
 const POLL_MS = 30_000;
@@ -112,10 +112,10 @@ export function WorkspaceLiveAnalytics({
     <section className={`space-y-6 ${className}`.trim()}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-[#1A1D26]">
             {compact ? "Insights & trends" : "Analytics & AI predictions"}
           </h3>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-[#5B6472]">
             Live · updates on payment/expense · 30s refresh
             {data?.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleTimeString()}` : ""}
           </p>
@@ -123,14 +123,14 @@ export function WorkspaceLiveAnalytics({
         <button
           type="button"
           onClick={() => void load()}
-          className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-200 hover:bg-white/[0.08]"
+          className="rounded-lg border border-[#E5E9EF] bg-white/[0.05] px-3 py-1.5 text-xs text-[#1A1D26] hover:bg-white/[0.08]"
         >
           Refresh
         </button>
       </div>
 
-      {loading && !data && <p className="text-sm text-slate-500">Loading analytics…</p>}
-      {error && !data && <p className="text-sm text-rose-300">{error}</p>}
+      {loading && !data && <p className="text-sm text-[#5B6472]">Loading analytics…</p>}
+      {error && !data && <p className="text-sm text-[#C62828]">{error}</p>}
 
       {data && (
         <>
@@ -141,8 +141,8 @@ export function WorkspaceLiveAnalytics({
                   key={p.label}
                   className={`rounded-xl border p-3 ${toneBorder[p.tone] ?? toneBorder.sky}`}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{p.label}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-400">{p.detail}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5B6472]">{p.label}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[#5B6472]">{p.detail}</p>
                 </div>
               ))}
             </div>
@@ -150,7 +150,7 @@ export function WorkspaceLiveAnalytics({
 
           <div className={`grid gap-6 ${compact ? "xl:grid-cols-12" : "lg:grid-cols-2"}`}>
             <div className={`space-y-4 ${compact ? "xl:col-span-5" : ""}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Money · invoice mix</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Money · invoice mix</p>
               <PieChart items={data.money.pie} valuePrefix="KES " emptyLabel="No invoice data yet" />
               <div className="grid grid-cols-2 gap-3">
                 <StatTile label="Outstanding" value={formatMoney(data.money.totalOutstanding)} tone="amber" />
@@ -159,7 +159,7 @@ export function WorkspaceLiveAnalytics({
             </div>
 
             <div className={`space-y-4 ${compact ? "xl:col-span-7" : ""}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Cash flow (8 weeks)
               </p>
               <DualBarChart
@@ -175,13 +175,13 @@ export function WorkspaceLiveAnalytics({
           </div>
 
           {(variant === "finance" || variant === "admin") && data.money.debtAlerts.length > 0 && (
-            <div className={compact ? "rounded-xl border border-rose-500/15 bg-rose-950/10 p-4" : ""}>
+            <div className={compact ? "rounded-xl border border-rose-500/15 bg-[#FEF2F2] p-4" : ""}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-400/90">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#C62828]/90">
                   Clients due
                 </p>
                 {compact && (
-                  <a href="/finance/clients-due" className="text-xs text-rose-300/90 hover:text-rose-200">
+                  <a href="/finance/clients-due" className="text-xs text-[#C62828]/90 hover:text-[#C62828]">
                     View all →
                   </a>
                 )}
@@ -190,10 +190,10 @@ export function WorkspaceLiveAnalytics({
                 {data.money.debtAlerts.slice(0, compact ? 6 : undefined).map((d) => (
                   <li
                     key={d.clientId}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/20 bg-[#FEF2F2] px-3 py-2 text-sm"
                   >
-                    <span className="font-medium text-slate-200">{d.clientName}</span>
-                    <span className="text-rose-300">
+                    <span className="font-medium text-[#1A1D26]">{d.clientName}</span>
+                    <span className="text-[#C62828]">
                       {formatMoney(d.amountDue)} due
                       {d.overdueInvoices > 0 ? ` · ${d.overdueInvoices} overdue` : ""}
                     </span>
@@ -205,7 +205,7 @@ export function WorkspaceLiveAnalytics({
 
           <div className={`grid gap-6 ${compact ? "lg:grid-cols-2" : "lg:grid-cols-2"}`}>
             <div className="space-y-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Projects · status
               </p>
               <PieChart items={data.projects.byStatus.map((s) => ({ label: s.status, value: s.count }))} />
@@ -219,7 +219,7 @@ export function WorkspaceLiveAnalytics({
 
             {!compact && (
               <div className="space-y-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                   Delivery health
                 </p>
                 <PieChart items={data.projects.completionPie} emptyLabel="No active task data" />
@@ -235,7 +235,7 @@ export function WorkspaceLiveAnalytics({
 
             {compact && data.projects.completionPie.length > 0 && (
               <div className="space-y-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                   Delivery health
                 </p>
                 <PieChart items={data.projects.completionPie} emptyLabel="No active task data" />
@@ -245,12 +245,12 @@ export function WorkspaceLiveAnalytics({
 
           {data.projects.slowProjects.length > 0 && (
             <div>
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-amber-400/90">
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[#B45309]/90">
                 Projects taking longer · overdue or stalled
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[32rem] text-left text-sm">
-                  <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+                  <thead className="text-[10px] uppercase tracking-wide text-[#5B6472]">
                     <tr>
                       <th className="py-2 pr-3">Project</th>
                       <th className="py-2 pr-3">Days active</th>
@@ -260,16 +260,16 @@ export function WorkspaceLiveAnalytics({
                   </thead>
                   <tbody>
                     {data.projects.slowProjects.map((p) => (
-                      <tr key={p.id} className="border-t border-white/[0.06] text-slate-300">
+                      <tr key={p.id} className="border-t border-[#E5E9EF] text-[#5B6472]">
                         <td className="py-2 pr-3">
                           {p.name}
                           {p.pastEndDate && (
-                            <span className="ml-1 text-[10px] text-rose-400">past end date</span>
+                            <span className="ml-1 text-[10px] text-[#C62828]">past end date</span>
                           )}
                         </td>
                         <td className="py-2 pr-3">{p.daysActive}d</td>
                         <td className="py-2 pr-3">{p.completionRate}%</td>
-                        <td className="py-2 text-amber-300">{p.overdueTasks}</td>
+                        <td className="py-2 text-[#B45309]">{p.overdueTasks}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -280,13 +280,13 @@ export function WorkspaceLiveAnalytics({
 
           {showTeam && data.team && (
             <>
-              <div className="border-t border-white/[0.06] pt-6">
-                <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-300">
+              <div className="border-t border-[#E5E9EF] pt-6">
+                <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-[#5B6472]">
                   Team engagement & success
                 </p>
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                       Engagement signals
                     </p>
                     <HorizontalBarChart
@@ -298,7 +298,7 @@ export function WorkspaceLiveAnalytics({
                     />
                   </div>
                   <div>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                       Report activity (8 weeks)
                     </p>
                     <DualBarChart
@@ -314,7 +314,7 @@ export function WorkspaceLiveAnalytics({
                 </div>
                 {data.team.velocity.length > 0 && (
                   <div className="mt-6">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                       Developer velocity (14d tasks done vs active load)
                     </p>
                     <HorizontalBarChart

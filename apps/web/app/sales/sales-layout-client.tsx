@@ -4,16 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
-import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
 import { salesNeu } from "../../components/sales/sales-theme";
 import { SalesSideNav } from "./sales-workspace-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 import { isDirectorOnly } from "../../lib/is-director-only";
 import { DirectorLayoutClient } from "../director/director-layout-client";
 
 export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
 
   if (isDirectorOnly(auth.roleKeys)) {
@@ -50,7 +47,6 @@ export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
         subtitle="Pipeline · delivery · revenue"
         themeKey="sales"
         className="hidden w-[15rem] md:flex"
-        footer={<WorkspaceAccountFooter themeKey="sales" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />}
       >
         <SalesSideNav />
       </WorkspaceAside>

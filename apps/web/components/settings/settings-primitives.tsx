@@ -88,8 +88,8 @@ export function SettingsSection({
     <section className={`flex flex-col gap-5 ${className}`}>
       <div>
         {label ? <p className={`mb-2 ${t.sectionLabel}`}>{label}</p> : null}
-        <h2 className="font-display text-lg font-semibold text-slate-100 sm:text-xl">{title}</h2>
-        {description ? <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-400">{description}</p> : null}
+        <h2 className="font-display text-lg font-semibold text-[#1A1D26] sm:text-xl">{title}</h2>
+        {description ? <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-[#5B6472]">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -107,11 +107,11 @@ export function SettingsField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
         {label}
       </span>
       {children}
-      {hint ? <p className="mt-1 text-[11px] text-slate-500">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-[11px] text-[#5B6472]">{hint}</p> : null}
     </label>
   );
 }
@@ -133,8 +133,8 @@ export function SettingsToggle({
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-200">{label}</p>
-        {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
+        <p className="text-sm font-medium text-[#1A1D26]">{label}</p>
+        {description ? <p className="mt-0.5 text-xs text-[#5B6472]">{description}</p> : null}
       </div>
       <button
         type="button"
@@ -156,7 +156,7 @@ export function SettingsToggle({
 
 export function SettingsMessage({ type, children }: { type: "ok" | "error"; children: ReactNode }) {
   return (
-    <p className={`text-sm ${type === "ok" ? "text-emerald-400" : "text-rose-400"}`}>{children}</p>
+    <p className={`text-sm ${type === "ok" ? "text-[#1B6B3A]" : "text-[#C62828]"}`}>{children}</p>
   );
 }
 
@@ -178,14 +178,14 @@ export function SettingsSaveBar({
   const t = useSettingsTheme();
   if (!dirty && !saving && !successMessage && !errorMessage) return null;
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-white/[0.06] bg-[#0b0f14]/95 px-4 py-4 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-[#E5E9EF] bg-white/95 px-4 py-4 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       {(dirty || saving) && (
         <button type="button" disabled={saving || !dirty} onClick={onSave} className={t.btnPrimary}>
           {saving ? "Saving…" : label}
         </button>
       )}
       {dirty && !saving ? (
-        <span className="text-xs text-slate-500">Unsaved changes</span>
+        <span className="text-xs text-[#5B6472]">Unsaved changes</span>
       ) : null}
       {successMessage && !dirty ? <SettingsMessage type="ok">{successMessage}</SettingsMessage> : null}
       {errorMessage ? <SettingsMessage type="error">{errorMessage}</SettingsMessage> : null}

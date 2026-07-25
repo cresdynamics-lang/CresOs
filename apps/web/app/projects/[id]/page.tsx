@@ -73,8 +73,8 @@ function ProjectDetailSection({
   }
   return (
     <div className={`shell ${shellClassName ?? ""}`.trim()}>
-      <h3 className="mb-2 text-sm font-medium text-slate-300">{label}</h3>
-      {description ? <p className="mb-2 text-xs text-slate-500">{description}</p> : null}
+      <h3 className="mb-2 text-sm font-medium text-[#5B6472]">{label}</h3>
+      {description ? <p className="mb-2 text-xs text-[#5B6472]">{description}</p> : null}
       {children}
     </div>
   );
@@ -511,13 +511,13 @@ export default function ProjectDetailPage() {
     if (isDirector) {
       return (
         <DirectorFullscreenPage>
-          <p className="px-5 py-8 text-slate-400 lg:px-8">Loading…</p>
+          <p className="px-5 py-8 text-[#5B6472] lg:px-8">Loading…</p>
         </DirectorFullscreenPage>
       );
     }
     return (
       <section className="shell">
-        <p className="text-slate-400">Loading…</p>
+        <p className="text-[#5B6472]">Loading…</p>
       </section>
     );
   }
@@ -525,8 +525,8 @@ export default function ProjectDetailPage() {
     if (isDirector) {
       return (
         <DirectorFullscreenPage>
-          <p className="px-5 py-8 text-slate-400 lg:px-8">Project not found.</p>
-          <Link href="/projects" className="px-5 text-sky-400 hover:underline lg:px-8">
+          <p className="px-5 py-8 text-[#5B6472] lg:px-8">Project not found.</p>
+          <Link href="/projects" className="px-5 text-[#2563EB] hover:underline lg:px-8">
             Back to projects
           </Link>
         </DirectorFullscreenPage>
@@ -534,8 +534,8 @@ export default function ProjectDetailPage() {
     }
     return (
       <section className="shell">
-        <p className="text-slate-400">Project not found.</p>
-        <Link href="/projects" className="text-sky-400 hover:underline">Back to projects</Link>
+        <p className="text-[#5B6472]">Project not found.</p>
+        <Link href="/projects" className="text-[#2563EB] hover:underline">Back to projects</Link>
       </section>
     );
   }
@@ -575,31 +575,31 @@ export default function ProjectDetailPage() {
 
   const inputCls = isDirector
     ? directorNeu.input
-    : "rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100";
+    : "rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-1.5 text-sm text-[#1A1D26]";
   const btnPrimary = isDirector
     ? directorNeu.btnPrimary
     : "rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50";
   const btnGhost = isDirector
     ? directorNeu.btnGhost
-    : "rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800";
+    : "rounded border border-[#D0D5DD] px-3 py-1.5 text-sm text-[#5B6472] hover:bg-[#E5E9EF]";
   const taskRowCls = isDirector
     ? `${directorNeu.dataBlock} text-sm`
-    : "rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm";
+    : "rounded border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2 text-sm";
 
   const headerBadges = (
     <>
       {project.type && (
-        <span className="rounded-full border border-white/[0.08] bg-[#0e1319] px-2.5 py-0.5 text-xs text-slate-300">
+        <span className="rounded-full border border-[#E5E9EF] bg-white px-2.5 py-0.5 text-xs text-[#5B6472]">
           {project.type === "demo" ? "Demo" : "Project"}
         </span>
       )}
       {project.approvalStatus === "pending_approval" && (
-        <span className="rounded-full border border-amber-500/30 bg-amber-950/40 px-2.5 py-0.5 text-xs text-amber-200">
+        <span className="rounded-full border border-amber-500/30 bg-[#FFF6E5] px-2.5 py-0.5 text-xs text-[#92400E]">
           Pending approval
         </span>
       )}
       {project.approvalStatus === "approved" && (
-        <span className="rounded-full border border-emerald-500/25 bg-emerald-950/30 px-2.5 py-0.5 text-xs text-emerald-300">
+        <span className="rounded-full border border-emerald-500/25 bg-[#F2F9EF] px-2.5 py-0.5 text-xs text-[#1B6B3A]">
           Approved
         </span>
       )}
@@ -643,8 +643,8 @@ export default function ProjectDetailPage() {
         (isDirector ? (
           <DirectorBanner tone="danger">{reviewError}</DirectorBanner>
         ) : (
-          <div className="shell border-rose-900/40 bg-rose-950/20">
-            <p className="text-sm text-rose-200">{reviewError}</p>
+          <div className="shell border-rose-900/40 bg-[#FEF2F2]">
+            <p className="text-sm text-[#C62828]">{reviewError}</p>
           </div>
         ))}
 
@@ -679,7 +679,7 @@ export default function ProjectDetailPage() {
             You were invited to work on this project. Accept to edit tasks and comment; decline if you cannot take it.
           </DirectorBanner>
         ) : (
-        <div className="shell border-amber-900/50 bg-amber-950/30">
+        <div className="shell border-amber-900/50 bg-[#FFF6E5]">
           <p className="text-sm text-amber-100">You were invited to work on this project. Accept to edit tasks and comment; decline if you cannot take it.</p>
           <div className="mt-2 flex gap-2">
             <button
@@ -693,7 +693,7 @@ export default function ProjectDetailPage() {
             <button
               type="button"
               onClick={() => { setSwapOpen(true); setSwapError(null); }}
-              className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+              className="rounded border border-[#D0D5DD] px-3 py-1.5 text-sm text-[#1A1D26] hover:bg-[#E5E9EF]"
             >
               Swap to another developer
             </button>
@@ -701,7 +701,7 @@ export default function ProjectDetailPage() {
               type="button"
               disabled={respondingId === myPendingAssignment.id}
               onClick={() => handleRespondAssignment(myPendingAssignment.id, false)}
-              className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+              className="rounded border border-[#D0D5DD] px-3 py-1.5 text-sm text-[#5B6472] hover:bg-[#E5E9EF] disabled:opacity-50"
             >
               Decline
             </button>
@@ -718,20 +718,20 @@ export default function ProjectDetailPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-[#E5E9EF] bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-2 text-lg font-semibold text-slate-50">Swap project to another developer</h3>
-            <p className="mb-3 text-sm text-slate-400">
+            <p className="mb-3 text-sm text-[#5B6472]">
               Pick who should take this project. They will receive an in-app request to accept.
             </p>
-            {swapError && <p className="mb-2 text-sm text-rose-300">{swapError}</p>}
+            {swapError && <p className="mb-2 text-sm text-[#C62828]">{swapError}</p>}
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Developer</span>
+              <span className="text-xs text-[#5B6472]">Developer</span>
               <select
                 value={swapToUserId}
                 onChange={(e) => setSwapToUserId(e.target.value)}
-                className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]"
               >
                 <option value="">Select developer</option>
                 {developers.filter((d) => d.id !== auth.userId).map((d) => (
@@ -756,7 +756,7 @@ export default function ProjectDetailPage() {
                   setSwapOpen(false);
                   setSwapError(null);
                 }}
-                className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                className="rounded border border-[#D0D5DD] px-4 py-2 text-sm text-[#5B6472] hover:bg-[#E5E9EF]"
               >
                 Cancel
               </button>
@@ -769,14 +769,14 @@ export default function ProjectDetailPage() {
         (isDirector ? (
           <DirectorBanner tone="info">Review this project and add tasks below. When done, click &quot;Mark as reviewed&quot;.</DirectorBanner>
         ) : (
-          <div className="shell border-sky-600/40 bg-sky-950/30">
+          <div className="shell border-sky-600/40 bg-[#F0F6FC]">
             <p className="text-sm text-sky-200">Review this project and add tasks below. When done, click &quot;Mark as reviewed&quot;.</p>
           </div>
         ))}
 
       {canSeeContact && (
         <ProjectDetailSection director={isDirector} label="Contact & price">
-          <ul className="space-y-1 text-sm text-slate-200">
+          <ul className="space-y-1 text-sm text-[#1A1D26]">
             {project.clientOrOwnerName && <li>Name: {project.clientOrOwnerName}</li>}
             {project.phone && <li>Phone: {project.phone}</li>}
             {project.email && <li>Email: {project.email}</li>}
@@ -788,29 +788,29 @@ export default function ProjectDetailPage() {
               </>
             )}
             {project.managementActive && project.managementMonthlyAmount != null && (
-              <li className="mt-2 text-sky-300">
+              <li className="mt-2 text-[#2563EB]">
                 <span className="font-medium text-sky-200">On management billing</span>
                 {": "}
                 {formatMoney(project.managementMonthlyAmount)}/month
                 {project.managementStartedAt && (
-                  <span className="text-slate-400">
+                  <span className="text-[#5B6472]">
                     {" "}
                     · started {new Date(project.managementStartedAt).toLocaleDateString()}
                   </span>
                 )}
                 {project.managementMonths != null && (
-                  <span className="text-slate-400">
+                  <span className="text-[#5B6472]">
                     {" "}
                     · planned {project.managementMonths} month{project.managementMonths !== 1 ? "s" : ""}
                   </span>
                 )}
                 {project.managementProgressPercent != null && (
-                  <span className="text-slate-400"> · progress {project.managementProgressPercent}%</span>
+                  <span className="text-[#5B6472]"> · progress {project.managementProgressPercent}%</span>
                 )}
                 {(isDirector || isFinance || auth.roleKeys.includes("admin")) && (
                   <Link
                     href="/projects/management"
-                    className="ml-2 text-xs text-sky-400 underline hover:text-sky-300"
+                    className="ml-2 text-xs text-[#2563EB] underline hover:text-[#2563EB]"
                   >
                     Open management workspace
                   </Link>
@@ -823,7 +823,7 @@ export default function ProjectDetailPage() {
 
       {project.projectDetails && (
         <ProjectDetailSection director={isDirector} label="Project details">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{project.projectDetails}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1A1D26]">{project.projectDetails}</p>
         </ProjectDetailSection>
       )}
 
@@ -857,15 +857,15 @@ export default function ProjectDetailPage() {
         >
           {inviteOpen && isDirector && (
             <form onSubmit={(e) => void handleInviteDevelopers(e)} className={`${directorNeu.panelInset} mb-3`}>
-              <p className="mb-2 text-xs text-slate-400">Select one or more developers. Each must accept before working on tasks.</p>
+              <p className="mb-2 text-xs text-[#5B6472]">Select one or more developers. Each must accept before working on tasks.</p>
               <div className="max-h-32 space-y-1 overflow-y-auto">
                 {developers.length === 0 ? (
-                  <p className="text-xs text-slate-500">No developers available.</p>
+                  <p className="text-xs text-[#5B6472]">No developers available.</p>
                 ) : (
                   developers.map((d) => {
                     const already = project.developerAssignments?.some((a) => a.userId === d.id);
                     return (
-                      <label key={d.id} className={`flex cursor-pointer items-center gap-2 text-sm ${already ? "text-slate-500" : "text-slate-200"}`}>
+                      <label key={d.id} className={`flex cursor-pointer items-center gap-2 text-sm ${already ? "text-[#5B6472]" : "text-[#1A1D26]"}`}>
                         <input
                           type="checkbox"
                           disabled={already}
@@ -877,13 +877,13 @@ export default function ProjectDetailPage() {
                           }}
                         />
                         {d.name || d.email}
-                        {already ? <span className="text-xs text-slate-500">(already on team)</span> : null}
+                        {already ? <span className="text-xs text-[#5B6472]">(already on team)</span> : null}
                       </label>
                     );
                   })
                 )}
               </div>
-              {inviteError && <p className="mt-2 text-xs text-rose-300">{inviteError}</p>}
+              {inviteError && <p className="mt-2 text-xs text-[#C62828]">{inviteError}</p>}
               <button
                 type="submit"
                 disabled={invitingDevs || inviteDevIds.length === 0}
@@ -898,18 +898,18 @@ export default function ProjectDetailPage() {
               {project.developerAssignments.map((a) => (
                 <li key={a.id} className="flex items-center gap-1.5">
                   <DevNameTag name={a.user.name || a.user.email} />
-                  <span className="text-[0.65rem] capitalize text-slate-500">{a.status}</span>
+                  <span className="text-[0.65rem] capitalize text-[#5B6472]">{a.status}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-500">No developers invited yet.</p>
+            <p className="text-sm text-[#5B6472]">No developers invited yet.</p>
           )}
         </ProjectDetailSection>
       )}
       {project.assignedDeveloper && (!project.developerAssignments || project.developerAssignments.length === 0) && (
         <ProjectDetailSection director={isDirector} label="Primary contact (developer)">
-          <p className="text-sm text-slate-200">{project.assignedDeveloper.name || project.assignedDeveloper.email}</p>
+          <p className="text-sm text-[#1A1D26]">{project.assignedDeveloper.name || project.assignedDeveloper.email}</p>
         </ProjectDetailSection>
       )}
 
@@ -917,8 +917,8 @@ export default function ProjectDetailPage() {
         <ProjectDetailSection director={isDirector} label="Timeline">
           <ul className="space-y-2">
             {project.timeline.map((t, i) => (
-              <li key={i} className="flex gap-2 text-sm text-slate-200">
-                {t.date && <span className="text-slate-400">{t.date}</span>}
+              <li key={i} className="flex gap-2 text-sm text-[#1A1D26]">
+                {t.date && <span className="text-[#5B6472]">{t.date}</span>}
                 <span>{t.title || "—"}</span>
               </li>
             ))}
@@ -931,18 +931,18 @@ export default function ProjectDetailPage() {
           director={isDirector}
           label="Delivery snapshot"
           description="Task notes below stay in sync with development: blockers and scope issues help Sales coordinate with the client."
-          shellClassName="border-emerald-900/30 bg-emerald-950/20"
+          shellClassName="border-emerald-900/30 bg-[#F2F9EF]"
         >
-          <p className="text-sm text-slate-300">
-            <span className="text-emerald-300">{deliveryCounts.done} done</span>
+          <p className="text-sm text-[#5B6472]">
+            <span className="text-[#1B6B3A]">{deliveryCounts.done} done</span>
             {" · "}
-            <span className="text-sky-300">{deliveryCounts.in_progress} in progress</span>
+            <span className="text-[#2563EB]">{deliveryCounts.in_progress} in progress</span>
             {" · "}
-            <span className="text-violet-300">{deliveryCounts.waiting_response} waiting</span>
+            <span className="text-[#6D28D9]">{deliveryCounts.waiting_response} waiting</span>
             {" · "}
-            <span className="text-amber-300">{deliveryCounts.blocked} blocked</span>
+            <span className="text-[#B45309]">{deliveryCounts.blocked} blocked</span>
             {" · "}
-            <span className="text-slate-500">{deliveryCounts.not_started} not started</span>
+            <span className="text-[#5B6472]">{deliveryCounts.not_started} not started</span>
           </p>
         </ProjectDetailSection>
       )}
@@ -981,7 +981,7 @@ export default function ProjectDetailPage() {
           </form>
         )}
         {project.tasks.length === 0 ? (
-          <p className="text-sm text-slate-400">No tasks yet.</p>
+          <p className="text-sm text-[#5B6472]">No tasks yet.</p>
         ) : (
           <ul className={isDirector ? "divide-y divide-white/[0.04]" : "space-y-3"}>
             {project.tasks.map((t) => (
@@ -989,18 +989,18 @@ export default function ProjectDetailPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-medium text-slate-100">{t.title}</span>
+                      <span className="truncate font-medium text-[#1A1D26]">{t.title}</span>
                       {devLabel(t.assignee) && (t.status === "done" || t.status === "in_progress" || t.status === "blocked") && (
                         <DevNameTag name={devLabel(t.assignee)!} />
                       )}
                       {t.status === "done" && (
-                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-300">
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-[#1B6B3A]">
                           Done
                         </span>
                       )}
                     </div>
                     {t.description && (
-                      <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-400">{t.description}</p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-xs text-[#5B6472]">{t.description}</p>
                     )}
                   </div>
                   {isAssignedDev ? (
@@ -1008,7 +1008,7 @@ export default function ProjectDetailPage() {
                       <select
                         value={t.status === "todo" ? "not_started" : t.status}
                         onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
-                        className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-200"
+                        className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-[#1A1D26]"
                       >
                         <option value="not_started">Not started</option>
                         <option value="in_progress">In progress</option>
@@ -1023,33 +1023,33 @@ export default function ProjectDetailPage() {
                           setEditTaskTitle(t.title);
                           setEditTaskDescription(t.description ?? "");
                         }}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        className="rounded border border-[#D0D5DD] px-2 py-1 text-xs text-[#1A1D26] hover:bg-[#E5E9EF]"
                       >
                         Edit
                       </button>
                     </div>
                   ) : (
-                    <span className="capitalize text-slate-400">{t.status.replace("_", " ")}</span>
+                    <span className="capitalize text-[#5B6472]">{t.status.replace("_", " ")}</span>
                   )}
                 </div>
                 {isAssignedDev && editingTaskId === t.id && (
-                  <div className="mt-2 rounded border border-slate-700 bg-slate-900/50 p-2">
-                    <label className="block text-xs text-slate-400">
+                  <div className="mt-2 rounded border border-[#E5E9EF] bg-white p-2">
+                    <label className="block text-xs text-[#5B6472]">
                       Title
                       <input
                         type="text"
                         value={editTaskTitle}
                         onChange={(e) => setEditTaskTitle(e.target.value)}
-                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
                       />
                     </label>
-                    <label className="mt-2 block text-xs text-slate-400">
+                    <label className="mt-2 block text-xs text-[#5B6472]">
                       Description (optional)
                       <textarea
                         value={editTaskDescription}
                         onChange={(e) => setEditTaskDescription(e.target.value)}
                         rows={3}
-                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                        className="mt-1 w-full rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
                       />
                     </label>
                     <div className="mt-2 flex gap-2">
@@ -1064,7 +1064,7 @@ export default function ProjectDetailPage() {
                       <button
                         type="button"
                         onClick={() => setEditingTaskId(null)}
-                        className="rounded border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+                        className="rounded border border-[#D0D5DD] px-3 py-1.5 text-xs text-[#5B6472] hover:bg-[#E5E9EF]"
                       >
                         Cancel
                       </button>
@@ -1072,23 +1072,23 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
                 {t.blockedReason?.trim() && (
-                  <p className="mt-2 text-xs text-amber-200/90">
-                    <span className="font-medium text-amber-400/90">Blocked: </span>
+                  <p className="mt-2 text-xs text-[#92400E]/90">
+                    <span className="font-medium text-[#B45309]/90">Blocked: </span>
                     {t.blockedReason}
                   </p>
                 )}
                 {t.comments && t.comments.length > 0 && (
-                  <ul className="mt-2 space-y-2 border-l border-slate-600 pl-3">
+                  <ul className="mt-2 space-y-2 border-l border-[#D0D5DD] pl-3">
                     {t.comments.map((c) => (
-                      <li key={c.id} className="text-xs text-slate-300">
-                        <span className="text-slate-500">
+                      <li key={c.id} className="text-xs text-[#5B6472]">
+                        <span className="text-[#5B6472]">
                           {(c.author?.name || c.author?.email || "Developer") + " · "}
-                          <span className="text-slate-400">{commentTypeLabel(c.type)}</span>
+                          <span className="text-[#5B6472]">{commentTypeLabel(c.type)}</span>
                           {c.audience && c.audience !== "all" && (
-                            <span className="text-slate-500"> · To: {c.audience}</span>
+                            <span className="text-[#5B6472]"> · To: {c.audience}</span>
                           )}
                         </span>
-                        <p className="mt-0.5 whitespace-pre-wrap text-slate-200">{c.body}</p>
+                        <p className="mt-0.5 whitespace-pre-wrap text-[#1A1D26]">{c.body}</p>
                       </li>
                     ))}
                   </ul>
@@ -1097,22 +1097,22 @@ export default function ProjectDetailPage() {
                   (commentTaskId === t.id ? (
                     <form
                       onSubmit={(e) => handlePostComment(t.id, e)}
-                      className="mt-2 space-y-2 rounded border border-slate-600 bg-slate-900/50 p-2"
+                      className="mt-2 space-y-2 rounded border border-[#D0D5DD] bg-white p-2"
                     >
                       <textarea
                         value={commentBody}
                         onChange={(e) => setCommentBody(e.target.value)}
                         placeholder="Comment for Sales, developers, or everyone…"
                         rows={3}
-                        className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                        className="w-full rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1.5 text-sm text-[#1A1D26]"
                       />
                       <div className="flex flex-wrap items-center gap-2">
-                        <label className="text-xs text-slate-400">
+                        <label className="text-xs text-[#5B6472]">
                           Audience{" "}
                           <select
                             value={commentAudience}
                             onChange={(e) => setCommentAudience(e.target.value)}
-                            className="ml-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200"
+                            className="ml-1 rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-xs text-[#1A1D26]"
                           >
                             <option value="all">Everyone</option>
                             <option value="sales">Sales / owner</option>
@@ -1121,11 +1121,11 @@ export default function ProjectDetailPage() {
                         </label>
                       </div>
                       {project.mentionableUsers && project.mentionableUsers.length > 0 && (
-                        <div className="text-xs text-slate-400">
-                          <span className="block text-slate-500">Notify (mention)</span>
+                        <div className="text-xs text-[#5B6472]">
+                          <span className="block text-[#5B6472]">Notify (mention)</span>
                           <div className="mt-1 flex flex-wrap gap-2">
                             {project.mentionableUsers.map((u) => (
-                              <label key={u.id} className="flex cursor-pointer items-center gap-1 text-slate-300">
+                              <label key={u.id} className="flex cursor-pointer items-center gap-1 text-[#5B6472]">
                                 <input
                                   type="checkbox"
                                   checked={commentMentions.includes(u.id)}
@@ -1156,7 +1156,7 @@ export default function ProjectDetailPage() {
                             setCommentBody("");
                             setCommentMentions([]);
                           }}
-                          className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                          className="rounded border border-[#D0D5DD] px-3 py-1 text-xs text-[#5B6472] hover:bg-[#E5E9EF]"
                         >
                           Cancel
                         </button>
@@ -1171,7 +1171,7 @@ export default function ProjectDetailPage() {
                         setCommentAudience("all");
                         setCommentMentions([]);
                       }}
-                      className="mt-2 text-xs text-sky-400 hover:underline"
+                      className="mt-2 text-xs text-[#2563EB] hover:underline"
                     >
                       Add comment
                     </button>
@@ -1186,7 +1186,7 @@ export default function ProjectDetailPage() {
         {isAssignedDev && (
           <form onSubmit={handleAddMilestone} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="flex flex-1 flex-col gap-1">
-              <span className="text-xs text-slate-400">Milestone name</span>
+              <span className="text-xs text-[#5B6472]">Milestone name</span>
               <input
                 type="text"
                 value={addMilestoneName}
@@ -1196,7 +1196,7 @@ export default function ProjectDetailPage() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">Due date (optional)</span>
+              <span className="text-xs text-[#5B6472]">Due date (optional)</span>
               <input
                 type="date"
                 value={addMilestoneDueDate}
@@ -1213,17 +1213,17 @@ export default function ProjectDetailPage() {
             </button>
           </form>
         )}
-        {milestoneError && <p className="mb-2 text-sm text-rose-300">{milestoneError}</p>}
+        {milestoneError && <p className="mb-2 text-sm text-[#C62828]">{milestoneError}</p>}
         {project.milestones.length === 0 ? (
-          <p className="text-sm text-slate-400">No milestones yet.</p>
+          <p className="text-sm text-[#5B6472]">No milestones yet.</p>
         ) : (
           <ul className={isDirector ? "divide-y divide-white/[0.04]" : "space-y-2"}>
             {project.milestones.map((m) => (
-              <li key={m.id} className={isDirector ? `${directorNeu.dataBlock} flex flex-wrap items-center justify-between gap-2 text-sm` : "flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm"}>
+              <li key={m.id} className={isDirector ? `${directorNeu.dataBlock} flex flex-wrap items-center justify-between gap-2 text-sm` : "flex flex-wrap items-center justify-between gap-2 rounded border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2 text-sm"}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-slate-100">{m.name}</span>
+                  <span className="text-[#1A1D26]">{m.name}</span>
                   {m.status === "completed" && (
-                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-emerald-300">
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-medium text-[#1B6B3A]">
                       Completed
                     </span>
                   )}
@@ -1232,7 +1232,7 @@ export default function ProjectDetailPage() {
                   <select
                     value={m.status}
                     onChange={(e) => void handleMilestoneStatusChange(m.id, e.target.value)}
-                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs capitalize text-slate-200"
+                    className="rounded border border-[#D0D5DD] bg-[#E5E9EF] px-2 py-1 text-xs capitalize text-[#1A1D26]"
                   >
                     <option value="pending">Pending</option>
                     <option value="in_progress">In progress</option>
@@ -1240,7 +1240,7 @@ export default function ProjectDetailPage() {
                     <option value="rejected">Rejected</option>
                   </select>
                 ) : (
-                  <span className="capitalize text-slate-400">{m.status.replace("_", " ")}</span>
+                  <span className="capitalize text-[#5B6472]">{m.status.replace("_", " ")}</span>
                 )}
               </li>
             ))}
@@ -1309,11 +1309,11 @@ export default function ProjectDetailPage() {
     <section className="flex flex-col gap-4">
       <div className="shell flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/projects" className="mb-2 inline-block text-sm text-slate-400 hover:text-slate-200">
+          <Link href="/projects" className="mb-2 inline-block text-sm text-[#5B6472] hover:text-[#1A1D26]">
             ← Projects
           </Link>
           <h2 className="text-xl font-semibold text-slate-50">{project.name}</h2>
-          <p className="text-sm text-slate-400 capitalize">{project.status}</p>
+          <p className="text-sm text-[#5B6472] capitalize">{project.status}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">{headerBadges}</div>
         </div>
         <div className="flex flex-wrap gap-2">{headerActions}</div>
@@ -1365,25 +1365,25 @@ function HandoffRequestModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-xl border border-[#E5E9EF] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold text-slate-50">Request handoff — {projectName}</h3>
-        <p className="mb-3 text-sm text-slate-400">Another developer can accept to become the assigned developer and edit tasks. If they reject, the project stays with you.</p>
+        <p className="mb-3 text-sm text-[#5B6472]">Another developer can accept to become the assigned developer and edit tasks. If they reject, the project stays with you.</p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Hand off to</span>
-            <select value={toUserId} onChange={(e) => setToUserId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+            <span className="text-xs text-[#5B6472]">Hand off to</span>
+            <select value={toUserId} onChange={(e) => setToUserId(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
               <option value="">Select developer</option>
               {developers.map((d) => (
                 <option key={d.id} value={d.id}>{d.name || d.email}</option>
               ))}
             </select>
           </label>
-          {error && <p className="text-sm text-amber-400">{error}</p>}
+          {error && <p className="text-sm text-[#B45309]">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={submitting || !toUserId} className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
               {submitting ? "Sending…" : "Send request"}
             </button>
-            <button type="button" onClick={onClose} className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
+            <button type="button" onClick={onClose} className="rounded border border-[#D0D5DD] px-4 py-2 text-sm text-[#5B6472] hover:bg-[#E5E9EF]">
               Cancel
             </button>
           </div>
@@ -1480,22 +1480,22 @@ function EditProjectContactModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onClose}>
       <div
-        className="flex max-h-[min(92dvh,880px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-xl"
+        className="flex max-h-[min(92dvh,880px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[#E5E9EF] bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-slate-700 px-5 py-4">
+        <div className="shrink-0 border-b border-[#E5E9EF] px-5 py-4">
           <h3 className="text-lg font-semibold text-slate-50">Edit project</h3>
-          <p className="mt-1 text-xs text-slate-500">Scroll the form on small screens; actions stay pinned at the bottom.</p>
+          <p className="mt-1 text-xs text-[#5B6472]">Scroll the form on small screens; actions stay pinned at the bottom.</p>
         </div>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Project name</span>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Project name</span>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Status</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+            <span className="text-xs text-[#5B6472]">Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
               <option value="planned">Planned</option>
               <option value="active">Active</option>
               <option value="paused">Paused</option>
@@ -1505,17 +1505,17 @@ function EditProjectContactModal({
           </label>
           <div className="flex gap-2">
             <label className="flex flex-1 flex-col gap-1">
-              <span className="text-xs text-slate-400">Start date</span>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+              <span className="text-xs text-[#5B6472]">Start date</span>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
             </label>
             <label className="flex flex-1 flex-col gap-1">
-              <span className="text-xs text-slate-400">End date</span>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+              <span className="text-xs text-[#5B6472]">End date</span>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
             </label>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Primary developer</span>
-            <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100">
+            <span className="text-xs text-[#5B6472]">Primary developer</span>
+            <select value={assignedDeveloperId} onChange={(e) => setAssignedDeveloperId(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]">
               <option value="">—</option>
               {developers.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -1525,10 +1525,10 @@ function EditProjectContactModal({
             </select>
           </label>
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Invite additional developers</span>
-            <div className="max-h-28 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-800/80 p-2">
+            <span className="text-xs text-[#5B6472]">Invite additional developers</span>
+            <div className="max-h-28 space-y-1 overflow-y-auto rounded border border-[#E5E9EF] bg-[#F4F7F9] p-2">
               {developers.map((d) => (
-                <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+                <label key={d.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#1A1D26]">
                   <input
                     type="checkbox"
                     checked={inviteDeveloperIds.includes(d.id)}
@@ -1544,64 +1544,64 @@ function EditProjectContactModal({
             </div>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Client / owner name</span>
-            <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Client / owner name</span>
+            <input type="text" value={clientOrOwnerName} onChange={(e) => setClientOrOwnerName(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Phone</span>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Phone</span>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Email</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Price (KES)</span>
-            <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Price (KES)</span>
+            <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Project details</span>
-            <textarea value={projectDetails} onChange={(e) => setProjectDetails(e.target.value)} rows={4} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" />
+            <span className="text-xs text-[#5B6472]">Project details</span>
+            <textarea value={projectDetails} onChange={(e) => setProjectDetails(e.target.value)} rows={4} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" />
           </label>
           <div className="flex flex-col gap-2">
-            <span className="text-xs text-slate-400">Timeline</span>
+            <span className="text-xs text-[#5B6472]">Timeline</span>
             {timeline.map((t, i) => (
               <div key={i} className="flex gap-2">
                 <input
                   type="date"
                   value={t.date}
                   onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))}
-                  className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                  className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                 />
                 <input
                   type="text"
                   placeholder="Title"
                   value={t.title}
                   onChange={(e) => setTimeline((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                  className="flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                  className="flex-1 rounded border border-[#E5E9EF] bg-[#E5E9EF] px-2 py-1 text-sm text-[#1A1D26]"
                 />
-                <button type="button" onClick={() => setTimeline((prev) => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-slate-200">×</button>
+                <button type="button" onClick={() => setTimeline((prev) => prev.filter((_, j) => j !== i))} className="text-[#5B6472] hover:text-[#1A1D26]">×</button>
               </div>
             ))}
-            <button type="button" onClick={() => setTimeline((prev) => [...prev, { date: "", title: "" }])} className="text-xs text-sky-400 hover:underline">
+            <button type="button" onClick={() => setTimeline((prev) => [...prev, { date: "", title: "" }])} className="text-xs text-[#2563EB] hover:underline">
               + Add timeline item
             </button>
           </div>
-          <p className="text-xs text-slate-500">When project is on management:</p>
+          <p className="text-xs text-[#5B6472]">When project is on management:</p>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">Expected per month (KES)</span>
-            <input type="number" min={0} step={0.01} value={managementMonthlyAmount} onChange={(e) => setManagementMonthlyAmount(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="e.g. 50000" />
+            <span className="text-xs text-[#5B6472]">Expected per month (KES)</span>
+            <input type="number" min={0} step={0.01} value={managementMonthlyAmount} onChange={(e) => setManagementMonthlyAmount(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" placeholder="e.g. 50000" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400">For how long (months)</span>
-            <input type="number" min={0} value={managementMonths} onChange={(e) => setManagementMonths(e.target.value)} className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100" placeholder="e.g. 12" />
+            <span className="text-xs text-[#5B6472]">For how long (months)</span>
+            <input type="number" min={0} value={managementMonths} onChange={(e) => setManagementMonths(e.target.value)} className="rounded border border-[#E5E9EF] bg-[#E5E9EF] px-3 py-2 text-[#1A1D26]" placeholder="e.g. 12" />
           </label>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2 border-t border-slate-700 bg-slate-900/95 px-5 py-3">
+          <div className="flex shrink-0 flex-wrap gap-2 border-t border-[#E5E9EF] bg-white px-5 py-3">
             <button type="submit" disabled={submitting} className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50">
               {submitting ? "Saving…" : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="rounded border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
+            <button type="button" onClick={onClose} className="rounded border border-[#D0D5DD] px-4 py-2 text-sm text-[#5B6472] hover:bg-[#E5E9EF]">
               Cancel
             </button>
           </div>

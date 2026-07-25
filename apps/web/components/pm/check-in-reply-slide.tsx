@@ -43,10 +43,10 @@ export function CheckInReplySlide({ open, title, subtitle, onClose, children }: 
         aria-label={title}
       >
         <div className="mx-auto mt-3 h-1 w-12 rounded-full bg-white/20" />
-        <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-[#E5E9EF] px-5 py-4">
           <div className="min-w-0">
             <p className="font-display text-lg font-semibold text-slate-50">{title}</p>
-            {subtitle ? <p className="mt-1 text-sm text-slate-400">{subtitle}</p> : null}
+            {subtitle ? <p className="mt-1 text-sm text-[#5B6472]">{subtitle}</p> : null}
           </div>
           <button type="button" className={checkInGlass.btnGhost} onClick={onClose}>
             Close

@@ -199,12 +199,12 @@ export default function PmKnowledgePage() {
       {stats ? (
         <div className="mx-5 mb-4 flex flex-wrap gap-3 lg:mx-8">
           <div className={`${pmNeu.panelInset} min-w-[8rem] px-4 py-3`}>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Total indexed</p>
-            <p className="text-2xl font-bold tabular-nums text-teal-300">{stats.total}</p>
+            <p className="text-[10px] uppercase tracking-wide text-[#5B6472]">Total indexed</p>
+            <p className="text-2xl font-bold tabular-nums text-[#2D5A5A]">{stats.total}</p>
           </div>
           <div className={`${pmNeu.panelInset} min-w-[8rem] px-4 py-3`}>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Last 30 days</p>
-            <p className="text-2xl font-bold tabular-nums text-slate-100">{stats.recent30Days}</p>
+            <p className="text-[10px] uppercase tracking-wide text-[#5B6472]">Last 30 days</p>
+            <p className="text-2xl font-bold tabular-nums text-[#1A1D26]">{stats.recent30Days}</p>
           </div>
           {stats.bySource
             ? Object.entries(stats.bySource)
@@ -221,8 +221,8 @@ export default function PmKnowledgePage() {
                       sourceFilter === source ? "ring-1 ring-teal-500/50" : ""
                     }`}
                   >
-                    <p className="text-[10px] uppercase tracking-wide text-slate-500">{source.replace(/_/g, " ")}</p>
-                    <p className="text-lg font-semibold text-slate-200">{count}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-[#5B6472]">{source.replace(/_/g, " ")}</p>
+                    <p className="text-lg font-semibold text-[#1A1D26]">{count}</p>
                   </button>
                 ))
             : null}
@@ -231,14 +231,14 @@ export default function PmKnowledgePage() {
 
       {insights ? (
         <PmSection label={insightsAi ? "AI delivery intelligence" : "Delivery intelligence"}>
-          <div className={`${pmNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-slate-300`}>{insights}</div>
+          <div className={`${pmNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-[#5B6472]`}>{insights}</div>
         </PmSection>
       ) : null}
 
       <PmSection label="Knowledge feed" description="Search across all indexed copies — team profiles, tasks, comments, messages, reports, CRM, emails, and platform actions.">
         <div className="mb-4 flex flex-wrap gap-2">
           <input
-            className="min-w-[12rem] flex-1 rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-200"
+            className="min-w-[12rem] flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26]"
             placeholder="Search — developers, Wilson, project name, blockers…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -256,32 +256,32 @@ export default function PmKnowledgePage() {
           ) : null}
         </div>
         {searchAnswer ? (
-          <div className={`${pmNeu.panelInset} mb-4 whitespace-pre-wrap border border-teal-500/20 px-4 py-3 text-sm leading-relaxed text-slate-200`}>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-teal-400">
+          <div className={`${pmNeu.panelInset} mb-4 whitespace-pre-wrap border border-teal-500/20 px-4 py-3 text-sm leading-relaxed text-[#1A1D26]`}>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#2D5A5A]">
               {searchAi ? "AI answer from knowledge pool" : "Search summary"}
             </p>
             {searchAnswer}
           </div>
         ) : null}
-        {error ? <p className="mb-3 text-sm text-rose-300">{error}</p> : null}
+        {error ? <p className="mb-3 text-sm text-[#C62828]">{error}</p> : null}
         {loading ? (
-          <p className="text-sm text-slate-500">Loading knowledge…</p>
+          <p className="text-sm text-[#5B6472]">Loading knowledge…</p>
         ) : chunks.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No knowledge indexed yet. Click <strong className="text-slate-300">Sync full history</strong> to copy all existing actions, communications, and reports into the pool.
+          <p className="text-sm text-[#5B6472]">
+            No knowledge indexed yet. Click <strong className="text-[#5B6472]">Sync full history</strong> to copy all existing actions, communications, and reports into the pool.
           </p>
         ) : (
           <ul className="space-y-2">
             {chunks.map((c) => (
               <li key={c.id} className={`${pmNeu.listRow} px-3 py-3`}>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-[#5B6472]">
                   <span>
                     {c.kind} · {c.sourceType}
                   </span>
                   <span>{new Date(c.occurredAt).toLocaleString()}</span>
                 </div>
-                {c.title ? <p className="mt-1 text-sm font-medium text-slate-100">{c.title}</p> : null}
-                <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-400">
+                {c.title ? <p className="mt-1 text-sm font-medium text-[#1A1D26]">{c.title}</p> : null}
+                <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#5B6472]">
                   {c.content.length > 500 ? `${c.content.slice(0, 500)}…` : c.content}
                 </p>
               </li>

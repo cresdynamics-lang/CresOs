@@ -6,8 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { adminNeu } from "../../components/admin/admin-theme";
 import { AdminNav, AdminSideNav } from "./admin-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
-import { getDisplayFirstName } from "../../lib/personalized-greeting";
+import { HeaderProfileMenu } from "../../components/workspace/header-profile-menu";
 
 function pageTitle(pathname: string | null): string {
   if (!pathname) return "Dashboard";
@@ -25,12 +24,9 @@ function pageTitle(pathname: string | null): string {
 export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
   const canAccess = auth.roleKeys.includes("admin");
   const [search, setSearch] = useState("");
-  const firstName = getDisplayFirstName(auth.userName, auth.userEmail);
-  const initial = (firstName.charAt(0) || "A").toUpperCase();
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -73,37 +69,6 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           <AdminSideNav />
-        </div>
-        <div className="shrink-0 border-t border-[#2A2E3D] p-3">
-          <Link
-            href="/settings/account"
-            className="mb-1 flex min-h-[40px] items-center gap-2.5 rounded-lg px-3 py-2 font-body text-[13px] font-semibold text-[#C8CDD8] hover:bg-[#2A2E3D] hover:text-white"
-          >
-            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.75}
-                d="M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1l2-1.5-2-3.5-2.4 1a7.6 7.6 0 00-1.7-1L12.8 2h-1.6L10.8 4.5a7.6 7.6 0 00-1.7 1l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 000 2l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 001.7 1L11.2 22h1.6l.4-2.5a7.6 7.6 0 001.7-1l2.4 1 2-3.5-2-1.5c.1-.3.1-.7.1-1z"
-              />
-            </svg>
-            Settings
-          </Link>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex min-h-[40px] w-full items-center gap-2.5 rounded-lg px-3 py-2 font-body text-[13px] font-semibold text-[#C8CDD8] hover:bg-[#2A2E3D] hover:text-white"
-          >
-            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.75}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"
-              />
-            </svg>
-            Sign out
-          </button>
         </div>
       </aside>
 
@@ -152,12 +117,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
                 />
               </svg>
             </button>
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2D5A5A] font-label text-sm font-bold text-white"
-              title={auth.userEmail || firstName}
-            >
-              {initial}
-            </div>
+            <HeaderProfileMenu />
           </div>
         </header>
 

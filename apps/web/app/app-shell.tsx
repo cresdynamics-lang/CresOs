@@ -9,18 +9,16 @@ import { HeaderStatusStrip } from "./header-status";
 import { filterGlobalNavSections } from "../lib/global-nav-sections";
 import { resolveWorkspaceForUser } from "../lib/resolve-workspace-for-user";
 import { WorkspaceAside } from "../components/workspace/workspace-aside";
-import { WorkspaceAccountFooter } from "../components/workspace/workspace-account-footer";
+import { HeaderProfileMenu } from "../components/workspace/header-profile-menu";
 import { GlobalSideNav } from "../components/workspace/global-side-nav";
 import { workspaceMeta, WorkspaceNavContent } from "../components/workspace/workspace-nav-content";
 import {
-  HrWorkspaceAside,
-  HrWorkspaceAsideFooter
+  HrWorkspaceAside
 } from "../components/hr/hr-workspace-aside";
 import { HrSideNav } from "./hr/hr-nav";
 import { HrAsideWorkforceSnapshot } from "../components/hr/hr-aside-workforce";
 import {
-  PmWorkspaceAside,
-  PmWorkspaceAsideFooter
+  PmWorkspaceAside
 } from "../components/pm/pm-workspace-aside";
 import { PmSideNav } from "./pm/pm-nav";
 import { PmAsideDeliverySnapshot } from "../components/pm/pm-aside-delivery";
@@ -42,7 +40,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [unreadByKeyword, setUnreadByKeyword] = useState<Record<string, number>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<"preferences" | "account">("account");
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const canSeeApprovals = useMemo(
@@ -307,25 +304,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace("/login");
   };
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
@@ -353,38 +331,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const inWorkspace = workspace !== null;
 
   const isSettingsRoute = pathname.startsWith("/settings");
-  const hideTopHeader = isFullscreen || isSettingsRoute;
-  const hideShellChrome = isFullscreenPage && isFullscreen;
-
-  const workspaceThemeKey =
-    inWorkspace && workspace
-      ? (workspaceMeta(workspace).themeKey as "finance" | "sales" | "developer" | "director" | "admin" | "client" | "hr" | "pm")
-      : "global";
-
-  const navFooter = <WorkspaceAccountFooter themeKey="global" onLogout={handleLogout} showIdentity />;
+  /** Admin brings its own top chrome with the profile menu. */
+  const hideTopHeader = pathname.startsWith("/admin");
+  const hideShellChrome = false;
 
   const workspaceFooter = inWorkspace ? (
     <div className="flex flex-col gap-1">
       <Link
         href="/dashboard"
         onClick={() => setMobileNavOpen(false)}
-        className="mx-1 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+        className="mx-1 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-[#F4F7F9] hover:text-brand"
       >
         App dashboard
       </Link>
-      <WorkspaceAccountFooter
-        themeKey={workspaceThemeKey}
-        onLogout={() => {
-          setMobileNavOpen(false);
-          handleLogout();
-        }}
-        showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "admin" && workspace !== "client" && workspace !== "hr" && workspace !== "pm"}
-        showIdentity={false}
-      />
     </div>
-  ) : (
-    navFooter
-  );
+  ) : null;
 
   const asideTitle = inWorkspace && workspace ? workspaceMeta(workspace).title : "CresOS";
   const asideSubtitle =
@@ -414,31 +375,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => setMobileNavOpen(false)}
           />
           {workspace === "hr" ? (
-            <HrWorkspaceAside
-              className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl"
-              footer={
-                <HrWorkspaceAsideFooter
-                  onLogout={() => {
-                    setMobileNavOpen(false);
-                    handleLogout();
-                  }}
-                />
-              }
-            >
+            <HrWorkspaceAside className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl">
               <HrSideNav onNavClick={() => setMobileNavOpen(false)} />
             </HrWorkspaceAside>
           ) : workspace === "pm" ? (
-            <PmWorkspaceAside
-              className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl"
-              footer={
-                <PmWorkspaceAsideFooter
-                  onLogout={() => {
-                    setMobileNavOpen(false);
-                    handleLogout();
-                  }}
-                />
-              }
-            >
+            <PmWorkspaceAside className="safe-area-top absolute left-0 top-0 z-10 !flex max-w-sm shadow-2xl">
               <PmSideNav onNavClick={() => setMobileNavOpen(false)} />
             </PmWorkspaceAside>
           ) : (
@@ -467,20 +408,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       {inWorkspace && workspace === "hr" && !hideShellChrome && !isSettingsRoute ? (
-        <HrWorkspaceAside
-          className="hidden w-[17.5rem] shrink-0 md:flex"
-          footer={<HrWorkspaceAsideFooter onLogout={handleLogout} />}
-        >
+        <HrWorkspaceAside className="hidden w-[17.5rem] shrink-0 md:flex">
           <HrAsideWorkforceSnapshot />
           <HrSideNav />
         </HrWorkspaceAside>
       ) : null}
 
       {inWorkspace && workspace === "pm" && !hideShellChrome && !isSettingsRoute ? (
-        <PmWorkspaceAside
-          className="hidden w-[17.5rem] shrink-0 md:flex"
-          footer={<PmWorkspaceAsideFooter onLogout={handleLogout} />}
-        >
+        <PmWorkspaceAside className="hidden w-[17.5rem] shrink-0 md:flex">
           <PmAsideDeliverySnapshot />
           <PmSideNav />
         </PmWorkspaceAside>
@@ -492,7 +427,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           subtitle="Operating system for growth"
           themeKey="global"
           className="hidden w-[15rem] md:flex"
-          footer={navFooter}
         >
           <GlobalSideNav
             sections={visibleSections}
@@ -535,22 +469,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-wrap items-center justify-end gap-1.5 sm:max-w-none sm:gap-2">
             <HeaderStatusStrip />
-            
-            {/* Fullscreen toggle — all workspace pages */}
-            <button
-              onClick={toggleFullscreen}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[#E5E9EF] bg-[#F4F7F9] p-2.5 text-slate-600 hover:border-brand/40 hover:text-brand lg:min-h-0 lg:min-w-0 lg:p-2"
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isFullscreen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                )}
-              </svg>
-            </button>
+            <HeaderProfileMenu onLogout={handleLogout} />
           </div>
         </header>
         <div

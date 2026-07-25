@@ -189,13 +189,13 @@ export function FinanceAssistantConsole() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
         <div className={`${financeNeu.panel} p-4 sm:p-6`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Finance · AI</p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Finance AI Assistant</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1B6B3A]">Finance · AI</p>
+          <h1 className="mt-1 text-xl font-semibold text-[#1A1D26] sm:text-2xl">Finance AI Assistant</h1>
+          <p className="mt-1 max-w-2xl text-sm text-[#5B6472]">
             Ask streams live from the ledger + knowledge pool. Record mode previews expenses/payments for confirmation.
           </p>
 
-          <div className="mt-4 flex gap-2 border-b border-white/[0.06] pb-3">
+          <div className="mt-4 flex gap-2 border-b border-[#E5E9EF] pb-3">
             <button
               type="button"
               onClick={() => {
@@ -232,7 +232,7 @@ export function FinanceAssistantConsole() {
                 key={p}
                 type="button"
                 onClick={() => setMessage(p)}
-                className="rounded-full border border-white/[0.06] bg-[#0e1319] px-3 py-1.5 text-left text-[11px] text-slate-400 hover:border-emerald-500/30 hover:text-slate-200"
+                className="rounded-full border border-[#E5E9EF] bg-white px-3 py-1.5 text-left text-[11px] text-[#5B6472] hover:border-emerald-500/30 hover:text-[#1A1D26]"
               >
                 {p}
               </button>
@@ -263,13 +263,13 @@ export function FinanceAssistantConsole() {
                 statusMessage={streamStatus}
                 reply={streamReply}
                 loading={streamLoading}
-                accentClass="text-emerald-400"
+                accentClass="text-[#1B6B3A]"
               />
             </div>
           ) : null}
 
           {error || streamError ? (
-            <p className="mt-3 text-sm text-rose-300">{error || streamError}</p>
+            <p className="mt-3 text-sm text-[#C62828]">{error || streamError}</p>
           ) : null}
         </div>
 
@@ -282,17 +282,17 @@ export function FinanceAssistantConsole() {
                   statusMessage={streamStatus}
                   reply={result.reply}
                   loading={false}
-                  accentClass="text-emerald-400"
+                  accentClass="text-[#1B6B3A]"
                 />
                 {executeMessage ? (
                   <div className="space-y-2">
-                    <p className="text-sm text-emerald-300">{executeMessage}</p>
+                    <p className="text-sm text-[#1B6B3A]">{executeMessage}</p>
                     {executeMessage.includes("recorded") ? (
                       <div className="flex flex-wrap gap-3 text-xs font-medium">
-                        <Link href="/finance/ledger" className="text-emerald-300 hover:text-emerald-200">
+                        <Link href="/finance/ledger" className="text-[#1B6B3A] hover:text-[#1B6B3A]">
                           All transactions →
                         </Link>
-                        <Link href="/finance/projects" className="text-emerald-300 hover:text-emerald-200">
+                        <Link href="/finance/projects" className="text-[#1B6B3A] hover:text-[#1B6B3A]">
                           Project balances →
                         </Link>
                       </div>
@@ -313,7 +313,7 @@ export function FinanceAssistantConsole() {
                 statusMessage={streamStatus}
                 reply={result.reply}
                 loading={false}
-                accentClass="text-emerald-400"
+                accentClass="text-[#1B6B3A]"
               />
             )}
           </div>
@@ -322,13 +322,13 @@ export function FinanceAssistantConsole() {
 
       {sessions.length > 0 ? (
         <aside className={`${financeNeu.panel} w-full shrink-0 p-4 lg:w-72`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Recent sessions</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1B6B3A]">Recent sessions</p>
           <ul className="mt-3 max-h-[420px] space-y-2 overflow-y-auto">
             {sessions.map((s) => (
               <li key={s.id} className={`${financeNeu.panelInset} rounded-lg px-3 py-2 text-xs`}>
-                <p className="font-medium text-slate-300">{s.mode}</p>
-                <p className="mt-1 line-clamp-2 text-slate-500">{s.message}</p>
-                <p className="mt-1 text-[10px] text-slate-600">
+                <p className="font-medium text-[#5B6472]">{s.mode}</p>
+                <p className="mt-1 line-clamp-2 text-[#5B6472]">{s.message}</p>
+                <p className="mt-1 text-[10px] text-[#5B6472]">
                   {new Date(s.createdAt).toLocaleString(undefined, {
                     dateStyle: "short",
                     timeStyle: "short"

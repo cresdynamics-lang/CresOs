@@ -48,7 +48,7 @@ export function HrPageHero({
             {title}
           </h1>
           {description ? (
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{description}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">{description}</p>
           ) : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
@@ -77,11 +77,11 @@ export function HrKpiCell({
 }) {
   return (
     <div className={hrNeu.kpiCell}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5B6472]">{label}</p>
       <p className={`mt-2 font-display text-2xl font-bold tabular-nums tracking-tight sm:text-3xl ${kpiValueTone[tone]}`}>
         {value}
       </p>
-      {hint ? <p className="mt-1 text-xs text-slate-600">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xs text-[#5B6472]">{hint}</p> : null}
     </div>
   );
 }
@@ -102,7 +102,7 @@ export function HrSection({
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-5 lg:px-8">
         <div>
           <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/85">{label}</h2>
-          {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+          {description ? <p className="mt-1 text-xs text-[#5B6472]">{description}</p> : null}
         </div>
         {action}
       </div>
@@ -115,7 +115,7 @@ export function HrQuickNav({ links }: { links: ReadonlyArray<{ href: string; lab
   return (
     <nav
       aria-label="Quick links"
-      className="flex flex-wrap gap-2 border-b border-white/[0.06] px-5 py-4 lg:px-8"
+      className="flex flex-wrap gap-2 border-b border-[#E5E9EF] px-5 py-4 lg:px-8"
     >
       {links.map((link) => (
         <Link
@@ -146,7 +146,7 @@ export function HrChartZone({
     <div className={`${hrNeu.chartZone} ${className}`.trim()}>
       <div className="mb-4 px-5 lg:px-8">
         <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400/80">{title}</h3>
-        {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-1 text-xs text-[#5B6472]">{subtitle}</p> : null}
       </div>
       <div className="flex min-h-[min(16rem,36vh)] flex-1 flex-col justify-center px-5 pb-6 lg:px-8">{children}</div>
     </div>
@@ -167,10 +167,10 @@ export function HrDataBlock({
 }) {
   return (
     <div className={hrNeu.dataBlock}>
-      <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+      <div className="flex flex-col gap-3 border-b border-[#E5E9EF] px-5 py-4 sm:flex-row sm:items-center sm:justify-between lg:px-8">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
-          {description ? <p className="text-xs text-slate-500">{description}</p> : null}
+          <h2 className="text-sm font-semibold text-[#1A1D26]">{title}</h2>
+          {description ? <p className="text-xs text-[#5B6472]">{description}</p> : null}
         </div>
         {toolbar}
       </div>
@@ -188,9 +188,9 @@ export function HrBanner({
 }) {
   const cls =
     tone === "danger"
-      ? "border-rose-500/30 bg-rose-950/25 text-rose-200"
+      ? "border-rose-500/30 bg-[#FEF2F2] text-[#C62828]"
       : tone === "success"
-        ? "border-emerald-500/30 bg-emerald-950/25 text-emerald-200"
-        : "border-rose-500/20 bg-rose-950/15 text-rose-100";
+        ? "border-emerald-500/30 bg-[#F2F9EF] text-[#1B6B3A]"
+        : "border-rose-500/20 bg-[#FEF2F2] text-[#C62828]";
   return <p className={`border-y px-5 py-3 text-sm lg:px-8 ${cls}`}>{children}</p>;
 }

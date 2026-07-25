@@ -6,7 +6,6 @@ import { devNeu } from "../developer/developer-theme";
 import { salesNeu } from "../sales/sales-theme";
 import { financeNeu } from "../finance/finance-theme";
 import { WorkspaceAside } from "./workspace-aside";
-import { WorkspaceAccountFooter } from "./workspace-account-footer";
 import { workspaceMeta } from "./workspace-nav-content";
 import { FinanceSideNav } from "../../app/finance/finance-nav";
 import { SalesSideNav } from "../../app/sales/sales-workspace-nav";
@@ -14,7 +13,6 @@ import { DeveloperNav, DeveloperSideNav } from "../../app/developer/developer-na
 import { DirectorNav, DirectorSideNav } from "../../app/director/director-nav";
 import { HrNav } from "../../app/hr/hr-nav";
 import { PmNav } from "../../app/pm/pm-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 import { directorNeu } from "../director/director-theme";
 import { hrNeu } from "../hr/hr-theme";
 import { pmNeu } from "../pm/pm-theme";
@@ -25,16 +23,7 @@ type WorkspaceRouteShellProps = {
 };
 
 export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShellProps) {
-  const handleLogout = useWorkspaceLogout();
   const meta = workspaceMeta(workspace);
-  const footer = (
-    <WorkspaceAccountFooter
-      themeKey={meta.themeKey}
-      onLogout={handleLogout}
-      showAccountLink={workspace !== "finance" && workspace !== "developer" && workspace !== "sales" && workspace !== "director" && workspace !== "hr" && workspace !== "pm"}
-      showIdentity={false}
-    />
-  );
 
   const aside = (
     <WorkspaceAside
@@ -42,7 +31,6 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
       subtitle={meta.subtitle}
       themeKey={meta.themeKey}
       className="hidden w-[15rem] md:flex"
-      footer={footer}
     >
       {workspace === "finance" && <FinanceSideNav />}
       {workspace === "sales" && <SalesSideNav />}

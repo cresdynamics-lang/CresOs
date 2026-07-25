@@ -227,7 +227,7 @@ export default function DeveloperReportsPage() {
 
   if (!hydrated) {
     return (
-      <div className={`flex min-h-[12rem] flex-1 items-center justify-center text-sm text-slate-500 ${devNeu.canvas}`}>
+      <div className={`flex min-h-[12rem] flex-1 items-center justify-center text-sm text-[#5B6472] ${devNeu.canvas}`}>
         Loading reports…
       </div>
     );
@@ -289,7 +289,7 @@ export default function DeveloperReportsPage() {
       />
 
       {loadError && (
-        <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
+        <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-[#FEF2F2] px-4 py-3 text-sm text-rose-100">
           {loadError}
         </div>
       )}
@@ -304,7 +304,7 @@ export default function DeveloperReportsPage() {
         {list.length === 0 ? (
           <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-violet-800/40 bg-gradient-to-br from-violet-950/25 via-slate-950/60 to-slate-950 px-6 py-12 text-center">
             <p className="font-display text-xl font-bold tracking-tight text-violet-200/90">No reports yet</p>
-            <p className="mt-2 max-w-sm text-sm text-slate-400">
+            <p className="mt-2 max-w-sm text-sm text-[#5B6472]">
               {isDeveloper
                 ? "Submit your first daily report to keep delivery visible to leadership."
                 : "Reports from your team will appear here."}
@@ -321,7 +321,7 @@ export default function DeveloperReportsPage() {
           </div>
         ) : (
           <CrmDataTable emptyMessage="No reports" isEmpty={false}>
-            <table className="min-w-full text-left text-sm text-slate-200">
+            <table className="min-w-full text-left text-sm text-[#1A1D26]">
               <CrmTableHead>
                 <th className="px-3 py-2.5 font-medium">Date</th>
                 {isDirector && <th className="px-3 py-2.5 font-medium">Submitted by</th>}
@@ -338,59 +338,59 @@ export default function DeveloperReportsPage() {
                   const status = report.reviewStatus ?? "pending";
                   const badgeClass =
                     status === "checked"
-                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-300"
+                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-[#1B6B3A]"
                       : status === "viewed"
-                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-sky-300"
-                        : "rounded bg-amber-500/15 px-2 py-0.5 text-amber-200";
+                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-[#2563EB]"
+                        : "rounded bg-amber-500/15 px-2 py-0.5 text-[#92400E]";
 
                   return (
-                    <tr key={report.id} className="border-b border-slate-800">
-                      <td className="py-2 pr-3 text-slate-200">
-                        <Link href={`/developer-reports/${report.id}`} className="text-violet-300 hover:underline">
+                    <tr key={report.id} className="border-b border-[#E5E9EF]">
+                      <td className="py-2 pr-3 text-[#1A1D26]">
+                        <Link href={`/developer-reports/${report.id}`} className="text-[#6D28D9] hover:underline">
                           {formatNairobiDate(report.reportDate)}
                         </Link>
                       </td>
                       {isDirector && (
-                        <td className="py-2 pr-3 text-xs text-slate-400">
+                        <td className="py-2 pr-3 text-xs text-[#5B6472]">
                           {report.submittedBy ? report.submittedBy.name ?? report.submittedBy.email : "—"}
                         </td>
                       )}
                       {isDirector && (
-                        <td className="max-w-[14rem] py-2 pr-3 text-xs text-slate-400" title={reportPreview(report)}>
+                        <td className="max-w-[14rem] py-2 pr-3 text-xs text-[#5B6472]" title={reportPreview(report)}>
                           {reportPreview(report)}
                         </td>
                       )}
                       <td className="py-2 pr-3 text-xs">
                         <span className={badgeClass}>{status}</span>
                       </td>
-                      <td className="py-2 pr-3 text-xs text-slate-400">
+                      <td className="py-2 pr-3 text-xs text-[#5B6472]">
                         {report.hasAiLeadershipReply ? (
-                          <span className="text-emerald-300">Reviewed</span>
+                          <span className="text-[#1B6B3A]">Reviewed</span>
                         ) : status === "pending" ? (
-                          <span className="text-amber-200">Awaiting</span>
+                          <span className="text-[#92400E]">Awaiting</span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-[#5B6472]">—</span>
                         )}
                       </td>
                       <td className="py-2 pr-3 text-xs">
                         {(report.pendingQuestionsCount ?? 0) > 0 ? (
-                          <span className="rounded bg-amber-500/15 px-2 py-0.5 text-amber-200">
+                          <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[#92400E]">
                             {report.pendingQuestionsCount}
                           </span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-[#5B6472]">—</span>
                         )}
                       </td>
                       {isDirector && (
-                        <td className="py-2 pr-3 text-xs text-slate-400">
+                        <td className="py-2 pr-3 text-xs text-[#5B6472]">
                           {report.hasAiLeadershipReply ? (
-                            <span className="text-emerald-300">Yes</span>
+                            <span className="text-[#1B6B3A]">Yes</span>
                           ) : (
-                            <span className="text-slate-500">—</span>
+                            <span className="text-[#5B6472]">—</span>
                           )}
                         </td>
                       )}
-                      <td className="py-2 pr-3 text-xs text-slate-500">
+                      <td className="py-2 pr-3 text-xs text-[#5B6472]">
                         {formatNairobiDateTime(report.createdAt)}
                       </td>
                       <td className="py-2 text-right">
@@ -408,14 +408,14 @@ export default function DeveloperReportsPage() {
 
       {showForm && isDeveloper && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#F4F7F9] p-4 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
         >
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-violet-500/40 bg-gradient-to-br from-violet-950/60 via-slate-950 to-sky-950/30 shadow-2xl">
-            <div className="border-b border-slate-800/80 px-5 py-4 sm:px-6">
+            <div className="border-b border-[#E5E9EF]/80 px-5 py-4 sm:px-6">
               <h3 className="font-display text-xl font-bold tracking-tight text-violet-200">Submit developer report</h3>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-[#5B6472]">
                 Voice filing walks section by section — start with What worked. At least 60 characters total.
               </p>
             </div>

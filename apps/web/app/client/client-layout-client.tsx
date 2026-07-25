@@ -4,14 +4,11 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
-import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
 import { clientNeu } from "../../components/client/client-theme";
 import { ClientNav, ClientSideNav } from "./client-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 
 export function ClientLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
   const canAccess = auth.roleKeys.includes("client");
 
@@ -41,9 +38,6 @@ export function ClientLayoutClient({ children }: { children: React.ReactNode }) 
         subtitle="Your projects & progress"
         themeKey="client"
         className="hidden w-[15rem] md:flex"
-        footer={
-          <WorkspaceAccountFooter themeKey="client" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />
-        }
       >
         <ClientSideNav />
       </WorkspaceAside>

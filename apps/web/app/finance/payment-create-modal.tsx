@@ -89,14 +89,14 @@ export function PaymentCreateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#F4F7F9] p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-modal-title"
     >
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.06] bg-[#121820] shadow-[8px_8px_24px_rgba(0,0,0,0.65),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
+      <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E5E9EF] bg-white shadow-[8px_8px_24px_rgba(15,23,42,0.06),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E5E9EF] px-4 py-3 sm:px-5">
           <h2 id="payment-modal-title" className="text-lg font-semibold text-emerald-100">
             {mode === "edit" ? "Edit payment" : "Record payment"}
           </h2>
@@ -114,12 +114,12 @@ export function PaymentCreateModal({
 
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-5">
           {submitError && (
-            <p className="mb-3 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-xs text-rose-200">
+            <p className="mb-3 rounded border border-rose-800 bg-[#FEF2F2] px-2 py-1.5 text-xs text-[#C62828]">
               {submitError}
             </p>
           )}
 
-          <p className="mb-3 text-xs leading-relaxed text-slate-500">
+          <p className="mb-3 text-xs leading-relaxed text-[#5B6472]">
             Client defaults from the project. Change client or received-from only when finance needs to override.
             {mode === "create"
               ? " On record, the client is emailed a payment confirmation with project progress."
@@ -128,7 +128,7 @@ export function PaymentCreateModal({
 
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Project</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Project</span>
               <select
                 value={form.projectId}
                 onChange={(e) => {
@@ -159,7 +159,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Client</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Client</span>
               <select
                 value={form.clientId}
                 onChange={(e) => {
@@ -184,7 +184,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Invoice</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Invoice</span>
               <select
                 value={form.invoiceId}
                 onChange={(e) => {
@@ -212,7 +212,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Amount (KES)</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Amount (KES)</span>
               <input
                 type="number"
                 min="0"
@@ -226,7 +226,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received from</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Received from</span>
               <input
                 type="text"
                 placeholder={selectedClient?.name ?? "Client name or payer"}
@@ -241,7 +241,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Settled on account
               </span>
               <input
@@ -255,7 +255,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Transaction reference
               </span>
               <input
@@ -269,7 +269,7 @@ export function PaymentCreateModal({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Transaction time</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Transaction time</span>
               <input
                 type="datetime-local"
                 value={form.receivedAt}
@@ -280,20 +280,20 @@ export function PaymentCreateModal({
             </label>
 
             {selectedInvoice && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#5B6472]">
                 {selectedClient?.name ? (
                   <>
-                    Client <span className="text-slate-300">{selectedClient.name}</span>
+                    Client <span className="text-[#5B6472]">{selectedClient.name}</span>
                     {" · "}
                   </>
                 ) : null}
-                Invoice <span className="text-slate-300">{selectedInvoice.number}</span>
+                Invoice <span className="text-[#5B6472]">{selectedInvoice.number}</span>
                 {selectedInvoice.project ? ` · ${selectedInvoice.project.name}` : ""}
               </p>
             )}
           </div>
 
-          <div className="safe-area-bottom mt-4 flex shrink-0 gap-2 border-t border-white/[0.06] pt-4">
+          <div className="safe-area-bottom mt-4 flex shrink-0 gap-2 border-t border-[#E5E9EF] pt-4">
             <button type="button" onClick={onClose} className={`flex-1 ${financeNeu.btnGhost}`}>
               Cancel
             </button>

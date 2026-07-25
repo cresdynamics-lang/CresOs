@@ -301,7 +301,7 @@ export function EmailAutomationConsole() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className={adminNeu.eyebrow}>Command · Email AI</p>
-            <h1 className="mt-1 font-display text-xl font-bold tracking-tight text-[#111827] sm:text-2xl">
+            <h1 className="mt-1 font-display text-xl font-bold tracking-tight text-[#1A1D26] sm:text-2xl">
               Inbox &amp; automated replies
             </h1>
           </div>
@@ -334,7 +334,7 @@ export function EmailAutomationConsole() {
         </div>
 
         {showConfig ? (
-          <div className="mt-3 rounded-xl border border-[#f0f0f0] bg-[#f5f5f5] p-3">
+          <div className="mt-3 rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] p-3">
             {configLoading ? (
               <p className="text-xs text-slate-500">Loading…</p>
             ) : (
@@ -344,7 +344,7 @@ export function EmailAutomationConsole() {
                     type="checkbox"
                     checked={configEnabled}
                     onChange={(e) => setConfigEnabled(e.target.checked)}
-                    className="rounded border-[#e1dfdd] bg-white"
+                    className="rounded border-[#E5E9EF] bg-white"
                   />
                   Email automation enabled (IMAP fetch + AI drafts · send via Resend)
                 </label>
@@ -353,7 +353,7 @@ export function EmailAutomationConsole() {
                   value={configInstructions}
                   onChange={(e) => setConfigInstructions(e.target.value)}
                   placeholder="Optional custom instructions…"
-                  className="mt-2 w-full rounded-xl border border-[#e1dfdd] bg-white px-3 py-2 text-sm text-slate-700"
+                  className="mt-2 w-full rounded-xl border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-slate-700"
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <button type="button" onClick={() => void saveConfig()} disabled={configSaving} className={adminNeu.btnPrimary}>
@@ -364,7 +364,7 @@ export function EmailAutomationConsole() {
                   </button>
                 </div>
                 {showDefaultCeo ? (
-                  <pre className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-[#f0f0f0] bg-white p-3 text-[11px] text-slate-500">
+                  <pre className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-[#E5E9EF] bg-white p-3 text-[11px] text-slate-500">
                     {ceoDefault}
                   </pre>
                 ) : null}
@@ -379,7 +379,7 @@ export function EmailAutomationConsole() {
         {/* Column 1 — categories */}
         <nav
           aria-label="Email categories"
-          className="flex w-[11.5rem] shrink-0 flex-col overflow-y-auto border-r border-[#e1dfdd] bg-white"
+          className="flex w-[11.5rem] shrink-0 flex-col overflow-y-auto border-r border-[#E5E9EF] bg-white"
         >
           <p className="shrink-0 px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">
             Categories
@@ -409,7 +409,7 @@ export function EmailAutomationConsole() {
               );
             })}
           </div>
-          <div className="mx-3 border-t border-[#f0f0f0]" />
+          <div className="mx-3 border-t border-[#E5E9EF]" />
           <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
             More
           </p>
@@ -437,14 +437,14 @@ export function EmailAutomationConsole() {
         </nav>
 
         {/* Column 2 — email list (own scroll) */}
-        <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r border-[#e1dfdd] bg-[#faf9f8]">
-          <div className="shrink-0 border-b border-[#f0f0f0] p-2.5">
+        <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r border-[#E5E9EF] bg-[#F4F7F9]">
+          <div className="shrink-0 border-b border-[#E5E9EF] p-2.5">
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search mail…"
-              className="w-full rounded-lg border border-[#e1dfdd] bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400"
+              className="w-full rounded-lg border border-[#E5E9EF] bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -460,7 +460,7 @@ export function EmailAutomationConsole() {
                     key={t.id}
                     type="button"
                     onClick={() => void openThread(t.id)}
-                    className={`flex w-full gap-2.5 border-b border-[#f0f0f0] px-2.5 py-2.5 text-left transition-colors hover:bg-brand/5 ${
+                    className={`flex w-full gap-2.5 border-b border-[#E5E9EF] px-2.5 py-2.5 text-left transition-colors hover:bg-brand/5 ${
                       active ? "bg-brand/10 ring-1 ring-inset ring-brand/25" : ""
                     }`}
                   >
@@ -494,7 +494,7 @@ export function EmailAutomationConsole() {
             )}
           </div>
           {total > LIMIT ? (
-            <div className="flex shrink-0 items-center justify-between border-t border-[#f0f0f0] px-2.5 py-1.5 text-[11px] text-slate-500">
+            <div className="flex shrink-0 items-center justify-between border-t border-[#E5E9EF] px-2.5 py-1.5 text-[11px] text-slate-500">
               <button type="button" disabled={offset === 0} onClick={() => void loadThreads(Math.max(0, offset - LIMIT))} className="disabled:opacity-30">
                 ←
               </button>
@@ -509,7 +509,7 @@ export function EmailAutomationConsole() {
         </aside>
 
         {/* Column 3 — body + AI draft in fixed scroll boxes */}
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#faf9f8]">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F4F7F9]">
           {detailLoading ? (
             <p className="py-16 text-center text-sm text-slate-500">Opening message…</p>
           ) : !selected ? (
@@ -570,8 +570,8 @@ export function EmailAutomationConsole() {
               ) : null}
 
               {/* Received body — scrollable box */}
-              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#e1dfdd] bg-white shadow-sm">
-                <header className="shrink-0 border-b border-[#f0f0f0] px-3 py-2">
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E9EF] bg-white shadow-sm">
+                <header className="shrink-0 border-b border-[#E5E9EF] px-3 py-2">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700">Email body</p>
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
@@ -583,7 +583,7 @@ export function EmailAutomationConsole() {
 
               {/* AI draft — scrollable box */}
               <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-brand/25 bg-white shadow-sm">
-                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[#f0f0f0] px-3 py-2">
+                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[#E5E9EF] px-3 py-2">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand">AI draft reply</p>
                   {canAct && !editingDraft && selected.draftReply ? (
                     <button type="button" onClick={() => setEditingDraft(true)} className="text-[11px] font-semibold text-brand hover:underline">
@@ -646,13 +646,13 @@ export function EmailAutomationConsole() {
               </div>
 
               {showRevise ? (
-                <div className="shrink-0 rounded-xl border border-[#f0f0f0] bg-white p-3">
+                <div className="shrink-0 rounded-xl border border-[#E5E9EF] bg-white p-3">
                   <textarea
                     rows={2}
                     value={revisionNotes}
                     onChange={(e) => setRevisionNotes(e.target.value)}
                     placeholder="Revision notes for the AI (optional)…"
-                    className="w-full rounded-lg border border-[#e1dfdd] px-2.5 py-1.5 text-sm text-slate-700"
+                    className="w-full rounded-lg border border-[#E5E9EF] px-2.5 py-1.5 text-sm text-slate-700"
                   />
                   <div className="mt-2 flex gap-2">
                     <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnPrimary}>

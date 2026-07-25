@@ -106,15 +106,15 @@ export function DeveloperReportsView({
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col gap-5 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0 flex-1">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/90">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#6D28D9]/90">
             Developer reports
           </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
             My reports
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
             {directorLabel
               ? `Submit one daily report to ${directorLabel}. Filed entries are read-only — leadership reviews and may ask follow-up questions.`
               : "File one daily report per calendar day. Submitted entries are read-only."}
@@ -125,7 +125,7 @@ export function DeveloperReportsView({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className={`${devNeu.navIdle} rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+            className={`${devNeu.navIdle} rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -136,7 +136,7 @@ export function DeveloperReportsView({
       </header>
 
       {loadError ? (
-        <div className={`${devNeu.alertDanger} px-4 py-3 text-sm text-rose-200 sm:px-5`}>{loadError}</div>
+        <div className={`${devNeu.alertDanger} px-4 py-3 text-sm text-[#C62828] sm:px-5`}>{loadError}</div>
       ) : null}
 
       {aiPollActive ? (
@@ -147,16 +147,16 @@ export function DeveloperReportsView({
 
       {overdue.length > 0 ? (
         <div className={`${devNeu.alertWarning} px-4 py-3 sm:px-5`}>
-          <p className="font-semibold text-amber-200">
+          <p className="font-semibold text-[#92400E]">
             {overdue.length} open question{overdue.length === 1 ? "" : "s"} past the answer deadline
           </p>
-          <ul className="mt-2 space-y-1 text-sm text-slate-300">
+          <ul className="mt-2 space-y-1 text-sm text-[#5B6472]">
             {overdue.slice(0, 5).map((o) => (
               <li key={o.id}>
-                <Link href={`/developer-reports/${o.reportId}`} className="text-amber-300 hover:underline">
+                <Link href={`/developer-reports/${o.reportId}`} className="text-[#B45309] hover:underline">
                   Report {o.reportTitle}
                 </Link>
-                <span className="text-slate-500"> — answer required</span>
+                <span className="text-[#5B6472]"> — answer required</span>
               </li>
             ))}
           </ul>
@@ -188,15 +188,15 @@ export function DeveloperReportsView({
       <section aria-label="Report history" className="w-full flex-1">
         <div className="mb-3 flex items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>My report history</DashboardSectionLabel>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#5B6472]">
             {loading ? "Loading…" : `${reports.length} report${reports.length === 1 ? "" : "s"}`}
           </p>
         </div>
 
         {reports.length === 0 && !loading ? (
           <DevNeuPanel inset className="flex min-h-[14rem] flex-col items-center justify-center gap-3 text-center">
-            <p className="font-display text-lg font-semibold text-slate-200">No reports yet</p>
-            <p className="max-w-sm text-sm text-slate-500">
+            <p className="font-display text-lg font-semibold text-[#1A1D26]">No reports yet</p>
+            <p className="max-w-sm text-sm text-[#5B6472]">
               Submit your first daily report to keep delivery visible to leadership.
             </p>
             <button type="button" onClick={onNewReport} className={devNeu.btnPrimary}>
@@ -210,10 +210,10 @@ export function DeveloperReportsView({
               const badge = reviewBadge(status);
               const badgeClass =
                 badge.tone === "emerald"
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-[#1B6B3A]"
                   : badge.tone === "sky"
-                    ? "border-sky-500/25 bg-sky-500/10 text-sky-300"
-                    : "border-amber-500/25 bg-amber-500/10 text-amber-200";
+                    ? "border-sky-500/25 bg-sky-500/10 text-[#2563EB]"
+                    : "border-amber-500/25 bg-amber-500/10 text-[#92400E]";
               return (
                 <li key={report.id} className={devNeu.panel}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -229,18 +229,18 @@ export function DeveloperReportsView({
                           {badge.label}
                         </span>
                         {report.hasAiLeadershipReply ? (
-                          <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-300">
+                          <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#1B6B3A]">
                             Leadership replied
                           </span>
                         ) : null}
                         {(report.pendingQuestionsCount ?? 0) > 0 ? (
-                          <span className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-200">
+                          <span className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#92400E]">
                             {report.pendingQuestionsCount} open Q
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-400">{reportPreview(report)}</p>
-                      <p className="mt-1 text-[11px] text-slate-600">
+                      <p className="mt-2 text-sm leading-relaxed text-[#5B6472]">{reportPreview(report)}</p>
+                      <p className="mt-1 text-[11px] text-[#5B6472]">
                         Filed {formatNairobiDateTime(report.createdAt)}
                       </p>
                     </div>
@@ -269,7 +269,7 @@ export function DeveloperReportsView({
             <h3 id="dev-report-form-title" className="font-display text-xl font-bold text-violet-200">
               Submit developer report
             </h3>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-[#5B6472]">
               Voice filing walks section by section — start with What worked. At least 60 characters total (
               {totalFormChars}/60).
             </p>

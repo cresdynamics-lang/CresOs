@@ -16,7 +16,7 @@ export default function SalesMessagesPage() {
   }, [hydrated, auth.accessToken, allowed, router]);
 
   if (!hydrated || !auth.accessToken) {
-    return <div className="text-sm text-slate-400">Loading…</div>;
+    return <div className="text-sm text-[#5B6472]">Loading…</div>;
   }
   if (!allowed) return null;
 

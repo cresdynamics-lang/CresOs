@@ -339,10 +339,10 @@ export default function ReportDetailPage() {
                 <span
                   className={
                     report.reviewStatus === "checked"
-                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
+                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-[#1B6B3A]"
                       : report.reviewStatus === "viewed"
-                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300"
-                        : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200"
+                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-[#2563EB]"
+                        : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-[#92400E]"
                   }
                 >
                   {report.reviewStatus ?? "pending"}
@@ -479,7 +479,7 @@ export default function ReportDetailPage() {
 
       {report.status === "draft" && isAuthor && (
         <div className="shell flex flex-wrap items-center gap-4">
-          <p className="text-sm text-slate-400">This report is a draft. Submit it to make it visible to the director.</p>
+          <p className="text-sm text-[#5B6472]">This report is a draft. Submit it to make it visible to the director.</p>
           <button
             type="button"
             disabled={loading}

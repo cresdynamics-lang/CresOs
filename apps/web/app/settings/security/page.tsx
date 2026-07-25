@@ -143,7 +143,7 @@ export default function SecurityPage() {
   if (loading) {
     return (
       <div className="px-4 py-12 sm:px-6 lg:px-8">
-        <p className="text-sm text-slate-500">Loading security settings…</p>
+        <p className="text-sm text-[#5B6472]">Loading security settings…</p>
       </div>
     );
   }
@@ -238,7 +238,7 @@ export default function SecurityPage() {
       </SettingsPanel>
 
       <SettingsPanel className="border-b-0">
-        <p className="max-w-3xl text-sm text-slate-500">
+        <p className="max-w-3xl text-sm text-[#5B6472]">
           Two-factor authentication and remote session management are planned. Password changes take effect immediately.
         </p>
       </SettingsPanel>

@@ -227,7 +227,7 @@ export default function SchedulePage() {
   if (hydrated && !canUseSchedule) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center px-4">
-        <p className="text-center text-sm text-slate-400">Tasks & schedule is not available for your account.</p>
+        <p className="text-center text-sm text-[#5B6472]">Tasks & schedule is not available for your account.</p>
       </section>
     );
   }
@@ -310,8 +310,8 @@ export default function SchedulePage() {
         welcomeChildren={
           <>
             <DashboardSectionLabel roleKeys={roleKeys}>{attention.sectionTitle}</DashboardSectionLabel>
-            <p className="font-body text-sm leading-relaxed text-slate-300">{attention.summary}</p>
-            <ul className="ml-1 mt-3 list-disc space-y-2 pl-4 font-body text-sm text-slate-400 marker:text-violet-500">
+            <p className="font-body text-sm leading-relaxed text-[#5B6472]">{attention.summary}</p>
+            <ul className="ml-1 mt-3 list-disc space-y-2 pl-4 font-body text-sm text-[#5B6472] marker:text-[#2D5A5A]">
               {attention.bullets.map((line) => (
                 <li key={line}>{line}</li>
               ))}
@@ -322,7 +322,7 @@ export default function SchedulePage() {
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-900/40 transition hover:from-sky-500 hover:to-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2D5A5A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#244848] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2D5A5A]/40"
           >
             <span className="text-lg leading-none" aria-hidden>
               +
@@ -333,17 +333,17 @@ export default function SchedulePage() {
       />
 
       {notificationPermission === "denied" && (
-        <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/50 via-slate-950/90 to-slate-950 px-4 py-3 sm:px-5">
-          <p className="text-sm text-amber-100">
-            <span className="font-semibold text-amber-300">Browser notifications are off.</span> Enable them in your
-            browser settings so meeting, call, and report reminders can ring and notify you.
+        <div className="rounded-2xl border border-[#F5D0A9] bg-[#FEF3E8] px-4 py-3 sm:px-5">
+          <p className="text-sm text-[#92400E]">
+            <span className="font-semibold">Browser notifications are off.</span> Enable them in your browser
+            settings so meeting, call, and report reminders can notify you.
           </p>
         </div>
       )}
 
-      <p className="text-xs text-slate-500">
-        All schedule times use <span className="font-medium text-slate-400">Nairobi (EAT)</span>. Now:{" "}
-        <span className="font-medium text-sky-400/90">{nairobiNow}</span>
+      <p className="text-xs text-[#5B6472]">
+        All schedule times use <span className="font-medium text-[#1A1D26]">Nairobi (EAT)</span>. Now:{" "}
+        <span className="font-medium text-[#2D5A5A]">{nairobiNow}</span>
       </p>
 
       <CrmSectionPanel title="Review period" tone="sky" description="Pick the window you want to review and stay accountable.">
@@ -357,12 +357,12 @@ export default function SchedulePage() {
           }))}
         />
         {showOrgToggle && (
-          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-950/20 px-4 py-3 text-sm text-violet-100">
+          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-4 py-3 text-sm text-[#1A1D26]">
             <input
               type="checkbox"
               checked={orgSchedule}
               onChange={(e) => setOrgSchedule(e.target.checked)}
-              className="h-4 w-4 rounded border-violet-600 text-violet-600 focus:ring-violet-500"
+              className="h-4 w-4 rounded border-[#D0D5DD] text-[#2D5A5A] focus:ring-[#2D5A5A]"
             />
             Show entire organization (review and confirm team meetings)
           </label>
@@ -375,7 +375,7 @@ export default function SchedulePage() {
             {data ? (
               <ScheduleKpiStrip stats={data.stats} />
             ) : (
-              <p className="text-sm text-slate-400">Loading stats…</p>
+              <p className="text-sm text-[#5B6472]">Loading stats…</p>
             )}
           </CrmSectionPanel>
 
@@ -392,19 +392,19 @@ export default function SchedulePage() {
         >
           <div className="flex min-h-0 flex-1 flex-col">
             {!data ? (
-              <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/80 bg-slate-950/40 px-6 py-16 text-center">
-                <p className="font-display text-lg font-semibold text-slate-300">Loading your schedule…</p>
+              <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-[#E5E9EF] bg-[#F4F7F9] px-6 py-16 text-center">
+                <p className="font-display text-lg font-semibold text-[#5B6472]">Loading your schedule…</p>
               </div>
             ) : data.items.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-emerald-800/40 bg-gradient-to-br from-emerald-950/20 via-slate-950/60 to-slate-950 px-6 py-16 text-center">
-                <p className="font-display text-xl font-bold tracking-tight text-emerald-200/90">No items in this period</p>
-                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
+              <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-[#E5E9EF] bg-[#F4F7F9] px-6 py-16 text-center">
+                <p className="font-display text-xl font-bold tracking-tight text-[#1A1D26]">No items in this period</p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#5B6472]">
                   Add meetings, calls, reports, or tasks to stay on track.
                 </p>
                 <button
                   type="button"
                   onClick={() => setAddOpen(true)}
-                  className="mt-6 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500"
+                  className="mt-6 rounded-xl bg-[#2D5A5A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#244848]"
                 >
                   Add your first item
                 </button>
@@ -414,63 +414,45 @@ export default function SchedulePage() {
                 {data.items.map((item) => {
                   const meta = typeMeta(item.type);
                   const done = !!item.completedAt;
-                  const toneBorder: Record<StatTone, string> = {
-                    sky: "border-sky-500/35",
-                    emerald: "border-emerald-500/35",
-                    violet: "border-violet-500/35",
-                    amber: "border-amber-500/35",
-                    brand: "border-brand/35",
-                    rose: "border-rose-500/35"
-                  };
-                  const toneBg: Record<StatTone, string> = {
-                    sky: "from-sky-500/8",
-                    emerald: "from-emerald-500/8",
-                    violet: "from-violet-500/8",
-                    amber: "from-amber-500/8",
-                    brand: "from-brand/8",
-                    rose: "from-rose-500/8"
+                  const iconTone: Record<StatTone, string> = {
+                    sky: "bg-[#E8F0F0] text-[#2D5A5A]",
+                    emerald: "bg-[#E8F5EE] text-[#1B6B3A]",
+                    violet: "bg-[#E8F0F0] text-[#2D5A5A]",
+                    amber: "bg-[#FEF3E8] text-[#B45309]",
+                    brand: "bg-[#E8F0F0] text-[#2D5A5A]",
+                    rose: "bg-[#FEF2F2] text-[#C62828]"
                   };
                   return (
                     <li
                       key={item.id}
-                      className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-gradient-to-br via-slate-950/90 to-slate-950 px-4 py-3.5 transition ${toneBorder[meta.tone]} ${toneBg[meta.tone]} ${done ? "opacity-75" : ""}`}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E5E9EF] bg-white px-4 py-3.5 shadow-sm transition ${done ? "opacity-70" : ""}`}
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-3">
                         <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${
-                            meta.tone === "sky"
-                              ? "bg-sky-500/20 text-sky-300"
-                              : meta.tone === "emerald"
-                                ? "bg-emerald-500/20 text-emerald-300"
-                                : meta.tone === "violet"
-                                  ? "bg-violet-500/20 text-violet-300"
-                                  : meta.tone === "amber"
-                                    ? "bg-amber-500/20 text-amber-300"
-                                    : "bg-brand/20 text-brand"
-                          }`}
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${iconTone[meta.tone]}`}
                         >
                           {meta.icon}
                         </span>
                         <div className="min-w-0 flex-1">
                           <p
-                            className={`font-display text-base font-semibold tracking-tight text-slate-100 ${done ? "line-through text-slate-500" : ""}`}
+                            className={`font-display text-base font-semibold tracking-tight text-[#1A1D26] ${done ? "line-through text-[#5B6472]" : ""}`}
                           >
                             {item.title}
                           </p>
                           {item.user && (
-                            <p className="mt-0.5 text-xs text-sky-400/90">{item.user.name ?? item.user.email}</p>
+                            <p className="mt-0.5 text-xs text-[#2D5A5A]">{item.user.name ?? item.user.email}</p>
                           )}
-                          <p className="mt-1 text-xs text-slate-400">
-                            <span className="font-medium text-slate-300">{meta.label}</span>
+                          <p className="mt-1 text-xs text-[#5B6472]">
+                            <span className="font-medium text-[#1A1D26]">{meta.label}</span>
                             {" · "}
                             {formatNairobiDateTime(item.scheduledAt)}
                             {item.reminderMinutesBefore != null && (
-                              <span className="ml-1.5 text-violet-400">
+                              <span className="ml-1.5 text-[#5B6472]">
                                 · Reminder {item.reminderMinutesBefore} min before
                               </span>
                             )}
                           </p>
-                          {item.notes && <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{item.notes}</p>}
+                          {item.notes && <p className="mt-1.5 text-xs leading-relaxed text-[#5B6472]">{item.notes}</p>}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -478,10 +460,10 @@ export default function SchedulePage() {
                           type="button"
                           onClick={() => void toggleDone(item)}
                           disabled={togglingId === item.id}
-                          className={`rounded-xl px-3.5 py-2 text-xs font-semibold shadow-md transition disabled:opacity-50 ${
+                          className={`rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition disabled:opacity-50 ${
                             done
-                              ? "border border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                              : "bg-emerald-600 text-white shadow-emerald-900/30 hover:bg-emerald-500"
+                              ? "border border-[#E5E9EF] bg-[#F4F7F9] text-[#1A1D26] hover:bg-white"
+                              : "bg-[#2D5A5A] text-white hover:bg-[#244848]"
                           }`}
                         >
                           {togglingId === item.id ? "…" : done ? "Undo" : "Mark done"}
@@ -490,7 +472,7 @@ export default function SchedulePage() {
                           <button
                             type="button"
                             onClick={() => void handleDelete(item.id)}
-                            className="rounded-xl border border-rose-600/40 bg-rose-950/40 p-2 text-rose-300 hover:bg-rose-900/50"
+                            className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-2 text-[#C62828] hover:bg-[#FEE2E2]"
                             aria-label="Delete"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,37 +497,37 @@ export default function SchedulePage() {
 
       {addOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[#1A1D26]/40 p-4 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="schedule-add-title"
         >
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-sky-500/40 bg-gradient-to-br from-sky-950/60 via-slate-950 to-violet-950/40 shadow-2xl shadow-sky-900/20">
-            <div className="border-b border-slate-800/80 px-5 py-4 sm:px-6">
-              <h3 id="schedule-add-title" className="font-display text-xl font-bold tracking-tight text-sky-200">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-[#E5E9EF] bg-white shadow-[0_8px_24px_rgba(28,31,46,0.12)]">
+            <div className="border-b border-[#E5E9EF] px-5 py-4 sm:px-6">
+              <h3 id="schedule-add-title" className="font-display text-xl font-bold tracking-tight text-[#1A1D26]">
                 Schedule something
               </h3>
-              <p className="mt-1 text-sm text-slate-400">Meetings, calls, reports, and tasks — with optional reminders.</p>
+              <p className="mt-1 text-sm text-[#5B6472]">Meetings, calls, reports, and tasks — with optional reminders.</p>
             </div>
             <form onSubmit={(e) => void handleAdd(e)} className="flex flex-col gap-4 px-5 py-5 sm:px-6">
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Title *</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-[#5B6472]">Title *</span>
                 <input
                   type="text"
                   value={form.title}
                   onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
                   placeholder="e.g. Call client X, Submit report, Team standup"
-                  className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:border-sky-500/50 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                  className="rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] placeholder:text-[#5B6472]/70 focus:border-[#2D5A5A] focus:outline-none focus:ring-2 focus:ring-[#2D5A5A]/20"
                   required
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Type</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-[#5B6472]">Type</span>
                   <select
                     value={form.type}
                     onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
-                    className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 focus:border-sky-500/50 focus:outline-none"
+                    className="rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] focus:border-[#2D5A5A] focus:outline-none"
                   >
                     {TYPES.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -555,17 +537,17 @@ export default function SchedulePage() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">When (Nairobi)</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-[#5B6472]">When (Nairobi)</span>
                   <input
                     type="datetime-local"
                     value={form.scheduledAt}
                     onChange={(e) => setForm((p) => ({ ...p, scheduledAt: e.target.value }))}
-                    className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 focus:border-sky-500/50 focus:outline-none"
+                    className="rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] focus:border-[#2D5A5A] focus:outline-none"
                   />
                 </label>
               </div>
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Remind me before</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-[#5B6472]">Remind me before</span>
                 <select
                   value={form.reminderMinutesBefore === "" ? "" : form.reminderMinutesBefore}
                   onChange={(e) =>
@@ -574,7 +556,7 @@ export default function SchedulePage() {
                       reminderMinutesBefore: e.target.value === "" ? "" : Number(e.target.value)
                     }))
                   }
-                  className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 focus:border-violet-500/50 focus:outline-none"
+                  className="rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] focus:border-[#2D5A5A] focus:outline-none"
                 >
                   {REMINDER_OPTIONS.map((r) => (
                     <option key={r.value === "" ? "none" : r.value} value={r.value}>
@@ -584,26 +566,26 @@ export default function SchedulePage() {
                 </select>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Notes</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-[#5B6472]">Notes</span>
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
                   rows={3}
-                  className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 focus:border-sky-500/50 focus:outline-none"
+                  className="rounded-xl border border-[#E5E9EF] bg-white px-3 py-2.5 text-[#1A1D26] focus:border-[#2D5A5A] focus:outline-none"
                 />
               </label>
-              <div className="flex flex-wrap gap-2 border-t border-slate-800/80 pt-4">
+              <div className="flex flex-wrap gap-2 border-t border-[#E5E9EF] pt-4">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:from-sky-500 hover:to-violet-500 disabled:opacity-50"
+                  className="rounded-xl bg-[#2D5A5A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#244848] disabled:opacity-50"
                 >
                   {submitting ? "Adding…" : "Add to schedule"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAddOpen(false)}
-                  className="rounded-xl border border-slate-600 bg-slate-900/60 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800"
+                  className="rounded-xl border border-[#E5E9EF] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6472] hover:bg-[#F4F7F9]"
                 >
                   Cancel
                 </button>

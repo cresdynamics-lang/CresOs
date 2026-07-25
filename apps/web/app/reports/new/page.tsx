@@ -82,7 +82,7 @@ export default function NewReportPage() {
   if (!hydrated || !canCreate) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-[#5B6472]">Loading…</p>
       </div>
     );
   }

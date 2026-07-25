@@ -33,17 +33,16 @@ export function AdminAiCommandWidget() {
   }, [apiFetch, message]);
 
   return (
-    <div className={`${adminNeu.panel} p-4 sm:p-5`}>
+    <div className={`${adminNeu.panel} !p-4 sm:!p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">AI Command</p>
-          <h2 className="mt-1 text-base font-semibold text-slate-900">Ask org intelligence</h2>
-          <p className="mt-1 text-xs text-slate-500">Quick questions from the command center — full console for execute.</p>
+          <p className={adminNeu.eyebrow}>AI Command</p>
+          <h2 className="mt-1 font-display text-base font-bold text-[#1A1D26]">Ask org intelligence</h2>
+          <p className="mt-1 font-body text-xs font-medium text-[#5B6472]">
+            Quick questions from the command center — full console for execute.
+          </p>
         </div>
-        <Link
-          href="/admin/ai-command"
-          className="rounded-lg border border-brand/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
-        >
+        <Link href="/admin/ai-command" className={adminNeu.btnGhost}>
           Open AI Command →
         </Link>
       </div>
@@ -54,7 +53,7 @@ export function AdminAiCommandWidget() {
             key={p}
             type="button"
             onClick={() => setMessage(p)}
-            className="rounded-full border border-[#E5E9EF] bg-white px-2.5 py-1 text-[10px] text-slate-600 hover:border-brand/40 hover:text-brand"
+            className="rounded-lg border border-[#E5E9EF] bg-white px-2.5 py-1 font-body text-[10px] font-semibold text-[#5B6472] hover:border-[#2D5A5A]/40 hover:text-[#2D5A5A]"
           >
             {p.slice(0, 48)}…
           </button>
@@ -69,18 +68,15 @@ export function AdminAiCommandWidget() {
           placeholder="e.g. Summarize active projects and risks"
           className={`min-w-0 flex-1 ${adminNeu.input}`}
         />
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => void ask()}
-          className={`shrink-0 ${adminNeu.btnPrimary}`}
-        >
+        <button type="button" disabled={loading} onClick={() => void ask()} className={`shrink-0 ${adminNeu.btnPrimary}`}>
           {loading ? "…" : "Ask"}
         </button>
       </div>
 
       {reply ? (
-        <div className={`${adminNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-600`}>
+        <div
+          className={`${adminNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap font-body text-xs font-medium leading-relaxed text-[#1A1D26]`}
+        >
           {reply}
         </div>
       ) : null}

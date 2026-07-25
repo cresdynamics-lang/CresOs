@@ -60,7 +60,7 @@ function ThemeChoice({
       }`}
     >
       <span className="font-semibold">{mode}</span>
-      <span className="text-[10px] font-normal normal-case text-slate-500">{hint}</span>
+      <span className="text-[10px] font-normal normal-case text-[#5B6472]">{hint}</span>
     </button>
   );
 }
@@ -215,7 +215,7 @@ export default function PreferencesPage() {
   if (loading) {
     return (
       <div className="px-4 py-12 sm:px-6 lg:px-8">
-        <p className="text-sm text-slate-500">Loading preferences…</p>
+        <p className="text-sm text-[#5B6472]">Loading preferences…</p>
       </div>
     );
   }

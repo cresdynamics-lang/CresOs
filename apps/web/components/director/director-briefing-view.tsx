@@ -34,69 +34,69 @@ const SECTION_META: Record<
   { accent: string; border: string; bg: string; icon: string }
 > = {
   glance: {
-    accent: "text-sky-300",
+    accent: "text-[#2563EB]",
     border: "border-sky-500/25",
-    bg: "bg-sky-950/20",
+    bg: "bg-[#F0F6FC]",
     icon: "◎"
   },
   platform: {
-    accent: "text-slate-300",
-    border: "border-white/10",
-    bg: "bg-[#0e1319]",
+    accent: "text-[#5B6472]",
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
     icon: "⚡"
   },
   shipped: {
-    accent: "text-emerald-300",
+    accent: "text-[#1B6B3A]",
     border: "border-emerald-500/25",
-    bg: "bg-emerald-950/15",
+    bg: "bg-[#F2F9EF]",
     icon: "✓"
   },
   progress: {
-    accent: "text-cyan-300",
+    accent: "text-[#0E7490]",
     border: "border-cyan-500/20",
-    bg: "bg-cyan-950/10",
+    bg: "bg-[#ECFAFB]",
     icon: "↻"
   },
   blocked: {
-    accent: "text-amber-300",
+    accent: "text-[#B45309]",
     border: "border-amber-500/25",
-    bg: "bg-amber-950/15",
+    bg: "bg-[#FFF6E5]",
     icon: "⏸"
   },
   sales: {
-    accent: "text-violet-300",
+    accent: "text-[#6D28D9]",
     border: "border-violet-500/25",
-    bg: "bg-violet-950/15",
+    bg: "bg-[#F9F0FB]",
     icon: "◈"
   },
   team: {
-    accent: "text-indigo-300",
+    accent: "text-[#4338CA]",
     border: "border-indigo-500/20",
-    bg: "bg-indigo-950/10",
+    bg: "bg-[#EEF1FB]",
     icon: "◉"
   },
   attention: {
-    accent: "text-rose-300",
+    accent: "text-[#C62828]",
     border: "border-rose-500/30",
-    bg: "bg-rose-950/20",
+    bg: "bg-[#FEF2F2]",
     icon: "!"
   },
   tomorrow: {
-    accent: "text-teal-300",
+    accent: "text-[#2D5A5A]",
     border: "border-teal-500/20",
-    bg: "bg-teal-950/10",
+    bg: "bg-[#E8F0F0]",
     icon: "→"
   },
   end: {
-    accent: "text-slate-500",
-    border: "border-white/5",
+    accent: "text-[#5B6472]",
+    border: "border-[#E5E9EF]",
     bg: "bg-transparent",
     icon: "—"
   },
   default: {
-    accent: "text-slate-300",
-    border: "border-white/8",
-    bg: "bg-[#10161e]",
+    accent: "text-[#5B6472]",
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
     icon: "•"
   }
 };
@@ -267,22 +267,22 @@ export function briefingAtAGlance(body: string, maxLen = 220): string {
 
 function PlatformActionRow({ item }: { item: BriefingItem }) {
   return (
-    <li className="flex gap-3 rounded-lg border border-white/[0.04] bg-[#0b1016] px-3 py-2.5">
-      <span className="shrink-0 font-mono text-[11px] tabular-nums text-sky-400/90">{item.time ?? "—"}</span>
+    <li className="flex gap-3 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2.5">
+      <span className="shrink-0 font-mono text-[11px] tabular-nums text-[#2563EB]/90">{item.time ?? "—"}</span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           {item.source && (
-            <span className="rounded-md bg-slate-800/80 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+            <span className="rounded-md bg-[#F4F7F9] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#5B6472]">
               {item.source}
             </span>
           )}
           {item.type && (
-            <span className="rounded-md bg-sky-950/60 px-1.5 py-0.5 font-mono text-[10px] text-sky-300/90">
+            <span className="rounded-md bg-[#F0F6FC] px-1.5 py-0.5 font-mono text-[10px] text-[#2563EB]/90">
               {item.type}
             </span>
           )}
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-slate-300">{item.summary}</p>
+        <p className="mt-1 text-sm leading-relaxed text-[#5B6472]">{item.summary}</p>
       </div>
     </li>
   );
@@ -291,16 +291,16 @@ function PlatformActionRow({ item }: { item: BriefingItem }) {
 function BulletRow({ item, accent }: { item: BriefingItem; accent: string }) {
   if (item.noReport) {
     return (
-      <li className={`rounded-lg border border-rose-500/30 bg-rose-950/25 px-3 py-2.5 ${directorNeu.alertDanger}`}>
-        <p className="text-sm font-medium text-rose-200">{item.label ?? item.summary}</p>
-        {item.detail && <p className="mt-0.5 text-xs text-rose-300/80">{item.detail}</p>}
+      <li className={`rounded-lg border border-rose-500/30 bg-[#FEF2F2] px-3 py-2.5 ${directorNeu.alertDanger}`}>
+        <p className="text-sm font-medium text-[#C62828]">{item.label ?? item.summary}</p>
+        {item.detail && <p className="mt-0.5 text-xs text-[#C62828]/80">{item.detail}</p>}
       </li>
     );
   }
   return (
     <li
       className={`rounded-lg border px-3 py-2.5 ${
-        item.warning ? directorNeu.alertWarning : "border-white/[0.04] bg-[#0b1016]"
+        item.warning ? directorNeu.alertWarning : "border-[#E5E9EF] bg-white"
       }`}
     >
       <div className="flex gap-2">
@@ -308,11 +308,11 @@ function BulletRow({ item, accent }: { item: BriefingItem; accent: string }) {
         <div className="min-w-0">
           {item.label && item.detail ? (
             <>
-              <p className="text-sm font-medium text-slate-200">{item.label}</p>
-              <p className="mt-0.5 text-sm leading-relaxed text-slate-400">{item.detail}</p>
+              <p className="text-sm font-medium text-[#1A1D26]">{item.label}</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-[#5B6472]">{item.detail}</p>
             </>
           ) : (
-            <p className="text-sm leading-relaxed text-slate-300">{item.summary}</p>
+            <p className="text-sm leading-relaxed text-[#5B6472]">{item.summary}</p>
           )}
         </div>
       </div>
@@ -336,7 +336,7 @@ function BriefingSectionCard({
 
   if (isEnd) {
     return (
-      <p className="pt-2 text-center text-[11px] uppercase tracking-[0.2em] text-slate-600">{section.content || section.title}</p>
+      <p className="pt-2 text-center text-[11px] uppercase tracking-[0.2em] text-[#5B6472]">{section.content || section.title}</p>
     );
   }
 
@@ -349,7 +349,7 @@ function BriefingSectionCard({
       >
         <div className="flex min-w-0 items-center gap-3">
           <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-[#121820] text-sm ${meta.accent}`}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#E5E9EF] bg-white text-sm ${meta.accent}`}
             aria-hidden
           >
             {meta.icon}
@@ -358,15 +358,15 @@ function BriefingSectionCard({
             {section.title}
           </h3>
         </div>
-        <span className="shrink-0 text-xs text-slate-500">{open ? "Hide" : "Show"}</span>
+        <span className="shrink-0 text-xs text-[#5B6472]">{open ? "Hide" : "Show"}</span>
       </button>
 
       {open && (
-        <div className="border-t border-white/[0.04] px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+        <div className="border-t border-[#E5E9EF] px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
           {isGlance && section.content && !section.items.length ? (
-            <p className="text-base leading-relaxed text-slate-200 sm:text-[1.05rem]">{section.content}</p>
+            <p className="text-base leading-relaxed text-[#1A1D26] sm:text-[1.05rem]">{section.content}</p>
           ) : isGlance && section.items.length > 0 ? (
-            <p className="text-base leading-relaxed text-slate-200 sm:text-[1.05rem]">
+            <p className="text-base leading-relaxed text-[#1A1D26] sm:text-[1.05rem]">
               {section.items.map((i) => i.summary).join(" ")}
             </p>
           ) : isPlatform && section.items.length > 0 ? (
@@ -379,7 +379,7 @@ function BriefingSectionCard({
             <div className="grid gap-4 sm:grid-cols-2">
               {section.subsections.map((sub) => (
                 <div key={sub.label}>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{sub.label}</p>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">{sub.label}</p>
                   <ul className="space-y-2">
                     {sub.items.map((item, i) => (
                       <BulletRow key={`${sub.label}-${i}`} item={item} accent={meta.accent} />
@@ -395,7 +395,7 @@ function BriefingSectionCard({
               ))}
             </ul>
           ) : (
-            <p className="text-sm leading-relaxed text-slate-400">{section.content || "No entries for this section."}</p>
+            <p className="text-sm leading-relaxed text-[#5B6472]">{section.content || "No entries for this section."}</p>
           )}
         </div>
       )}
@@ -441,21 +441,21 @@ export function DirectorBriefingDocument({
       <header className={`${directorNeu.panel} border-sky-500/15`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-400/80">Cres Dynamics</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#2563EB]/80">Cres Dynamics</p>
             <h2 className="mt-1 font-display text-xl font-bold tracking-tight text-slate-50 sm:text-2xl">
               {parsed.title}
             </h2>
-            {subject && <p className="mt-1 text-sm text-slate-400">{subject}</p>}
-            <p className="mt-2 text-sm text-slate-500">{parsed.subtitle || dateLabel}</p>
+            {subject && <p className="mt-1 text-sm text-[#5B6472]">{subject}</p>}
+            <p className="mt-2 text-sm text-[#5B6472]">{parsed.subtitle || dateLabel}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {dateLabel && (
-              <span className="rounded-full border border-sky-500/25 bg-sky-950/40 px-3 py-1 text-xs font-medium text-sky-200">
+              <span className="rounded-full border border-sky-500/25 bg-[#F0F6FC] px-3 py-1 text-xs font-medium text-sky-200">
                 {dateLabel}
               </span>
             )}
             {generatedLabel && (
-              <span className="rounded-full border border-white/10 bg-[#0e1319] px-3 py-1 text-xs text-slate-400">
+              <span className="rounded-full border border-[#E5E9EF] bg-white px-3 py-1 text-xs text-[#5B6472]">
                 Generated {generatedLabel}
               </span>
             )}
@@ -481,9 +481,9 @@ export function DirectorBriefingPreview({ body, className = "" }: { body: string
 
   return (
     <div className={className}>
-      <p className="text-sm leading-relaxed text-slate-400">{text}</p>
+      <p className="text-sm leading-relaxed text-[#5B6472]">{text}</p>
       {attentionCount > 0 && (
-        <p className="mt-2 text-xs font-medium text-amber-300/90">
+        <p className="mt-2 text-xs font-medium text-[#B45309]/90">
           {attentionCount} item{attentionCount === 1 ? "" : "s"} need attention
         </p>
       )}

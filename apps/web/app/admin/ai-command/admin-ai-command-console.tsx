@@ -31,7 +31,7 @@ function PromptChips({ prompts, onPick }: { prompts: string[]; onPick: (p: strin
           key={p}
           type="button"
           onClick={() => onPick(p)}
-          className="rounded-full border border-[#d1d1d1] bg-white px-3 py-1.5 text-left text-[11px] font-medium text-[#242424] hover:border-brand/40 hover:bg-brand/5 hover:text-brand"
+          className="rounded-lg border border-[#E5E9EF] bg-white px-3 py-1.5 text-left font-body text-[11px] font-semibold text-[#1A1D26] hover:border-[#2D5A5A]/40 hover:bg-[#E8F0F0] hover:text-[#2D5A5A]"
         >
           {p}
         </button>
@@ -223,17 +223,23 @@ export function AdminAiCommandConsole() {
   const prompts = tab === "execute" ? EXECUTE_PROMPTS : INTELLIGENCE_PROMPTS;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row sm:p-6">
+    <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-row">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <AdminPanel>
-          <p className={adminNeu.eyebrow}>Command · AI</p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#111827]">Admin AI Command</h1>
-          <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#374151]">
-            Create meetings and tasks, or ask deep org intelligence — projects, people, hours vs days, and Cres Dynamics
-            fit.
-          </p>
+        <AdminPanel className="!p-4 sm:!p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className={adminNeu.eyebrow}>Command · AI</p>
+              <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26]">
+                Admin AI Command
+              </h1>
+              <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#5B6472]">
+                Create meetings and tasks, or ask deep org intelligence — projects, people, hours vs days, and Cres
+                Dynamics fit.
+              </p>
+            </div>
+          </div>
 
-          <div className="mt-4 flex gap-2 border-b border-[#e5e7eb] pb-3">
+          <div className="mt-4 flex flex-wrap gap-2 border-b border-[#E5E9EF] pb-3">
             {isAdmin ? (
               <button
                 type="button"
@@ -267,11 +273,11 @@ export function AdminAiCommandConsole() {
                   key={f.id}
                   type="button"
                   onClick={() => setFocus(f.id)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                  className={
                     focus === f.id
-                      ? "border border-brand/35 bg-brand-light text-brand"
-                      : "border border-[#d1d1d1] text-[#424242] hover:border-brand/40 hover:text-brand"
-                  }`}
+                      ? "rounded-lg border border-[#2D5A5A] bg-[#2D5A5A] px-2.5 py-1 font-label text-[10px] font-bold text-white"
+                      : "rounded-lg border border-[#E5E9EF] bg-white px-2.5 py-1 font-label text-[10px] font-bold text-[#5B6472] hover:bg-[#F4F7F9] hover:text-[#2D5A5A]"
+                  }
                 >
                   {f.label}
                 </button>
@@ -300,34 +306,42 @@ export function AdminAiCommandConsole() {
             />
           </div>
 
-          {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+          {error ? (
+            <p className={`${adminNeu.alertDanger} mt-3 px-3 py-2 font-body text-sm font-semibold text-[#C62828]`}>
+              {error}
+            </p>
+          ) : null}
         </AdminPanel>
 
         {result ? (
-          <AdminPanel>
+          <AdminPanel className="!p-4 sm:!p-5">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                {result.aiGenerated ? "AI response" : "Fallback"}
-              </span>
+              <span className={adminNeu.badgeAccent}>{result.aiGenerated ? "AI response" : "Fallback"}</span>
               {result.transcript ? (
-                <span className="text-[11px] text-slate-500">Transcript: {result.transcript.slice(0, 120)}…</span>
+                <span className="font-body text-[11px] font-medium text-[#5B6472]">
+                  Transcript: {result.transcript.slice(0, 120)}…
+                </span>
               ) : null}
             </div>
 
             {tab === "execute" ? (
               <div className="space-y-4">
-                <p className="whitespace-pre-wrap text-sm text-slate-600">{result.reply}</p>
+                <p className="whitespace-pre-wrap font-body text-sm font-medium leading-relaxed text-[#1A1D26]">
+                  {result.reply}
+                </p>
                 {executeMessage ? (
                   <div className="space-y-2">
                     <p
-                      className={`text-sm ${executeMessage.includes("failed") ? "text-amber-300" : "text-emerald-300"}`}
+                      className={`font-body text-sm font-semibold ${
+                        executeMessage.includes("failed") ? "text-[#9A6B12]" : "text-[#2E7D4F]"
+                      }`}
                     >
                       {executeMessage}
                     </p>
                     {executeMessage.includes("created") && !executeMessage.includes("failed") ? (
                       <Link
                         href="/schedule?period=week"
-                        className="inline-block text-xs font-medium text-brand hover:text-brand"
+                        className="inline-block font-label text-xs font-bold text-[#2D5A5A] hover:underline"
                       >
                         View on Schedule (Today / This week) →
                       </Link>
@@ -351,20 +365,20 @@ export function AdminAiCommandConsole() {
       </div>
 
       <aside className="w-full shrink-0 lg:w-72">
-        <AdminPanel>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Recent sessions</p>
+        <AdminPanel className="!p-4">
+          <p className={adminNeu.eyebrow}>Recent sessions</p>
           <ul className="mt-3 max-h-[420px] space-y-2 overflow-y-auto">
             {sessions.length === 0 ? (
-              <li className="text-xs text-slate-500">No sessions yet</li>
+              <li className="font-body text-xs font-medium text-[#5B6472]">No sessions yet</li>
             ) : (
               sessions.map((s) => (
-                <li key={s.id} className={`${adminNeu.listRow} px-2 py-2`}>
-                  <p className="text-[10px] uppercase text-slate-500">
+                <li key={s.id} className={`${adminNeu.listRow} px-2.5 py-2`}>
+                  <p className="font-label text-[10px] font-bold uppercase tracking-[0.08em] text-[#5B6472]">
                     {s.mode}
                     {s.focus ? ` · ${s.focus}` : ""}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">{s.message}</p>
-                  <p className="mt-1 text-[10px] text-slate-600">
+                  <p className="mt-0.5 line-clamp-2 font-body text-xs font-semibold text-[#1A1D26]">{s.message}</p>
+                  <p className="mt-1 font-body text-[10px] font-medium text-[#8B93A1]">
                     {new Date(s.createdAt).toLocaleString()}
                   </p>
                 </li>

@@ -4,15 +4,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
-import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
 import { directorNeu } from "../../components/director/director-theme";
 import { DirectorNav, DirectorSideNav } from "./director-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 import { isDirectorOnly } from "../../lib/is-director-only";
 
 export function DirectorLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
   const canAccess = isDirectorOnly(auth.roleKeys);
 
@@ -42,9 +39,6 @@ export function DirectorLayoutClient({ children }: { children: React.ReactNode }
         subtitle="Command · pipeline · delivery"
         themeKey="director"
         className="hidden w-[15rem] md:flex"
-        footer={
-          <WorkspaceAccountFooter themeKey="director" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />
-        }
       >
         <DirectorSideNav />
       </WorkspaceAside>

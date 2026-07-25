@@ -16,6 +16,7 @@ export const devNeu = {
     "w-full rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2.5 text-sm text-[#5B6472]",
   btnPrimary: lightSurface.btnPrimary,
   btnGhost: lightSurface.btnGhost,
+  statBrand: lightSurface.statBrand,
   statViolet: lightSurface.statViolet,
   statEmerald: lightSurface.statEmerald,
   statRose: lightSurface.statRose,

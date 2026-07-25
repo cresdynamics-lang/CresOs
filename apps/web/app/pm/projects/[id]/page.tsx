@@ -144,7 +144,7 @@ export default function PmProjectDetailPage() {
 
   if (!canAccess) return null;
   if (!project) {
-    return <p className="px-5 py-8 text-sm text-slate-500">Loading project…</p>;
+    return <p className="px-5 py-8 text-sm text-[#5B6472]">Loading project…</p>;
   }
 
   const devs = project.developerAssignments?.map((a) => a.user) ?? [];
@@ -181,8 +181,8 @@ export default function PmProjectDetailPage() {
       />
 
       {sprintSuggestion ? (
-        <div className={`${pmNeu.panelInset} mx-5 mb-4 whitespace-pre-wrap text-sm text-slate-300 lg:mx-8`}>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-teal-400">AI agile recovery plan</p>
+        <div className={`${pmNeu.panelInset} mx-5 mb-4 whitespace-pre-wrap text-sm text-[#5B6472] lg:mx-8`}>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#2D5A5A]">AI agile recovery plan</p>
           {sprintSuggestion}
         </div>
       ) : null}
@@ -199,15 +199,15 @@ export default function PmProjectDetailPage() {
 
       <PmSection label="Success criteria">
         <textarea
-          className="w-full rounded-xl border border-white/[0.06] bg-[#0e1319] p-3 text-sm text-slate-200"
+          className="w-full rounded-xl border border-[#E5E9EF] bg-white p-3 text-sm text-[#1A1D26]"
           rows={3}
           value={successCriteria}
           onChange={(e) => setSuccessCriteria(e.target.value)}
           placeholder="What does done look like for this project?"
         />
-        <label className="mt-3 block text-xs text-slate-500">Agile sprint notes (delays, blockers, retro)</label>
+        <label className="mt-3 block text-xs text-[#5B6472]">Agile sprint notes (delays, blockers, retro)</label>
         <textarea
-          className="mt-1 w-full rounded-xl border border-white/[0.06] bg-[#0e1319] p-3 text-sm text-slate-200"
+          className="mt-1 w-full rounded-xl border border-[#E5E9EF] bg-white p-3 text-sm text-[#1A1D26]"
           rows={3}
           value={sprintNotes}
           onChange={(e) => setSprintNotes(e.target.value)}
@@ -218,14 +218,14 @@ export default function PmProjectDetailPage() {
       <PmSection label="Milestones" description="Mark delayed items and move status as delivery evolves.">
         <div className="mb-4 flex flex-wrap gap-2">
           <input
-            className="min-w-[12rem] flex-1 rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="min-w-[12rem] flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             placeholder="Milestone name"
             value={milestoneName}
             onChange={(e) => setMilestoneName(e.target.value)}
           />
           <input
             type="date"
-            className="rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             value={milestoneDue}
             onChange={(e) => setMilestoneDue(e.target.value)}
           />
@@ -239,16 +239,16 @@ export default function PmProjectDetailPage() {
           return (
             <div key={m.id} className={`${pmNeu.listRow} flex flex-wrap items-center justify-between gap-2`}>
               <div>
-                <p className="text-sm text-slate-100">
+                <p className="text-sm text-[#1A1D26]">
                   {m.name}
-                  {overdue ? <span className="ml-2 text-xs text-amber-400">overdue</span> : null}
+                  {overdue ? <span className="ml-2 text-xs text-[#B45309]">overdue</span> : null}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#5B6472]">
                   Due {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : "—"} · {m.status}
                 </p>
               </div>
               <select
-                className="rounded-lg border border-white/[0.06] bg-[#0e1319] px-2 py-1 text-xs"
+                className="rounded-lg border border-[#E5E9EF] bg-white px-2 py-1 text-xs"
                 value={m.status}
                 onChange={(e) => void updateMilestoneStatus(m.id, e.target.value)}
               >
@@ -265,13 +265,13 @@ export default function PmProjectDetailPage() {
       <PmSection label="Tasks" description="Assigned tasks appear on the developer schedule automatically.">
         <div className="mb-4 flex flex-wrap gap-2">
           <input
-            className="min-w-[12rem] flex-1 rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="min-w-[12rem] flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             placeholder="Task title"
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
           />
           <select
-            className="rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm"
+            className="rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm"
             value={taskAssignee}
             onChange={(e) => setTaskAssignee(e.target.value)}
           >
@@ -289,8 +289,8 @@ export default function PmProjectDetailPage() {
         {(project.tasks ?? []).map((t) => (
           <div key={t.id} className={`${pmNeu.listRow} flex justify-between gap-2`}>
             <div>
-              <p className="text-sm text-slate-100">{t.title}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-[#1A1D26]">{t.title}</p>
+              <p className="text-xs text-[#5B6472]">
                 {t.assignee?.name ?? "Unassigned"} · {t.status}
               </p>
             </div>
@@ -300,12 +300,12 @@ export default function PmProjectDetailPage() {
 
       <PmSection label="Team on project">
         {devs.length === 0 ? (
-          <p className="text-sm text-slate-500">No accepted developers yet.</p>
+          <p className="text-sm text-[#5B6472]">No accepted developers yet.</p>
         ) : (
           <ul className="space-y-2">
             {devs.map((d) => (
-              <li key={d.id} className="text-sm text-slate-300">
-                {d.name} <span className="text-slate-600">({d.email})</span>
+              <li key={d.id} className="text-sm text-[#5B6472]">
+                {d.name} <span className="text-[#5B6472]">({d.email})</span>
               </li>
             ))}
           </ul>

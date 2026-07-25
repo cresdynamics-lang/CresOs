@@ -114,22 +114,22 @@ export function AssistantInputPanel({
   };
 
   const textareaCls = light
-    ? "w-full resize-y rounded-xl border border-[#E5E9EF] bg-white px-3 py-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 shadow-sm disabled:opacity-60"
-    : "w-full resize-y rounded-xl border border-white/[0.08] bg-[#0e1319] px-3 py-3 text-sm leading-relaxed text-slate-200 placeholder:text-slate-600 disabled:opacity-60";
+    ? "w-full resize-y rounded-xl border border-[#E5E9EF] bg-white px-3 py-3 font-body text-sm font-medium leading-relaxed text-[#1A1D26] placeholder:text-[#8B93A1] shadow-sm focus:border-[#2D5A5A] focus:outline-none focus:ring-2 focus:ring-[#2D5A5A]/20 disabled:opacity-60"
+    : "w-full resize-y rounded-xl border border-[#E5E9EF] bg-white px-3 py-3 text-sm leading-relaxed text-[#1A1D26] placeholder:text-[#5B6472] disabled:opacity-60";
   const primaryBtn = light
-    ? "rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
+    ? "rounded-xl bg-[#2D5A5A] px-4 py-2 font-label text-sm font-semibold text-white shadow-sm hover:bg-[#244848] disabled:opacity-50"
     : "rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
   const ghostBtn = light
-    ? "border-[#E5E9EF] bg-white text-slate-700 hover:border-brand/40 hover:text-brand"
-    : "border-white/[0.08] bg-[#121820] text-slate-200";
+    ? "border-[#E5E9EF] bg-white text-[#1A1D26] hover:border-[#2D5A5A]/40 hover:text-[#2D5A5A]"
+    : "border-[#E5E9EF] bg-white text-[#1A1D26]";
   const recBtn = recording
     ? light
-      ? "border-rose-300 bg-rose-50 text-rose-700"
-      : "border-rose-500/40 bg-rose-500/10 text-rose-200"
+      ? "border-[#F5B5B5] bg-[#FEF2F2] text-[#C62828]"
+      : "border-rose-500/40 bg-rose-500/10 text-[#C62828]"
     : ghostBtn;
   const micAlert = light
-    ? "rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
-    : "rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200";
+    ? "rounded-lg border border-[#F8B042]/40 bg-[#FFF6E5] px-3 py-2 font-body text-xs font-medium text-[#9A6B12]"
+    : "rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-[#92400E]";
 
   return (
     <div className="space-y-3">
@@ -178,7 +178,7 @@ export function AssistantInputPanel({
             </button>
           </>
         ) : null}
-        <span className="text-[11px] text-slate-500">⌘/Ctrl + Enter to send</span>
+        <span className="text-[11px] text-[#5B6472]">⌘/Ctrl + Enter to send</span>
       </div>
       {micError ? <p className={micAlert}>{micError}</p> : null}
     </div>

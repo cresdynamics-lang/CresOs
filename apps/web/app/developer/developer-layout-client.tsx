@@ -4,15 +4,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
-import { WorkspaceAccountFooter } from "../../components/workspace/workspace-account-footer";
 import { devNeu } from "../../components/developer/developer-theme";
 import { DeveloperNav, DeveloperSideNav } from "./developer-nav";
-import { useWorkspaceLogout } from "../../lib/use-workspace-logout";
 import { canAccessDeveloperWorkspace } from "../../lib/developer-workspace-access";
 
 export function DeveloperLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const handleLogout = useWorkspaceLogout();
   const { auth, hydrated } = useAuth();
   const canAccess = canAccessDeveloperWorkspace(auth.roleKeys);
 
@@ -50,7 +47,6 @@ export function DeveloperLayoutClient({ children }: { children: React.ReactNode 
         subtitle="Tasks · reports · delivery"
         themeKey="developer"
         className="hidden w-[15rem] md:flex"
-        footer={<WorkspaceAccountFooter themeKey="developer" onLogout={handleLogout} showAccountLink={false} showIdentity={false} />}
       >
         <DeveloperSideNav />
       </WorkspaceAside>

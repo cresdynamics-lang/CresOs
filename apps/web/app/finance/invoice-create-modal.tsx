@@ -81,16 +81,16 @@ export function InvoiceCreateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#F4F7F9] p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="invoice-modal-title"
     >
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div
-        className={`finance-neu relative z-10 flex max-h-[min(92dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.06] bg-[#121820] shadow-[8px_8px_24px_rgba(0,0,0,0.65),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl`}
+        className={`finance-neu relative z-10 flex max-h-[min(92dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E5E9EF] bg-white shadow-[8px_8px_24px_rgba(15,23,42,0.06),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl`}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E5E9EF] px-4 py-3 sm:px-5">
           <h2 id="invoice-modal-title" className="text-lg font-semibold text-emerald-100">
             New invoice
           </h2>
@@ -108,13 +108,13 @@ export function InvoiceCreateModal({
 
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-5">
           {submitError && (
-            <p className="mb-3 rounded border border-rose-800 bg-rose-950/40 px-2 py-1.5 text-xs text-rose-200">
+            <p className="mb-3 rounded border border-rose-800 bg-[#FEF2F2] px-2 py-1.5 text-xs text-[#C62828]">
               {submitError}
             </p>
           )}
           <div className="flex flex-col gap-3">
             <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Client
               </span>
               <select
@@ -142,7 +142,7 @@ export function InvoiceCreateModal({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
                 Project
               </span>
               <select
@@ -177,25 +177,25 @@ export function InvoiceCreateModal({
               </select>
             </label>
             {selectedProject ? (
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/20 px-3 py-2 text-xs text-slate-300">
+              <div className="rounded-lg border border-emerald-500/20 bg-[#F2F9EF] px-3 py-2 text-xs text-[#5B6472]">
                 {selectedProject.price != null ? (
                   <p>
-                    Contract: <span className="text-emerald-300">{formatMoney(selectedProject.price)}</span>
+                    Contract: <span className="text-[#1B6B3A]">{formatMoney(selectedProject.price)}</span>
                     {" · "}
                     Received:{" "}
-                    <span className="text-emerald-300">
+                    <span className="text-[#1B6B3A]">
                       {formatMoney(selectedProject.amountReceived ?? 0)}
                     </span>
                   </p>
                 ) : (
                   <p>No contract value set — update allocated amount in Projects finance.</p>
                 )}
-                <p className="mt-1 text-slate-500">
+                <p className="mt-1 text-[#5B6472]">
                   Invoice number uses project format (e.g. 001/01/26) when the project has finance ref.
                 </p>
               </div>
             ) : (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#5B6472]">
                 Link every client invoice to a project so confirmed payments update received amounts.
               </p>
             )}
@@ -216,7 +216,7 @@ export function InvoiceCreateModal({
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Line items</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Line items</p>
               {form.lines.map((line, idx) => (
                 <div key={line.id} className="grid grid-cols-12 gap-2">
                   <input
@@ -269,8 +269,8 @@ export function InvoiceCreateModal({
             </div>
 
             {lineTotal > 0 ? (
-              <p className="text-sm text-slate-300">
-                Invoice total: <span className="font-semibold text-emerald-300">{formatMoney(lineTotal)}</span>
+              <p className="text-sm text-[#5B6472]">
+                Invoice total: <span className="font-semibold text-[#1B6B3A]">{formatMoney(lineTotal)}</span>
               </p>
             ) : null}
 
@@ -283,7 +283,7 @@ export function InvoiceCreateModal({
             />
           </div>
 
-          <div className="mt-4 flex shrink-0 gap-2 border-t border-white/[0.06] pt-4">
+          <div className="mt-4 flex shrink-0 gap-2 border-t border-[#E5E9EF] pt-4">
             <button type="submit" className={`flex-1 ${financeNeu.btnPrimary}`}>
               Create & download PDF
             </button>

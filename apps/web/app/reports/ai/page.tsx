@@ -82,14 +82,14 @@ export default function AiReportsPage() {
 
       {!loadedOnce && (
         <div className={directorNeu.panel}>
-          <p className="text-sm text-slate-400">Loading briefings…</p>
+          <p className="text-sm text-[#5B6472]">Loading briefings…</p>
         </div>
       )}
 
       {loadedOnce && reports.length === 0 && (
         <div className={`${directorNeu.panel} text-center`}>
-          <p className="font-medium text-slate-200">No briefings yet</p>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="font-medium text-[#1A1D26]">No briefings yet</p>
+          <p className="mt-2 text-sm text-[#5B6472]">
             The first director briefing appears after the scheduled daily run (around 7pm org time).
           </p>
         </div>
@@ -98,9 +98,9 @@ export default function AiReportsPage() {
       {loadedOnce && reports.length > 0 && (
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(15rem,18rem)_1fr] lg:gap-5">
           <aside className={`flex min-h-0 flex-col ${directorNeu.panel} !p-0`}>
-            <div className="border-b border-white/[0.06] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Archive</p>
-              <p className="mt-0.5 text-sm text-slate-300">{reports.length} briefing{reports.length === 1 ? "" : "s"}</p>
+            <div className="border-b border-[#E5E9EF] px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Archive</p>
+              <p className="mt-0.5 text-sm text-[#5B6472]">{reports.length} briefing{reports.length === 1 ? "" : "s"}</p>
             </div>
             <ul className="min-h-0 flex-1 overflow-y-auto p-2" role="listbox" aria-label="Briefing dates">
               {reports.map((r) => {
@@ -119,9 +119,9 @@ export default function AiReportsPage() {
                           : `${directorNeu.listRow} hover:border-sky-500/15`
                       }`}
                     >
-                      <p className="text-xs font-medium text-sky-300/90">{formatDateKey(r.dateKey)}</p>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-400">{preview}</p>
-                      <p className="mt-1.5 text-[10px] text-slate-600">
+                      <p className="text-xs font-medium text-[#2563EB]/90">{formatDateKey(r.dateKey)}</p>
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-[#5B6472]">{preview}</p>
+                      <p className="mt-1.5 text-[10px] text-[#5B6472]">
                         {new Date(r.createdAt).toLocaleString(undefined, {
                           month: "short",
                           day: "numeric",

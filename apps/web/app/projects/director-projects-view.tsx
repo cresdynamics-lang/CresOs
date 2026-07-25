@@ -83,7 +83,7 @@ export function DirectorProjectsView({
               className={
                 active
                   ? "rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-200"
-                  : "rounded-lg border border-white/[0.06] bg-[#0e1319] px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+                  : "rounded-lg border border-[#E5E9EF] bg-white px-3 py-1.5 text-xs font-medium text-[#5B6472] hover:text-[#1A1D26]"
               }
             >
               {opt.label}
@@ -118,14 +118,14 @@ export function DirectorProjectsView({
         description="Finance ref, client, team assignment, delivery status, and approval."
       >
         {loading ? (
-          <p className="py-8 text-sm text-slate-500">Loading…</p>
+          <p className="py-8 text-sm text-[#5B6472]">Loading…</p>
         ) : projects.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-500">{emptyMessage}</p>
+          <p className="py-10 text-center text-sm text-[#5B6472]">{emptyMessage}</p>
         ) : (
           <div className="-mx-5 overflow-x-auto lg:-mx-8">
-            <table className="min-w-[64rem] w-full text-left text-sm text-slate-200">
+            <table className="min-w-[64rem] w-full text-left text-sm text-[#1A1D26]">
               <thead>
-                <tr className="border-b border-white/[0.06] bg-[#0e1319]/90 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <tr className="border-b border-[#E5E9EF] bg-white/90 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5B6472]">
                   <th className="px-5 py-2.5 font-medium lg:px-8">Project</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">Finance ref</th>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium">Type</th>
@@ -151,35 +151,35 @@ export function DirectorProjectsView({
                       : "—";
                   return (
                     <tr key={project.id} className="align-top transition-colors hover:bg-sky-500/[0.04]">
-                      <td className="max-w-[14rem] px-5 py-3 font-medium text-slate-100 lg:px-8">
+                      <td className="max-w-[14rem] px-5 py-3 font-medium text-[#1A1D26] lg:px-8">
                         <Link
                           href={`/projects/${project.id}`}
-                          className="line-clamp-2 font-medium text-sky-300 hover:text-sky-200 hover:underline"
+                          className="line-clamp-2 font-medium text-[#2563EB] hover:text-sky-200 hover:underline"
                         >
                           {project.name}
                         </Link>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-slate-400">{financeRef}</td>
+                      <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-[#5B6472]">{financeRef}</td>
                       <td className="whitespace-nowrap px-3 py-3">
                         {project.type === "demo" ? (
-                          <span className="rounded-full border border-violet-500/25 bg-violet-950/30 px-2 py-0.5 text-xs text-violet-300">
+                          <span className="rounded-full border border-violet-500/25 bg-[#F9F0FB] px-2 py-0.5 text-xs text-[#6D28D9]">
                             Demo
                           </span>
                         ) : project.type === "project" ? (
-                          <span className="rounded-full border border-sky-500/25 bg-sky-950/30 px-2 py-0.5 text-xs text-sky-300">
+                          <span className="rounded-full border border-sky-500/25 bg-[#F0F6FC] px-2 py-0.5 text-xs text-[#2563EB]">
                             Project
                           </span>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="max-w-[10rem] px-3 py-3 text-slate-400">
+                      <td className="max-w-[10rem] px-3 py-3 text-[#5B6472]">
                         <span className="line-clamp-2">{project.clientOrOwnerName ?? "—"}</span>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-right text-slate-200">
+                      <td className="whitespace-nowrap px-3 py-3 text-right text-[#1A1D26]">
                         {project.price != null && project.price > 0 ? formatMoney(Number(project.price)) : "—"}
                       </td>
-                      <td className="max-w-[12rem] px-3 py-3 text-xs text-slate-500">
+                      <td className="max-w-[12rem] px-3 py-3 text-xs text-[#5B6472]">
                         {project.developerAssignments && project.developerAssignments.length > 0 ? (
                           <span
                             className="line-clamp-2"
@@ -195,30 +195,30 @@ export function DirectorProjectsView({
                           "—"
                         )}
                       </td>
-                      <td className="max-w-[12rem] px-3 py-3 text-xs text-slate-500">
+                      <td className="max-w-[12rem] px-3 py-3 text-xs text-[#5B6472]">
                         <span className="line-clamp-2" title={deliveryShort}>
                           {deliveryShort}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
                         {project.approvalStatus === "pending_approval" && (
-                          <span className="rounded-full border border-amber-500/30 bg-amber-950/40 px-2 py-0.5 text-xs text-amber-200">
+                          <span className="rounded-full border border-amber-500/30 bg-[#FFF6E5] px-2 py-0.5 text-xs text-[#92400E]">
                             Pending
                           </span>
                         )}
                         {project.approvalStatus === "approved" && (
-                          <span className="rounded-full border border-emerald-500/25 bg-emerald-950/30 px-2 py-0.5 text-xs text-emerald-300">
+                          <span className="rounded-full border border-emerald-500/25 bg-[#F2F9EF] px-2 py-0.5 text-xs text-[#1B6B3A]">
                             Approved
                           </span>
                         )}
                         {project.approvalStatus &&
                           !["pending_approval", "approved"].includes(project.approvalStatus) && (
-                            <span className="text-xs capitalize text-slate-400">{project.approvalStatus}</span>
+                            <span className="text-xs capitalize text-[#5B6472]">{project.approvalStatus}</span>
                           )}
-                        {!project.approvalStatus && <span className="text-slate-600">—</span>}
+                        {!project.approvalStatus && <span className="text-[#5B6472]">—</span>}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 capitalize text-slate-300">
-                        <span className="rounded-full border border-white/[0.08] bg-[#0e1319] px-2 py-0.5 text-xs">
+                      <td className="whitespace-nowrap px-3 py-3 capitalize text-[#5B6472]">
+                        <span className="rounded-full border border-[#E5E9EF] bg-white px-2 py-0.5 text-xs">
                           {project.status}
                         </span>
                       </td>
@@ -254,7 +254,7 @@ export function DirectorProjectsView({
                               type="button"
                               onClick={() => onGenerateClientMessage(project)}
                               disabled={generatingId === project.id}
-                              className="shrink-0 rounded-lg border border-white/[0.08] bg-[#121820] px-2 py-1 text-xs text-slate-200 hover:text-white disabled:opacity-50"
+                              className="shrink-0 rounded-lg border border-[#E5E9EF] bg-white px-2 py-1 text-xs text-[#1A1D26] hover:text-white disabled:opacity-50"
                             >
                               {generatingId === project.id ? "…" : "Client msg"}
                             </button>
@@ -272,13 +272,13 @@ export function DirectorProjectsView({
 
       {clientMessage && (
         <DirectorSection label={`Client message — ${clientMessage.projectName}`}>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{clientMessage.message}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1A1D26]">{clientMessage.message}</p>
           {clientMessage.link && (
             <a
               href={clientMessage.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 inline-block text-sm text-sky-400 hover:underline"
+              className="mt-2 inline-block text-sm text-[#2563EB] hover:underline"
             >
               View status: {clientMessage.link}
             </a>

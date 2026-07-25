@@ -218,15 +218,15 @@ export function SalesOverviewDashboard({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-400/90">
+          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#B45309]/90">
             Sales
           </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
             {welcomeHeadline}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
             Your pipeline queue and charts — use the sidebar to jump between CRM, reports, invoices, and tasks.
           </p>
         </div>
@@ -234,7 +234,7 @@ export function SalesOverviewDashboard({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${salesNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50`}
+          className={`${salesNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
@@ -295,7 +295,7 @@ export function SalesOverviewDashboard({
             </Link>
           </SalesStatRow>
           {isSalesRep ? (
-            <SalesStatRow className="mt-6 border-t border-white/[0.06] pt-6">
+            <SalesStatRow className="mt-6 border-t border-[#E5E9EF] pt-6">
               <SalesStatInline
                 label="Report streak"
                 value={loading ? "…" : (queue?.reportStreakDays ?? 0)}
@@ -358,7 +358,7 @@ export function SalesOverviewDashboard({
         </WorkspaceDashboardSection>
       )}
 
-      <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-white/[0.06] pb-5">
+      <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
@@ -374,7 +374,7 @@ export function SalesOverviewDashboard({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
           {scheduleKpis ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#5B6472]">
               Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending · {scheduleKpis.total}{" "}
               total
             </p>
@@ -413,7 +413,7 @@ export function SalesOverviewDashboard({
             {taskBars.length > 0 ? (
               <VerticalBarChart items={taskBars} />
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#5B6472]">
                 {loading ? "Loading schedule…" : "No tasks scheduled this week — open Tasks to plan your week"}
               </p>
             )}
@@ -423,8 +423,8 @@ export function SalesOverviewDashboard({
 
       {isSalesRep && (
         <section aria-label="Work history" className={`w-full ${salesNeu.panelInset}`}>
-          <h3 className="text-sm font-semibold text-slate-200">Your work history (read-only)</h3>
-          <p className="mt-2 text-sm text-slate-400">
+          <h3 className="text-sm font-semibold text-[#1A1D26]">Your work history (read-only)</h3>
+          <p className="mt-2 text-sm text-[#5B6472]">
             Past report submissions stay on record. File new daily reports anytime — they won&apos;t overwrite locked
             entries.
           </p>
@@ -445,7 +445,7 @@ export function SalesOverviewDashboard({
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={salesNeu.chartPanel}>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-400/80">{title}</h3>
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B45309]/80">{title}</h3>
       <div className="mt-5 flex flex-1 flex-col items-center justify-center">{children}</div>
     </div>
   );

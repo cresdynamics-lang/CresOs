@@ -9,40 +9,40 @@ const toneStyles: Record<
   { border: string; bg: string; value: string; label: string }
 > = {
   brand: {
-    border: "border-brand/35",
-    bg: "bg-brand/10",
-    value: "text-brand",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#2D5A5A]",
+    label: "text-[#5B6472]"
   },
   emerald: {
-    border: "border-emerald-500/35",
-    bg: "bg-emerald-500/10",
-    value: "text-emerald-400",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#1B6B3A]",
+    label: "text-[#5B6472]"
   },
   amber: {
-    border: "border-amber-500/40",
-    bg: "bg-amber-500/10",
-    value: "text-amber-400",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#B45309]",
+    label: "text-[#5B6472]"
   },
   rose: {
-    border: "border-rose-500/40",
-    bg: "bg-rose-500/10",
-    value: "text-rose-400",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#C62828]",
+    label: "text-[#5B6472]"
   },
   sky: {
-    border: "border-sky-500/35",
-    bg: "bg-sky-500/10",
-    value: "text-sky-400",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#1A1D26]",
+    label: "text-[#5B6472]"
   },
   violet: {
-    border: "border-violet-500/35",
-    bg: "bg-violet-500/10",
-    value: "text-violet-400",
-    label: "text-slate-300"
+    border: "border-[#E5E9EF]",
+    bg: "bg-white",
+    value: "text-[#2D5A5A]",
+    label: "text-[#5B6472]"
   }
 };
 
@@ -72,7 +72,7 @@ export function StatCard({
       </div>
       <div>
         <p className={`text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
-        {hint ? <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
+        {hint ? <p className="mt-1 text-[11px] text-[#5B6472] sm:text-xs">{hint}</p> : null}
       </div>
     </div>
   );

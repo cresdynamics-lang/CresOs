@@ -41,9 +41,9 @@ export function WorkspaceDashboardSection({
 }
 
 const URGENCY_TITLE: Record<WorkspaceUrgencyTone, string> = {
-  danger: "font-display text-lg font-bold leading-snug tracking-tight text-rose-100 sm:text-xl",
+  danger: "font-display text-lg font-bold leading-snug tracking-tight text-[#C62828] sm:text-xl",
   warning: "font-display text-base font-semibold leading-snug tracking-tight text-amber-100 sm:text-lg",
-  info: "font-display text-base font-semibold leading-snug text-slate-100"
+  info: "font-display text-base font-semibold leading-snug text-[#1A1D26]"
 };
 
 const URGENCY_ACTION: Record<WorkspaceUrgencyTone, string> = {
@@ -67,7 +67,7 @@ export function WorkspacePriorityGrid({ items, panelClass, dismissible }: Worksp
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-4">
             <div className="min-w-0 flex-1">
               <p className={URGENCY_TITLE[item.tone]}>{item.title}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{item.detail}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-[#5B6472]">{item.detail}</p>
               {dismissible?.(item.id)}
             </div>
             <Link
@@ -98,7 +98,7 @@ export function WorkspaceAlignedTips({ tips, aiHint, panelClass, roleKeys = [] }
         {tips.length > 0 ? (
           <ul className="space-y-2.5">
             {tips.map((tip) => (
-              <li key={tip} className="flex gap-2.5 text-sm leading-relaxed text-slate-300">
+              <li key={tip} className="flex gap-2.5 text-sm leading-relaxed text-[#5B6472]">
                 <span className="mt-0.5 shrink-0 text-amber-500/90" aria-hidden>
                   •
                 </span>
@@ -109,7 +109,7 @@ export function WorkspaceAlignedTips({ tips, aiHint, panelClass, roleKeys = [] }
         ) : null}
         {aiHint ? (
           <p
-            className={`text-sm leading-relaxed text-violet-200/90 ${tips.length > 0 ? "mt-4 border-t border-white/[0.06] pt-4" : ""}`}
+            className={`text-sm leading-relaxed text-violet-200/90 ${tips.length > 0 ? "mt-4 border-t border-[#E5E9EF] pt-4" : ""}`}
           >
             {aiHint}
           </p>

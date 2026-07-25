@@ -160,7 +160,7 @@ export default function FinanceReportsPage() {
 
   if (!hydrated || !auth.accessToken) {
     return (
-      <div className={`${financeNeu.workspace} flex h-full items-center justify-center text-sm text-slate-400`}>
+      <div className={`${financeNeu.workspace} flex h-full items-center justify-center text-sm text-[#5B6472]`}>
         Loading…
       </div>
     );
@@ -174,23 +174,23 @@ export default function FinanceReportsPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-10">
       <header>
         <DashboardSectionLabel>{meta.title}</DashboardSectionLabel>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-400">{meta.description}</p>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[#5B6472]">{meta.description}</p>
       </header>
 
       {notice && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-lg border border-emerald-500/30 bg-[#F2F9EF] px-4 py-3 text-sm text-[#1B6B3A]">
           {notice}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-rose-500/30 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+        <div className="rounded-lg border border-rose-500/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#C62828]">
           {error}
         </div>
       )}
 
-      <section className={`${financeNeu.panel} rounded-2xl border border-white/[0.06] p-4 sm:p-5`}>
-        <h2 className="text-sm font-semibold text-slate-200">Report period</h2>
-        <p className="mt-1 text-xs text-slate-500">
+      <section className={`${financeNeu.panel} rounded-2xl border border-[#E5E9EF] p-4 sm:p-5`}>
+        <h2 className="text-sm font-semibold text-[#1A1D26]">Report period</h2>
+        <p className="mt-1 text-xs text-[#5B6472]">
           Weekly, monthly, 6 months, yearly, all time, or pick a custom date range.
         </p>
 
@@ -212,7 +212,7 @@ export default function FinanceReportsPage() {
 
         {preset === "custom" && (
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="block text-xs text-slate-400">
+            <label className="block text-xs text-[#5B6472]">
               From
               <input
                 type="date"
@@ -221,7 +221,7 @@ export default function FinanceReportsPage() {
                 className={`${financeNeu.input} mt-1 block`}
               />
             </label>
-            <label className="block text-xs text-slate-400">
+            <label className="block text-xs text-[#5B6472]">
               To
               <input
                 type="date"
@@ -241,12 +241,12 @@ export default function FinanceReportsPage() {
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-2 border-t border-white/[0.06] pt-4">
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-[#E5E9EF] pt-4">
           <button
             type="button"
             onClick={() => void loadReport()}
             disabled={loading}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-lg border border-[#D0D5DD] px-4 py-2 text-sm text-[#1A1D26] hover:bg-[#E5E9EF] disabled:opacity-50"
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -270,12 +270,12 @@ export default function FinanceReportsPage() {
       </section>
 
       {canSendToAdmin && (
-        <section className={`${financeNeu.panel} rounded-2xl border border-sky-500/20 bg-sky-950/20 p-4 sm:p-5`}>
+        <section className={`${financeNeu.panel} rounded-2xl border border-sky-500/20 bg-[#F0F6FC] p-4 sm:p-5`}>
           <h2 className="text-sm font-semibold text-sky-200">Send report to admin</h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-[#5B6472]">
             Emails all admins a summary with the PDF attached — for director review and records.
           </p>
-          <label className="mt-3 block text-xs text-slate-400">
+          <label className="mt-3 block text-xs text-[#5B6472]">
             Optional note for admins
             <textarea
               value={note}
@@ -297,12 +297,12 @@ export default function FinanceReportsPage() {
       )}
 
       {report && (
-        <section className={`${financeNeu.panel} rounded-2xl border border-white/[0.06] p-4 sm:p-5`}>
+        <section className={`${financeNeu.panel} rounded-2xl border border-[#E5E9EF] p-4 sm:p-5`}>
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold text-slate-200">
+            <h2 className="text-sm font-semibold text-[#1A1D26]">
               {report.period.label ?? "Report summary"}
             </h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#5B6472]">
               Generated {new Date(report.generatedAt).toLocaleString()}
             </p>
           </div>
@@ -319,24 +319,24 @@ export default function FinanceReportsPage() {
           </FinanceStatRow>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+            <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500/90">Money in</p>
-              <p className="mt-1 text-sm text-slate-200">Client payments: {formatMoney(report.revenue.thisMonth)}</p>
-              <p className="text-xs text-slate-500">All time: {formatMoney(report.revenue.allTime)}</p>
+              <p className="mt-1 text-sm text-[#1A1D26]">Client payments: {formatMoney(report.revenue.thisMonth)}</p>
+              <p className="text-xs text-[#5B6472]">All time: {formatMoney(report.revenue.allTime)}</p>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90">HR & payroll</p>
-              <p className="mt-1 text-sm text-slate-200">
+            <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#B45309]/90">HR & payroll</p>
+              <p className="mt-1 text-sm text-[#1A1D26]">
                 Salaries: {formatMoney(report.salaries?.inPeriod ?? 0)}
               </p>
-              <p className="text-xs text-slate-500">{report.salaries?.count ?? 0} salary expense(s) in period</p>
+              <p className="text-xs text-[#5B6472]">{report.salaries?.count ?? 0} salary expense(s) in period</p>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-400/90">Project ops</p>
-              <p className="mt-1 text-sm text-slate-200">
+            <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6D28D9]/90">Project ops</p>
+              <p className="mt-1 text-sm text-[#1A1D26]">
                 Developer payments: {formatMoney(report.developerPayments?.inPeriod ?? 0)}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#5B6472]">
                 {report.developerPayments?.count ?? 0} developer payment(s) in period
               </p>
             </div>
@@ -344,21 +344,21 @@ export default function FinanceReportsPage() {
 
           {report.expensesByCategory && report.expensesByCategory.length > 0 && (
             <div className="mt-5">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#5B6472]">
                 Expense breakdown (period)
               </h3>
               <ul className="space-y-1 text-sm">
                 {report.expensesByCategory.map((cat) => (
-                  <li key={cat.category} className="flex justify-between gap-4 text-slate-300">
+                  <li key={cat.category} className="flex justify-between gap-4 text-[#5B6472]">
                     <span>{categoryLabel(cat.category)}</span>
-                    <span className="tabular-nums text-slate-200">{formatMoney(cat.amount)}</span>
+                    <span className="tabular-nums text-[#1A1D26]">{formatMoney(cat.amount)}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <div className="mt-5 grid gap-3 text-xs text-slate-400 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 text-xs text-[#5B6472] sm:grid-cols-2">
             <p>Outstanding / AR: {formatMoney(report.invoices.outstandingAmount)}</p>
             <p>Overdue invoices: {report.invoices.overdueCount}</p>
             <p>Pending approvals: {report.pending?.total ?? 0}</p>
@@ -367,15 +367,15 @@ export default function FinanceReportsPage() {
         </section>
       )}
 
-      <section className={`${financeNeu.panel} rounded-2xl border border-white/[0.06] p-4 sm:p-5`}>
-        <h2 className="text-sm font-semibold text-slate-200">Finance feature map</h2>
-        <p className="mt-1 text-xs text-slate-500">
+      <section className={`${financeNeu.panel} rounded-2xl border border-[#E5E9EF] p-4 sm:p-5`}>
+        <h2 className="text-sm font-semibold text-[#1A1D26]">Finance feature map</h2>
+        <p className="mt-1 text-xs text-[#5B6472]">
           How each workspace area maps to money in, money out, and admin workflows.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06] text-xs uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-[#E5E9EF] text-xs uppercase tracking-wider text-[#5B6472]">
                 <th className="pb-2 pr-4 font-medium">Area</th>
                 <th className="pb-2 pr-4 font-medium">Flow</th>
                 <th className="pb-2 pr-4 font-medium">Owner</th>
@@ -384,15 +384,15 @@ export default function FinanceReportsPage() {
             </thead>
             <tbody>
               {FINANCE_FEATURE_MAP.map((row) => (
-                <tr key={row.area} className="border-b border-white/[0.04]">
+                <tr key={row.area} className="border-b border-[#E5E9EF]">
                   <td className="py-2.5 pr-4">
-                    <Link href={row.route} className="font-medium text-emerald-300/90 hover:text-emerald-200">
+                    <Link href={row.route} className="font-medium text-[#1B6B3A]/90 hover:text-[#1B6B3A]">
                       {row.area}
                     </Link>
                   </td>
-                  <td className="py-2.5 pr-4 text-slate-400">{row.direction}</td>
-                  <td className="py-2.5 pr-4 text-slate-400">{row.handledBy}</td>
-                  <td className="py-2.5 text-slate-300">{row.description}</td>
+                  <td className="py-2.5 pr-4 text-[#5B6472]">{row.direction}</td>
+                  <td className="py-2.5 pr-4 text-[#5B6472]">{row.handledBy}</td>
+                  <td className="py-2.5 text-[#5B6472]">{row.description}</td>
                 </tr>
               ))}
             </tbody>
