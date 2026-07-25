@@ -29,6 +29,7 @@
  *   EMAIL_AUTOMATION_POLL_INTERVAL  (seconds, default 10)
  *   EMAIL_AUTOMATION_ENABLED   (default true)
  *   WEBSITE_CRAWL_URL          (default: https://www.cresdynamics.com)
+ *   EMAIL_SIGNATURE_IMAGE_URL  (absolute or /uploads path — appended under reply body)
  */
 
 import { Router } from "express";
@@ -37,6 +38,7 @@ import Groq from "groq-sdk";
 import { sendOutboundEmail } from "../lib/resend";
 import { resolveGroqModel } from "../lib/groq-model";
 import { resolveSenderGreeting } from "../lib/sender-greeting";
+import { compileTemplateHtml, type EmailTemplateDesign } from "../lib/email-template-design";
 import {
   attachmentsHaveExtractedContent,
   capEmailBodyForAi,
@@ -49,7 +51,6 @@ import {
   renderFromTemplate,
   saveOrgTemplateOverrides
 } from "../lib/email-template-engine";
-import type { EmailTemplateDesign } from "../lib/email-template-design";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
@@ -60,6 +61,131 @@ import type { Request, Response, NextFunction } from "express";
 // ── Known internal team members (by first name, case-insensitive) ─────────────
 
 const INTERNAL_TEAM_NAMES = ["reinhard", "victor", "kelvin", "brian"];
+
+type EmailRecipient = { email: string; name: string };
+
+function extractEmailFromHeader(value: string): string {
+  const m = value.match(/<([^>]+)>/);
+  return (m?.[1] ?? value).trim().toLowerCase();
+}
+
+function ourMailboxEmails(): Set<string> {
+  const out = new Set<string>();
+  const add = (raw: string | undefined) => {
+    const v = (raw ?? "").trim();
+    if (!v) return;
+    out.add(extractEmailFromHeader(v));
+  };
+  add(process.env.IMAP_USER);
+  add(process.env.IMAP_USERNAME);
+  add(process.env.MAIL_USERNAME);
+  add(process.env.MAIL_FROM_ADDRESS);
+  add(process.env.RESEND_FROM_EMAIL);
+  add(process.env.RESEND_REPLY_TO);
+  add(process.env.RESEND_FROM_EMAIL_FINANCE);
+  add(process.env.RESEND_FROM_EMAIL_SALES);
+  add(process.env.RESEND_FROM_EMAIL_DIRECTOR);
+  out.add("info@cresdynamics.com");
+  return out;
+}
+
+function normalizeAddressList(input: unknown): EmailRecipient[] {
+  if (!input) return [];
+  const list: Array<{ address?: string; email?: string; name?: string }> = Array.isArray(input)
+    ? (input as Array<{ address?: string; email?: string; name?: string }>)
+    : Array.isArray((input as { value?: unknown }).value)
+      ? ((input as { value: Array<{ address?: string; email?: string; name?: string }> }).value)
+      : [];
+  const seen = new Set<string>();
+  const out: EmailRecipient[] = [];
+  for (const item of list) {
+    const email = String(item.address ?? item.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    out.push({ email, name: String(item.name ?? "").trim() });
+  }
+  return out;
+}
+
+function parseStoredRecipients(raw: string | null | undefined): EmailRecipient[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return normalizeAddressList(
+      parsed.map((p) =>
+        typeof p === "string"
+          ? { email: p }
+          : (p as { email?: string; address?: string; name?: string })
+      )
+    );
+  } catch {
+    return [];
+  }
+}
+
+function formatRecipient(r: EmailRecipient): string {
+  return r.name ? `${r.name} <${r.email}>` : r.email;
+}
+
+function uniqueRecipients(list: EmailRecipient[]): EmailRecipient[] {
+  const seen = new Set<string>();
+  const out: EmailRecipient[] = [];
+  for (const r of list) {
+    const key = r.email.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ email: key, name: r.name });
+  }
+  return out;
+}
+
+/** Reply-All: To = original From; Cc = original To+Cc minus us and the From; Bcc when captured. */
+function buildReplyAllRecipients(thread: {
+  fromEmail: string;
+  fromName: string;
+  toEmails?: string | null;
+  ccEmails?: string | null;
+  bccEmails?: string | null;
+}): { to: string[]; cc: string[]; bcc: string[] } {
+  const ours = ourMailboxEmails();
+  const fromEmail = thread.fromEmail.trim().toLowerCase();
+  const to: string[] = [formatRecipient({ email: fromEmail, name: thread.fromName || "" })];
+
+  const originalTo = parseStoredRecipients(thread.toEmails);
+  const originalCc = parseStoredRecipients(thread.ccEmails);
+  const originalBcc = parseStoredRecipients(thread.bccEmails);
+
+  const cc = uniqueRecipients([...originalTo, ...originalCc]).filter(
+    (r) => r.email !== fromEmail && !ours.has(r.email)
+  );
+  const bcc = uniqueRecipients(originalBcc).filter(
+    (r) => r.email !== fromEmail && !ours.has(r.email)
+  );
+
+  return {
+    to,
+    cc: cc.map(formatRecipient),
+    bcc: bcc.map(formatRecipient)
+  };
+}
+
+function serializeEmailThread<
+  T extends {
+    toEmails?: string | null;
+    ccEmails?: string | null;
+    bccEmails?: string | null;
+  }
+>(thread: T) {
+  return {
+    ...thread,
+    toEmails: parseStoredRecipients(thread.toEmails),
+    ccEmails: parseStoredRecipients(thread.ccEmails),
+    bccEmails: parseStoredRecipients(thread.bccEmails)
+  };
+}
 
 // ── CEO default instructions ──────────────────────────────────────────────────
 
@@ -544,12 +670,18 @@ async function sendEmailReply(
     subject: string;
     body: string;
     originalMessageId?: string | null;
+    toEmails?: string | null;
+    ccEmails?: string | null;
+    bccEmails?: string | null;
   }
 ): Promise<{ ok: boolean; error?: string }> {
   const subject = params.subject.startsWith("Re:") ? params.subject : `Re: ${params.subject}`;
   const greeting = params.toName?.trim() ? `Hi ${params.toName.trim()},` : "Hi,";
   const templates = await loadOrgEmailTemplates(prisma, orgId);
-  const rendered =
+  const replyTpl = templates.find((t) => t.key === "reply");
+  const signatureEnv = (process.env.EMAIL_SIGNATURE_IMAGE_URL || "").trim();
+
+  let rendered =
     renderFromTemplate(templates, "reply", {
       body: params.body,
       recipient_name: params.toName?.trim() || params.toEmail,
@@ -558,12 +690,66 @@ async function sendEmailReply(
       footer_note: "This message was sent from Cres Dynamics."
     }) ?? {
       html: `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.6;">${params.body.replace(/\n/g, "<br>")}</body></html>`,
-      text: params.body
+      text: params.body,
+      subject
     };
-  const to = params.toName ? `${params.toName} <${params.toEmail}>` : params.toEmail;
-  const result = await sendOutboundEmail({ to, subject, text: rendered.text, html: rendered.html });
+
+  // Prefer template signature image; fall back to EMAIL_SIGNATURE_IMAGE_URL when unset.
+  if (
+    replyTpl &&
+    !replyTpl.useCustomHtml &&
+    signatureEnv &&
+    !(replyTpl.design.showSignatureImage && replyTpl.design.signatureImageUrl)
+  ) {
+    const designWithSig = {
+      ...replyTpl.design,
+      signatureImageUrl: signatureEnv,
+      showSignatureImage: true
+    };
+    const htmlShell = compileTemplateHtml(designWithSig);
+    rendered = {
+      ...rendered,
+      html: renderFromTemplate(
+        [{ ...replyTpl, design: designWithSig, htmlBody: htmlShell, useCustomHtml: false }],
+        "reply",
+        {
+          body: params.body,
+          recipient_name: params.toName?.trim() || params.toEmail,
+          subject: params.subject.replace(/^Re:\s*/i, ""),
+          greeting,
+          footer_note: "This message was sent from Cres Dynamics."
+        }
+      )!.html
+    };
+  }
+
+  const recipients = buildReplyAllRecipients({
+    fromEmail: params.toEmail,
+    fromName: params.toName,
+    toEmails: params.toEmails,
+    ccEmails: params.ccEmails,
+    bccEmails: params.bccEmails
+  });
+
+  const headers: Record<string, string> = {};
+  const mid = (params.originalMessageId || "").trim();
+  if (mid) {
+    headers["In-Reply-To"] = mid;
+    headers["References"] = mid;
+  }
+
+  const result = await sendOutboundEmail({
+    to: recipients.to,
+    ...(recipients.cc.length ? { cc: recipients.cc } : {}),
+    ...(recipients.bcc.length ? { bcc: recipients.bcc } : {}),
+    subject,
+    text: rendered.text,
+    html: rendered.html,
+    ...(Object.keys(headers).length ? { headers } : {})
+  });
   if (result.ok) {
-    console.info(`[email-automation] Reply sent to ${params.toEmail} — ${subject}`);
+    const ccNote = recipients.cc.length ? ` (cc ${recipients.cc.length})` : "";
+    console.info(`[email-automation] Reply sent to ${params.toEmail}${ccNote} — ${subject}`);
     return { ok: true };
   }
   console.error(`[email-automation] Send failed to ${params.toEmail}:`, result.error);
@@ -644,6 +830,9 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
         let messageId = uid;
         let body = "";
         let hasAttachments = false;
+        let toEmails: EmailRecipient[] = [];
+        let ccEmails: EmailRecipient[] = [];
+        let bccEmails: EmailRecipient[] = [];
 
         if (msg.source) {
           try {
@@ -654,6 +843,10 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
             fromName = parsed.from?.value?.[0]?.name || msg.envelope?.from?.[0]?.name || "";
             subject = parsed.subject || msg.envelope?.subject || "(no subject)";
             messageId = parsed.messageId || msg.envelope?.messageId || uid;
+
+            toEmails = normalizeAddressList(parsed.to ?? msg.envelope?.to);
+            ccEmails = normalizeAddressList(parsed.cc ?? msg.envelope?.cc);
+            bccEmails = normalizeAddressList(parsed.bcc ?? msg.envelope?.bcc);
 
             // ── Body: prefer plain text, fall back to HTML→text ────────────
             body = parsed.text || "";
@@ -689,7 +882,18 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
             fromName = msg.envelope?.from?.[0]?.name || "";
             subject = msg.envelope?.subject || "(no subject)";
             messageId = msg.envelope?.messageId || uid;
+            toEmails = normalizeAddressList(msg.envelope?.to);
+            ccEmails = normalizeAddressList(msg.envelope?.cc);
+            bccEmails = normalizeAddressList(msg.envelope?.bcc);
           }
+        } else {
+          fromEmail = msg.envelope?.from?.[0]?.address || "";
+          fromName = msg.envelope?.from?.[0]?.name || "";
+          subject = msg.envelope?.subject || "(no subject)";
+          messageId = msg.envelope?.messageId || uid;
+          toEmails = normalizeAddressList(msg.envelope?.to);
+          ccEmails = normalizeAddressList(msg.envelope?.cc);
+          bccEmails = normalizeAddressList(msg.envelope?.bcc);
         }
 
         body = capEmailBodyForAi(body);
@@ -703,6 +907,9 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
             messageId,
             fromEmail,
             fromName,
+            toEmails: JSON.stringify(toEmails),
+            ccEmails: JSON.stringify(ccEmails),
+            bccEmails: JSON.stringify(bccEmails),
             subject,
             body,
             senderType,
@@ -712,7 +919,11 @@ async function fetchNewEmails(orgId: string, prisma: PrismaClient): Promise<numb
           },
         });
         count++;
-        console.info(`[email-automation] New ${senderType} email from ${fromName || fromEmail} — "${subject}"${hasAttachments ? " [+attachments]" : ""}`);
+        const recipNote =
+          ccEmails.length || toEmails.length > 1
+            ? ` [to:${toEmails.length} cc:${ccEmails.length}]`
+            : "";
+        console.info(`[email-automation] New ${senderType} email from ${fromName || fromEmail} — "${subject}"${hasAttachments ? " [+attachments]" : ""}${recipNote}`);
       }
     } finally {
       lock.release();
@@ -782,12 +993,18 @@ async function doApproveAndSend(threadId: string, prisma: PrismaClient): Promise
     subject: thread.subject,
     body: thread.draftReply,
     originalMessageId: thread.messageId,
+    toEmails: thread.toEmails,
+    ccEmails: thread.ccEmails,
+    bccEmails: thread.bccEmails,
   });
 
   if (result.ok) {
     await prisma.emailThread.update({ where: { id: threadId }, data: { status: "sent" } });
+    const ccCount = parseStoredRecipients(thread.ccEmails).length + parseStoredRecipients(thread.toEmails).filter(
+      (r) => r.email !== thread.fromEmail.toLowerCase() && !ourMailboxEmails().has(r.email)
+    ).length;
     await sendWhatsAppNotification(
-      `✅ *Reply sent* to ${thread.fromEmail}\n*Subject:* ${thread.subject}`
+      `✅ *Reply sent* to ${thread.fromEmail}${ccCount ? ` (+${ccCount} cc)` : ""}\n*Subject:* ${thread.subject}`
     );
   } else {
     await prisma.emailThread.update({ where: { id: threadId }, data: { status: "failed" } });
@@ -1059,11 +1276,12 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
           id: true, fromEmail: true, fromName: true, subject: true,
           status: true, senderType: true, receivedAt: true, updatedAt: true,
           draftReply: true, waMessageSid: true, hasAttachments: true, draftError: true,
+          toEmails: true, ccEmails: true, bccEmails: true,
         },
       }),
       prisma.emailThread.count({ where }),
     ]);
-    res.json({ threads, total, limit, offset });
+    res.json({ threads: threads.map(serializeEmailThread), total, limit, offset });
   });
 
   // GET /email-automation/threads/:id
@@ -1072,7 +1290,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     const orgId = req.auth!.orgId;
     const thread = await prisma.emailThread.findFirst({ where: { id, orgId } });
     if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
-    res.json(thread);
+    res.json(serializeEmailThread(thread));
   });
 
   // POST /email-automation/threads/:id/regenerate-draft
@@ -1100,7 +1318,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
       await dispatchDraft({ ...thread, draftReply: draft }, prisma);
 
       const updated = await prisma.emailThread.findUnique({ where: { id: thread.id } });
-      res.json(updated);
+      res.json(updated ? serializeEmailThread(updated) : updated);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Draft generation failed";
       await prisma.emailThread.update({
@@ -1123,7 +1341,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
       where: { id: thread.id },
       data: { draftReply, status: "editing" },
     });
-    res.json(updated);
+    res.json(serializeEmailThread(updated));
   });
 
   // POST /email-automation/threads/:id/approve  — CRM approval → send reply
@@ -1142,11 +1360,12 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
 
     const result = await doApproveAndSend(thread.id, prisma);
     const updated = await prisma.emailThread.findUnique({ where: { id: thread.id } });
+    const serialized = updated ? serializeEmailThread(updated) : updated;
 
     if (result.ok) {
-      res.json({ ok: true, thread: updated });
+      res.json({ ok: true, thread: serialized });
     } else {
-      res.status(500).json({ ok: false, error: result.error, thread: updated });
+      res.status(500).json({ ok: false, error: result.error, thread: serialized });
     }
   });
 
@@ -1157,7 +1376,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
     const thread = await prisma.emailThread.findFirst({ where: { id, orgId } });
     if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
     const updated = await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "ignored" } });
-    res.json(updated);
+    res.json(serializeEmailThread(updated));
   });
 
   // GET /email-automation/templates
@@ -1290,7 +1509,7 @@ export default function emailAutomationRouter(prisma: PrismaClient): Router {
       await prisma.emailThread.update({ where: { id: thread.id }, data: { draftReply: draft, draftError: null } });
       await dispatchDraft({ ...thread, draftReply: draft }, prisma);
       const updated = await prisma.emailThread.findUnique({ where: { id: thread.id } });
-      res.json(updated);
+      res.json(updated ? serializeEmailThread(updated) : updated);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Retry failed";
       await prisma.emailThread.update({

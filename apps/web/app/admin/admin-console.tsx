@@ -33,6 +33,13 @@ const TAB_META: Record<TabKey, { title: string; description: string }> = {
   }
 };
 
+function statusBadgeClass(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "active") return adminNeu.badgeSuccess;
+  if (s === "invited" || s === "pending") return adminNeu.badgeWarning;
+  return adminNeu.badge;
+}
+
 function tabFromPathname(path: string | null): TabKey {
   if (!path) return "users";
   if (path.startsWith("/admin/org")) return "departments";
@@ -310,72 +317,69 @@ export function AdminConsole() {
 
   if (!isAdmin) {
     return (
-      <section className="shell">
-        <p className="text-slate-400">You don’t have access to administration.</p>
+      <section className={adminNeu.panel}>
+        <p className="text-sm font-medium text-[#242424]">You don’t have access to administration.</p>
       </section>
     );
   }
 
   return (
-    <section className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden text-xs leading-snug text-slate-600 sm:text-sm sm:leading-normal">
+    <section className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden text-sm leading-normal text-[#242424]">
       {tab !== "email-automation" && (
-        <header className={`${adminNeu.panelInset} px-4 py-4 sm:px-5`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand/80">Administration</p>
-          <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:text-xl">{TAB_META[tab].title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{TAB_META[tab].description}</p>
+        <header className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#616161]">Administration</p>
+          <h1 className="mt-1 text-xl font-bold text-[#242424] sm:text-2xl">{TAB_META[tab].title}</h1>
+          <p className="mt-1 text-sm font-medium text-[#424242]">{TAB_META[tab].description}</p>
         </header>
       )}
 
       {loadError && (
-        <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{loadError}</p>
+        <p className={`${adminNeu.alertDanger} px-3 py-2.5 text-sm font-semibold text-[#a4262c]`}>{loadError}</p>
       )}
 
       {tab === "users" && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-100 px-4 py-4 sm:px-5">
-            <div>
-              <p className="text-xs text-slate-500">{usersWithRoles.length} user{usersWithRoles.length === 1 ? "" : "s"} in organisation</p>
+          <div className={`${adminNeu.card} min-w-0 w-full max-w-full overflow-hidden`}>
+            <div className={adminNeu.commandBar}>
+              <p className="text-sm font-semibold text-[#242424]">
+                {usersWithRoles.length} user{usersWithRoles.length === 1 ? "" : "s"} in organisation
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateUserError(null);
+                  setShowCreateUser(true);
+                }}
+                className={adminNeu.btnPrimary}
+              >
+                + New employee
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setCreateUserError(null);
-                setShowCreateUser(true);
-              }}
-              className={adminNeu.btnPrimary}
-            >
-              + New employee
-            </button>
-          </div>
 
-          <div className="min-w-0 w-full max-w-full overflow-x-hidden">
-            <div className="mt-0 border-t border-sky-200 pt-4 px-4 sm:px-5">
-            {loadError && <p className="mb-2 text-[11px] text-amber-300 sm:text-xs">{loadError}</p>}
+            <div className="min-w-0">
             {usersWithRoles.length === 0 ? (
-              <p className="text-slate-400">No users in this organisation.</p>
+              <p className="px-4 py-10 text-center text-sm font-medium text-[#424242]">
+                No users in this organisation.
+              </p>
             ) : (
               <>
-                <div className="space-y-2 md:hidden">
+                <div className="divide-y divide-[#f0f0f0] md:hidden">
                   {usersWithRoles.map((u) => (
-                    <div
-                      key={`m-${u.id}`}
-                      className="rounded-lg border border-sky-200 bg-[#f8fbfe] p-2.5 text-[11px] text-slate-600 sm:text-xs"
-                    >
+                    <div key={`m-${u.id}`} className="p-3 text-sm text-[#242424]">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-slate-900">{u.name ?? "—"}</p>
-                          <p className="mt-0.5 break-all text-slate-400">{u.email}</p>
-                          <p className="mt-1 text-slate-500">Status: {u.status}</p>
-                          <p className="mt-1 text-slate-500">
-                            Director: {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
+                          <p className="truncate text-sm font-semibold text-[#242424]">{u.name ?? "—"}</p>
+                          <p className="mt-0.5 break-all text-xs font-medium text-[#424242]">{u.email}</p>
+                          <div className="mt-1.5">
+                            <span className={statusBadgeClass(u.status)}>{u.status}</span>
+                          </div>
+                          <p className="mt-1.5 text-xs font-medium text-[#424242]">
+                            <span className="font-semibold text-[#242424]">Reports to: </span>
+                            {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(u)}
-                            className="rounded border border-sky-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-white"
-                          >
+                          <button type="button" onClick={() => openEdit(u)} className={adminNeu.btnGhost}>
                             Edit
                           </button>
                           <button
@@ -383,21 +387,19 @@ export function AdminConsole() {
                             disabled={auth.userId === u.id || deletingId === u.id}
                             title={auth.userId === u.id ? "You cannot remove your own account" : undefined}
                             onClick={() => void deleteUser(u)}
-                            className="rounded border border-rose-600/50 px-2 py-1 text-[11px] text-rose-400 hover:bg-rose-950/40 disabled:cursor-not-allowed disabled:opacity-40"
+                            className={adminNeu.btnDanger}
                           >
                             {deletingId === u.id ? "…" : "Delete"}
                           </button>
                         </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                         {(u.roles ?? []).map((ur) => (
-                          <span
-                            key={ur.roleId}
-                            className="inline-flex max-w-full items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-slate-700"
-                          >
+                          <span key={ur.roleId} className={`max-w-full ${adminNeu.badgeAccent}`}>
                             <span className="truncate">{ur.role.name}</span>
                             <button
                               type="button"
+                              aria-label={`Remove role ${ur.role.name}`}
                               onClick={async () => {
                                 try {
                                   const res = await apiFetch("/admin/role-assignments", {
@@ -410,7 +412,7 @@ export function AdminConsole() {
                                   // ignore
                                 }
                               }}
-                              className="shrink-0 text-rose-400 hover:underline"
+                              className="shrink-0 font-bold text-[#a4262c] hover:underline"
                             >
                               ×
                             </button>
@@ -418,6 +420,7 @@ export function AdminConsole() {
                         ))}
                         <select
                           value=""
+                          aria-label={`Add role to ${u.name ?? u.email}`}
                           onChange={async (e) => {
                             const roleId = e.target.value;
                             if (!roleId) return;
@@ -433,7 +436,7 @@ export function AdminConsole() {
                               // ignore
                             }
                           }}
-                          className="max-w-full rounded border border-sky-200 bg-white px-1 py-0.5 text-[10px] text-slate-700"
+                          className="max-w-full rounded border border-[#8a8886] bg-white px-1.5 py-1 text-[11px] font-semibold text-[#242424]"
                         >
                           <option value="">+ Add role</option>
                           {rolesForSelect
@@ -450,38 +453,38 @@ export function AdminConsole() {
                 </div>
 
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[560px] text-left text-xs lg:min-w-0 lg:text-sm">
+                  <table className="w-full min-w-[720px] text-left text-sm">
                     <thead>
-                      <tr className="border-b border-sky-200 text-slate-400">
-                        <th className="pb-2 pr-3">Name</th>
-                        <th className="pb-2 pr-3">Email</th>
-                        <th className="pb-2 pr-3">Status</th>
-                        <th className="pb-2 pr-3">Director</th>
-                        <th className="pb-2 pr-3">Roles</th>
-                        <th className="pb-2"></th>
+                      <tr>
+                        <th className={adminNeu.th}>Name</th>
+                        <th className={adminNeu.th}>Email</th>
+                        <th className={adminNeu.th}>Status</th>
+                        <th className={adminNeu.th}>Reports to</th>
+                        <th className={adminNeu.th}>Roles</th>
+                        <th className={`${adminNeu.th} text-right`}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {usersWithRoles.map((u) => (
-                        <tr key={u.id} className="border-b border-slate-800">
-                          <td className="py-2 pr-3 text-slate-700">{u.name ?? "—"}</td>
-                          <td className="max-w-[12rem] truncate py-2 pr-3 text-slate-600" title={u.email}>
+                        <tr key={u.id} className={adminNeu.rowHover}>
+                          <td className={`${adminNeu.td} font-semibold`}>{u.name ?? "—"}</td>
+                          <td className={`${adminNeu.td} max-w-[14rem] truncate font-medium text-[#424242]`} title={u.email}>
                             {u.email}
                           </td>
-                          <td className="py-2 pr-3 text-slate-600">{u.status}</td>
-                          <td className="py-2 pr-3 text-slate-600">
+                          <td className={adminNeu.td}>
+                            <span className={statusBadgeClass(u.status)}>{u.status}</span>
+                          </td>
+                          <td className={`${adminNeu.td} font-medium text-[#424242]`}>
                             {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
                           </td>
-                          <td className="py-2 pr-3">
-                            <div className="flex flex-wrap gap-1">
+                          <td className={adminNeu.td}>
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {(u.roles ?? []).map((ur) => (
-                                <span
-                                  key={ur.roleId}
-                                  className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs text-slate-700"
-                                >
+                                <span key={ur.roleId} className={adminNeu.badgeAccent}>
                                   {ur.role.name}
                                   <button
                                     type="button"
+                                    aria-label={`Remove role ${ur.role.name}`}
                                     onClick={async () => {
                                       try {
                                         const res = await apiFetch("/admin/role-assignments", {
@@ -494,7 +497,7 @@ export function AdminConsole() {
                                         // ignore
                                       }
                                     }}
-                                    className="text-rose-400 hover:underline"
+                                    className="font-bold text-[#a4262c] hover:underline"
                                   >
                                     ×
                                   </button>
@@ -502,6 +505,7 @@ export function AdminConsole() {
                               ))}
                               <select
                                 value=""
+                                aria-label={`Add role to ${u.name ?? u.email}`}
                                 onChange={async (e) => {
                                   const roleId = e.target.value;
                                   if (!roleId) return;
@@ -517,7 +521,7 @@ export function AdminConsole() {
                                     // ignore
                                   }
                                 }}
-                                className="rounded border border-sky-200 bg-white px-1 py-0.5 text-xs text-slate-700"
+                                className="rounded border border-[#8a8886] bg-white px-1.5 py-1 text-xs font-semibold text-[#242424]"
                               >
                                 <option value="">+ Add role</option>
                                 {rolesForSelect
@@ -530,13 +534,9 @@ export function AdminConsole() {
                               </select>
                             </div>
                           </td>
-                          <td className="py-2">
-                            <div className="flex flex-wrap items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openEdit(u)}
-                                className="rounded border border-sky-200 px-2 py-1 text-xs text-slate-600 hover:bg-white"
-                              >
+                          <td className={adminNeu.td}>
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              <button type="button" onClick={() => openEdit(u)} className={adminNeu.btnGhost}>
                                 Edit
                               </button>
                               <button
@@ -544,7 +544,7 @@ export function AdminConsole() {
                                 disabled={auth.userId === u.id || deletingId === u.id}
                                 title={auth.userId === u.id ? "You cannot remove your own account" : undefined}
                                 onClick={() => void deleteUser(u)}
-                                className="rounded border border-rose-600/50 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950/40 disabled:cursor-not-allowed disabled:opacity-40"
+                                className={adminNeu.btnDanger}
                               >
                                 {deletingId === u.id ? "…" : "Delete"}
                               </button>
@@ -580,48 +580,51 @@ export function AdminConsole() {
           />
 
           {editing && (
-            <div className="shell mx-auto w-full max-w-full border-brand/30 sm:max-w-md">
-              <h3 className="mb-2 text-xs font-semibold text-slate-700 sm:mb-3 sm:text-sm">Edit user</h3>
-              <p className="mb-2 break-all text-[11px] text-slate-400 sm:mb-3 sm:text-xs">{editing.email}</p>
+            <div className={`${adminNeu.panel} mx-auto w-full max-w-full sm:max-w-lg`}>
+              <h3 className="text-base font-bold text-[#242424]">Edit user</h3>
+              <p className="mt-0.5 break-all text-xs font-medium text-[#424242]">{editing.email}</p>
               {editError && (
-                <p className="mb-2 rounded border border-rose-600/40 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200 sm:text-xs" role="alert">
+                <p
+                  className={`${adminNeu.alertDanger} mt-3 px-3 py-2 text-xs font-semibold text-[#a4262c]`}
+                  role="alert"
+                >
                   {editError}
                 </p>
               )}
-              <div className="flex flex-col gap-3">
+              <div className="mt-4 flex flex-col gap-3.5">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Name</span>
+                  <span className="mb-1 block text-xs font-semibold text-[#242424]">Name</span>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+                    className={`w-full ${adminNeu.input}`}
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Phone</span>
+                  <span className="mb-1 block text-xs font-semibold text-[#242424]">Phone</span>
                   <input
                     type="tel"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+                    className={`w-full ${adminNeu.input}`}
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Notification email</span>
+                  <span className="mb-1 block text-xs font-semibold text-[#242424]">Notification email</span>
                   <input
                     type="email"
                     value={editNotificationEmail}
                     onChange={(e) => setEditNotificationEmail(e.target.value)}
-                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+                    className={`w-full ${adminNeu.input}`}
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-slate-400 sm:text-xs">Reports to director</span>
+                  <span className="mb-1 block text-xs font-semibold text-[#242424]">Reports to director</span>
                   <select
                     value={editDirectorId}
                     onChange={(e) => setEditDirectorId(e.target.value)}
-                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:text-sm"
+                    className={`w-full ${adminNeu.input}`}
                   >
                     <option value="">— None —</option>
                     {directors.map((d) => (
@@ -631,51 +634,47 @@ export function AdminConsole() {
                     ))}
                   </select>
                 </label>
-                <div className="rounded-lg border border-sky-200 bg-[#f5f9fc] p-3">
-                  <p className="mb-2 text-[11px] font-medium text-slate-600 sm:text-xs">Capabilities (dynamic)</p>
-                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-600">
+                <div className={adminNeu.panelInset}>
+                  <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.06em] text-[#424242]">Capabilities</p>
+                  <label className="flex items-center justify-between gap-2 border-b border-[#e1dfdd] py-2 text-sm font-medium text-[#242424]">
                     <span>Can see finance / cash flow</span>
                     <input
                       type="checkbox"
                       checked={editCanSeeFinance}
                       onChange={(e) => setEditCanSeeFinance(e.target.checked)}
-                      className="h-4 w-4 rounded border-sky-200"
+                      className="h-4 w-4 rounded border-[#8a8886] accent-brand"
                     />
                   </label>
-                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-600">
+                  <label className="flex items-center justify-between gap-2 border-b border-[#e1dfdd] py-2 text-sm font-medium text-[#242424]">
                     <span>Can submit reports</span>
                     <input
                       type="checkbox"
                       checked={editCanSubmitReports}
                       onChange={(e) => setEditCanSubmitReports(e.target.checked)}
-                      className="h-4 w-4 rounded border-sky-200"
+                      className="h-4 w-4 rounded border-[#8a8886] accent-brand"
                     />
                   </label>
-                  <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                  <label className="flex items-center justify-between gap-2 pt-2 text-sm font-medium text-[#242424]">
                     <span>Can review team reports</span>
                     <input
                       type="checkbox"
                       checked={editCanReviewTeamReports}
                       onChange={(e) => setEditCanReviewTeamReports(e.target.checked)}
-                      className="h-4 w-4 rounded border-sky-200"
+                      className="h-4 w-4 rounded border-[#8a8886] accent-brand"
                     />
                   </label>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={() => setEditing(null)} className={adminNeu.btnGhost}>
+                    Cancel
+                  </button>
                   <button
                     type="button"
                     disabled={saving}
                     onClick={() => void saveEdit()}
-                    className="w-full rounded bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand-dark disabled:opacity-60 sm:w-auto sm:text-sm"
+                    className={adminNeu.btnPrimary}
                   >
                     {saving ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(null)}
-                    className="w-full rounded border border-sky-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-white sm:w-auto sm:text-sm"
-                  >
-                    Cancel
                   </button>
                 </div>
               </div>
@@ -712,14 +711,14 @@ export function AdminConsole() {
               placeholder="Department name"
               value={deptName}
               onChange={(e) => setDeptName(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2 text-sm text-slate-700"
+              className={`min-w-0 flex-1 ${adminNeu.input}`}
             />
             <input
               type="text"
               placeholder="Description"
               value={deptDesc}
               onChange={(e) => setDeptDesc(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2 text-sm text-slate-700"
+              className={`min-w-0 flex-1 ${adminNeu.input}`}
             />
             <button type="submit" className={`shrink-0 ${adminNeu.btnPrimary}`}>
               Create department
@@ -728,12 +727,12 @@ export function AdminConsole() {
 
           <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {departments.map((d) => (
-              <li key={d.id} className={`${adminNeu.listRow} p-4`}>
+              <li key={d.id} className={`${adminNeu.card} p-4`}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold text-slate-900">{d.name}</h3>
-                    {d.description && <p className="mt-1 text-sm text-slate-400">{d.description}</p>}
-                    <p className="mt-2 text-xs text-slate-500">
+                    <h3 className="text-base font-bold text-[#242424]">{d.name}</h3>
+                    {d.description && <p className="mt-1 text-sm font-medium text-[#424242]">{d.description}</p>}
+                    <p className="mt-2 text-xs font-semibold text-[#616161]">
                       {d._count?.roles ?? d.roles?.length ?? 0} role(s)
                     </p>
                     {d.roles && d.roles.length > 0 && (
@@ -741,12 +740,12 @@ export function AdminConsole() {
                         {d.roles.map((role) => (
                           <li
                             key={role.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-sky-100 bg-[#f8fbfe] px-2.5 py-1.5 text-xs"
+                            className="flex items-center justify-between gap-2 rounded border border-[#e1dfdd] bg-[#faf9f8] px-2.5 py-1.5 text-xs"
                           >
-                            <span className="text-slate-600">
-                              {role.name} <span className="text-slate-500">({role.key})</span>
+                            <span className="font-semibold text-[#242424]">
+                              {role.name} <span className="font-medium text-[#616161]">({role.key})</span>
                             </span>
-                            <span className="text-slate-500">{role._count?.users ?? 0} users</span>
+                            <span className="font-semibold text-[#424242]">{role._count?.users ?? 0} users</span>
                           </li>
                         ))}
                       </ul>
@@ -760,7 +759,7 @@ export function AdminConsole() {
                         if (res.ok) await loadDepartments();
                       }
                     }}
-                    className="shrink-0 rounded-lg border border-rose-200 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-50"
+                    className={`shrink-0 ${adminNeu.btnDanger}`}
                   >
                     Delete
                   </button>
@@ -769,13 +768,15 @@ export function AdminConsole() {
             ))}
           </ul>
           {departments.length === 0 && (
-            <p className="text-sm text-slate-500">No departments yet. Create one above or run database seed.</p>
+            <p className="text-sm font-medium text-[#424242]">
+              No departments yet. Create one above or run database seed.
+            </p>
           )}
         </AdminPanel>
       )}
 
       {tab === "roles" && (
-        <div className="shell min-w-0 w-full max-w-full overflow-x-hidden">
+        <div className={`${adminNeu.panel} min-w-0 w-full max-w-full overflow-x-hidden`}>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -803,19 +804,19 @@ export function AdminConsole() {
               placeholder="Role name"
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:text-sm"
+              className={`min-w-0 flex-1 ${adminNeu.input}`}
             />
             <input
               type="text"
               placeholder="Key (e.g. analyst)"
               value={roleKey}
               onChange={(e) => setRoleKey(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:text-sm"
+              className={`min-w-0 flex-1 ${adminNeu.input}`}
             />
             <select
               value={roleDeptId}
               onChange={(e) => setRoleDeptId(e.target.value)}
-              className="w-full min-w-0 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:w-auto sm:text-sm"
+              className={`w-full min-w-0 sm:w-auto ${adminNeu.input}`}
             >
               <option value="">No department</option>
               {departments.map((dept) => (
@@ -824,24 +825,21 @@ export function AdminConsole() {
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              className="w-full shrink-0 rounded bg-sky-600 px-3 py-1.5 text-xs text-white sm:w-auto sm:text-sm"
-            >
+            <button type="submit" className={`w-full shrink-0 sm:w-auto ${adminNeu.btnPrimary}`}>
               Create role
             </button>
           </form>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-[#f0f0f0] rounded-lg border border-[#e1dfdd]">
             {rolesForSelect.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-col gap-2 rounded border border-sky-200 bg-[#f8fbfe] px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-3"
+                className={`flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${adminNeu.rowHover}`}
               >
                 <div className="min-w-0">
-                  <span className="text-sm font-medium text-slate-700 sm:text-base">{r.name}</span>
-                  <span className="ml-2 text-[11px] text-slate-500 sm:text-xs">{r.key}</span>
+                  <span className="text-sm font-semibold text-[#242424]">{r.name}</span>
+                  <span className={`ml-2 align-middle ${adminNeu.badge}`}>{r.key}</span>
                   {r.department && (
-                    <p className="text-[11px] text-sky-400 sm:text-xs">Dept: {r.department.name}</p>
+                    <p className="mt-0.5 text-xs font-medium text-[#424242]">Department: {r.department.name}</p>
                   )}
                 </div>
                 <button
@@ -856,14 +854,16 @@ export function AdminConsole() {
                       }
                     }
                   }}
-                  className="w-full shrink-0 rounded border border-rose-600/50 px-2 py-1 text-[11px] text-rose-400 hover:bg-rose-900/30 sm:w-auto sm:text-xs"
+                  className={`w-full shrink-0 sm:w-auto ${adminNeu.btnDanger}`}
                 >
                   Delete
                 </button>
               </li>
             ))}
             {roles.length === 0 && (
-              <li className="text-xs text-slate-400 sm:text-sm">No roles beyond defaults. Create one above.</li>
+              <li className="px-3 py-6 text-center text-sm font-medium text-[#424242]">
+                No roles beyond defaults. Create one above.
+              </li>
             )}
           </ul>
         </div>

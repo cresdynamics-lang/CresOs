@@ -143,7 +143,7 @@ export default function AdminClientPortalPage() {
       </AdminPanel>
 
       {error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-200">{error}</p>
+        <p className={`${adminNeu.alertDanger} px-4 py-3 text-sm font-semibold text-[#a4262c]`}>{error}</p>
       ) : null}
 
       {loading && !data ? <p className="text-sm text-slate-500">Loading client portal data…</p> : null}
@@ -151,7 +151,7 @@ export default function AdminClientPortalPage() {
       {data ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[18rem_minmax(0,1fr)_16rem]">
           <AdminPanel className="!p-0 flex max-h-[min(70vh,40rem)] flex-col overflow-hidden">
-            <p className="shrink-0 border-b border-sky-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="shrink-0 border-b border-[#e1dfdd] px-4 py-3 text-xs font-bold uppercase tracking-wide text-[#424242]">
               All clients
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -165,19 +165,17 @@ export default function AdminClientPortalPage() {
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedId(c.id)}
-                      className={`flex w-full flex-col gap-1 border-b border-sky-100 px-4 py-3 text-left transition-colors hover:bg-brand/5 ${
-                        active ? "bg-indigo-500/[0.08] ring-1 ring-inset ring-indigo-500/20" : ""
+                      className={`flex w-full flex-col gap-1 border-b border-[#f0f0f0] px-4 py-3 text-left transition-colors hover:bg-[#f3f8ff] ${
+                        active ? "bg-[#ebf3fc] ring-1 ring-inset ring-brand/25" : ""
                       }`}
                     >
                       <span className="truncate text-sm font-medium text-slate-700">{c.name}</span>
                       <span className="truncate text-xs text-slate-500">{c.email ?? "No email"}</span>
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] ${
-                            c.hasPortalAccess
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-sky-50 text-slate-500"
-                          }`}
+                          className={
+                            c.hasPortalAccess ? adminNeu.badgeSuccess : adminNeu.badge
+                          }
                         >
                           {c.hasPortalAccess ? "Portal user" : "No login"}
                         </span>
@@ -253,7 +251,7 @@ export default function AdminClientPortalPage() {
           </AdminPanel>
 
           <AdminPanel className="hidden max-h-[min(70vh,40rem)] flex-col overflow-hidden xl:flex !p-0">
-            <p className="shrink-0 border-b border-sky-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="shrink-0 border-b border-[#e1dfdd] px-4 py-3 text-xs font-bold uppercase tracking-wide text-[#424242]">
               Portal logins
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -271,7 +269,7 @@ export default function AdminClientPortalPage() {
                 </ul>
               )}
             </div>
-            <div className="shrink-0 border-t border-sky-100 p-3">
+            <div className="shrink-0 border-t border-[#e1dfdd] p-3">
               <Link href="/activity" className="text-xs font-medium text-brand hover:text-brand">
                 Full activity log →
               </Link>

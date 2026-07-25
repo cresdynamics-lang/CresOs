@@ -1575,6 +1575,10 @@ model EmailThread {
   messageId     String   // Email Message-ID header
   fromEmail     String
   fromName      String   @default("")
+  /// JSON arrays of { email, name } for To / Cc / Bcc on the original message
+  toEmails      String   @db.Text @default("[]")
+  ccEmails      String   @db.Text @default("[]")
+  bccEmails     String   @db.Text @default("[]")
   subject       String   @default("(no subject)")
   body          String   @db.Text @default("")
   receivedAt    DateTime @default(now())

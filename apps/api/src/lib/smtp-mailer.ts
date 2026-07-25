@@ -10,15 +10,20 @@ import type { EmailChannel } from "./email-senders";
 import { getEmailSender } from "./email-senders";
 
 export type SmtpSendInput = {
-  to: string;
+  /** Primary recipient(s). */
+  to: string | string[];
   subject: string;
   text: string;
   html?: string | null;
   replyTo?: string | null;
   from?: string | null;
+  cc?: string | string[];
+  bcc?: string | string[];
   /** Picks department From / Reply-To when `from` is not set. */
   emailChannel?: EmailChannel;
   attachments?: EmailAttachment[];
+  /** Optional headers e.g. In-Reply-To / References */
+  headers?: Record<string, string>;
 };
 
 type SmtpConfig = {
@@ -86,10 +91,13 @@ export async function smtpSendMail(input: SmtpSendInput): Promise<{ ok: true; id
     const info = await transporter.sendMail({
       from: fromHeader,
       to: input.to,
+      ...(input.cc ? { cc: input.cc } : {}),
+      ...(input.bcc ? { bcc: input.bcc } : {}),
       subject: input.subject,
       text: input.text,
       ...(input.html ? { html: input.html } : {}),
       ...(replyTo ? { replyTo } : {}),
+      ...(input.headers ? { headers: input.headers } : {}),
       ...(input.attachments?.length
         ? {
             attachments: input.attachments.map((a) => ({

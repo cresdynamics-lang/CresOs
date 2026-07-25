@@ -9,6 +9,8 @@ export type EmailStatus =
 
 export type SenderType = "external" | "internal";
 
+export type EmailRecipient = { email: string; name: string };
+
 export type ThreadSummary = {
   id: string;
   fromEmail: string;
@@ -22,12 +24,18 @@ export type ThreadSummary = {
   waMessageSid: string | null;
   hasAttachments: boolean;
   draftError: string | null;
+  toEmails?: EmailRecipient[];
+  ccEmails?: EmailRecipient[];
+  bccEmails?: EmailRecipient[];
 };
 
 export type ThreadDetail = ThreadSummary & {
   body: string;
   revisionNotes: string | null;
   messageId: string;
+  toEmails: EmailRecipient[];
+  ccEmails: EmailRecipient[];
+  bccEmails: EmailRecipient[];
 };
 
 export type EmailStats = {
@@ -77,14 +85,21 @@ export const STATUS_FILTERS = [
 export const EMAIL_SIDEBAR_PRIMARY = ["", "awaiting_approval", "ignored"] as const;
 
 export const STATUS_TONE: Record<EmailStatus, string> = {
-  pending_draft: "bg-slate-100 text-slate-700 ring-slate-200",
-  awaiting_approval: "bg-amber-50 text-amber-800 ring-amber-200",
-  editing: "bg-sky-50 text-sky-800 ring-sky-200",
-  approved: "bg-teal-50 text-teal-800 ring-teal-200",
-  sent: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  failed: "bg-rose-50 text-rose-800 ring-rose-200",
-  ignored: "bg-slate-50 text-slate-500 ring-slate-200"
+  pending_draft: "bg-slate-200 text-slate-900 ring-slate-300 font-semibold",
+  awaiting_approval: "bg-amber-100 text-amber-950 ring-amber-300 font-semibold",
+  editing: "bg-sky-100 text-sky-950 ring-sky-300 font-semibold",
+  approved: "bg-teal-100 text-teal-950 ring-teal-300 font-semibold",
+  sent: "bg-emerald-100 text-emerald-950 ring-emerald-300 font-semibold",
+  failed: "bg-rose-100 text-rose-950 ring-rose-400 font-semibold",
+  ignored: "bg-slate-100 text-slate-700 ring-slate-300 font-semibold"
 };
+
+export function formatRecipientLine(list: EmailRecipient[] | undefined): string {
+  if (!list?.length) return "";
+  return list
+    .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
+    .join(", ");
+}
 
 export function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {

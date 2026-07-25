@@ -12,6 +12,7 @@ import {
   STATUS_TONE,
   fmtDate,
   fmtDateShort,
+  formatRecipientLine,
   initials,
   type EmailStats,
   type EmailStatus,
@@ -305,10 +306,10 @@ export function EmailAutomationConsole() {
           <div className="flex flex-wrap items-center gap-2">
             {pollMsg ? (
               <span
-                className={`max-w-[16rem] truncate text-xs ${
+                className={`max-w-[16rem] truncate text-xs font-medium ${
                   pollMsg.toLowerCase().includes("fail") || pollMsg.toLowerCase().includes("auth")
-                    ? "text-rose-600"
-                    : "text-emerald-700"
+                    ? "text-rose-800"
+                    : "text-emerald-800"
                 }`}
               >
                 {pollMsg}
@@ -331,7 +332,7 @@ export function EmailAutomationConsole() {
         </div>
 
         {showConfig ? (
-          <div className="mt-3 rounded-xl border border-sky-100 bg-[#f5f9fc] p-3">
+          <div className="mt-3 rounded-xl border border-[#f0f0f0] bg-[#f5f5f5] p-3">
             {configLoading ? (
               <p className="text-xs text-slate-500">Loading…</p>
             ) : (
@@ -341,7 +342,7 @@ export function EmailAutomationConsole() {
                     type="checkbox"
                     checked={configEnabled}
                     onChange={(e) => setConfigEnabled(e.target.checked)}
-                    className="rounded border-sky-200 bg-white"
+                    className="rounded border-[#e1dfdd] bg-white"
                   />
                   Email automation enabled (IMAP fetch + AI drafts · send via Resend)
                 </label>
@@ -350,7 +351,7 @@ export function EmailAutomationConsole() {
                   value={configInstructions}
                   onChange={(e) => setConfigInstructions(e.target.value)}
                   placeholder="Optional custom instructions…"
-                  className="mt-2 w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  className="mt-2 w-full rounded-xl border border-[#e1dfdd] bg-white px-3 py-2 text-sm text-slate-700"
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <button type="button" onClick={() => void saveConfig()} disabled={configSaving} className={adminNeu.btnPrimary}>
@@ -361,7 +362,7 @@ export function EmailAutomationConsole() {
                   </button>
                 </div>
                 {showDefaultCeo ? (
-                  <pre className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-sky-100 bg-white p-3 text-[11px] text-slate-500">
+                  <pre className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-[#f0f0f0] bg-white p-3 text-[11px] text-slate-500">
                     {ceoDefault}
                   </pre>
                 ) : null}
@@ -376,9 +377,9 @@ export function EmailAutomationConsole() {
         {/* Column 1 — categories */}
         <nav
           aria-label="Email categories"
-          className="flex w-[11.5rem] shrink-0 flex-col overflow-y-auto border-r border-sky-200 bg-white"
+          className="flex w-[11.5rem] shrink-0 flex-col overflow-y-auto border-r border-[#e1dfdd] bg-white"
         >
-          <p className="shrink-0 px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <p className="shrink-0 px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">
             Categories
           </p>
           <div className="flex flex-col gap-0.5 px-2 pb-2">
@@ -390,15 +391,15 @@ export function EmailAutomationConsole() {
                   key={f.key || "received"}
                   type="button"
                   onClick={() => selectCategory(f.key)}
-                  className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors ${
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold transition-colors ${
                     active
                       ? "bg-brand/10 text-brand"
-                      : "text-slate-600 hover:bg-brand/5 hover:text-brand"
+                      : "text-slate-700 hover:bg-brand/5 hover:text-brand"
                   }`}
                 >
                   <span>{f.label}</span>
                   {typeof count === "number" ? (
-                    <span className={`tabular-nums text-[11px] ${active ? "text-brand" : "text-slate-400"}`}>
+                    <span className={`tabular-nums text-[11px] font-semibold ${active ? "text-brand" : "text-slate-600"}`}>
                       {count}
                     </span>
                   ) : null}
@@ -406,8 +407,8 @@ export function EmailAutomationConsole() {
               );
             })}
           </div>
-          <div className="mx-3 border-t border-sky-100" />
-          <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          <div className="mx-3 border-t border-[#f0f0f0]" />
+          <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
             More
           </p>
           <div className="flex flex-col gap-0.5 px-2 pb-3">
@@ -419,12 +420,14 @@ export function EmailAutomationConsole() {
                   key={f.key}
                   type="button"
                   onClick={() => selectCategory(f.key)}
-                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-medium ${
-                    active ? "bg-brand/10 text-brand" : "text-slate-500 hover:bg-brand/5 hover:text-slate-700"
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${
+                    active ? "bg-brand/10 text-brand" : "text-slate-600 hover:bg-brand/5 hover:text-slate-800"
                   }`}
                 >
                   <span>{f.label}</span>
-                  {typeof count === "number" ? <span className="tabular-nums text-[10px]">{count}</span> : null}
+                  {typeof count === "number" ? (
+                    <span className="tabular-nums text-[10px] font-semibold text-slate-600">{count}</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -432,14 +435,14 @@ export function EmailAutomationConsole() {
         </nav>
 
         {/* Column 2 — email list (own scroll) */}
-        <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r border-sky-200 bg-[#f8fbfe]">
-          <div className="shrink-0 border-b border-sky-100 p-2.5">
+        <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r border-[#e1dfdd] bg-[#faf9f8]">
+          <div className="shrink-0 border-b border-[#f0f0f0] p-2.5">
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search mail…"
-              className="w-full rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400"
+              className="w-full rounded-lg border border-[#e1dfdd] bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -455,11 +458,11 @@ export function EmailAutomationConsole() {
                     key={t.id}
                     type="button"
                     onClick={() => void openThread(t.id)}
-                    className={`flex w-full gap-2.5 border-b border-sky-100 px-2.5 py-2.5 text-left transition-colors hover:bg-brand/5 ${
+                    className={`flex w-full gap-2.5 border-b border-[#f0f0f0] px-2.5 py-2.5 text-left transition-colors hover:bg-brand/5 ${
                       active ? "bg-brand/10 ring-1 ring-inset ring-brand/25" : ""
                     }`}
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[11px] font-semibold text-slate-700">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ebf3fc] text-[11px] font-bold text-[#0b4a8f]">
                       {initials(t.fromName, t.fromEmail)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -467,14 +470,21 @@ export function EmailAutomationConsole() {
                         <span className="truncate text-[13px] font-medium text-slate-800">
                           {t.fromName || t.fromEmail}
                         </span>
-                        <span className="shrink-0 text-[10px] text-slate-400">{fmtDateShort(t.receivedAt)}</span>
+                        <span className="shrink-0 text-[10px] font-medium text-slate-600">{fmtDateShort(t.receivedAt)}</span>
                       </div>
-                      <p className="truncate text-[11px] text-slate-500">{t.subject}</p>
-                      <span
-                        className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-medium ring-1 ring-inset ${STATUS_TONE[t.status as EmailStatus]}`}
-                      >
-                        {STATUS_LABELS[t.status as EmailStatus]}
-                      </span>
+                      <p className="truncate text-[12px] font-medium text-slate-700">{t.subject}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <span
+                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] ring-1 ring-inset ${STATUS_TONE[t.status as EmailStatus]}`}
+                        >
+                          {STATUS_LABELS[t.status as EmailStatus]}
+                        </span>
+                        {(t.ccEmails?.length ?? 0) > 0 ? (
+                          <span className="inline-flex rounded-full bg-[#ebf3fc] px-1.5 py-0.5 text-[9px] font-bold text-[#0b4a8f] ring-1 ring-inset ring-brand/30">
+                            CC {t.ccEmails!.length}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </button>
                 );
@@ -482,7 +492,7 @@ export function EmailAutomationConsole() {
             )}
           </div>
           {total > LIMIT ? (
-            <div className="flex shrink-0 items-center justify-between border-t border-sky-100 px-2.5 py-1.5 text-[11px] text-slate-500">
+            <div className="flex shrink-0 items-center justify-between border-t border-[#f0f0f0] px-2.5 py-1.5 text-[11px] text-slate-500">
               <button type="button" disabled={offset === 0} onClick={() => void loadThreads(Math.max(0, offset - LIMIT))} className="disabled:opacity-30">
                 ←
               </button>
@@ -497,46 +507,73 @@ export function EmailAutomationConsole() {
         </aside>
 
         {/* Column 3 — body + AI draft in fixed scroll boxes */}
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#eef4fb]/50">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#faf9f8]">
           {detailLoading ? (
             <p className="py-16 text-center text-sm text-slate-500">Opening message…</p>
           ) : !selected ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-              <p className="text-sm font-medium text-slate-500">Select an email</p>
-              <p className="max-w-xs text-xs text-slate-400">
+              <p className="text-sm font-semibold text-slate-700">Select an email</p>
+              <p className="max-w-xs text-xs font-medium text-slate-600">
                 Body and AI draft open here in separate scrollable panels.
               </p>
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
+              <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
                   <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${STATUS_TONE[selected.status]}`}
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ring-1 ring-inset ${STATUS_TONE[selected.status]}`}
                   >
                     {STATUS_LABELS[selected.status]}
                   </span>
-                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selected.subject}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {selected.fromName || selected.fromEmail} · {fmtDate(selected.receivedAt)}
-                  </p>
+                  <p className="mt-1 truncate text-sm font-bold text-slate-900 sm:text-base">{selected.subject}</p>
+                  <dl className="mt-2 grid gap-1 text-xs leading-snug text-slate-800">
+                    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                      <dt className="font-semibold text-slate-600">From</dt>
+                      <dd className="min-w-0 truncate font-medium">
+                        {selected.fromName ? `${selected.fromName} <${selected.fromEmail}>` : selected.fromEmail}
+                      </dd>
+                    </div>
+                    {formatRecipientLine(selected.toEmails) ? (
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                        <dt className="font-semibold text-slate-600">To</dt>
+                        <dd className="min-w-0 break-words font-medium">{formatRecipientLine(selected.toEmails)}</dd>
+                      </div>
+                    ) : null}
+                    {formatRecipientLine(selected.ccEmails) ? (
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                        <dt className="font-semibold text-slate-600">Cc</dt>
+                        <dd className="min-w-0 break-words font-medium">{formatRecipientLine(selected.ccEmails)}</dd>
+                      </div>
+                    ) : null}
+                    {formatRecipientLine(selected.bccEmails) ? (
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                        <dt className="font-semibold text-slate-600">Bcc</dt>
+                        <dd className="min-w-0 break-words font-medium">{formatRecipientLine(selected.bccEmails)}</dd>
+                      </div>
+                    ) : null}
+                    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                      <dt className="font-semibold text-slate-600">Date</dt>
+                      <dd className="font-medium text-slate-700">{fmtDate(selected.receivedAt)}</dd>
+                    </div>
+                  </dl>
                 </div>
               </div>
 
               {selected.draftError ? (
-                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs text-rose-700`}>
-                  <p className="font-medium">Draft failed</p>
-                  <p className="mt-0.5 whitespace-pre-wrap">{selected.draftError}</p>
+                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs text-rose-900`}>
+                  <p className="font-bold">Draft failed</p>
+                  <p className="mt-0.5 whitespace-pre-wrap font-medium">{selected.draftError}</p>
                 </div>
               ) : null}
 
               {/* Received body — scrollable box */}
-              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm">
-                <header className="shrink-0 border-b border-sky-100 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Email body</p>
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#e1dfdd] bg-white shadow-sm">
+                <header className="shrink-0 border-b border-[#f0f0f0] px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-700">Email body</p>
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                  <div className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-800">
                     {selected.body || "(empty)"}
                   </div>
                 </div>
@@ -544,10 +581,10 @@ export function EmailAutomationConsole() {
 
               {/* AI draft — scrollable box */}
               <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-brand/25 bg-white shadow-sm">
-                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-100 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">AI draft reply</p>
+                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[#f0f0f0] px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand">AI draft reply</p>
                   {canAct && !editingDraft && selected.draftReply ? (
-                    <button type="button" onClick={() => setEditingDraft(true)} className="text-[11px] font-medium text-brand hover:underline">
+                    <button type="button" onClick={() => setEditingDraft(true)} className="text-[11px] font-semibold text-brand hover:underline">
                       Edit
                     </button>
                   ) : null}
@@ -557,10 +594,10 @@ export function EmailAutomationConsole() {
                     <textarea
                       value={draftText}
                       onChange={(e) => setDraftText(e.target.value)}
-                      className="h-full min-h-[8rem] w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 focus:outline-none"
+                      className="h-full min-h-[8rem] w-full resize-none bg-transparent text-sm font-medium leading-relaxed text-slate-800 focus:outline-none"
                     />
                   ) : (
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    <div className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-800">
                       {selected.draftReply || "(Draft not ready yet — pipeline may still be running)"}
                     </div>
                   )}
@@ -568,10 +605,10 @@ export function EmailAutomationConsole() {
               </section>
 
               {actionError ? (
-                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs text-rose-700`}>{actionError}</div>
+                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs font-semibold text-rose-900`}>{actionError}</div>
               ) : null}
               {actionSuccess ? (
-                <div className={`${adminNeu.alertInfo} shrink-0 px-3 py-2 text-xs text-emerald-700`}>{actionSuccess}</div>
+                <div className={`${adminNeu.alertInfo} shrink-0 px-3 py-2 text-xs font-semibold text-emerald-900`}>{actionSuccess}</div>
               ) : null}
 
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -599,18 +636,21 @@ export function EmailAutomationConsole() {
                   </>
                 ) : null}
                 {selected.status === "sent" ? (
-                  <span className="text-xs text-emerald-700">Reply sent to {selected.fromEmail}</span>
+                  <span className="text-xs font-semibold text-emerald-900">
+                    Reply sent to {selected.fromEmail}
+                    {(selected.ccEmails?.length ?? 0) > 0 ? ` (and ${selected.ccEmails!.length} Cc)` : ""}
+                  </span>
                 ) : null}
               </div>
 
               {showRevise ? (
-                <div className="shrink-0 rounded-xl border border-sky-100 bg-white p-3">
+                <div className="shrink-0 rounded-xl border border-[#f0f0f0] bg-white p-3">
                   <textarea
                     rows={2}
                     value={revisionNotes}
                     onChange={(e) => setRevisionNotes(e.target.value)}
                     placeholder="Revision notes for the AI (optional)…"
-                    className="w-full rounded-lg border border-sky-200 px-2.5 py-1.5 text-sm text-slate-700"
+                    className="w-full rounded-lg border border-[#e1dfdd] px-2.5 py-1.5 text-sm text-slate-700"
                   />
                   <div className="mt-2 flex gap-2">
                     <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnPrimary}>

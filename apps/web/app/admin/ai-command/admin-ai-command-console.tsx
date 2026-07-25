@@ -31,7 +31,7 @@ function PromptChips({ prompts, onPick }: { prompts: string[]; onPick: (p: strin
           key={p}
           type="button"
           onClick={() => onPick(p)}
-          className="rounded-full border border-sky-200 bg-white px-3 py-1.5 text-left text-[11px] text-slate-600 hover:border-brand/40 hover:bg-brand/5 hover:text-brand"
+          className="rounded-full border border-[#d1d1d1] bg-white px-3 py-1.5 text-left text-[11px] font-medium text-[#242424] hover:border-brand/40 hover:bg-[#f3f8ff] hover:text-[#0b4a8f]"
         >
           {p}
         </button>
@@ -233,7 +233,7 @@ export function AdminAiCommandConsole() {
             fit.
           </p>
 
-          <div className="mt-4 flex gap-2 border-b border-sky-100 pb-3">
+          <div className="mt-4 flex gap-2 border-b border-[#e1dfdd] pb-3">
             {isAdmin ? (
               <button
                 type="button"
@@ -271,10 +271,10 @@ export function AdminAiCommandConsole() {
                   key={f.id}
                   type="button"
                   onClick={() => setFocus(f.id)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
                     focus === f.id
-                      ? "bg-brand/15 text-brand border border-brand/30"
-                      : "border border-sky-200 text-slate-500 hover:border-brand/30 hover:text-brand"
+                      ? "border border-brand/35 bg-[#ebf3fc] text-[#0b4a8f]"
+                      : "border border-[#d1d1d1] text-[#424242] hover:border-brand/40 hover:text-[#0b4a8f]"
                   }`}
                 >
                   {f.label}

@@ -52,13 +52,19 @@ export async function sendOutboundEmail(input: SmtpSendInput): Promise<SendResul
       const sender = getEmailSender(input.emailChannel ?? "default");
       const from = input.from?.trim() || sender.from;
       const replyTo = input.replyTo?.trim() || sender.replyTo;
+      const toList = Array.isArray(input.to) ? input.to : [input.to];
+      const ccList = input.cc ? (Array.isArray(input.cc) ? input.cc : [input.cc]) : undefined;
+      const bccList = input.bcc ? (Array.isArray(input.bcc) ? input.bcc : [input.bcc]) : undefined;
       const { data, error } = await resend.emails.send({
         from,
-        to: [input.to],
+        to: toList,
+        ...(ccList?.length ? { cc: ccList } : {}),
+        ...(bccList?.length ? { bcc: bccList } : {}),
         subject: input.subject,
         text: input.text,
         ...(input.html ? { html: input.html } : {}),
         ...(replyTo ? { replyTo } : {}),
+        ...(input.headers ? { headers: input.headers } : {}),
         ...(input.attachments?.length
           ? {
               attachments: input.attachments.map((a) => ({

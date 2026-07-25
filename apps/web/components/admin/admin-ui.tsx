@@ -5,12 +5,12 @@ import type { StatTone } from "../stat-card";
 import { adminNeu } from "./admin-theme";
 
 const statToneClass: Record<StatTone, { value: string; label: string }> = {
-  brand: { value: "text-brand", label: "text-slate-500" },
-  emerald: { value: "text-emerald-700", label: "text-slate-500" },
-  amber: { value: "text-amber-700", label: "text-slate-500" },
-  rose: { value: "text-rose-700", label: "text-slate-500" },
-  sky: { value: "text-brand", label: "text-slate-500" },
-  violet: { value: "text-violet-700", label: "text-slate-500" }
+  brand: { value: "text-[#0b4a8f]", label: "text-[#424242]" },
+  emerald: { value: "text-[#0b5c15]", label: "text-[#424242]" },
+  amber: { value: "text-[#8a5300]", label: "text-[#424242]" },
+  rose: { value: "text-[#a4262c]", label: "text-[#424242]" },
+  sky: { value: "text-[#0b4a8f]", label: "text-[#424242]" },
+  violet: { value: "text-[#5c2e91]", label: "text-[#424242]" }
 };
 
 export function AdminStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -35,9 +35,9 @@ export function AdminStatInline({
   const s = statToneClass[tone];
   return (
     <div className="min-w-0">
-      <p className={`text-[10px] font-semibold uppercase tracking-wide ${s.label}`}>{label}</p>
+      <p className={`text-[10px] font-bold uppercase tracking-wide ${s.label}`}>{label}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
-      {hint ? <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
+      {hint ? <p className="mt-0.5 text-[11px] font-medium text-[#616161] sm:text-xs">{hint}</p> : null}
     </div>
   );
 }
@@ -58,9 +58,7 @@ export function AdminPanel({
 
 export function AdminFieldLabel({ children }: { children: ReactNode }) {
   return (
-    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-      {children}
-    </label>
+    <label className="mb-1 block text-xs font-semibold text-[#242424]">{children}</label>
   );
 }
 

@@ -25,8 +25,11 @@ export type EmailTemplateDesign = {
   headerTitle: string;
   logoUrl: string;
   heroImageUrl: string;
+  /** Optional signature / letterhead image shown under the body. */
+  signatureImageUrl: string;
   showLogo: boolean;
   showHeroImage: boolean;
+  showSignatureImage: boolean;
   borderRadius: number;
   bodyAlign: "left" | "center";
   contentIntro: string;
@@ -127,8 +130,10 @@ export function defaultDesignForKey(key: string): EmailTemplateDesign {
     headerTitle: isReply ? "Re: {{subject}}" : "{{subject}}",
     logoUrl: "",
     heroImageUrl: "",
+    signatureImageUrl: "",
     showLogo: false,
     showHeroImage: false,
+    showSignatureImage: false,
     borderRadius: 14,
     bodyAlign: "left",
     contentIntro: isReply ? "{{greeting}}" : "",
@@ -186,6 +191,13 @@ export function compileTemplateHtml(design: EmailTemplateDesign, publicApiBase: 
       ? `<img src="${abs(design.logoUrl)}" alt="Logo" width="auto" height="48" style="display:block;max-height:48px;margin:0 0 14px 0;border:0;" />`
       : "";
 
+  const signatureBlock =
+    design.showSignatureImage && design.signatureImageUrl
+      ? `<div style="margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0;">
+<img src="${abs(design.signatureImageUrl)}" alt="Signature" style="display:block;max-width:280px;height:auto;border:0;" />
+</div>`
+      : "";
+
   const introBlock = design.contentIntro.trim()
     ? `<div style="font-size:${design.fontSize + 1}px;color:#0f172a;font-weight:600;margin-bottom:14px;">${design.contentIntro}</div>`
     : "";
@@ -223,11 +235,12 @@ export function compileTemplateHtml(design: EmailTemplateDesign, publicApiBase: 
           <td style="padding:26px 28px 20px;font-family:${font};font-size:${design.fontSize}px;color:${design.textColor};line-height:1.65;text-align:${design.bodyAlign};">
             ${introBlock}
             <div>{{body}}</div>
+            ${signatureBlock}
             ${buttonBlock}
           </td>
         </tr>
         <tr>
-          <td style="background:${design.footerBackground};padding:14px 28px;border-top:1px solid #e2e8f0;font-family:${font};font-size:12px;color:#94a3b8;line-height:1.5;text-align:${design.bodyAlign};">
+          <td style="background:${design.footerBackground};padding:14px 28px;border-top:1px solid #e2e8f0;font-family:${font};font-size:12px;color:#64748b;line-height:1.5;text-align:${design.bodyAlign};">
             ${design.footerText}
           </td>
         </tr>

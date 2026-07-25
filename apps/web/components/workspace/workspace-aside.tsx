@@ -37,9 +37,9 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
   },
   admin: {
     panel: "bg-white",
-    border: "border-brand/30",
-    title: "text-brand",
-    subtitle: "text-slate-500"
+    border: "border-[#e1dfdd]",
+    title: "text-[#0b4a8f]",
+    subtitle: "text-[#424242]"
   },
   client: {
     panel: "bg-white",

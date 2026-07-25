@@ -81,8 +81,8 @@ export function CreateEmployeeAccountModal({
 }: CreateEmployeeAccountModalProps) {
   const [form, setForm] = useState<CreateEmployeeAccountPayload>(EMPTY_FORM);
   const neu = theme === "admin" ? adminNeu : hrNeu;
-  const accentEyebrow = theme === "admin" ? "text-brand/80" : "text-rose-400/80";
-  const accentError = "border-rose-200 bg-rose-950/40 text-rose-200";
+  const accentEyebrow = theme === "admin" ? "text-[#616161]" : "text-rose-700";
+  const accentError = "border-rose-300 bg-rose-50 font-semibold text-rose-900";
 
   useEffect(() => {
     if (!open) setForm({ ...EMPTY_FORM, hireDate: new Date().toISOString().slice(0, 10) });
@@ -120,7 +120,7 @@ export function CreateEmployeeAccountModal({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-brand/5 hover:text-slate-700"
+            className="rounded-lg px-2 py-1 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
             aria-label="Close"
           >
             ✕

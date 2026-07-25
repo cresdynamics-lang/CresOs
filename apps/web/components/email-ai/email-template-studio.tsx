@@ -141,7 +141,7 @@ export function EmailTemplateStudio({
   const [useCustomHtml, setUseCustomHtml] = useState(false);
   const [customHtml, setCustomHtml] = useState("");
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState<"logo" | "hero" | null>(null);
+  const [uploading, setUploading] = useState<"logo" | "hero" | "signature" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const selected = useMemo(
@@ -195,7 +195,7 @@ export function EmailTemplateStudio({
     setUseCustomHtml(false);
   };
 
-  const uploadAsset = async (file: File, target: "logo" | "hero") => {
+  const uploadAsset = async (file: File, target: "logo" | "hero" | "signature") => {
     setUploading(target);
     setMessage(null);
     try {
@@ -209,8 +209,10 @@ export function EmailTemplateStudio({
       }
       if (target === "logo") {
         patchDesign({ logoUrl: data.url, showLogo: true });
-      } else {
+      } else if (target === "hero") {
         patchDesign({ heroImageUrl: data.url, showHeroImage: true, headerStyle: "image" });
+      } else {
+        patchDesign({ signatureImageUrl: data.url, showSignatureImage: true });
       }
     } finally {
       setUploading(null);
@@ -433,7 +435,15 @@ export function EmailTemplateStudio({
                         onUpload={(f) => void uploadAsset(f, "hero")}
                         onClear={() => patchDesign({ heroImageUrl: "", showHeroImage: false })}
                       />
-                      <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <ImageUploadField
+                        label="Signature image"
+                        hint="Shown under the reply body (PNG/JPG). Also used for Reply-All sends."
+                        value={design.signatureImageUrl}
+                        uploading={uploading === "signature"}
+                        onUpload={(f) => void uploadAsset(f, "signature")}
+                        onClear={() => patchDesign({ signatureImageUrl: "", showSignatureImage: false })}
+                      />
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                         <input
                           type="checkbox"
                           checked={design.showLogo}
@@ -441,6 +451,15 @@ export function EmailTemplateStudio({
                           className="rounded border-sky-200"
                         />
                         Show logo
+                      </label>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={design.showSignatureImage}
+                          onChange={(e) => patchDesign({ showSignatureImage: e.target.checked })}
+                          className="rounded border-sky-200"
+                        />
+                        Show signature image
                       </label>
                     </div>
                   ) : null}

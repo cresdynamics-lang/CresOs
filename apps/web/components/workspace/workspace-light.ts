@@ -22,14 +22,14 @@ export const lightSurface = {
   input:
     "rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand/50 focus:outline-none focus:ring-2 focus:ring-brand/15",
   alertWarning: "rounded-xl border border-amber-200 bg-amber-50 shadow-sm",
-  alertDanger: "rounded-xl border border-rose-200 bg-rose-50 shadow-sm",
-  alertInfo: "rounded-xl border border-sky-200 bg-sky-50 shadow-sm",
+  alertDanger: "rounded-xl border border-rose-300 bg-rose-100 shadow-sm",
+  alertInfo: "rounded-xl border border-sky-300 bg-sky-100 shadow-sm",
   statBrand: "border-brand/25 bg-brand-light/60",
-  statEmerald: "border-emerald-200 bg-emerald-50",
-  statAmber: "border-amber-200 bg-amber-50",
-  statRose: "border-rose-200 bg-rose-50",
-  statViolet: "border-violet-200 bg-violet-50",
-  statSky: "border-sky-200 bg-sky-50",
-  statIndigo: "border-indigo-200 bg-indigo-50",
-  statTeal: "border-teal-200 bg-teal-50"
+  statEmerald: "border-emerald-300 bg-emerald-100",
+  statAmber: "border-amber-300 bg-amber-100",
+  statRose: "border-rose-300 bg-rose-100",
+  statViolet: "border-violet-300 bg-violet-100",
+  statSky: "border-sky-300 bg-sky-100",
+  statIndigo: "border-indigo-300 bg-indigo-100",
+  statTeal: "border-teal-300 bg-teal-100"
 } as const;

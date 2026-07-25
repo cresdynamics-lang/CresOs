@@ -235,37 +235,47 @@ html.theme-dark .shell {
   padding-right: 0;
 }
 
-/* Admin workspace — bright Cres Dynamics (brand blue) */
+/* Admin workspace — Microsoft 365 admin-center neutrals + Cres Dynamics accent */
 .admin-neu {
-  --admin-neu-bg: #eef4fb;
+  --admin-neu-bg: #faf9f8;
   --admin-neu-surface: #ffffff;
-  --admin-neu-inset: #f5f9fc;
-  --admin-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --admin-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  --admin-neu-inset: #f5f5f5;
+  --admin-neu-stroke: #e1dfdd;
+  --admin-neu-raised: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --admin-neu-inset-shadow: none;
+  color: #242424;
 }
 
 .admin-neu .shell {
-  border-color: rgba(186, 230, 253, 0.9);
-  background-color: #ffffff;
+  border-radius: 0.5rem;
+  border-color: var(--admin-neu-stroke);
+  background-color: var(--admin-neu-surface);
   box-shadow: var(--admin-neu-raised);
 }
 
 .admin-neu input:not([type="checkbox"]):not([type="radio"]),
 .admin-neu select,
 .admin-neu textarea {
-  border-radius: 0.75rem;
-  border-color: rgba(186, 230, 253, 0.95);
-  background-color: #f5f9fc;
-  color: #1e293b;
-  box-shadow: var(--admin-neu-inset-shadow);
+  border-radius: 0.375rem;
+  border-color: #8a8886;
+  background-color: #ffffff;
+  color: #242424;
+  box-shadow: none;
 }
 
 .admin-neu input:not([type="checkbox"]):not([type="radio"]):focus,
 .admin-neu select:focus,
 .admin-neu textarea:focus {
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: #1f6feb;
   outline: none;
-  box-shadow: var(--admin-neu-inset-shadow), 0 0 0 2px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.25);
+}
+
+/* Admin never renders faded body copy — lift legacy low-contrast utilities */
+.admin-neu [class*="text-slate-300"],
+.admin-neu [class*="text-slate-400"],
+.admin-neu [class*="text-slate-500"] {
+  color: #424242 !important;
 }
 
 .admin-fullscreen .shell {

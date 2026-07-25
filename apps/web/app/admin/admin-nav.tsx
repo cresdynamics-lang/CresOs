@@ -100,9 +100,9 @@ function AdminNavLinks({ vertical = false }: { vertical?: boolean }) {
         {groups.map((group) => (
           <div key={group.title}>
             {group.title === "App" ? (
-              <div className="mx-2 mb-3 border-t border-sky-100 pt-3" aria-hidden />
+              <div className="mx-2 mb-3 border-t border-[#e1dfdd] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">
+            <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#616161]">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">
