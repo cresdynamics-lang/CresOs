@@ -81,8 +81,8 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/finance/onboarding",
-    label: "Onboarding",
-    shortLabel: "Onboard",
+    label: "Playbook",
+    shortLabel: "Playbook",
     section: "onboarding",
     group: "overview",
     roles: ["admin", "finance", "analyst", "director_admin"],
@@ -218,7 +218,7 @@ function FinanceNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -327,7 +327,7 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
     description: "Voice or text to record expenses and payments, or ask about cash flow and invoices."
   },
   onboarding: {
-    title: "Finance onboarding",
-    description: "Ask AI what’s expected in Finance, who to escalate to, and how Cres Dynamics money flows work."
+    title: "Finance playbook",
+    description: "Expectations, escalations, and money-flow rules for Finance."
   }
 };

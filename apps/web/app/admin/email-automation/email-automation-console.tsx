@@ -6,6 +6,7 @@ import { adminNeu } from "../../../components/admin/admin-theme";
 import { AdminPanel } from "../../../components/admin/admin-ui";
 import { EmailTemplateStudio } from "../../../components/email-ai/email-template-studio";
 import {
+  EMAIL_SIDEBAR_PRIMARY,
   STATUS_FILTERS,
   STATUS_LABELS,
   STATUS_TONE,
@@ -19,59 +20,6 @@ import {
 } from "../../../components/email-ai/email-ai-types";
 
 const LIMIT = 30;
-
-function EmailMessageCard({
-  label,
-  from,
-  email,
-  date,
-  subject,
-  body,
-  variant = "inbound"
-}: {
-  label: string;
-  from: string;
-  email: string;
-  date: string;
-  subject: string;
-  body: string;
-  variant?: "inbound" | "draft";
-}) {
-  const isDraft = variant === "draft";
-  return (
-    <article
-      className={`overflow-hidden rounded-2xl border shadow-sm ${
-        isDraft
-          ? "border-indigo-500/25 bg-gradient-to-b from-indigo-500/[0.06] to-[#121820]"
-          : "border-white/[0.08] bg-white/[0.03]"
-      }`}
-    >
-      <header className="flex items-start gap-3 border-b border-white/[0.06] px-4 py-3 sm:px-5">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-            isDraft ? "bg-indigo-500/20 text-indigo-200" : "bg-slate-700/80 text-slate-200"
-          }`}
-        >
-          {initials(from, email)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-100">{from || email}</p>
-              <p className="truncate text-xs text-slate-500">{email}</p>
-            </div>
-            <time className="shrink-0 text-[11px] text-slate-500">{fmtDate(date)}</time>
-          </div>
-          <p className="mt-2 text-sm font-medium text-slate-200">{subject}</p>
-        </div>
-      </header>
-      <div className="px-4 py-4 sm:px-5">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-        <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300">{body || "(empty)"}</div>
-      </div>
-    </article>
-  );
-}
 
 export function EmailAutomationConsole() {
   const { apiFetch } = useAuth();
@@ -102,7 +50,6 @@ export function EmailAutomationConsole() {
   const [ceoDefault, setCeoDefault] = useState("");
   const [polling, setPolling] = useState(false);
   const [pollMsg, setPollMsg] = useState<string | null>(null);
-  const [waResending, setWaResending] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
@@ -173,7 +120,6 @@ export function EmailAutomationConsole() {
       setEditingDraft(false);
       setShowRevise(false);
       setRevisionNotes("");
-      setWaResending(false);
       try {
         const res = await apiFetch(`/email-automation/threads/${id}`);
         if (res.ok) {
@@ -264,23 +210,6 @@ export function EmailAutomationConsole() {
     }
   }, [selected, revisionNotes, apiFetch, loadThreads, offset]);
 
-  const doResendWhatsApp = useCallback(async () => {
-    if (!selected) return;
-    setWaResending(true);
-    clearAction();
-    try {
-      const res = await apiFetch(`/email-automation/threads/${selected.id}/resend-whatsapp`, { method: "POST" });
-      if (res.ok) {
-        setActionSuccess("Draft re-sent to WhatsApp.");
-      } else {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setActionError(d.error ?? "Failed to resend to WhatsApp");
-      }
-    } finally {
-      setWaResending(false);
-    }
-  }, [selected, apiFetch]);
-
   const doRetry = useCallback(async () => {
     if (!selected) return;
     clearAction();
@@ -352,21 +281,35 @@ export function EmailAutomationConsole() {
     (selected.status === "failed" || (selected.status === "pending_draft" && !selected.draftReply)) &&
     !actionBusy;
 
+  const primaryFilters = STATUS_FILTERS.filter((f) =>
+    (EMAIL_SIDEBAR_PRIMARY as readonly string[]).includes(f.key)
+  );
+  const secondaryFilters = STATUS_FILTERS.filter(
+    (f) => !(EMAIL_SIDEBAR_PRIMARY as readonly string[]).includes(f.key)
+  );
+
+  const selectCategory = (key: string) => {
+    setStatusFilter(key);
+    setSelected(null);
+    void loadThreads(0, key);
+  };
+
   return (
-    <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-4">
-      <AdminPanel className="!p-4 sm:!p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex h-[calc(100dvh-6.5rem)] min-h-[28rem] flex-col gap-3 overflow-hidden">
+      <AdminPanel className="!shrink-0 !p-3 sm:!p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-400">Command · Email AI</p>
-            <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Inbox &amp; automated replies</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Inbound mail is drafted by AI using the email body plus extracted PDF/Word/text attachments, then reviewed here.
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Command · Email AI</p>
+            <h1 className="mt-0.5 text-lg font-semibold text-slate-900 sm:text-xl">Inbox &amp; automated replies</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {pollMsg ? (
               <span
-                className={`text-xs ${pollMsg.toLowerCase().includes("fail") ? "text-rose-400" : "text-emerald-400"}`}
+                className={`max-w-[16rem] truncate text-xs ${
+                  pollMsg.toLowerCase().includes("fail") || pollMsg.toLowerCase().includes("auth")
+                    ? "text-rose-600"
+                    : "text-emerald-700"
+                }`}
               >
                 {pollMsg}
               </span>
@@ -375,12 +318,12 @@ export function EmailAutomationConsole() {
               {polling ? "Checking…" : "Check inbox"}
             </button>
             <button type="button" onClick={() => setShowTemplates(true)} className={adminNeu.btnGhost}>
-              Template studio
+              Templates
             </button>
             <button
               type="button"
               onClick={() => setShowConfig((v) => !v)}
-              className={showConfig ? adminNeu.navActive + " px-3 py-2 text-sm" : adminNeu.btnGhost}
+              className={showConfig ? `${adminNeu.navActive} px-3 py-2 text-sm` : adminNeu.btnGhost}
             >
               AI instructions
             </button>
@@ -388,41 +331,37 @@ export function EmailAutomationConsole() {
         </div>
 
         {showConfig ? (
-          <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#0e1319] p-4">
-            <p className="text-sm font-medium text-slate-200">Email AI settings</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Enable automation and optionally override CEO / Director tone defaults for all inbound drafts.
-            </p>
+          <div className="mt-3 rounded-xl border border-sky-100 bg-[#f5f9fc] p-3">
             {configLoading ? (
-              <p className="mt-3 text-xs text-slate-500">Loading…</p>
+              <p className="text-xs text-slate-500">Loading…</p>
             ) : (
               <>
-                <label className="mt-4 flex cursor-pointer items-center gap-3 text-sm text-slate-300">
+                <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-600">
                   <input
                     type="checkbox"
                     checked={configEnabled}
                     onChange={(e) => setConfigEnabled(e.target.checked)}
-                    className="rounded border-white/20 bg-[#121820]"
+                    className="rounded border-sky-200 bg-white"
                   />
-                  Email automation enabled (IMAP fetch + AI drafts)
+                  Email automation enabled (IMAP fetch + AI drafts · send via Resend)
                 </label>
                 <textarea
-                  rows={5}
+                  rows={3}
                   value={configInstructions}
                   onChange={(e) => setConfigInstructions(e.target.value)}
                   placeholder="Optional custom instructions…"
-                  className="mt-3 w-full rounded-xl border border-white/[0.08] bg-[#121820] px-3 py-2.5 text-sm text-slate-200"
+                  className="mt-2 w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700"
                 />
-                <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="mt-2 flex flex-wrap items-center gap-3">
                   <button type="button" onClick={() => void saveConfig()} disabled={configSaving} className={adminNeu.btnPrimary}>
                     {configSaving ? "Saving…" : "Save settings"}
                   </button>
-                  <button type="button" onClick={() => setShowDefaultCeo((v) => !v)} className="text-xs text-slate-400 hover:text-slate-300">
+                  <button type="button" onClick={() => setShowDefaultCeo((v) => !v)} className="text-xs text-slate-500 hover:text-slate-700">
                     {showDefaultCeo ? "Hide" : "View"} CEO default
                   </button>
                 </div>
                 {showDefaultCeo ? (
-                  <pre className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-white/[0.06] bg-[#0b0f14] p-3 text-[11px] text-slate-400">
+                  <pre className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-sky-100 bg-white p-3 text-[11px] text-slate-500">
                     {ceoDefault}
                   </pre>
                 ) : null}
@@ -432,228 +371,217 @@ export function EmailAutomationConsole() {
         ) : null}
       </AdminPanel>
 
-      <div className={`${adminNeu.panel} !p-0 flex min-h-0 flex-1 flex-col overflow-hidden`}>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.06] px-3 py-3 sm:px-4">
-          {STATUS_FILTERS.map((f) => {
-            const count = stats ? stats[f.statKey] : undefined;
-            const active = statusFilter === f.key;
-            return (
-              <button
-                key={f.key || "all"}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(f.key);
-                  void loadThreads(0, f.key);
-                }}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                  active
-                    ? "bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-500/30"
-                    : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
-                }`}
-              >
-                {f.label}
-                {typeof count === "number" ? (
-                  <span className={`tabular-nums ${active ? "text-indigo-300" : "text-slate-500"}`}>{count}</span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-full max-w-sm shrink-0 flex-col border-r border-white/[0.06] bg-[#0e1319]/60">
-            <div className="shrink-0 border-b border-white/[0.06] p-3">
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search mail…"
-                className="w-full rounded-xl border border-white/[0.08] bg-[#121820] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600"
-              />
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {listLoading ? (
-                <p className="py-16 text-center text-xs text-slate-500">Loading inbox…</p>
-              ) : filteredThreads.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-16 text-center">
-                  <div className="text-3xl opacity-30">✉</div>
-                  <p className="text-xs text-slate-500">No messages in this folder</p>
-                </div>
-              ) : (
-                filteredThreads.map((t) => {
-                  const active = selected?.id === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => void openThread(t.id)}
-                      className={`flex w-full gap-3 border-b border-white/[0.04] px-3 py-3 text-left transition-colors hover:bg-white/[0.03] ${
-                        active ? "bg-indigo-500/[0.08] ring-1 ring-inset ring-indigo-500/20" : ""
-                      }`}
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700/80 text-xs font-semibold text-slate-200">
-                        {initials(t.fromName, t.fromEmail)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-slate-200">
-                            {t.fromName || t.fromEmail}
-                          </span>
-                          <span className="shrink-0 text-[10px] text-slate-500">{fmtDateShort(t.receivedAt)}</span>
-                        </div>
-                        <p className="truncate text-xs text-slate-400">{t.subject}</p>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${STATUS_TONE[t.status as EmailStatus]}`}
-                          >
-                            {STATUS_LABELS[t.status as EmailStatus]}
-                          </span>
-                          <span className="text-[10px] text-slate-600">
-                            {t.senderType === "external" ? "Client" : "Internal"}
-                          </span>
-                          {t.hasAttachments ? (
-                            <span className="text-[10px] text-amber-500/90">📎 Attachments</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            {total > LIMIT ? (
-              <div className="flex shrink-0 items-center justify-between border-t border-white/[0.06] px-3 py-2 text-xs text-slate-500">
+      {/* 3 columns: categories | email list | body + draft — each scrolls on its own */}
+      <div className={`${adminNeu.panel} !p-0 flex min-h-0 flex-1 overflow-hidden`}>
+        {/* Column 1 — categories */}
+        <nav
+          aria-label="Email categories"
+          className="flex w-[11.5rem] shrink-0 flex-col overflow-y-auto border-r border-sky-200 bg-white"
+        >
+          <p className="shrink-0 px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Categories
+          </p>
+          <div className="flex flex-col gap-0.5 px-2 pb-2">
+            {primaryFilters.map((f) => {
+              const count = stats ? stats[f.statKey] : undefined;
+              const active = statusFilter === f.key;
+              return (
                 <button
+                  key={f.key || "received"}
                   type="button"
-                  disabled={offset === 0}
-                  onClick={() => void loadThreads(Math.max(0, offset - LIMIT))}
-                  className="disabled:opacity-30"
+                  onClick={() => selectCategory(f.key)}
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors ${
+                    active
+                      ? "bg-brand/10 text-brand"
+                      : "text-slate-600 hover:bg-brand/5 hover:text-brand"
+                  }`}
                 >
-                  ← Prev
-                </button>
-                <span>
-                  {offset + 1}–{Math.min(offset + LIMIT, total)} of {total}
-                </span>
-                <button
-                  type="button"
-                  disabled={offset + LIMIT >= total}
-                  onClick={() => void loadThreads(offset + LIMIT)}
-                  className="disabled:opacity-30"
-                >
-                  Next →
-                </button>
-              </div>
-            ) : null}
-          </aside>
-
-          <main className="min-w-0 flex-1 overflow-y-auto bg-[#0b0f14]/40">
-            {detailLoading ? (
-              <p className="py-24 text-center text-sm text-slate-500">Opening message…</p>
-            ) : !selected ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10 text-3xl">✉</div>
-                <p className="text-sm font-medium text-slate-400">Select a message to review</p>
-                <p className="max-w-sm text-xs text-slate-600">
-                  AI drafts appear here for approval. Sent replies use your saved email template.
-                </p>
-              </div>
-            ) : (
-              <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${STATUS_TONE[selected.status]}`}
-                    >
-                      {STATUS_LABELS[selected.status]}
+                  <span>{f.label}</span>
+                  {typeof count === "number" ? (
+                    <span className={`tabular-nums text-[11px] ${active ? "text-brand" : "text-slate-400"}`}>
+                      {count}
                     </span>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {selected.senderType === "external" ? "External sender · CEO tone" : "Internal · Director tone"}
-                      {selected.hasAttachments ? " · Attachments included in AI context" : ""}
-                    </p>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mx-3 border-t border-sky-100" />
+          <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            More
+          </p>
+          <div className="flex flex-col gap-0.5 px-2 pb-3">
+            {secondaryFilters.map((f) => {
+              const count = stats ? stats[f.statKey] : undefined;
+              const active = statusFilter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => selectCategory(f.key)}
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-medium ${
+                    active ? "bg-brand/10 text-brand" : "text-slate-500 hover:bg-brand/5 hover:text-slate-700"
+                  }`}
+                >
+                  <span>{f.label}</span>
+                  {typeof count === "number" ? <span className="tabular-nums text-[10px]">{count}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Column 2 — email list (own scroll) */}
+        <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r border-sky-200 bg-[#f8fbfe]">
+          <div className="shrink-0 border-b border-sky-100 p-2.5">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search mail…"
+              className="w-full rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {listLoading ? (
+              <p className="py-12 text-center text-xs text-slate-500">Loading…</p>
+            ) : filteredThreads.length === 0 ? (
+              <p className="px-3 py-12 text-center text-xs text-slate-500">No messages in this category</p>
+            ) : (
+              filteredThreads.map((t) => {
+                const active = selected?.id === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => void openThread(t.id)}
+                    className={`flex w-full gap-2.5 border-b border-sky-100 px-2.5 py-2.5 text-left transition-colors hover:bg-brand/5 ${
+                      active ? "bg-brand/10 ring-1 ring-inset ring-brand/25" : ""
+                    }`}
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[11px] font-semibold text-slate-700">
+                      {initials(t.fromName, t.fromEmail)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate text-[13px] font-medium text-slate-800">
+                          {t.fromName || t.fromEmail}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-slate-400">{fmtDateShort(t.receivedAt)}</span>
+                      </div>
+                      <p className="truncate text-[11px] text-slate-500">{t.subject}</p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-medium ring-1 ring-inset ${STATUS_TONE[t.status as EmailStatus]}`}
+                      >
+                        {STATUS_LABELS[t.status as EmailStatus]}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {total > LIMIT ? (
+            <div className="flex shrink-0 items-center justify-between border-t border-sky-100 px-2.5 py-1.5 text-[11px] text-slate-500">
+              <button type="button" disabled={offset === 0} onClick={() => void loadThreads(Math.max(0, offset - LIMIT))} className="disabled:opacity-30">
+                ←
+              </button>
+              <span>
+                {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
+              </span>
+              <button type="button" disabled={offset + LIMIT >= total} onClick={() => void loadThreads(offset + LIMIT)} className="disabled:opacity-30">
+                →
+              </button>
+            </div>
+          ) : null}
+        </aside>
+
+        {/* Column 3 — body + AI draft in fixed scroll boxes */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#eef4fb]/50">
+          {detailLoading ? (
+            <p className="py-16 text-center text-sm text-slate-500">Opening message…</p>
+          ) : !selected ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+              <p className="text-sm font-medium text-slate-500">Select an email</p>
+              <p className="max-w-xs text-xs text-slate-400">
+                Body and AI draft open here in separate scrollable panels.
+              </p>
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${STATUS_TONE[selected.status]}`}
+                  >
+                    {STATUS_LABELS[selected.status]}
+                  </span>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selected.subject}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {selected.fromName || selected.fromEmail} · {fmtDate(selected.receivedAt)}
+                  </p>
+                </div>
+              </div>
+
+              {selected.draftError ? (
+                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs text-rose-700`}>
+                  <p className="font-medium">Draft failed</p>
+                  <p className="mt-0.5 whitespace-pre-wrap">{selected.draftError}</p>
+                </div>
+              ) : null}
+
+              {/* Received body — scrollable box */}
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm">
+                <header className="shrink-0 border-b border-sky-100 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Email body</p>
+                </header>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    {selected.body || "(empty)"}
                   </div>
                 </div>
+              </section>
 
-                {selected.draftError ? (
-                  <div className={`${adminNeu.alertDanger} px-4 py-3 text-sm text-rose-300`}>
-                    <p className="font-medium">Draft failed</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-rose-200/90">{selected.draftError}</p>
-                  </div>
-                ) : null}
-
-                <EmailMessageCard
-                  label="Received"
-                  from={selected.fromName}
-                  email={selected.fromEmail}
-                  date={selected.receivedAt}
-                  subject={selected.subject}
-                  body={selected.body}
-                  variant="inbound"
-                />
-
-                {editingDraft ? (
-                  <div className="overflow-hidden rounded-2xl border border-indigo-500/25 bg-[#121820]">
-                    <div className="border-b border-white/[0.06] px-4 py-3 sm:px-5">
-                      <p className="text-sm font-semibold text-indigo-200">Edit reply draft</p>
-                    </div>
+              {/* AI draft — scrollable box */}
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-brand/25 bg-white shadow-sm">
+                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-100 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">AI draft reply</p>
+                  {canAct && !editingDraft && selected.draftReply ? (
+                    <button type="button" onClick={() => setEditingDraft(true)} className="text-[11px] font-medium text-brand hover:underline">
+                      Edit
+                    </button>
+                  ) : null}
+                </header>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+                  {editingDraft ? (
                     <textarea
-                      rows={12}
                       value={draftText}
                       onChange={(e) => setDraftText(e.target.value)}
-                      className="w-full resize-y bg-transparent px-4 py-4 text-sm leading-relaxed text-slate-200 focus:outline-none sm:px-5"
+                      className="h-full min-h-[8rem] w-full resize-none bg-transparent text-sm leading-relaxed text-slate-700 focus:outline-none"
                     />
-                  </div>
-                ) : (
-                  <EmailMessageCard
-                    label="AI draft reply"
-                    from="Cres Dynamics"
-                    email="reply@cresdynamics.com"
-                    date={selected.updatedAt}
-                    subject={`Re: ${selected.subject}`}
-                    body={selected.draftReply || "(Draft not ready yet — pipeline may still be running)"}
-                    variant="draft"
-                  />
-                )}
+                  ) : (
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                      {selected.draftReply || "(Draft not ready yet — pipeline may still be running)"}
+                    </div>
+                  )}
+                </div>
+              </section>
 
-                {selected.waMessageSid && ["awaiting_approval", "editing"].includes(selected.status) ? (
-                  <div className={`${adminNeu.alertInfo} flex items-center gap-3 px-4 py-3 text-sm text-indigo-200`}>
-                    <span>📱</span>
-                    <span className="flex-1">Draft on WhatsApp — reply APPROVE, IGNORE, or edit then SUBMIT.</span>
-                    <button
-                      type="button"
-                      onClick={() => void doResendWhatsApp()}
-                      disabled={waResending}
-                      className="text-xs font-medium text-indigo-300 hover:text-indigo-200"
-                    >
-                      {waResending ? "Sending…" : "Resend"}
-                    </button>
-                  </div>
-                ) : null}
+              {actionError ? (
+                <div className={`${adminNeu.alertDanger} shrink-0 px-3 py-2 text-xs text-rose-700`}>{actionError}</div>
+              ) : null}
+              {actionSuccess ? (
+                <div className={`${adminNeu.alertInfo} shrink-0 px-3 py-2 text-xs text-emerald-700`}>{actionSuccess}</div>
+              ) : null}
 
-                {actionError ? (
-                  <div className={`${adminNeu.alertDanger} px-4 py-3 text-sm text-rose-300`}>{actionError}</div>
-                ) : null}
-                {actionSuccess ? (
-                  <div className={`${adminNeu.alertInfo} px-4 py-3 text-sm text-emerald-300`}>{actionSuccess}</div>
-                ) : null}
-
+              <div className="flex shrink-0 flex-wrap gap-2">
                 {canRetryDraft ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => void doRetry()} disabled={actionBusy} className={adminNeu.btnPrimary}>
-                      {actionBusy ? "Generating…" : "Retry AI draft"}
-                    </button>
-                    <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnGhost}>
-                      Regenerate with notes
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => void doRetry()} disabled={actionBusy} className={adminNeu.btnPrimary}>
+                    {actionBusy ? "Generating…" : "Retry AI draft"}
+                  </button>
                 ) : null}
-
                 {["awaiting_approval", "editing", "failed"].includes(selected.status) ? (
-                  <div className="flex flex-wrap gap-2">
-                    {canAct && !editingDraft && selected.draftReply ? (
-                      <button type="button" onClick={() => setEditingDraft(true)} className={adminNeu.btnGhost}>
-                        Edit draft
-                      </button>
-                    ) : null}
+                  <>
                     <button
                       type="button"
                       onClick={() => void doApprove()}
@@ -662,63 +590,41 @@ export function EmailAutomationConsole() {
                     >
                       {actionBusy ? "Sending…" : editingDraft ? "Save & send" : "Approve & send"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowRevise((v) => !v)}
-                      disabled={actionBusy}
-                      className={adminNeu.btnGhost}
-                    >
+                    <button type="button" onClick={() => setShowRevise((v) => !v)} disabled={actionBusy} className={adminNeu.btnGhost}>
                       Regenerate
                     </button>
                     <button type="button" onClick={() => void doIgnore()} disabled={actionBusy} className={adminNeu.btnGhost}>
                       Ignore
                     </button>
-                    {!selected.waMessageSid ? (
-                      <button
-                        type="button"
-                        onClick={() => void doResendWhatsApp()}
-                        disabled={waResending || !selected.draftReply}
-                        className={adminNeu.btnGhost}
-                      >
-                        Send to WhatsApp
-                      </button>
-                    ) : null}
-                  </div>
+                  </>
                 ) : null}
-
-                {showRevise ? (
-                  <div className="rounded-xl border border-white/[0.06] bg-[#0e1319] p-4">
-                    <p className="text-xs font-medium text-slate-400">Revision notes for the AI (optional)</p>
-                    <textarea
-                      rows={3}
-                      value={revisionNotes}
-                      onChange={(e) => setRevisionNotes(e.target.value)}
-                      placeholder="E.g. Shorter, mention our 3-day turnaround…"
-                      className="mt-2 w-full rounded-lg border border-white/[0.08] bg-[#121820] px-3 py-2 text-sm text-slate-200"
-                    />
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnPrimary}>
-                        {actionBusy ? "Generating…" : "Generate new draft"}
-                      </button>
-                      <button type="button" onClick={() => setShowRevise(false)} className={adminNeu.btnGhost}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
                 {selected.status === "sent" ? (
-                  <div className={`${adminNeu.alertInfo} px-4 py-3 text-sm text-emerald-300`}>
-                    Reply sent to {selected.fromEmail}
-                  </div>
-                ) : null}
-                {selected.status === "ignored" ? (
-                  <p className="text-sm text-slate-500">This message was ignored.</p>
+                  <span className="text-xs text-emerald-700">Reply sent to {selected.fromEmail}</span>
                 ) : null}
               </div>
-            )}
-          </main>
-        </div>
+
+              {showRevise ? (
+                <div className="shrink-0 rounded-xl border border-sky-100 bg-white p-3">
+                  <textarea
+                    rows={2}
+                    value={revisionNotes}
+                    onChange={(e) => setRevisionNotes(e.target.value)}
+                    placeholder="Revision notes for the AI (optional)…"
+                    className="w-full rounded-lg border border-sky-200 px-2.5 py-1.5 text-sm text-slate-700"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" onClick={() => void doRegenerate()} disabled={actionBusy} className={adminNeu.btnPrimary}>
+                      {actionBusy ? "Generating…" : "Generate new draft"}
+                    </button>
+                    <button type="button" onClick={() => setShowRevise(false)} className={adminNeu.btnGhost}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </main>
       </div>
 
       <EmailTemplateStudio apiFetch={apiFetch} open={showTemplates} onClose={() => setShowTemplates(false)} />

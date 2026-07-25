@@ -64,23 +64,26 @@ export const STATUS_LABELS: Record<EmailStatus, string> = {
 };
 
 export const STATUS_FILTERS = [
-  { key: "", label: "All", statKey: "total" as const },
+  { key: "", label: "Received", statKey: "total" as const },
   { key: "awaiting_approval", label: "Awaiting Review", statKey: "pending" as const },
-  { key: "editing", label: "Editing", statKey: "editing" as const },
+  { key: "ignored", label: "Ignored", statKey: "ignored" as const },
   { key: "pending_draft", label: "Drafting", statKey: "drafting" as const },
+  { key: "editing", label: "Editing", statKey: "editing" as const },
   { key: "sent", label: "Sent", statKey: "sent" as const },
-  { key: "failed", label: "Failed", statKey: "failed" as const },
-  { key: "ignored", label: "Ignored", statKey: "ignored" as const }
+  { key: "failed", label: "Failed", statKey: "failed" as const }
 ];
 
+/** Primary sidebar categories shown first in Admin Email. */
+export const EMAIL_SIDEBAR_PRIMARY = ["", "awaiting_approval", "ignored"] as const;
+
 export const STATUS_TONE: Record<EmailStatus, string> = {
-  pending_draft: "bg-slate-500/15 text-slate-300 ring-slate-500/20",
-  awaiting_approval: "bg-amber-500/15 text-amber-300 ring-amber-500/25",
-  editing: "bg-sky-500/15 text-sky-300 ring-sky-500/25",
-  approved: "bg-teal-500/15 text-teal-300 ring-teal-500/25",
-  sent: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
-  failed: "bg-rose-500/15 text-rose-300 ring-rose-500/25",
-  ignored: "bg-slate-600/10 text-slate-500 ring-slate-600/20"
+  pending_draft: "bg-slate-100 text-slate-700 ring-slate-200",
+  awaiting_approval: "bg-amber-50 text-amber-800 ring-amber-200",
+  editing: "bg-sky-50 text-sky-800 ring-sky-200",
+  approved: "bg-teal-50 text-teal-800 ring-teal-200",
+  sent: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  failed: "bg-rose-50 text-rose-800 ring-rose-200",
+  ignored: "bg-slate-50 text-slate-500 ring-slate-200"
 };
 
 export function fmtDate(iso: string): string {

@@ -42,10 +42,9 @@ function fallbackReply(audience: OnboardingAudience, message: string): Onboardin
   return {
     audience,
     reply:
-      `Here's your Cres Dynamics ${audienceLabel(audience)} onboarding baseline.\n\n` +
-      `**What's expected of you**\n${expectations}\n\n` +
-      `**When this happens → go to this person**\n${contacts}\n\n` +
-      `(AI is offline — configure GROQ_API_KEY for richer answers from the live knowledge pool. Your question: "${message.slice(0, 160)}")`,
+      `**${audienceLabel(audience)} playbook**\n\n` +
+      `Expected:\n${expectations}\n\n` +
+      `When → who:\n${contacts}`,
     aiGenerated: false,
     suggestedQuestions: playbook.suggestedQuestions,
     contactRules: playbook.contactRules.map((r) => ({ when: r.when, goTo: r.goTo }))
@@ -63,9 +62,7 @@ export async function runOnboardingChat(
   if (!trimmed) {
     return {
       audience,
-      reply:
-        `Welcome to Onboarding for **${audienceLabel(audience)}**.\n\n` +
-        `${playbook.summary}\n\nAsk anything about expectations, who to contact, or how Cres Dynamics runs for your role.`,
+      reply: playbook.summary,
       aiGenerated: false,
       suggestedQuestions: playbook.suggestedQuestions,
       contactRules: playbook.contactRules.map((r) => ({ when: r.when, goTo: r.goTo }))
@@ -81,24 +78,25 @@ export async function runOnboardingChat(
     trimmed
   );
 
-  const system = `You are CresOS Onboarding Coach for Cres Dynamics.
-You onboard people into their ROLE — never invent other roles' private finances or HR details unless audience is admin.
-Audience: ${audienceLabel(audience)} (${audience}).
-${audience === "admin" ? "Admin may see org-wide knowledge." : "Stay strictly within this role's playbook + role-scoped knowledge."}
+  const system = `You are the Cres Dynamics Playbook assistant in CresOS.
+You answer ROLE questions for: ${audienceLabel(audience)} (${audience}).
+${audience === "admin" ? "Admin may use org-wide knowledge." : "Stay within this role's playbook + role-scoped knowledge."}
+Never invent other roles' private finance/HR details unless audience is admin.
 
 Return JSON only:
 {
   "reply": "markdown answer",
-  "followUpQuestions": ["optional 2-4 suggested next questions"]
+  "followUpQuestions": ["optional 1-3 short next questions"]
 }
 
-Answer style:
-- Lead with what is expected of them for this role.
-- Explicitly map "when X happens → go to Y" using the contact rules.
-- Use knowledge pool facts when present; say when pool is thin.
-- Be concrete about CresOS screens (Schedule, Reports, CRM, Finance, PM, HR) when relevant.
+Answer style — CRITICAL:
+- Answer directly in 2–6 short sentences (or a tight bullet list). No preamble, no "as an AI", no long explanations.
+- Lead with the answer. Skip background unless asked.
+- Map "when X → go to Y" only when the question is about who to contact.
+- Prefer facts from the knowledge pool; if thin, say so in one line and use the playbook.
+- Name CresOS screens only when useful (Schedule, Reports, CRM, Finance, PM, HR).
 - Do not invent employee names not in context.
-${poolEmpty ? "- Knowledge pool is thin for this role filter; lean on the playbook." : ""}`;
+${poolEmpty ? "- Knowledge pool is thin for this role; lean on the playbook." : ""}`;
 
   try {
     const { raw } = await groqChatWithFallback({
@@ -106,11 +104,11 @@ ${poolEmpty ? "- Knowledge pool is thin for this role filter; lean on the playbo
         { role: "system", content: system },
         {
           role: "user",
-          content: `New joiner / role question:\n${trimmed}\n\n--- CONTEXT ---\n${contextBlock}`
+          content: `Question:\n${trimmed}\n\n--- CONTEXT ---\n${contextBlock}`
         }
       ],
-      max_tokens: 1600,
-      temperature: 0.35,
+      max_tokens: 700,
+      temperature: 0.25,
       response_format: { type: "json_object" }
     });
 

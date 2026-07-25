@@ -404,13 +404,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     isSettingsRoute;
 
   return (
-    <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-slate-950" : ""}`}>
+    <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-[#eef4fb]" : "bg-[#eef4fb]"}`}>
       {mobileNavOpen && !hideShellChrome && !isSettingsRoute && (
         <div className="fixed inset-0 z-40">
           <button
             type="button"
             aria-label="Close menu"
-            className="absolute inset-0 bg-slate-950/70"
+            className="absolute inset-0 bg-slate-900/40"
             onClick={() => setMobileNavOpen(false)}
           />
           {workspace === "hr" ? (
@@ -510,27 +510,27 @@ export function AppShell({ children }: { children: ReactNode }) {
         }`}
       >
         <header
-          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 backdrop-blur-sm sm:gap-3 sm:px-4 sm:py-2.5 ${
+          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-white px-3 py-2 shadow-sm sm:gap-3 sm:px-4 sm:py-2.5 ${
             hideTopHeader
               ? "hidden"
-              : "max-lg:fixed max-lg:inset-x-0 max-lg:top-0 max-lg:z-50 max-lg:pt-[env(safe-area-inset-top,0px)] lg:relative lg:top-auto lg:bg-slate-950/95"
+              : "max-lg:fixed max-lg:inset-x-0 max-lg:top-0 max-lg:z-50 max-lg:pt-[env(safe-area-inset-top,0px)] lg:relative lg:top-auto lg:bg-white/95"
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 active:bg-slate-700 md:hidden"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border-2 border-brand/40 bg-brand/10 p-2.5 text-brand hover:border-brand hover:bg-brand/15 hover:text-brand-dark active:bg-brand/20 md:hidden"
               aria-label="Open menu"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             <img src="/LOGO.jpg" width={28} height={28} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
             <div className="min-w-0 text-xs font-medium uppercase tracking-wide text-slate-500">
-              <span className="truncate text-slate-400">{auth.orgName?.trim() || "Workspace"}</span>
+              <span className="truncate text-slate-700">{auth.orgName?.trim() || "Workspace"}</span>
             </div>
           </div>
           <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-wrap items-center justify-end gap-1.5 sm:max-w-none sm:gap-2">
@@ -539,7 +539,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* Fullscreen toggle — all workspace pages */}
             <button
               onClick={toggleFullscreen}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 lg:min-h-0 lg:min-w-0 lg:p-2"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-sky-200 bg-[#f5f9fc] p-2.5 text-slate-600 hover:border-brand/40 hover:text-brand lg:min-h-0 lg:min-w-0 lg:p-2"
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >

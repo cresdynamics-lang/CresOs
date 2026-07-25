@@ -6,34 +6,34 @@ import { financeNeu } from "./finance-theme";
 
 const statToneClass: Record<StatTone, { shell: string; value: string; label: string }> = {
   brand: {
-    shell: "border-brand/15 bg-[#10141a]",
+    shell: "border-brand/25 bg-brand-light/70",
     value: "text-brand",
-    label: "text-slate-400"
+    label: "text-slate-500"
   },
   emerald: {
     shell: financeNeu.statEmerald,
-    value: "text-emerald-400",
-    label: "text-slate-400"
+    value: "text-emerald-700",
+    label: "text-slate-500"
   },
   amber: {
     shell: financeNeu.statAmber,
-    value: "text-amber-400",
-    label: "text-slate-400"
+    value: "text-amber-700",
+    label: "text-slate-500"
   },
   rose: {
     shell: financeNeu.statRose,
-    value: "text-rose-400",
-    label: "text-slate-400"
+    value: "text-rose-700",
+    label: "text-slate-500"
   },
   sky: {
-    shell: "border-sky-500/15 bg-[#10141a]",
-    value: "text-sky-400",
-    label: "text-slate-400"
+    shell: "border-sky-200 bg-sky-50",
+    value: "text-sky-700",
+    label: "text-slate-500"
   },
   violet: {
     shell: financeNeu.statViolet,
-    value: "text-violet-400",
-    label: "text-slate-400"
+    value: "text-violet-700",
+    label: "text-slate-500"
   }
 };
 
@@ -90,7 +90,7 @@ export function FinanceStatGrid({ children }: { children: ReactNode }) {
 export function FinanceStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-white/[0.06] pb-6 sm:grid-cols-4 ${className}`.trim()}
+      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-sky-100 pb-6 sm:grid-cols-4 ${className}`.trim()}
     >
       {children}
     </div>
@@ -148,7 +148,7 @@ export function FinanceFlatTable({
 export function FinanceFlatTableHead({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-white/[0.06] text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
         {children}
       </tr>
     </thead>
@@ -156,7 +156,7 @@ export function FinanceFlatTableHead({ children }: { children: ReactNode }) {
 }
 
 export function FinanceFlatTableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>;
+  return <tbody className="divide-y divide-sky-100">{children}</tbody>;
 }
 
 export function FinanceFlatTableRow({
@@ -166,7 +166,7 @@ export function FinanceFlatTableRow({
   children: ReactNode;
   className?: string;
 }) {
-  return <tr className={`text-slate-200 ${className}`.trim()}>{children}</tr>;
+  return <tr className={`text-slate-700 ${className}`.trim()}>{children}</tr>;
 }
 
 export function FinanceFlatTh({
@@ -209,15 +209,15 @@ export function FinanceFlatTd({
 }
 
 const statusTone: Record<string, string> = {
-  sent: "text-sky-400",
-  paid: "text-emerald-400",
-  partial: "text-amber-400",
-  draft: "text-slate-400",
-  overdue: "text-rose-400"
+  sent: "text-sky-700",
+  paid: "text-emerald-700",
+  partial: "text-amber-700",
+  draft: "text-slate-500",
+  overdue: "text-rose-700"
 };
 
 export function FinanceStatusLabel({ status }: { status: string }) {
-  const tone = statusTone[status.toLowerCase()] ?? "text-slate-400";
+  const tone = statusTone[status.toLowerCase()] ?? "text-slate-500";
   return <span className={`text-xs font-medium capitalize ${tone}`}>{status.replace(/_/g, " ")}</span>;
 }
 
@@ -236,8 +236,8 @@ export function FinanceTextAction({
 }) {
   const cls =
     tone === "danger"
-      ? "text-rose-400 hover:text-rose-300"
-      : "text-slate-400 hover:text-emerald-400";
+      ? "text-rose-600 hover:text-rose-700"
+      : "text-slate-500 hover:text-emerald-700";
   if (href) {
     return (
       <a href={href} className={`text-xs font-medium transition-colors ${cls} ${className}`.trim()}>

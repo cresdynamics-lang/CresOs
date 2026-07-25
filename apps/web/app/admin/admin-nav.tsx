@@ -16,7 +16,7 @@ type NavItem = {
 const ADMIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Command center", shortLabel: "Home", group: "command", match: "exact" },
   { href: "/admin/ai-command", label: "AI Command", shortLabel: "AI Command", group: "command", match: "prefix" },
-  { href: "/admin/onboarding", label: "Onboarding", shortLabel: "Onboard", group: "command", match: "prefix" },
+  { href: "/admin/onboarding", label: "Playbook", shortLabel: "Playbook", group: "command", match: "prefix" },
   { href: "/admin/email-automation", label: "Email AI", shortLabel: "Email AI", group: "command", match: "prefix" },
   { href: "/analytics", label: "Analytics", group: "command", match: "prefix" },
   { href: "/activity", label: "Activity log", shortLabel: "Activity", group: "command", match: "prefix" },
@@ -100,9 +100,9 @@ function AdminNavLinks({ vertical = false }: { vertical?: boolean }) {
         {groups.map((group) => (
           <div key={group.title}>
             {group.title === "App" ? (
-              <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
+              <div className="mx-2 mb-3 border-t border-sky-100 pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">

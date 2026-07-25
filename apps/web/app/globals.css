@@ -3,23 +3,23 @@
 @tailwind utilities;
 
 body {
-  @apply bg-slate-950 text-slate-50 antialiased;
+  @apply bg-[#eef4fb] text-slate-800 antialiased;
 }
 
-html.theme-light body {
-  @apply bg-slate-100 text-slate-900;
+html.theme-dark body {
+  @apply bg-slate-950 text-slate-50;
 }
 
 .shell {
-  @apply max-w-full min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 backdrop-blur px-3 py-3 sm:px-6 sm:py-4;
+  @apply max-w-full min-w-0 rounded-2xl border border-sky-200/80 bg-white shadow-sm px-3 py-3 sm:px-6 sm:py-4;
 }
 
-html.theme-light .shell {
-  @apply border-slate-200 bg-white/95 text-slate-900;
+html.theme-dark .shell {
+  @apply border-slate-800 bg-slate-900/70 text-slate-50 shadow-none;
 }
 
 .nav-link {
-  @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors;
+  @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand/5 hover:text-brand transition-colors;
 }
 
 .nav-link-active {
@@ -57,18 +57,109 @@ html.theme-light .shell {
   }
 }
 
-/* Finance workspace — dark neumorphism */
+/* Bright workspace text remaps — leftover dark utilities stay readable */
+.finance-neu,
+.admin-neu,
+.sales-neu,
+.developer-neu,
+.director-neu,
+.hr-neu,
+.pm-neu,
+.client-neu {
+  color: #1e293b;
+}
+
+.finance-neu [class*="text-slate-100"],
+.finance-neu [class*="text-slate-200"],
+.finance-neu [class*="text-slate-300"],
+.admin-neu [class*="text-slate-100"],
+.admin-neu [class*="text-slate-200"],
+.admin-neu [class*="text-slate-300"],
+.sales-neu [class*="text-slate-100"],
+.sales-neu [class*="text-slate-200"],
+.sales-neu [class*="text-slate-300"],
+.developer-neu [class*="text-slate-100"],
+.developer-neu [class*="text-slate-200"],
+.developer-neu [class*="text-slate-300"],
+.director-neu [class*="text-slate-100"],
+.director-neu [class*="text-slate-200"],
+.director-neu [class*="text-slate-300"],
+.hr-neu [class*="text-slate-100"],
+.hr-neu [class*="text-slate-200"],
+.hr-neu [class*="text-slate-300"],
+.pm-neu [class*="text-slate-100"],
+.pm-neu [class*="text-slate-200"],
+.pm-neu [class*="text-slate-300"],
+.client-neu [class*="text-slate-100"],
+.client-neu [class*="text-slate-200"],
+.client-neu [class*="text-slate-300"] {
+  color: #334155 !important;
+}
+
+.finance-neu [class*="text-slate-400"],
+.admin-neu [class*="text-slate-400"],
+.sales-neu [class*="text-slate-400"],
+.developer-neu [class*="text-slate-400"],
+.director-neu [class*="text-slate-400"],
+.hr-neu [class*="text-slate-400"],
+.pm-neu [class*="text-slate-400"],
+.client-neu [class*="text-slate-400"] {
+  color: #64748b !important;
+}
+
+.finance-neu [class*="border-slate-700"],
+.finance-neu [class*="border-slate-800"],
+.admin-neu [class*="border-slate-700"],
+.admin-neu [class*="border-slate-800"],
+.sales-neu [class*="border-slate-700"],
+.sales-neu [class*="border-slate-800"],
+.developer-neu [class*="border-slate-700"],
+.developer-neu [class*="border-slate-800"],
+.director-neu [class*="border-slate-700"],
+.director-neu [class*="border-slate-800"],
+.hr-neu [class*="border-slate-700"],
+.hr-neu [class*="border-slate-800"],
+.pm-neu [class*="border-slate-700"],
+.pm-neu [class*="border-slate-800"] {
+  border-color: #bae6fd !important;
+}
+
+.finance-neu [class*="bg-slate-800"],
+.finance-neu [class*="bg-slate-900"],
+.finance-neu [class*="bg-slate-950"],
+.admin-neu [class*="bg-slate-800"],
+.admin-neu [class*="bg-slate-900"],
+.admin-neu [class*="bg-slate-950"],
+.sales-neu [class*="bg-slate-800"],
+.sales-neu [class*="bg-slate-900"],
+.sales-neu [class*="bg-slate-950"],
+.developer-neu [class*="bg-slate-800"],
+.developer-neu [class*="bg-slate-900"],
+.developer-neu [class*="bg-slate-950"],
+.director-neu [class*="bg-slate-800"],
+.director-neu [class*="bg-slate-900"],
+.director-neu [class*="bg-slate-950"],
+.hr-neu [class*="bg-slate-800"],
+.hr-neu [class*="bg-slate-900"],
+.hr-neu [class*="bg-slate-950"],
+.pm-neu [class*="bg-slate-800"],
+.pm-neu [class*="bg-slate-900"],
+.pm-neu [class*="bg-slate-950"] {
+  background-color: #ffffff !important;
+}
+
+/* Finance workspace — bright Cres Dynamics */
 .finance-neu {
-  --finance-neu-bg: #0b0f14;
-  --finance-neu-surface: #121820;
-  --finance-neu-inset: #0e1319;
-  --finance-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --finance-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --finance-neu-bg: #eef4fb;
+  --finance-neu-surface: #ffffff;
+  --finance-neu-inset: #f5f9fc;
+  --finance-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --finance-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .finance-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
+  border-color: rgba(186, 230, 253, 0.9);
+  background-color: #ffffff;
   box-shadow: var(--finance-neu-raised);
 }
 
@@ -76,9 +167,9 @@ html.theme-light .shell {
 .finance-neu select,
 .finance-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
-  background-color: #0e1319;
-  color: #f1f5f9;
+  border-color: rgba(186, 230, 253, 0.95);
+  background-color: #f5f9fc;
+  color: #1e293b;
   box-shadow: var(--finance-neu-inset-shadow);
 }
 
@@ -93,33 +184,33 @@ html.theme-light .shell {
 .finance-neu li[class*="border-slate-800"],
 .finance-neu [class*="bg-slate-900/60"],
 .finance-neu [class*="bg-slate-900/30"] {
-  border-color: rgba(255, 255, 255, 0.04) !important;
-  background-color: #10161e !important;
-  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4), -2px -2px 8px rgba(255, 255, 255, 0.03);
+  border-color: rgba(186, 230, 253, 0.9) !important;
+  background-color: #f8fbfe !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .finance-neu table {
-  border-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(186, 230, 253, 0.9);
 }
 
 .finance-neu button[class*="bg-emerald-600"],
 .finance-neu button[class*="bg-amber-600"],
 .finance-neu button[class*="bg-sky-600"] {
-  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.45), -2px -2px 8px rgba(16, 185, 129, 0.12);
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.25);
 }
 
 .finance-neu button[class*="border-slate-600"],
 .finance-neu button[class*="border-slate-700"] {
-  border-color: rgba(255, 255, 255, 0.06) !important;
-  background-color: #121820 !important;
-  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.35), -2px -2px 8px rgba(255, 255, 255, 0.03);
+  border-color: rgba(125, 211, 252, 0.7) !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .finance-neu [class*="bg-slate-950/40"],
 .finance-neu [class*="bg-slate-900/40"] {
-  border-color: rgba(255, 255, 255, 0.04) !important;
-  background-color: #0e1319 !important;
-  box-shadow: inset 3px 3px 10px rgba(0, 0, 0, 0.4), inset -2px -2px 8px rgba(255, 255, 255, 0.02);
+  border-color: rgba(186, 230, 253, 0.9) !important;
+  background-color: #f5f9fc !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .finance-fullscreen .shell {
@@ -144,18 +235,18 @@ html.theme-light .shell {
   padding-right: 0;
 }
 
-/* Admin workspace — dark neumorphism (indigo accent) */
+/* Admin workspace — bright Cres Dynamics (brand blue) */
 .admin-neu {
-  --admin-neu-bg: #0b0f14;
-  --admin-neu-surface: #121820;
-  --admin-neu-inset: #0e1319;
-  --admin-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --admin-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --admin-neu-bg: #eef4fb;
+  --admin-neu-surface: #ffffff;
+  --admin-neu-inset: #f5f9fc;
+  --admin-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --admin-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .admin-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
+  border-color: rgba(186, 230, 253, 0.9);
+  background-color: #ffffff;
   box-shadow: var(--admin-neu-raised);
 }
 
@@ -163,9 +254,9 @@ html.theme-light .shell {
 .admin-neu select,
 .admin-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
-  background-color: #0e1319;
-  color: #f1f5f9;
+  border-color: rgba(186, 230, 253, 0.95);
+  background-color: #f5f9fc;
+  color: #1e293b;
   box-shadow: var(--admin-neu-inset-shadow);
 }
 
@@ -190,18 +281,18 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
-/* HR workspace — dark neumorphism (rose accent) */
+/* HR workspace — bright (rose accent) */
 .hr-neu {
-  --hr-neu-bg: #0b0f14;
-  --hr-neu-surface: #121820;
-  --hr-neu-inset: #0e1319;
-  --hr-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --hr-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --hr-neu-bg: #eef4fb;
+  --hr-neu-surface: #ffffff;
+  --hr-neu-inset: #f5f9fc;
+  --hr-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --hr-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .hr-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
+  border-color: rgba(186, 230, 253, 0.9);
+  background-color: #ffffff;
   box-shadow: var(--hr-neu-raised);
 }
 
@@ -209,9 +300,9 @@ html.theme-light .shell {
 .hr-neu select,
 .hr-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
-  background-color: #0e1319;
-  color: #f1f5f9;
+  border-color: rgba(186, 230, 253, 0.95);
+  background-color: #f5f9fc;
+  color: #1e293b;
   box-shadow: var(--hr-neu-inset-shadow);
 }
 
@@ -236,18 +327,18 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
-/* PM workspace — dark neumorphism (teal accent) */
+/* PM workspace — bright (teal accent) */
 .pm-neu {
-  --pm-neu-bg: #0b0f14;
-  --pm-neu-surface: #121820;
-  --pm-neu-inset: #0e1319;
-  --pm-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --pm-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --pm-neu-bg: #eef4fb;
+  --pm-neu-surface: #ffffff;
+  --pm-neu-inset: #f5f9fc;
+  --pm-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --pm-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .pm-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
+  border-color: rgba(186, 230, 253, 0.9);
+  background-color: #ffffff;
   box-shadow: var(--pm-neu-raised);
 }
 
@@ -255,9 +346,9 @@ html.theme-light .shell {
 .pm-neu select,
 .pm-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
-  background-color: #0e1319;
-  color: #f1f5f9;
+  border-color: rgba(186, 230, 253, 0.95);
+  background-color: #f5f9fc;
+  color: #1e293b;
   box-shadow: var(--pm-neu-inset-shadow);
 }
 
@@ -282,17 +373,17 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
-/* Sales neumorphism — mirrors finance-neu with amber accent */
+/* Sales — bright (amber accent) */
 .sales-neu {
-  --sales-neu-bg: #0b0f14;
-  --sales-neu-surface: #121820;
-  --sales-neu-inset: #0e1319;
-  --sales-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --sales-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --sales-neu-bg: #eef4fb;
+  --sales-neu-surface: #ffffff;
+  --sales-neu-inset: #f5f9fc;
+  --sales-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --sales-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sales-neu .shell {
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(186, 230, 253, 0.9);
   background: var(--sales-neu-surface);
   box-shadow: var(--sales-neu-raised);
 }
@@ -301,7 +392,7 @@ html.theme-light .shell {
 .sales-neu select,
 .sales-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(186, 230, 253, 0.95);
   background-color: var(--sales-neu-inset);
   box-shadow: var(--sales-neu-inset-shadow);
 }
@@ -322,18 +413,18 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
-/* Director workspace — dark neumorphism (sky accent) */
+/* Director — bright (brand / sky) */
 .director-neu {
-  --director-neu-bg: #0b0f14;
-  --director-neu-surface: #121820;
-  --director-neu-inset: #0e1319;
-  --director-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --director-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --director-neu-bg: #eef4fb;
+  --director-neu-surface: #ffffff;
+  --director-neu-inset: #f5f9fc;
+  --director-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --director-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .director-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
+  border-color: rgba(186, 230, 253, 0.9);
+  background-color: #ffffff;
   box-shadow: var(--director-neu-raised);
 }
 
@@ -341,9 +432,9 @@ html.theme-light .shell {
 .director-neu select,
 .director-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
-  background-color: #0e1319;
-  color: #f1f5f9;
+  border-color: rgba(186, 230, 253, 0.95);
+  background-color: #f5f9fc;
+  color: #1e293b;
   box-shadow: var(--director-neu-inset-shadow);
 }
 
@@ -358,9 +449,9 @@ html.theme-light .shell {
 .director-neu li[class*="border-slate-700"],
 .director-neu [class*="bg-slate-800/60"],
 .director-neu [class*="bg-slate-900/50"] {
-  border-color: rgba(255, 255, 255, 0.04) !important;
-  background-color: #10161e !important;
-  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4), -2px -2px 8px rgba(255, 255, 255, 0.03);
+  border-color: rgba(186, 230, 253, 0.9) !important;
+  background-color: #f8fbfe !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .director-fullscreen .shell {
@@ -376,38 +467,17 @@ html.theme-light .shell {
   padding-top: 0;
 }
 
-/* Director workspace stays dark even when user prefers light theme */
-html.theme-light .director-neu,
-html.theme-light .director-neu .shell,
-html.theme-light .director-fullscreen {
-  color: #f1f5f9;
-}
-
-html.theme-light .director-neu .shell {
-  border-color: rgba(255, 255, 255, 0.04);
-  background-color: #121820;
-  box-shadow: var(--director-neu-raised, 6px 6px 14px rgba(0, 0, 0, 0.55));
-}
-
-html.theme-light .director-neu input:not([type="checkbox"]):not([type="radio"]),
-html.theme-light .director-neu select,
-html.theme-light .director-neu textarea {
-  background-color: #0e1319;
-  color: #f1f5f9;
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-/* Developer neumorphism — mirrors finance-neu with violet accent */
+/* Developer — bright (violet accent) */
 .developer-neu {
-  --developer-neu-bg: #0b0f14;
-  --developer-neu-surface: #121820;
-  --developer-neu-inset: #0e1319;
-  --developer-neu-raised: 6px 6px 14px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04);
-  --developer-neu-inset-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+  --developer-neu-bg: #eef4fb;
+  --developer-neu-surface: #ffffff;
+  --developer-neu-inset: #f5f9fc;
+  --developer-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --developer-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .developer-neu .shell {
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(186, 230, 253, 0.9);
   background: var(--developer-neu-surface);
   box-shadow: var(--developer-neu-raised);
 }
@@ -416,7 +486,7 @@ html.theme-light .director-neu textarea {
 .developer-neu select,
 .developer-neu textarea {
   border-radius: 0.75rem;
-  border-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(186, 230, 253, 0.95);
   background-color: var(--developer-neu-inset);
   box-shadow: var(--developer-neu-inset-shadow);
 }
@@ -450,7 +520,7 @@ html.theme-light .director-neu textarea {
 .developer-glass {
   --dev-glass-bg: #080b12;
   --dev-glass-border: rgba(255, 255, 255, 0.1);
-  --dev-glass-surface: rgba(255, 255, 255, 0.06);
+  --dev-glass-surface: rgba(125, 211, 252, 0.7);
   color-scheme: dark;
 }
 
@@ -489,9 +559,9 @@ html.theme-light .director-neu textarea {
 .developer-glass [class*="bg-cres-surface"],
 .developer-glass [class*="bg-cres-card"] {
   border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .developer-glass table {
@@ -500,14 +570,14 @@ html.theme-light .director-neu textarea {
 
 .developer-glass tr[class*="border-slate-800"],
 .developer-glass tr[class*="border-b"] {
-  border-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .developer-glass button[class*="border-slate-600"],
 .developer-glass button[class*="border-slate-700"],
 .developer-glass button[class*="border-cres-border"] {
   border-color: rgba(255, 255, 255, 0.1) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
@@ -541,7 +611,7 @@ html.theme-light .director-neu textarea {
   background:
     radial-gradient(circle at 26% 22%, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.18) 14%, transparent 32%),
     radial-gradient(circle at 62% 68%, rgba(56, 189, 248, 0.1) 0%, transparent 48%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, rgba(186, 230, 253, 0.08) 42%, transparent 72%);
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 42%, transparent 72%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
     inset 0 2px 16px rgba(255, 255, 255, 0.22),
@@ -617,7 +687,7 @@ html.theme-light .director-neu textarea {
 .community-glass [class*="bg-slate-950"],
 .community-glass [class*="bg-slate-900"],
 .community-glass [class*="bg-slate-800"] {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -644,7 +714,7 @@ html.theme-light .director-neu textarea {
   background: radial-gradient(
     circle at 30% 26%,
     rgba(255, 255, 255, 0.42) 0%,
-    rgba(186, 230, 253, 0.18) 28%,
+    rgba(255, 255, 255, 0.08) 28%,
     rgba(56, 189, 248, 0.1) 48%,
     rgba(212, 168, 83, 0.04) 62%,
     transparent 74%

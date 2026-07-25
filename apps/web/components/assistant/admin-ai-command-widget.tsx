@@ -36,13 +36,13 @@ export function AdminAiCommandWidget() {
     <div className={`${adminNeu.panel} p-4 sm:p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-400">AI Command</p>
-          <h2 className="mt-1 text-base font-semibold text-slate-100">Ask org intelligence</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">AI Command</p>
+          <h2 className="mt-1 text-base font-semibold text-slate-900">Ask org intelligence</h2>
           <p className="mt-1 text-xs text-slate-500">Quick questions from the command center — full console for execute.</p>
         </div>
         <Link
           href="/admin/ai-command"
-          className="rounded-lg border border-indigo-500/30 px-3 py-1.5 text-xs font-medium text-indigo-200 hover:bg-indigo-500/10"
+          className="rounded-lg border border-brand/30 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
         >
           Open AI Command →
         </Link>
@@ -54,7 +54,7 @@ export function AdminAiCommandWidget() {
             key={p}
             type="button"
             onClick={() => setMessage(p)}
-            className="rounded-full border border-white/[0.06] bg-[#0e1319] px-2.5 py-1 text-[10px] text-slate-400 hover:border-indigo-500/30"
+            className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] text-slate-600 hover:border-brand/40 hover:text-brand"
           >
             {p.slice(0, 48)}…
           </button>
@@ -67,20 +67,20 @@ export function AdminAiCommandWidget() {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void ask()}
           placeholder="e.g. Summarize active projects and risks"
-          className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-[#0e1319] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600"
+          className={`min-w-0 flex-1 ${adminNeu.input}`}
         />
         <button
           type="button"
           disabled={loading}
           onClick={() => void ask()}
-          className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          className={`shrink-0 ${adminNeu.btnPrimary}`}
         >
           {loading ? "…" : "Ask"}
         </button>
       </div>
 
       {reply ? (
-        <div className={`${adminNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-300`}>
+        <div className={`${adminNeu.panelInset} mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-600`}>
           {reply}
         </div>
       ) : null}

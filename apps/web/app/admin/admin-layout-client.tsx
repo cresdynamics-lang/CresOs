@@ -23,7 +23,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   if (!hydrated || !auth.accessToken) {
     return (
       <div
-        className={`${adminNeu.workspace} admin-fullscreen flex h-full items-center justify-center text-sm text-slate-400 ${adminNeu.canvas}`}
+        className={`${adminNeu.workspace} admin-fullscreen ${adminNeu.canvas} flex h-full items-center justify-center text-sm text-slate-500`}
       >
         Loading admin workspace…
       </div>
@@ -49,7 +49,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
       </WorkspaceAside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 border-b border-white/[0.06] px-3 py-2 md:hidden">
+        <div className="shrink-0 border-b border-sky-200 px-3 py-2 md:hidden">
           <AdminNav />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">

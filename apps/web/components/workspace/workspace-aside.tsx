@@ -9,59 +9,60 @@ export type WorkspaceAsideTheme = {
   subtitle: string;
 };
 
+/** Bright side panels — Cres Dynamics brand blue + role accents. */
 export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
   finance: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-emerald-500/90",
+    panel: "bg-white",
+    border: "border-emerald-200",
+    title: "text-emerald-700",
     subtitle: "text-slate-500"
   },
   sales: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-amber-400/90",
+    panel: "bg-white",
+    border: "border-amber-200",
+    title: "text-amber-700",
     subtitle: "text-slate-500"
   },
   developer: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-violet-400/90",
+    panel: "bg-white",
+    border: "border-violet-200",
+    title: "text-violet-700",
     subtitle: "text-slate-500"
   },
   director: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-sky-400/90",
+    panel: "bg-white",
+    border: "border-sky-200",
+    title: "text-brand",
     subtitle: "text-slate-500"
   },
   admin: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-indigo-400/90",
+    panel: "bg-white",
+    border: "border-brand/30",
+    title: "text-brand",
     subtitle: "text-slate-500"
   },
   client: {
-    panel: "bg-[#0a0d14]/95",
-    border: "border-white/[0.06]",
-    title: "text-teal-400/90",
+    panel: "bg-white",
+    border: "border-teal-200",
+    title: "text-teal-700",
     subtitle: "text-slate-500"
   },
   hr: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-rose-400/90",
+    panel: "bg-white",
+    border: "border-rose-200",
+    title: "text-rose-700",
     subtitle: "text-slate-500"
   },
   pm: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-teal-400/90",
+    panel: "bg-white",
+    border: "border-teal-200",
+    title: "text-teal-700",
     subtitle: "text-slate-500"
   },
   global: {
-    panel: "bg-[#0e1319]/95",
-    border: "border-white/[0.04]",
-    title: "text-slate-300",
+    panel: "bg-white",
+    border: "border-sky-200",
+    title: "text-brand",
     subtitle: "text-slate-500"
   }
 };

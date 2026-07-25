@@ -64,8 +64,8 @@ const DEVELOPER_NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/developer/onboarding",
-    label: "Onboarding",
-    shortLabel: "Onboard",
+    label: "Playbook",
+    shortLabel: "Playbook",
     section: "onboarding",
     group: "workspace",
     roles: ["developer"],
@@ -147,7 +147,7 @@ function DeveloperNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -221,8 +221,8 @@ export const DEVELOPER_PAGE_TITLES: Record<DeveloperSection, { title: string; de
     description: "View assigned projects, milestones, and delivery status."
   },
   onboarding: {
-    title: "Developer onboarding",
-    description: "Ask AI what’s expected of you, who to go to when blocked, and how Cres Dynamics delivery works."
+    title: "Developer playbook",
+    description: "What’s expected of you, who to go to when blocked, and how delivery works."
   },
   community: {
     title: "Community",

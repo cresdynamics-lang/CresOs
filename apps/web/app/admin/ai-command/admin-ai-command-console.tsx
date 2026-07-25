@@ -31,7 +31,7 @@ function PromptChips({ prompts, onPick }: { prompts: string[]; onPick: (p: strin
           key={p}
           type="button"
           onClick={() => onPick(p)}
-          className="rounded-full border border-white/[0.06] bg-[#0e1319] px-3 py-1.5 text-left text-[11px] text-slate-400 hover:border-indigo-500/30 hover:text-slate-200"
+          className="rounded-full border border-sky-200 bg-white px-3 py-1.5 text-left text-[11px] text-slate-600 hover:border-brand/40 hover:bg-brand/5 hover:text-brand"
         >
           {p}
         </button>
@@ -226,14 +226,14 @@ export function AdminAiCommandConsole() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row sm:p-6">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <AdminPanel>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-400">Command · AI</p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Admin AI Command</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Command · AI</p>
+          <h1 className="mt-1 text-xl font-semibold text-slate-900 sm:text-2xl">Admin AI Command</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
             Create meetings and tasks, or ask deep org intelligence — projects, people, hours vs days, and Cres Dynamics
             fit.
           </p>
 
-          <div className="mt-4 flex gap-2 border-b border-white/[0.06] pb-3">
+          <div className="mt-4 flex gap-2 border-b border-sky-100 pb-3">
             {isAdmin ? (
               <button
                 type="button"
@@ -273,8 +273,8 @@ export function AdminAiCommandConsole() {
                   onClick={() => setFocus(f.id)}
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                     focus === f.id
-                      ? "bg-indigo-500/25 text-indigo-100"
-                      : "border border-white/[0.06] text-slate-500"
+                      ? "bg-brand/15 text-brand border border-brand/30"
+                      : "border border-sky-200 text-slate-500 hover:border-brand/30 hover:text-brand"
                   }`}
                 >
                   {f.label}
@@ -320,7 +320,7 @@ export function AdminAiCommandConsole() {
 
             {tab === "execute" ? (
               <div className="space-y-4">
-                <p className="whitespace-pre-wrap text-sm text-slate-300">{result.reply}</p>
+                <p className="whitespace-pre-wrap text-sm text-slate-600">{result.reply}</p>
                 {executeMessage ? (
                   <div className="space-y-2">
                     <p
@@ -331,7 +331,7 @@ export function AdminAiCommandConsole() {
                     {executeMessage.includes("created") && !executeMessage.includes("failed") ? (
                       <Link
                         href="/schedule?period=week"
-                        className="inline-block text-xs font-medium text-indigo-300 hover:text-indigo-200"
+                        className="inline-block text-xs font-medium text-brand hover:text-brand"
                       >
                         View on Schedule (Today / This week) →
                       </Link>
@@ -367,7 +367,7 @@ export function AdminAiCommandConsole() {
                     {s.mode}
                     {s.focus ? ` · ${s.focus}` : ""}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-300">{s.message}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">{s.message}</p>
                   <p className="mt-1 text-[10px] text-slate-600">
                     {new Date(s.createdAt).toLocaleString()}
                   </p>

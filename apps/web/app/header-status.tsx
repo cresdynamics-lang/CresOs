@@ -61,7 +61,7 @@ export function HeaderStatusStrip() {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-      <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1 text-xs text-slate-300 sm:gap-2 sm:px-2.5 sm:py-1.5">
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-[#f5f9fc] px-2 py-1 text-xs text-slate-600 sm:gap-2 sm:px-2.5 sm:py-1.5">
         <NotificationBell />
       </div>
       {canSeeApprovals && !isAdmin && (
@@ -69,8 +69,8 @@ export function HeaderStatusStrip() {
           href="/approvals"
           className={`min-h-[36px] touch-manipulation whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors sm:min-h-0 sm:px-3 sm:text-xs ${
             approvalsWarn
-              ? "border-amber-500/60 bg-amber-950/40 text-amber-200 hover:bg-amber-950/60"
-              : "border-sky-700/60 bg-sky-950/30 text-sky-200 hover:bg-sky-950/50"
+              ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              : "border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100"
           }`}
         >
           <span className="sm:hidden">{pendingFinance} pending</span>

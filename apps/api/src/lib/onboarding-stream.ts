@@ -30,12 +30,12 @@ export async function streamOnboardingChat(
   }
 
   try {
-    sse.status("queued", "Onboarding request received…");
+    sse.status("queued", "Playbook request received…");
     sse.status("analyzing", `Loading ${audienceLabel(audience)} playbook…`);
 
     if (!listGroqApiKeys().length) {
       const fallback = await runOnboardingChat(prisma, orgId, audience, trimmed);
-      sse.status("writing", "Writing onboarding reply…");
+      sse.status("writing", "Writing reply…");
       for (const word of fallback.reply.split(/(\s+)/)) {
         if (word) {
           sse.token(word);
@@ -75,12 +75,13 @@ export async function streamOnboardingChat(
     sse.status("thinking", "Drafting role guidance…");
     sse.status("writing", "Writing reply…");
 
-    const system = `You are CresOS Onboarding Coach for Cres Dynamics.
+    const system = `You are the Cres Dynamics Playbook assistant in CresOS.
 Audience: ${audienceLabel(audience)} (${audience}).
-${audience === "admin" ? "Admin may see org-wide knowledge." : "Stay within this role's playbook + role-scoped knowledge."}
-Lead with expectations, then "when X → go to Y".
+${audience === "admin" ? "Admin may use org-wide knowledge." : "Stay within this role's playbook + role-scoped knowledge."}
+Answer directly in 2–6 short sentences or a tight bullet list. No preamble or long explanations.
+Only add "when X → go to Y" when the question is about who to contact.
 Use markdown. Do not wrap in JSON.
-${poolEmpty ? "Knowledge pool is thin — lean on the playbook." : ""}`;
+${poolEmpty ? "Knowledge pool is thin — lean on the playbook in one line." : ""}`;
 
     let reply = "";
     for await (const chunk of groqChatStreamWithFallback({
@@ -91,8 +92,8 @@ ${poolEmpty ? "Knowledge pool is thin — lean on the playbook." : ""}`;
           content: `Question:\n${trimmed}\n\n--- CONTEXT ---\n${contextBlock}`
         }
       ],
-      max_tokens: 1600,
-      temperature: 0.35
+      max_tokens: 700,
+      temperature: 0.25
     })) {
       if (chunk.type === "token") {
         reply += chunk.text;
@@ -122,7 +123,7 @@ ${poolEmpty ? "Knowledge pool is thin — lean on the playbook." : ""}`;
     });
     sse.end();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Onboarding stream failed";
+    const msg = e instanceof Error ? e.message : "Playbook stream failed";
     // eslint-disable-next-line no-console
     console.error("[onboarding-stream]", e);
     sse.error(msg);

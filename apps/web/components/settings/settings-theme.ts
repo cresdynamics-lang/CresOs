@@ -1,3 +1,4 @@
+import { lightSurface } from "../workspace/workspace-light";
 import { devNeu } from "../developer/developer-theme";
 import { financeNeu } from "../finance/finance-theme";
 import { salesNeu } from "../sales/sales-theme";
@@ -25,33 +26,31 @@ export type SettingsThemeTokens = {
 };
 
 const sharedFullscreen = {
-  section: "border-b border-white/[0.06] px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+  section: "border-b border-sky-100 px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
   heroBand:
-    "border-b border-white/[0.06] bg-gradient-to-br from-[#121820]/90 via-[#0b0f14] to-transparent px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+    "border-b border-sky-100 bg-gradient-to-br from-brand-light/60 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
   sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500",
-  listRow: "rounded-xl border border-white/[0.05] bg-[#0e1319]/60 px-4 py-3"
+  listRow: lightSurface.listRow
 };
 
 const globalTokens: SettingsThemeTokens = {
   workspaceClass: "developer-neu",
-  canvas: "bg-[#0b0f14]",
-  panel: "rounded-2xl border border-white/[0.06] bg-[#121820] p-4 sm:p-5",
-  panelInset: "rounded-xl border border-white/[0.04] bg-[#0e1319] p-3 sm:p-4",
+  canvas: lightSurface.canvas,
+  panel: lightSurface.panel,
+  panelInset: lightSurface.panelInset,
   ...sharedFullscreen,
-  navActive: "border border-sky-500/30 bg-sky-500/10 text-sky-100",
-  navIdle:
-    "border border-transparent text-slate-400 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-slate-200",
-  input:
-    "w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500/30 focus:outline-none focus:ring-2 focus:ring-sky-500/15",
+  navActive:
+    "border-l-[3px] border-l-brand border-y border-r border-brand/30 bg-brand/10 text-brand font-semibold",
+  navIdle: lightSurface.navIdle,
+  input: lightSurface.input,
   inputReadonly:
-    "w-full rounded-xl border border-white/[0.04] bg-[#0e1319]/60 px-3 py-2.5 text-sm text-slate-500",
-  btnPrimary: "rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50",
-  btnGhost:
-    "rounded-xl border border-white/[0.06] bg-[#121820] px-3 py-2 text-sm text-slate-200 hover:text-white disabled:opacity-50",
-  accentText: "text-sky-300",
-  accentPill: "border-sky-500/25 bg-sky-500/10 text-sky-300",
-  headerGradient: "from-sky-300 via-cyan-200 to-slate-200",
-  toggleOn: "bg-sky-500"
+    "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
+  btnPrimary: lightSurface.btnPrimary,
+  btnGhost: lightSurface.btnGhost,
+  accentText: "text-brand",
+  accentPill: "border-brand/25 bg-brand/10 text-brand",
+  headerGradient: "from-brand via-sky-500 to-cyan-500",
+  toggleOn: "bg-brand"
 };
 
 export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens {
@@ -63,8 +62,8 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: devNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-white/[0.06] bg-gradient-to-br from-violet-950/25 via-[#0b0f14] to-transparent px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400/80",
+        "border-b border-sky-100 bg-gradient-to-br from-violet-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-700",
       listRow: devNeu.listRow,
       navActive: devNeu.navActive,
       navIdle: devNeu.navIdle,
@@ -72,10 +71,10 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       inputReadonly: devNeu.inputReadonly,
       btnPrimary: devNeu.btnPrimary,
       btnGhost: devNeu.btnGhost,
-      accentText: "text-violet-300",
-      accentPill: "border-violet-500/25 bg-violet-500/10 text-violet-300",
-      headerGradient: "from-violet-300 via-indigo-200 to-slate-200",
-      toggleOn: "bg-violet-500"
+      accentText: "text-violet-700",
+      accentPill: "border-violet-200 bg-violet-50 text-violet-800",
+      headerGradient: "from-violet-600 via-indigo-500 to-brand",
+      toggleOn: "bg-violet-600"
     };
   }
   if (key === "finance") {
@@ -86,20 +85,20 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: financeNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-white/[0.06] bg-gradient-to-br from-emerald-950/25 via-[#0b0f14] to-transparent px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-400/80",
+        "border-b border-sky-100 bg-gradient-to-br from-emerald-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-700",
       listRow: sharedFullscreen.listRow,
       navActive: financeNeu.navActive,
       navIdle: financeNeu.navIdle,
       input: financeNeu.input,
       inputReadonly:
-        "w-full rounded-xl border border-white/[0.04] bg-[#0e1319]/60 px-3 py-2.5 text-sm text-slate-500 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)]",
+        "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
       btnPrimary: financeNeu.btnPrimary,
       btnGhost: financeNeu.btnGhost,
-      accentText: "text-emerald-300",
-      accentPill: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
-      headerGradient: "from-emerald-300 via-teal-200 to-slate-200",
-      toggleOn: "bg-emerald-500"
+      accentText: "text-emerald-700",
+      accentPill: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      headerGradient: "from-emerald-600 via-teal-500 to-brand",
+      toggleOn: "bg-emerald-600"
     };
   }
   if (key === "sales") {
@@ -110,22 +109,20 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: salesNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-white/[0.06] bg-gradient-to-br from-amber-950/25 via-[#0b0f14] to-transparent px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-400/80",
+        "border-b border-sky-100 bg-gradient-to-br from-amber-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+      sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-700",
       listRow: sharedFullscreen.listRow,
       navActive: salesNeu.navActive,
       navIdle: salesNeu.navIdle,
-      input:
-        "w-full rounded-xl border border-white/[0.05] bg-[#0e1319] px-3 py-2.5 text-sm text-slate-100 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)] placeholder:text-slate-500 focus:border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500/15",
+      input: salesNeu.input,
       inputReadonly:
-        "w-full rounded-xl border border-white/[0.04] bg-[#0e1319]/60 px-3 py-2.5 text-sm text-slate-500 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)]",
+        "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
       btnPrimary: salesNeu.btnPrimary,
-      btnGhost:
-        "rounded-xl border border-white/[0.06] bg-[#121820] px-3 py-2 text-sm text-slate-200 shadow-[4px_4px_10px_rgba(0,0,0,0.35)] hover:text-white disabled:opacity-50",
-      accentText: "text-amber-300",
-      accentPill: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-      headerGradient: "from-amber-300 via-orange-200 to-slate-200",
-      toggleOn: "bg-amber-500"
+      btnGhost: salesNeu.btnGhost,
+      accentText: "text-amber-700",
+      accentPill: "border-amber-200 bg-amber-50 text-amber-900",
+      headerGradient: "from-amber-500 via-orange-500 to-brand",
+      toggleOn: "bg-amber-600"
     };
   }
   return globalTokens;

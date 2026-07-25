@@ -14,7 +14,7 @@ type NavItem = {
 
 const DIRECTOR_NAV: NavItem[] = [
   { href: "/dashboard", label: "Command center", shortLabel: "Home", group: "command", match: "exact" },
-  { href: "/director/onboarding", label: "Onboarding", shortLabel: "Onboard", group: "command", match: "prefix" },
+  { href: "/director/onboarding", label: "Playbook", shortLabel: "Playbook", group: "command", match: "prefix" },
   { href: "/analytics", label: "Analytics", group: "command", match: "prefix" },
   { href: "/activity", label: "Activity log", shortLabel: "Activity", group: "command", match: "prefix" },
   { href: "/leads", label: "Leads", group: "pipeline", match: "prefix" },
@@ -74,7 +74,7 @@ function DirectorNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">

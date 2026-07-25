@@ -317,22 +317,22 @@ export function AdminConsole() {
   }
 
   return (
-    <section className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden text-xs leading-snug text-slate-300 sm:text-sm sm:leading-normal">
+    <section className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden text-xs leading-snug text-slate-600 sm:text-sm sm:leading-normal">
       {tab !== "email-automation" && (
         <header className={`${adminNeu.panelInset} px-4 py-4 sm:px-5`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-indigo-400/80">Administration</p>
-          <h1 className="mt-1 text-lg font-semibold text-slate-100 sm:text-xl">{TAB_META[tab].title}</h1>
-          <p className="mt-1 text-sm text-slate-400">{TAB_META[tab].description}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand/80">Administration</p>
+          <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:text-xl">{TAB_META[tab].title}</h1>
+          <p className="mt-1 text-sm text-slate-500">{TAB_META[tab].description}</p>
         </header>
       )}
 
       {loadError && (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{loadError}</p>
+        <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{loadError}</p>
       )}
 
       {tab === "users" && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-100 px-4 py-4 sm:px-5">
             <div>
               <p className="text-xs text-slate-500">{usersWithRoles.length} user{usersWithRoles.length === 1 ? "" : "s"} in organisation</p>
             </div>
@@ -349,7 +349,7 @@ export function AdminConsole() {
           </div>
 
           <div className="min-w-0 w-full max-w-full overflow-x-hidden">
-            <div className="mt-0 border-t border-slate-700/80 pt-4 px-4 sm:px-5">
+            <div className="mt-0 border-t border-sky-200 pt-4 px-4 sm:px-5">
             {loadError && <p className="mb-2 text-[11px] text-amber-300 sm:text-xs">{loadError}</p>}
             {usersWithRoles.length === 0 ? (
               <p className="text-slate-400">No users in this organisation.</p>
@@ -359,11 +359,11 @@ export function AdminConsole() {
                   {usersWithRoles.map((u) => (
                     <div
                       key={`m-${u.id}`}
-                      className="rounded-lg border border-slate-700 bg-slate-800/40 p-2.5 text-[11px] text-slate-300 sm:text-xs"
+                      className="rounded-lg border border-sky-200 bg-[#f8fbfe] p-2.5 text-[11px] text-slate-600 sm:text-xs"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-slate-100">{u.name ?? "—"}</p>
+                          <p className="truncate font-medium text-slate-900">{u.name ?? "—"}</p>
                           <p className="mt-0.5 break-all text-slate-400">{u.email}</p>
                           <p className="mt-1 text-slate-500">Status: {u.status}</p>
                           <p className="mt-1 text-slate-500">
@@ -374,7 +374,7 @@ export function AdminConsole() {
                           <button
                             type="button"
                             onClick={() => openEdit(u)}
-                            className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+                            className="rounded border border-sky-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-white"
                           >
                             Edit
                           </button>
@@ -393,7 +393,7 @@ export function AdminConsole() {
                         {(u.roles ?? []).map((ur) => (
                           <span
                             key={ur.roleId}
-                            className="inline-flex max-w-full items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-200"
+                            className="inline-flex max-w-full items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-slate-700"
                           >
                             <span className="truncate">{ur.role.name}</span>
                             <button
@@ -433,7 +433,7 @@ export function AdminConsole() {
                               // ignore
                             }
                           }}
-                          className="max-w-full rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-[10px] text-slate-200"
+                          className="max-w-full rounded border border-sky-200 bg-white px-1 py-0.5 text-[10px] text-slate-700"
                         >
                           <option value="">+ Add role</option>
                           {rolesForSelect
@@ -452,7 +452,7 @@ export function AdminConsole() {
                 <div className="hidden overflow-x-auto md:block">
                   <table className="w-full min-w-[560px] text-left text-xs lg:min-w-0 lg:text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700 text-slate-400">
+                      <tr className="border-b border-sky-200 text-slate-400">
                         <th className="pb-2 pr-3">Name</th>
                         <th className="pb-2 pr-3">Email</th>
                         <th className="pb-2 pr-3">Status</th>
@@ -464,12 +464,12 @@ export function AdminConsole() {
                     <tbody>
                       {usersWithRoles.map((u) => (
                         <tr key={u.id} className="border-b border-slate-800">
-                          <td className="py-2 pr-3 text-slate-200">{u.name ?? "—"}</td>
-                          <td className="max-w-[12rem] truncate py-2 pr-3 text-slate-300" title={u.email}>
+                          <td className="py-2 pr-3 text-slate-700">{u.name ?? "—"}</td>
+                          <td className="max-w-[12rem] truncate py-2 pr-3 text-slate-600" title={u.email}>
                             {u.email}
                           </td>
-                          <td className="py-2 pr-3 text-slate-300">{u.status}</td>
-                          <td className="py-2 pr-3 text-slate-300">
+                          <td className="py-2 pr-3 text-slate-600">{u.status}</td>
+                          <td className="py-2 pr-3 text-slate-600">
                             {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
                           </td>
                           <td className="py-2 pr-3">
@@ -477,7 +477,7 @@ export function AdminConsole() {
                               {(u.roles ?? []).map((ur) => (
                                 <span
                                   key={ur.roleId}
-                                  className="inline-flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200"
+                                  className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs text-slate-700"
                                 >
                                   {ur.role.name}
                                   <button
@@ -517,7 +517,7 @@ export function AdminConsole() {
                                     // ignore
                                   }
                                 }}
-                                className="rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+                                className="rounded border border-sky-200 bg-white px-1 py-0.5 text-xs text-slate-700"
                               >
                                 <option value="">+ Add role</option>
                                 {rolesForSelect
@@ -535,7 +535,7 @@ export function AdminConsole() {
                               <button
                                 type="button"
                                 onClick={() => openEdit(u)}
-                                className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                                className="rounded border border-sky-200 px-2 py-1 text-xs text-slate-600 hover:bg-white"
                               >
                                 Edit
                               </button>
@@ -581,7 +581,7 @@ export function AdminConsole() {
 
           {editing && (
             <div className="shell mx-auto w-full max-w-full border-brand/30 sm:max-w-md">
-              <h3 className="mb-2 text-xs font-semibold text-slate-200 sm:mb-3 sm:text-sm">Edit user</h3>
+              <h3 className="mb-2 text-xs font-semibold text-slate-700 sm:mb-3 sm:text-sm">Edit user</h3>
               <p className="mb-2 break-all text-[11px] text-slate-400 sm:mb-3 sm:text-xs">{editing.email}</p>
               {editError && (
                 <p className="mb-2 rounded border border-rose-600/40 bg-rose-950/40 px-2 py-1.5 text-[11px] text-rose-200 sm:text-xs" role="alert">
@@ -595,7 +595,7 @@ export function AdminConsole() {
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
+                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
                   />
                 </label>
                 <label className="block">
@@ -604,7 +604,7 @@ export function AdminConsole() {
                     type="tel"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
+                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
                   />
                 </label>
                 <label className="block">
@@ -613,7 +613,7 @@ export function AdminConsole() {
                     type="email"
                     value={editNotificationEmail}
                     onChange={(e) => setEditNotificationEmail(e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:px-3 sm:py-2 sm:text-sm"
+                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
                   />
                 </label>
                 <label className="block">
@@ -621,7 +621,7 @@ export function AdminConsole() {
                   <select
                     value={editDirectorId}
                     onChange={(e) => setEditDirectorId(e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 sm:text-sm"
+                    className="w-full rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-900 sm:text-sm"
                   >
                     <option value="">— None —</option>
                     {directors.map((d) => (
@@ -631,33 +631,33 @@ export function AdminConsole() {
                     ))}
                   </select>
                 </label>
-                <div className="rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
-                  <p className="mb-2 text-[11px] font-medium text-slate-300 sm:text-xs">Capabilities (dynamic)</p>
-                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+                <div className="rounded-lg border border-sky-200 bg-[#f5f9fc] p-3">
+                  <p className="mb-2 text-[11px] font-medium text-slate-600 sm:text-xs">Capabilities (dynamic)</p>
+                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-600">
                     <span>Can see finance / cash flow</span>
                     <input
                       type="checkbox"
                       checked={editCanSeeFinance}
                       onChange={(e) => setEditCanSeeFinance(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-600"
+                      className="h-4 w-4 rounded border-sky-200"
                     />
                   </label>
-                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <label className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-600">
                     <span>Can submit reports</span>
                     <input
                       type="checkbox"
                       checked={editCanSubmitReports}
                       onChange={(e) => setEditCanSubmitReports(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-600"
+                      className="h-4 w-4 rounded border-sky-200"
                     />
                   </label>
-                  <label className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
                     <span>Can review team reports</span>
                     <input
                       type="checkbox"
                       checked={editCanReviewTeamReports}
                       onChange={(e) => setEditCanReviewTeamReports(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-600"
+                      className="h-4 w-4 rounded border-sky-200"
                     />
                   </label>
                 </div>
@@ -673,7 +673,7 @@ export function AdminConsole() {
                   <button
                     type="button"
                     onClick={() => setEditing(null)}
-                    className="w-full rounded border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 sm:w-auto sm:text-sm"
+                    className="w-full rounded border border-sky-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-white sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -712,14 +712,14 @@ export function AdminConsole() {
               placeholder="Department name"
               value={deptName}
               onChange={(e) => setDeptName(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-200"
+              className="min-w-0 flex-1 rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2 text-sm text-slate-700"
             />
             <input
               type="text"
               placeholder="Description"
               value={deptDesc}
               onChange={(e) => setDeptDesc(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2 text-sm text-slate-200"
+              className="min-w-0 flex-1 rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2 text-sm text-slate-700"
             />
             <button type="submit" className={`shrink-0 ${adminNeu.btnPrimary}`}>
               Create department
@@ -731,7 +731,7 @@ export function AdminConsole() {
               <li key={d.id} className={`${adminNeu.listRow} p-4`}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold text-slate-100">{d.name}</h3>
+                    <h3 className="text-base font-semibold text-slate-900">{d.name}</h3>
                     {d.description && <p className="mt-1 text-sm text-slate-400">{d.description}</p>}
                     <p className="mt-2 text-xs text-slate-500">
                       {d._count?.roles ?? d.roles?.length ?? 0} role(s)
@@ -741,9 +741,9 @@ export function AdminConsole() {
                         {d.roles.map((role) => (
                           <li
                             key={role.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.04] bg-[#0b1016] px-2.5 py-1.5 text-xs"
+                            className="flex items-center justify-between gap-2 rounded-lg border border-sky-100 bg-[#f8fbfe] px-2.5 py-1.5 text-xs"
                           >
-                            <span className="text-slate-300">
+                            <span className="text-slate-600">
                               {role.name} <span className="text-slate-500">({role.key})</span>
                             </span>
                             <span className="text-slate-500">{role._count?.users ?? 0} users</span>
@@ -760,7 +760,7 @@ export function AdminConsole() {
                         if (res.ok) await loadDepartments();
                       }
                     }}
-                    className="shrink-0 rounded-lg border border-rose-500/30 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-950/30"
+                    className="shrink-0 rounded-lg border border-rose-200 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-50"
                   >
                     Delete
                   </button>
@@ -803,19 +803,19 @@ export function AdminConsole() {
               placeholder="Role name"
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200 sm:text-sm"
+              className="min-w-0 flex-1 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:text-sm"
             />
             <input
               type="text"
               placeholder="Key (e.g. analyst)"
               value={roleKey}
               onChange={(e) => setRoleKey(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200 sm:text-sm"
+              className="min-w-0 flex-1 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:text-sm"
             />
             <select
               value={roleDeptId}
               onChange={(e) => setRoleDeptId(e.target.value)}
-              className="w-full min-w-0 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-200 sm:w-auto sm:text-sm"
+              className="w-full min-w-0 rounded border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 sm:w-auto sm:text-sm"
             >
               <option value="">No department</option>
               {departments.map((dept) => (
@@ -835,10 +835,10 @@ export function AdminConsole() {
             {rolesForSelect.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-800/50 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-3"
+                className="flex flex-col gap-2 rounded border border-sky-200 bg-[#f8fbfe] px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-3"
               >
                 <div className="min-w-0">
-                  <span className="text-sm font-medium text-slate-200 sm:text-base">{r.name}</span>
+                  <span className="text-sm font-medium text-slate-700 sm:text-base">{r.name}</span>
                   <span className="ml-2 text-[11px] text-slate-500 sm:text-xs">{r.key}</span>
                   {r.department && (
                     <p className="text-[11px] text-sky-400 sm:text-xs">Dept: {r.department.name}</p>

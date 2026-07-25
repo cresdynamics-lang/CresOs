@@ -81,8 +81,8 @@ export function CreateEmployeeAccountModal({
 }: CreateEmployeeAccountModalProps) {
   const [form, setForm] = useState<CreateEmployeeAccountPayload>(EMPTY_FORM);
   const neu = theme === "admin" ? adminNeu : hrNeu;
-  const accentEyebrow = theme === "admin" ? "text-indigo-400/80" : "text-rose-400/80";
-  const accentError = "border-rose-500/30 bg-rose-950/40 text-rose-200";
+  const accentEyebrow = theme === "admin" ? "text-brand/80" : "text-rose-400/80";
+  const accentError = "border-rose-200 bg-rose-950/40 text-rose-200";
 
   useEffect(() => {
     if (!open) setForm({ ...EMPTY_FORM, hireDate: new Date().toISOString().slice(0, 10) });
@@ -115,12 +115,12 @@ export function CreateEmployeeAccountModal({
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentEyebrow}`}>{eyebrow}</p>
-            <h3 className="mt-1 text-xl font-semibold text-slate-100">{title}</h3>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">{title}</h3>
           </div>
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-brand/5 hover:text-slate-700"
             aria-label="Close"
           >
             ✕

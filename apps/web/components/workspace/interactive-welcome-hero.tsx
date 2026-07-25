@@ -44,11 +44,11 @@ export type WorkspaceCompanionData = {
 };
 
 const NUDGE_SHELL: Record<CompanionNudge["kind"], string> = {
-  break: "border-violet-500/35 bg-gradient-to-br from-violet-950/40 via-[#141a22] to-[#0e1319]",
-  work: "border-rose-500/35 bg-gradient-to-br from-rose-950/40 via-[#141a22] to-[#0e1319]",
-  wellness: "border-cyan-400/35 bg-gradient-to-br from-cyan-950/35 via-[#141a22] to-[#0e1319]",
-  celebration: "border-emerald-400/35 bg-gradient-to-br from-emerald-950/35 via-[#141a22] to-[#0e1319]",
-  tip: "border-teal-400/35 bg-gradient-to-br from-teal-950/30 via-[#141a22] to-[#0e1319]"
+  break: "border-violet-200 bg-violet-50",
+  work: "border-rose-200 bg-rose-50",
+  wellness: "border-cyan-200 bg-cyan-50",
+  celebration: "border-emerald-200 bg-emerald-50",
+  tip: "border-teal-200 bg-teal-50"
 };
 
 type InteractiveWelcomeHeroProps = {
@@ -127,7 +127,7 @@ export function InteractiveWelcomeHero({
       <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h1
-            className={`font-display text-3xl font-bold leading-snug tracking-tight text-slate-50 sm:text-4xl lg:text-[2.75rem] lg:leading-tight`}
+            className={`font-display text-3xl font-bold leading-snug tracking-tight text-slate-900 sm:text-4xl lg:text-[2.75rem] lg:leading-tight`}
           >
             {loading ? (
               <span className="text-slate-500">Reading your workspace…</span>
@@ -143,7 +143,7 @@ export function InteractiveWelcomeHero({
             </span>
             {!loading ? (
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-[#0e1319] px-3 py-1 text-[11px] text-slate-400 shadow-[inset_2px_2px_6px_rgba(0,0,0,0.4)]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-[#f5f9fc] px-3 py-1 text-[11px] text-slate-600"
                 title="Visible time in workspace this session"
               >
                 <span className="relative flex h-2 w-2">
@@ -156,9 +156,9 @@ export function InteractiveWelcomeHero({
           </div>
         </div>
         {companion && !loading ? (
-          <div className="hidden shrink-0 rounded-2xl border border-white/[0.05] bg-[#0e1319]/80 px-4 py-3 text-right shadow-[inset_3px_3px_8px_rgba(0,0,0,0.4)] sm:block">
+          <div className="hidden shrink-0 rounded-2xl border border-sky-200 bg-[#f5f9fc] px-4 py-3 text-right sm:block">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Org health</p>
-            <p className="font-display text-3xl font-bold tabular-nums text-teal-300">{companion.work.orgHealth}</p>
+            <p className="font-display text-3xl font-bold tabular-nums text-teal-700">{companion.work.orgHealth}</p>
             <p className="text-[10px] text-slate-500">{companion.work.activeProjects} active projects</p>
           </div>
         ) : null}
@@ -169,10 +169,10 @@ export function InteractiveWelcomeHero({
           {visibleNudges.map((nudge) => (
             <li
               key={nudge.id}
-              className={`rounded-xl border p-4 shadow-[4px_4px_14px_rgba(0,0,0,0.45)] ${NUDGE_SHELL[nudge.kind]}`}
+              className={`rounded-xl border p-4 shadow-sm ${NUDGE_SHELL[nudge.kind]}`}
             >
-              <p className="font-display text-sm font-semibold text-slate-50">{nudge.title}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{nudge.message}</p>
+              <p className="font-display text-sm font-semibold text-slate-900">{nudge.title}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{nudge.message}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {nudge.actionHref && nudge.actionLabel ? (
                   <Link href={nudge.actionHref} className={`${dashboardNeu.btnPrimary} px-3 py-1.5 text-xs`}>
@@ -191,10 +191,10 @@ export function InteractiveWelcomeHero({
       ) : null}
 
       {children ? (
-        <div className="relative mt-6 border-t border-white/[0.1] pt-5">{children}</div>
+        <div className="relative mt-6 border-t border-sky-100 pt-5">{children}</div>
       ) : null}
       {!children && queueEmpty ? (
-        <div className="relative mt-6 border-t border-white/[0.1] pt-5">{queueEmpty}</div>
+        <div className="relative mt-6 border-t border-sky-100 pt-5">{queueEmpty}</div>
       ) : null}
     </div>
   );

@@ -290,7 +290,7 @@ const PLAYBOOKS: Record<OnboardingAudience, OnboardingPlaybook> = {
       {
         id: "hr-sales",
         when: "A sales hire needs CRM / pipeline orientation",
-        goTo: "Sales lead + this Onboarding AI for role expectations",
+        goTo: "Sales lead + Playbook for role expectations",
         roleHint: "sales"
       }
     ],
@@ -305,7 +305,7 @@ const PLAYBOOKS: Record<OnboardingAudience, OnboardingPlaybook> = {
       "Review workforce / profile completion",
       "Update employee records",
       "Coordinate payroll notes with Finance",
-      "Support new joiners via Onboarding guidance"
+      "Support new joiners via Playbook guidance"
     ]
   },
   finance: {
@@ -414,14 +414,14 @@ const PLAYBOOKS: Record<OnboardingAudience, OnboardingPlaybook> = {
       "What can Admin see that other roles cannot?",
       "How should I approve expenses?",
       "How do I onboard a new user into the right role?",
-      "When should I use Admin AI Command vs Onboarding?",
+      "When should I use Admin AI Command vs Playbook?",
       "How does the knowledge pool get updated?"
     ],
     dailyRhythm: [
       "Review users / roles / pending approvals",
       "Scan Admin AI Command / activity",
       "Clear structural escalations",
-      "Ensure new joiners have roles + Onboarding access"
+      "Ensure new joiners have roles + Playbook access"
     ]
   }
 };

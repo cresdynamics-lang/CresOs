@@ -5,12 +5,12 @@ import type { StatTone } from "../stat-card";
 import { adminNeu } from "./admin-theme";
 
 const statToneClass: Record<StatTone, { value: string; label: string }> = {
-  brand: { value: "text-brand", label: "text-slate-400" },
-  emerald: { value: "text-emerald-400", label: "text-slate-400" },
-  amber: { value: "text-amber-400", label: "text-slate-400" },
-  rose: { value: "text-rose-400", label: "text-slate-400" },
-  sky: { value: "text-indigo-400", label: "text-slate-400" },
-  violet: { value: "text-violet-400", label: "text-slate-400" }
+  brand: { value: "text-brand", label: "text-slate-500" },
+  emerald: { value: "text-emerald-700", label: "text-slate-500" },
+  amber: { value: "text-amber-700", label: "text-slate-500" },
+  rose: { value: "text-rose-700", label: "text-slate-500" },
+  sky: { value: "text-brand", label: "text-slate-500" },
+  violet: { value: "text-violet-700", label: "text-slate-500" }
 };
 
 export function AdminStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -68,12 +68,7 @@ export function AdminInput({
   className = "",
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) {
-  return (
-    <input
-      className={`w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-sm text-slate-100 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)] focus:border-indigo-500/35 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 ${className}`}
-      {...props}
-    />
-  );
+  return <input className={`w-full ${adminNeu.input} ${className}`.trim()} {...props} />;
 }
 
 export function AdminSelect({
@@ -82,11 +77,15 @@ export function AdminSelect({
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement> & { className?: string }) {
   return (
-    <select
-      className={`w-full rounded-xl border border-white/[0.06] bg-[#0e1319] px-3 py-2.5 text-sm text-slate-100 shadow-[inset_3px_3px_8px_rgba(0,0,0,0.45)] focus:border-indigo-500/35 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 ${className}`}
-      {...props}
-    >
+    <select className={`w-full ${adminNeu.input} ${className}`.trim()} {...props}>
       {children}
     </select>
   );
+}
+
+export function AdminTextarea({
+  className = "",
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { className?: string }) {
+  return <textarea className={`w-full ${adminNeu.input} ${className}`.trim()} {...props} />;
 }

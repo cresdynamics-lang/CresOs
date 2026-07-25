@@ -37,13 +37,16 @@ function applyThemeClass(resolved: "dark" | "light") {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
-  const [resolved, setResolved] = useState<"dark" | "light">("dark");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
+  const [resolved, setResolved] = useState<"dark" | "light">("light");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("cresos_theme") as ThemeMode | null;
-    if (stored === "light" || stored === "dark" || stored === "auto") {
+    // Prefer bright Cres Dynamics dashboards; migrate legacy dark default.
+    if (stored === "light" || stored === "auto") {
       setThemeState(stored);
+    } else {
+      setThemeState("light");
     }
   }, []);
 

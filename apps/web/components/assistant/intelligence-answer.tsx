@@ -8,11 +8,11 @@ export function IntelligenceAnswer({ result }: { result: AdminAssistantResponse 
   return (
     <div className="space-y-4">
       {result.focus && result.focus !== "general" ? (
-        <span className="inline-block rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-300">
+        <span className="inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
           Focus: {result.focus}
         </span>
       ) : null}
-      <div className={`${adminNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-slate-200`}>
+      <div className={`${adminNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-slate-700`}>
         {result.reply}
       </div>
 
@@ -22,7 +22,7 @@ export function IntelligenceAnswer({ result }: { result: AdminAssistantResponse 
           <ul className="space-y-2">
             {result.hoursInsights.map((h) => (
               <li key={h.subject} className={`${adminNeu.listRow} px-3 py-3`}>
-                <p className="text-sm font-medium text-slate-100">{h.subject}</p>
+                <p className="text-sm font-medium text-slate-900">{h.subject}</p>
                 <p className="mt-1 text-xs text-slate-400">
                   {h.daysMentioned != null ? `${h.daysMentioned} day(s) mentioned` : null}
                   {h.estimatedHours != null ? ` · ~${h.estimatedHours}h estimated` : null}
@@ -45,12 +45,12 @@ export function IntelligenceAnswer({ result }: { result: AdminAssistantResponse 
                   {p.projectId ? (
                     <Link
                       href={`/pm/projects/${p.projectId}`}
-                      className="text-sm font-medium text-indigo-200 hover:underline"
+                      className="text-sm font-medium text-brand hover:underline"
                     >
                       {p.projectName}
                     </Link>
                   ) : (
-                    <span className="text-sm font-medium text-slate-100">{p.projectName}</span>
+                    <span className="text-sm font-medium text-slate-900">{p.projectName}</span>
                   )}
                   <span className="text-[10px] uppercase text-slate-500">
                     {p.riskLevel} · {p.healthScore}/100
@@ -69,7 +69,7 @@ export function IntelligenceAnswer({ result }: { result: AdminAssistantResponse 
           <ul className="space-y-2">
             {result.personInsights.map((p) => (
               <li key={p.personHint} className={`${adminNeu.listRow} px-3 py-3`}>
-                <p className="text-sm font-medium text-slate-100">{p.personHint}</p>
+                <p className="text-sm font-medium text-slate-900">{p.personHint}</p>
                 {(p.reportDaysLast30 != null || p.estimatedHours != null) && (
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     {p.reportDaysLast30 != null ? `${p.reportDaysLast30} report days (30d)` : null}

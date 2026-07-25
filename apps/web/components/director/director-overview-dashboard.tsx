@@ -387,10 +387,10 @@ export function DirectorOverviewDashboard({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-sky-100 pb-5">
         <div className="min-w-0">
           <p className={`font-label text-[10px] font-semibold uppercase tracking-[0.22em] ${accentMuted}`}>{workspaceLabel}</p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             {welcomeHeadline}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{headerSubtitle}</p>
@@ -472,7 +472,7 @@ export function DirectorOverviewDashboard({
         </div>
       </WorkspaceDashboardSection>
 
-      <nav aria-label="Director quick links" className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-5">
+      <nav aria-label="Director quick links" className="flex flex-wrap gap-2 border-b border-sky-100 pb-5">
         {quickLinks.map((link) => (
           <Link key={link.href} href={link.href} className={`${neu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`}>
             {link.label}
@@ -512,7 +512,7 @@ export function DirectorOverviewDashboard({
           </div>
           {!canViewFinanceKpis && (
             <p className="mt-3 text-xs text-slate-500">
-              Finance totals restricted — Admin can enable <span className="text-slate-300">Can see finance</span> on
+              Finance totals restricted — Admin can enable <span className="text-slate-600">Can see finance</span> on
               your profile.
             </p>
           )}
@@ -558,7 +558,7 @@ export function DirectorOverviewDashboard({
         <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
           <table className="min-w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 <th className="px-3 py-2">Project</th>
                 <th className="px-3 py-2">Created by</th>
                 <th className="px-3 py-2">Status</th>
@@ -568,10 +568,10 @@ export function DirectorOverviewDashboard({
             </thead>
             <tbody>
               {projects.slice(0, 12).map((p) => (
-                <tr key={p.id} className="border-b border-white/[0.04] text-slate-200">
-                  <td className="px-3 py-2.5 font-medium text-slate-100">{p.name}</td>
+                <tr key={p.id} className="border-b border-sky-100 text-slate-700">
+                  <td className="px-3 py-2.5 font-medium text-slate-900">{p.name}</td>
                   <td className="px-3 py-2.5 text-slate-400">{p.createdBy?.name ?? p.createdBy?.email ?? "—"}</td>
-                  <td className="px-3 py-2.5 capitalize text-slate-300">{p.status}</td>
+                  <td className="px-3 py-2.5 capitalize text-slate-600">{p.status}</td>
                   <td className="px-3 py-2.5 text-xs text-slate-500">{p.approvalStatus ?? "—"}</td>
                   <td className="px-3 py-2.5 text-right">
                     <Link href={`/projects/${p.id}`} className={`text-xs font-medium ${accentLink} hover:underline`}>
@@ -597,7 +597,7 @@ export function DirectorOverviewDashboard({
           <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
             <table className="min-w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-white/[0.06] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2">Person</th>
                   <th className="px-3 py-2">Roles</th>
                   <th className="px-3 py-2">Project</th>
@@ -607,8 +607,8 @@ export function DirectorOverviewDashboard({
               </thead>
               <tbody>
                 {directorDashboard.teamCurrentFocus.map((row) => (
-                  <tr key={row.userId} className="border-b border-white/[0.04] text-slate-200">
-                    <td className="px-3 py-2.5 font-medium text-slate-100">{row.name?.trim() || row.email}</td>
+                  <tr key={row.userId} className="border-b border-sky-100 text-slate-700">
+                    <td className="px-3 py-2.5 font-medium text-slate-900">{row.name?.trim() || row.email}</td>
                     <td className="px-3 py-2.5 text-xs text-slate-500">
                       {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}
                     </td>
@@ -643,7 +643,7 @@ export function DirectorOverviewDashboard({
                 <p className={`text-[10px] font-semibold uppercase tracking-wider ${chartAccent}`}>Notifications</p>
                 <ul className="mt-2 space-y-2">
                   {unreadNotifications.slice(0, 5).map((n) => (
-                    <li key={n.id} className={`${neu.listRow} text-sm text-slate-300`}>
+                    <li key={n.id} className={`${neu.listRow} text-sm text-slate-600`}>
                       {(n.subject || n.body).slice(0, 72)}
                       {(n.subject || n.body).length > 72 ? "…" : ""}
                     </li>
@@ -662,7 +662,7 @@ export function DirectorOverviewDashboard({
                     <li key={l.id}>
                       <Link
                         href={`/leads/${l.id}`}
-                        className={`${neu.listRow} block text-sm text-slate-300 ${variant === "admin" ? "hover:text-indigo-300" : "hover:text-sky-300"}`}
+                        className={`${neu.listRow} block text-sm text-slate-600 ${variant === "admin" ? "hover:text-indigo-300" : "hover:text-sky-300"}`}
                       >
                         {l.title}
                       </Link>
@@ -677,7 +677,7 @@ export function DirectorOverviewDashboard({
                 <ul className="mt-2 space-y-2">
                   {attention!.approvalsPending!.slice(0, 5).map((a) => (
                     <li key={a.id}>
-                      <Link href="/approvals" className={`${neu.listRow} block text-sm text-slate-300`}>
+                      <Link href="/approvals" className={`${neu.listRow} block text-sm text-slate-600`}>
                         {a.entityType} · {a.requester?.name ?? a.requester?.email ?? "requester"}
                       </Link>
                     </li>
@@ -717,7 +717,7 @@ export function DirectorOverviewDashboard({
                           {formatActionTime(a.createdAt, directorSummaryFeed.tz)}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-300">{a.summary}</p>
+                      <p className="mt-1 text-sm text-slate-600">{a.summary}</p>
                       {a.actorLabel ? <p className="mt-0.5 text-xs text-slate-500">{a.actorLabel}</p> : null}
                     </li>
                   ))}
@@ -745,7 +745,7 @@ export function DirectorOverviewDashboard({
                       Open →
                     </Link>
                   </div>
-                  <p className="mt-1 text-sm font-medium text-slate-200">{r.subject}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-700">{r.subject}</p>
                   <DirectorBriefingPreview body={r.bodyPreview} className="mt-2" />
                 </li>
               ))}

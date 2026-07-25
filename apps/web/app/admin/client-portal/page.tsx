@@ -105,11 +105,11 @@ export default function AdminClientPortalPage() {
       <AdminPanel>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-400">Client access</p>
-            <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Client portal oversight</h1>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Client access</p>
+            <h1 className="mt-1 text-xl font-semibold text-slate-900 sm:text-2xl">Client portal oversight</h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
               All CRM clients with portal-linked projects, login sessions, and activity — cross-check with{" "}
-              <Link href="/activity" className="text-indigo-300 hover:text-indigo-200">
+              <Link href="/activity" className="text-brand hover:text-brand">
                 Activity log
               </Link>
               .
@@ -134,7 +134,7 @@ export default function AdminClientPortalPage() {
               { label: "Linked projects", value: data.stats.totalProjects }
             ].map((s) => (
               <div key={s.label} className={`${adminNeu.panelInset} text-center`}>
-                <p className="text-2xl font-bold tabular-nums text-indigo-300">{s.value}</p>
+                <p className="text-2xl font-bold tabular-nums text-brand">{s.value}</p>
                 <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">{s.label}</p>
               </div>
             ))}
@@ -143,7 +143,7 @@ export default function AdminClientPortalPage() {
       </AdminPanel>
 
       {error ? (
-        <p className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{error}</p>
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-200">{error}</p>
       ) : null}
 
       {loading && !data ? <p className="text-sm text-slate-500">Loading client portal data…</p> : null}
@@ -151,7 +151,7 @@ export default function AdminClientPortalPage() {
       {data ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[18rem_minmax(0,1fr)_16rem]">
           <AdminPanel className="!p-0 flex max-h-[min(70vh,40rem)] flex-col overflow-hidden">
-            <p className="shrink-0 border-b border-white/[0.06] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="shrink-0 border-b border-sky-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
               All clients
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -165,18 +165,18 @@ export default function AdminClientPortalPage() {
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedId(c.id)}
-                      className={`flex w-full flex-col gap-1 border-b border-white/[0.04] px-4 py-3 text-left transition-colors hover:bg-white/[0.03] ${
+                      className={`flex w-full flex-col gap-1 border-b border-sky-100 px-4 py-3 text-left transition-colors hover:bg-brand/5 ${
                         active ? "bg-indigo-500/[0.08] ring-1 ring-inset ring-indigo-500/20" : ""
                       }`}
                     >
-                      <span className="truncate text-sm font-medium text-slate-200">{c.name}</span>
+                      <span className="truncate text-sm font-medium text-slate-700">{c.name}</span>
                       <span className="truncate text-xs text-slate-500">{c.email ?? "No email"}</span>
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] ${
                             c.hasPortalAccess
                               ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-slate-700/50 text-slate-500"
+                              : "bg-sky-50 text-slate-500"
                           }`}
                         >
                           {c.hasPortalAccess ? "Portal user" : "No login"}
@@ -196,14 +196,14 @@ export default function AdminClientPortalPage() {
             ) : (
               <div className="flex flex-col gap-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-100">{selected.name}</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
                   <p className="mt-1 text-sm text-slate-400">{selected.email ?? "—"} · {selected.phone ?? "No phone"}</p>
                 </div>
 
                 <div className={`${adminNeu.panelInset} grid gap-3 sm:grid-cols-2`}>
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-slate-500">Portal account</p>
-                    <p className="mt-1 text-sm text-slate-200">
+                    <p className="mt-1 text-sm text-slate-700">
                       {selected.hasPortalAccess
                         ? selected.portalUser?.name ?? selected.portalUser?.email ?? "Yes"
                         : "Not provisioned — add client role user with matching email"}
@@ -211,7 +211,7 @@ export default function AdminClientPortalPage() {
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-slate-500">Last seen</p>
-                    <p className="mt-1 text-sm text-slate-200">
+                    <p className="mt-1 text-sm text-slate-700">
                       {fmtWhen(selected.lastSession?.lastSeenAt ?? selected.portalUser?.lastLoginAt)}
                     </p>
                     {selected.lastSession?.ip ? (
@@ -221,7 +221,7 @@ export default function AdminClientPortalPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-200">Projects ({selected.projects.length})</h3>
+                  <h3 className="text-sm font-semibold text-slate-700">Projects ({selected.projects.length})</h3>
                   {selected.projects.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-500">No projects linked to this client.</p>
                   ) : (
@@ -229,11 +229,11 @@ export default function AdminClientPortalPage() {
                       {selected.projects.map((p) => (
                         <li key={p.id} className={`${adminNeu.listRow} flex flex-wrap items-center justify-between gap-2`}>
                           <div>
-                            <p className="font-medium text-slate-200">{p.name}</p>
+                            <p className="font-medium text-slate-700">{p.name}</p>
                             <p className="text-xs capitalize text-slate-500">{p.status.replace(/_/g, " ")}</p>
                           </div>
                           <div className="text-right text-sm">
-                            <p className="font-semibold text-indigo-300">{p.progressPercent}%</p>
+                            <p className="font-semibold text-brand">{p.progressPercent}%</p>
                             <p className="text-xs text-slate-500">
                               {p.doneTasks}/{p.taskCount} tasks
                             </p>
@@ -253,7 +253,7 @@ export default function AdminClientPortalPage() {
           </AdminPanel>
 
           <AdminPanel className="hidden max-h-[min(70vh,40rem)] flex-col overflow-hidden xl:flex !p-0">
-            <p className="shrink-0 border-b border-white/[0.06] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="shrink-0 border-b border-sky-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Portal logins
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -263,7 +263,7 @@ export default function AdminClientPortalPage() {
                 <ul className="space-y-2">
                   {data.recentActivity.map((a) => (
                     <li key={a.id} className={`${adminNeu.listRow} text-xs`}>
-                      <p className="font-medium text-slate-200">{a.summary}</p>
+                      <p className="font-medium text-slate-700">{a.summary}</p>
                       <p className="mt-1 text-slate-500">{fmtWhen(a.createdAt)}</p>
                       {a.body ? <p className="mt-1 line-clamp-2 text-slate-600">{a.body}</p> : null}
                     </li>
@@ -271,8 +271,8 @@ export default function AdminClientPortalPage() {
                 </ul>
               )}
             </div>
-            <div className="shrink-0 border-t border-white/[0.06] p-3">
-              <Link href="/activity" className="text-xs font-medium text-indigo-300 hover:text-indigo-200">
+            <div className="shrink-0 border-t border-sky-100 p-3">
+              <Link href="/activity" className="text-xs font-medium text-brand hover:text-brand">
                 Full activity log →
               </Link>
             </div>

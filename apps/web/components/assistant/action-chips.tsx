@@ -44,7 +44,7 @@ export function ActionChips({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-400">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
           Proposed actions
         </p>
         {onExecuteAll && anyPending ? (
@@ -52,7 +52,7 @@ export function ActionChips({
             type="button"
             disabled={executing}
             onClick={onExecuteAll}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {executing ? "Executing…" : "Execute all"}
           </button>
@@ -69,22 +69,22 @@ export function ActionChips({
               key={a.id}
               className={`rounded-xl border px-4 py-3 text-sm ${
                 done
-                  ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-100"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                   : failed
-                    ? "border-rose-500/30 bg-rose-500/[0.06] text-rose-100"
-                    : "border-indigo-500/20 bg-indigo-500/[0.06] text-slate-200"
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-brand/20 bg-brand/5 text-slate-700"
               }`}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-indigo-200">
+                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-brand">
                   {KIND_LABELS[a.kind]}
                 </span>
-                <span className="font-medium text-slate-100">{a.title}</span>
+                <span className="font-medium text-slate-900">{a.title}</span>
                 {done ? (
-                  <span className="text-[10px] font-semibold uppercase text-emerald-400">Created</span>
+                  <span className="text-[10px] font-semibold uppercase text-emerald-700">Created</span>
                 ) : null}
                 {done && result.scheduleItemId ? (
-                  <a href="/schedule" className="text-[10px] text-emerald-300 hover:underline">
+                  <a href="/schedule" className="text-[10px] text-emerald-700 hover:underline">
                     View schedule
                   </a>
                 ) : null}
@@ -145,7 +145,7 @@ export function ActionChips({
                           type="button"
                           disabled={executing}
                           onClick={() => onResolveCandidate(a, field, c.id)}
-                          className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-[10px] text-indigo-100 hover:bg-indigo-500/20"
+                          className="rounded-lg border border-indigo-500/40 bg-brand/10 px-2 py-1 text-[10px] text-brand hover:bg-brand/10"
                         >
                           {c.label}
                         </button>
@@ -158,7 +158,7 @@ export function ActionChips({
                 <button
                   type="button"
                   onClick={() => onExecuteOne(a)}
-                  className="mt-3 rounded-lg border border-indigo-500/40 px-3 py-1.5 text-xs font-medium text-indigo-200 hover:bg-indigo-500/10"
+                  className="mt-3 rounded-lg border border-indigo-500/40 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
                 >
                   Execute
                 </button>

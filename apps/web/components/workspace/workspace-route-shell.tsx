@@ -64,7 +64,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
       >
         {aside}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-white/[0.06] px-3 py-2 md:hidden">
+          <div className="shrink-0 border-b border-sky-200 px-3 py-2 md:hidden">
             <DeveloperNav />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
@@ -104,7 +104,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
       >
         {aside}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-white/[0.06] px-3 py-2 md:hidden">
+          <div className="shrink-0 border-b border-sky-200 px-3 py-2 md:hidden">
             <DirectorNav />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
@@ -118,7 +118,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
   if (workspace === "hr") {
     return (
       <div className={`${hrNeu.workspace} hr-fullscreen ${hrNeu.canvas} flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden`}>
-        <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1016]/90 px-3 py-2.5 md:hidden">
+        <div className="shrink-0 border-b border-sky-200 bg-white px-3 py-2.5 md:hidden">
           <HrNav />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
@@ -131,7 +131,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
   if (workspace === "pm") {
     return (
       <div className={`${pmNeu.workspace} pm-fullscreen ${pmNeu.canvas} flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden`}>
-        <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1016]/90 px-3 py-2.5 md:hidden">
+        <div className="shrink-0 border-b border-sky-200 bg-white px-3 py-2.5 md:hidden">
           <PmNav />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

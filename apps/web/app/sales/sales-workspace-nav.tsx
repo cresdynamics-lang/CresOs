@@ -77,8 +77,8 @@ const SALES_NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/sales/onboarding",
-    label: "Onboarding",
-    shortLabel: "Onboard",
+    label: "Playbook",
+    shortLabel: "Playbook",
     group: "workspace",
     roles: ["admin", "sales", "director_admin"],
     match: "prefix"
@@ -169,7 +169,7 @@ function SalesNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">

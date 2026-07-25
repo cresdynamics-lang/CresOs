@@ -91,9 +91,9 @@ const PM_NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/pm/onboarding",
-    label: "Onboarding",
-    shortLabel: "Onboard",
-    description: "Role AI — expectations & who to ask",
+    label: "Playbook",
+    shortLabel: "Playbook",
+    description: "Role playbook — expectations & who to ask",
     group: "delivery",
     icon: PmIconOnboarding,
     match: "prefix"
