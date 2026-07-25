@@ -26,7 +26,7 @@ const statToneClass: Record<StatTone, { shell: string; value: string; label: str
     label: "text-slate-500"
   },
   sky: {
-    shell: "border-sky-200 bg-sky-50",
+    shell: "border-[#E5E9EF] bg-sky-50",
     value: "text-sky-700",
     label: "text-slate-500"
   },
@@ -90,7 +90,7 @@ export function FinanceStatGrid({ children }: { children: ReactNode }) {
 export function FinanceStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-sky-100 pb-6 sm:grid-cols-4 ${className}`.trim()}
+      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-[#E5E9EF] pb-6 sm:grid-cols-4 ${className}`.trim()}
     >
       {children}
     </div>
@@ -148,7 +148,7 @@ export function FinanceFlatTable({
 export function FinanceFlatTableHead({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wide text-slate-500">
         {children}
       </tr>
     </thead>

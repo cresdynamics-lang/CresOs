@@ -33,14 +33,14 @@ export function AssistantStreamPanel({
 
   const light = variant === "light";
   const chipBg = light
-    ? "border-sky-200 bg-white"
+    ? "border-[#E5E9EF] bg-white"
     : "border-white/[0.08] bg-[#0e1319]";
   const statusMuted = light ? "text-slate-500" : "text-slate-500";
   const replyBox = light
-    ? "border-sky-100 bg-[#f5f9fc] text-slate-800"
+    ? "border-[#E5E9EF] bg-[#F4F7F9] text-slate-800"
     : "border-white/[0.06] bg-[#0e1319] text-slate-200";
   const pendingBox = light
-    ? "border-sky-200 bg-sky-50/80 text-slate-500"
+    ? "border-[#E5E9EF] bg-sky-50/80 text-slate-500"
     : "border-white/[0.08] bg-[#0e1319]/60 text-slate-500";
   const caret = light ? "bg-sky-600" : "bg-slate-400";
 

@@ -14,9 +14,9 @@ const config: Config = {
       },
       colors: {
         brand: {
-          DEFAULT: "#1F6FEB",
-          dark: "#1749B3",
-          light: "#E0ECFF"
+          DEFAULT: "#2D5A5A",
+          dark: "#244848",
+          light: "#E8F0F0"
         },
         // Cres Dynamics–inspired palette (landing & sign-in)
         cres: {

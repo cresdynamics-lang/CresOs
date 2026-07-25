@@ -54,7 +54,7 @@ export function AdminAiCommandWidget() {
             key={p}
             type="button"
             onClick={() => setMessage(p)}
-            className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] text-slate-600 hover:border-brand/40 hover:text-brand"
+            className="rounded-full border border-[#E5E9EF] bg-white px-2.5 py-1 text-[10px] text-slate-600 hover:border-brand/40 hover:text-brand"
           >
             {p.slice(0, 48)}…
           </button>

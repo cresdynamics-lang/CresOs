@@ -46,12 +46,12 @@ const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
     dot: "text-brand"
   },
   director_admin: {
-    border: "border-sky-200",
+    border: "border-[#E5E9EF]",
     bg: "from-sky-50 via-white to-brand-light/40",
     glow: "shadow-sm",
     nameGradient: "from-sky-700 via-cyan-700 to-brand",
     roleText: "text-sky-700",
-    rolePill: "border-sky-200 bg-sky-50 text-sky-800",
+    rolePill: "border-[#E5E9EF] bg-sky-50 text-sky-800",
     sectionLabel: "text-cyan-700",
     dot: "text-sky-600"
   },
@@ -121,7 +121,7 @@ const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
     glow: "",
     nameGradient: "from-slate-900 to-brand",
     roleText: "text-slate-600",
-    rolePill: "border-sky-200 bg-[#f5f9fc] text-slate-700",
+    rolePill: "border-[#E5E9EF] bg-[#F4F7F9] text-slate-700",
     sectionLabel: "text-slate-500",
     dot: "text-brand"
   }

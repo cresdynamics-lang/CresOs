@@ -387,7 +387,7 @@ export function DirectorOverviewDashboard({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-sky-100 pb-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
         <div className="min-w-0">
           <p className={`font-label text-[10px] font-semibold uppercase tracking-[0.22em] ${accentMuted}`}>{workspaceLabel}</p>
           <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
@@ -472,7 +472,7 @@ export function DirectorOverviewDashboard({
         </div>
       </WorkspaceDashboardSection>
 
-      <nav aria-label="Director quick links" className="flex flex-wrap gap-2 border-b border-sky-100 pb-5">
+      <nav aria-label="Director quick links" className="flex flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
         {quickLinks.map((link) => (
           <Link key={link.href} href={link.href} className={`${neu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`}>
             {link.label}
@@ -558,7 +558,7 @@ export function DirectorOverviewDashboard({
         <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
           <table className="min-w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 <th className="px-3 py-2">Project</th>
                 <th className="px-3 py-2">Created by</th>
                 <th className="px-3 py-2">Status</th>
@@ -568,7 +568,7 @@ export function DirectorOverviewDashboard({
             </thead>
             <tbody>
               {projects.slice(0, 12).map((p) => (
-                <tr key={p.id} className="border-b border-sky-100 text-slate-700">
+                <tr key={p.id} className="border-b border-[#E5E9EF] text-slate-700">
                   <td className="px-3 py-2.5 font-medium text-slate-900">{p.name}</td>
                   <td className="px-3 py-2.5 text-slate-400">{p.createdBy?.name ?? p.createdBy?.email ?? "—"}</td>
                   <td className="px-3 py-2.5 capitalize text-slate-600">{p.status}</td>
@@ -597,7 +597,7 @@ export function DirectorOverviewDashboard({
           <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
             <table className="min-w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-sky-100 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2">Person</th>
                   <th className="px-3 py-2">Roles</th>
                   <th className="px-3 py-2">Project</th>
@@ -607,7 +607,7 @@ export function DirectorOverviewDashboard({
               </thead>
               <tbody>
                 {directorDashboard.teamCurrentFocus.map((row) => (
-                  <tr key={row.userId} className="border-b border-sky-100 text-slate-700">
+                  <tr key={row.userId} className="border-b border-[#E5E9EF] text-slate-700">
                     <td className="px-3 py-2.5 font-medium text-slate-900">{row.name?.trim() || row.email}</td>
                     <td className="px-3 py-2.5 text-xs text-slate-500">
                       {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}

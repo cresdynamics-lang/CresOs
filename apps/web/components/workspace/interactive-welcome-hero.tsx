@@ -143,7 +143,7 @@ export function InteractiveWelcomeHero({
             </span>
             {!loading ? (
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-[#f5f9fc] px-3 py-1 text-[11px] text-slate-600"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-1 text-[11px] text-slate-600"
                 title="Visible time in workspace this session"
               >
                 <span className="relative flex h-2 w-2">
@@ -156,7 +156,7 @@ export function InteractiveWelcomeHero({
           </div>
         </div>
         {companion && !loading ? (
-          <div className="hidden shrink-0 rounded-2xl border border-sky-200 bg-[#f5f9fc] px-4 py-3 text-right sm:block">
+          <div className="hidden shrink-0 rounded-2xl border border-[#E5E9EF] bg-[#F4F7F9] px-4 py-3 text-right sm:block">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Org health</p>
             <p className="font-display text-3xl font-bold tabular-nums text-teal-700">{companion.work.orgHealth}</p>
             <p className="text-[10px] text-slate-500">{companion.work.activeProjects} active projects</p>
@@ -191,10 +191,10 @@ export function InteractiveWelcomeHero({
       ) : null}
 
       {children ? (
-        <div className="relative mt-6 border-t border-sky-100 pt-5">{children}</div>
+        <div className="relative mt-6 border-t border-[#E5E9EF] pt-5">{children}</div>
       ) : null}
       {!children && queueEmpty ? (
-        <div className="relative mt-6 border-t border-sky-100 pt-5">{queueEmpty}</div>
+        <div className="relative mt-6 border-t border-[#E5E9EF] pt-5">{queueEmpty}</div>
       ) : null}
     </div>
   );

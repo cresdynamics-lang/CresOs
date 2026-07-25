@@ -36,21 +36,21 @@ type SessionRow = {
 
 /** Light blue professional surface — Cres Dynamics Playbook. */
 const LIGHT = {
-  shell: "bg-[#eef4fb] text-slate-800",
-  panel: "rounded-2xl border border-sky-200/80 bg-white p-4 shadow-sm sm:p-6",
-  panelInset: "rounded-xl border border-sky-100 bg-[#f5f9fc] p-3",
+  shell: "bg-[#F4F7F9] text-slate-800",
+  panel: "rounded-2xl border border-[#E5E9EF] bg-white p-4 shadow-sm sm:p-6",
+  panelInset: "rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] p-3",
   accent: "text-sky-700",
-  chip: "border-sky-200 bg-white text-slate-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-900",
+  chip: "border-[#E5E9EF] bg-white text-slate-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-900",
   button: "bg-sky-600 text-white hover:bg-sky-500 shadow-sm",
-  border: "border-sky-200",
+  border: "border-[#E5E9EF]",
   title: "text-slate-900",
   body: "text-slate-600",
   muted: "text-slate-500",
-  userBubble: "ml-6 border border-sky-200 bg-sky-50 text-slate-800",
-  assistantBubble: "mr-6 border border-sky-100 bg-[#f5f9fc] text-slate-800",
-  input: "border-sky-200 bg-white text-slate-800 placeholder:text-slate-400",
+  userBubble: "ml-6 border border-[#E5E9EF] bg-sky-50 text-slate-800",
+  assistantBubble: "mr-6 border border-[#E5E9EF] bg-[#F4F7F9] text-slate-800",
+  input: "border-[#E5E9EF] bg-white text-slate-800 placeholder:text-slate-400",
   recentBtn:
-    "w-full rounded-lg border border-sky-200 bg-[#f8fbfe] px-2.5 py-2 text-left text-[11px] text-slate-600 hover:border-sky-400 hover:text-sky-900",
+    "w-full rounded-lg border border-[#E5E9EF] bg-white px-2.5 py-2 text-left text-[11px] text-slate-600 hover:border-sky-400 hover:text-sky-900",
   error: "text-rose-600"
 };
 

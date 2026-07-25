@@ -9,62 +9,24 @@ export type WorkspaceAsideTheme = {
   subtitle: string;
 };
 
-/** Bright side panels — Cres Dynamics brand blue + role accents. */
+/** Side panels — unified GemMatrix teal system across all workspaces. */
+const GEMMATRIX_ASIDE: WorkspaceAsideTheme = {
+  panel: "bg-white",
+  border: "border-[#E5E9EF]",
+  title: "font-display text-brand",
+  subtitle: "font-body text-[#5B6472]"
+};
+
 export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
-  finance: {
-    panel: "bg-white",
-    border: "border-emerald-200",
-    title: "text-emerald-700",
-    subtitle: "text-slate-500"
-  },
-  sales: {
-    panel: "bg-white",
-    border: "border-amber-200",
-    title: "text-amber-700",
-    subtitle: "text-slate-500"
-  },
-  developer: {
-    panel: "bg-white",
-    border: "border-violet-200",
-    title: "text-violet-700",
-    subtitle: "text-slate-500"
-  },
-  director: {
-    panel: "bg-white",
-    border: "border-sky-200",
-    title: "text-brand",
-    subtitle: "text-slate-500"
-  },
-  admin: {
-    panel: "bg-white",
-    border: "border-[#d1d5db]",
-    title: "font-display text-[#1e3a8a]",
-    subtitle: "font-body text-[#374151]"
-  },
-  client: {
-    panel: "bg-white",
-    border: "border-teal-200",
-    title: "text-teal-700",
-    subtitle: "text-slate-500"
-  },
-  hr: {
-    panel: "bg-white",
-    border: "border-rose-200",
-    title: "text-rose-700",
-    subtitle: "text-slate-500"
-  },
-  pm: {
-    panel: "bg-white",
-    border: "border-teal-200",
-    title: "text-teal-700",
-    subtitle: "text-slate-500"
-  },
-  global: {
-    panel: "bg-white",
-    border: "border-sky-200",
-    title: "text-brand",
-    subtitle: "text-slate-500"
-  }
+  finance: GEMMATRIX_ASIDE,
+  sales: GEMMATRIX_ASIDE,
+  developer: GEMMATRIX_ASIDE,
+  director: GEMMATRIX_ASIDE,
+  admin: GEMMATRIX_ASIDE,
+  client: GEMMATRIX_ASIDE,
+  hr: GEMMATRIX_ASIDE,
+  pm: GEMMATRIX_ASIDE,
+  global: GEMMATRIX_ASIDE
 };
 
 type WorkspaceAsideProps = {

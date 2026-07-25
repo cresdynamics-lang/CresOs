@@ -10,47 +10,47 @@ const ACCENT: Record<ThemeKey, { ring: string; avatar: string; signOut: string }
   finance: {
     ring: "ring-emerald-200",
     avatar: "bg-emerald-50 text-emerald-700",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   sales: {
     ring: "ring-amber-200",
     avatar: "bg-amber-50 text-amber-800",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   developer: {
     ring: "ring-violet-200",
     avatar: "bg-violet-50 text-violet-700",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   director: {
-    ring: "ring-sky-200",
+    ring: "ring-[#E5E9EF]",
     avatar: "bg-brand/10 text-brand",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   admin: {
     ring: "ring-brand/25",
     avatar: "bg-brand/10 text-brand",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   client: {
     ring: "ring-teal-200",
     avatar: "bg-teal-50 text-teal-700",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   hr: {
     ring: "ring-rose-200",
     avatar: "bg-rose-50 text-rose-700",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   pm: {
     ring: "ring-teal-200",
     avatar: "bg-teal-50 text-teal-700",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   },
   global: {
     ring: "ring-brand/20",
     avatar: "bg-brand/10 text-brand",
-    signOut: "border-sky-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+    signOut: "border-[#E5E9EF] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
   }
 };
 
@@ -79,7 +79,7 @@ export function WorkspaceAccountFooter({
     <div className="flex flex-col gap-2 px-1">
       {showIdentity ? (
         <div
-          className={`flex items-center gap-2.5 rounded-xl border border-sky-100 bg-[#f5f9fc] px-2.5 py-2.5 ring-1 ${accent.ring}`}
+          className={`flex items-center gap-2.5 rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-2.5 py-2.5 ring-1 ${accent.ring}`}
         >
           <span
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${accent.avatar}`}
@@ -96,7 +96,7 @@ export function WorkspaceAccountFooter({
       {showAccountLink ? (
         <Link
           href="/settings/account"
-          className="flex min-h-[40px] items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:border-sky-200 hover:bg-brand/5 hover:text-brand"
+          className="flex min-h-[40px] items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:border-[#E5E9EF] hover:bg-brand/5 hover:text-brand"
         >
           <SettingsIcon />
           Account settings

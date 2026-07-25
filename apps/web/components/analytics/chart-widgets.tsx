@@ -99,7 +99,7 @@ export function StatTile({
 }) {
   const toneClass = {
     emerald: "text-emerald-800",
-    sky: "text-[#1e3a8a]",
+    sky: "text-[#2067B0]",
     amber: "text-amber-900",
     rose: "text-rose-900",
     violet: "text-violet-900",

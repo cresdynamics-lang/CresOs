@@ -114,13 +114,13 @@ export function AssistantInputPanel({
   };
 
   const textareaCls = light
-    ? "w-full resize-y rounded-xl border border-sky-200 bg-white px-3 py-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 shadow-sm disabled:opacity-60"
+    ? "w-full resize-y rounded-xl border border-[#E5E9EF] bg-white px-3 py-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 shadow-sm disabled:opacity-60"
     : "w-full resize-y rounded-xl border border-white/[0.08] bg-[#0e1319] px-3 py-3 text-sm leading-relaxed text-slate-200 placeholder:text-slate-600 disabled:opacity-60";
   const primaryBtn = light
     ? "rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-50"
     : "rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
   const ghostBtn = light
-    ? "border-sky-200 bg-white text-slate-700 hover:border-brand/40 hover:text-brand"
+    ? "border-[#E5E9EF] bg-white text-slate-700 hover:border-brand/40 hover:text-brand"
     : "border-white/[0.08] bg-[#121820] text-slate-200";
   const recBtn = recording
     ? light

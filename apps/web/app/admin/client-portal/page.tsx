@@ -111,7 +111,7 @@ export default function AdminClientPortalPage() {
             </h1>
             <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#374151]">
               All CRM clients with portal-linked projects, login sessions, and activity — cross-check with{" "}
-              <Link href="/activity" className="font-semibold text-[#1F6FEB] hover:underline">
+              <Link href="/activity" className="font-semibold text-[#2D5A5A] hover:underline">
                 Activity log
               </Link>
               .
@@ -136,7 +136,7 @@ export default function AdminClientPortalPage() {
               { label: "Linked projects", value: data.stats.totalProjects }
             ].map((s) => (
               <div key={s.label} className={`${adminNeu.panelInset} text-center`}>
-                <p className="font-display text-2xl font-bold tabular-nums text-[#1e3a8a]">{s.value}</p>
+                <p className="font-display text-2xl font-bold tabular-nums text-brand">{s.value}</p>
                 <p className="mt-1 font-label text-[10px] font-bold uppercase tracking-[0.1em] text-[#4b5563]">
                   {s.label}
                 </p>
@@ -169,8 +169,8 @@ export default function AdminClientPortalPage() {
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedId(c.id)}
-                      className={`flex w-full flex-col gap-1 border-b border-[#f0f0f0] px-4 py-3 text-left transition-colors hover:bg-[#f3f8ff] ${
-                        active ? "bg-[#ebf3fc] ring-1 ring-inset ring-brand/25" : ""
+                      className={`flex w-full flex-col gap-1 border-b border-[#f0f0f0] px-4 py-3 text-left transition-colors hover:bg-brand/5 ${
+                        active ? "bg-brand-light ring-1 ring-inset ring-brand/25" : ""
                       }`}
                     >
                       <span className="truncate text-sm font-medium text-slate-700">{c.name}</span>

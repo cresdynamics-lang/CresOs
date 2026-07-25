@@ -404,7 +404,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     isSettingsRoute;
 
   return (
-    <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-[#eef4fb]" : "bg-[#eef4fb]"}`}>
+    <div className={`flex h-dvh min-h-0 overflow-hidden ${hideShellChrome ? "bg-[#F4F7F9]" : "bg-[#F4F7F9]"}`}>
       {mobileNavOpen && !hideShellChrome && !isSettingsRoute && (
         <div className="fixed inset-0 z-40">
           <button
@@ -510,7 +510,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }`}
       >
         <header
-          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-white px-3 py-2 shadow-sm sm:gap-3 sm:px-4 sm:py-2.5 ${
+          className={`z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#E5E9EF] bg-white px-3 py-2 shadow-sm sm:gap-3 sm:px-4 sm:py-2.5 ${
             hideTopHeader
               ? "hidden"
               : "max-lg:fixed max-lg:inset-x-0 max-lg:top-0 max-lg:z-50 max-lg:pt-[env(safe-area-inset-top,0px)] lg:relative lg:top-auto lg:bg-white/95"
@@ -539,7 +539,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* Fullscreen toggle — all workspace pages */}
             <button
               onClick={toggleFullscreen}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-sky-200 bg-[#f5f9fc] p-2.5 text-slate-600 hover:border-brand/40 hover:text-brand lg:min-h-0 lg:min-w-0 lg:p-2"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[#E5E9EF] bg-[#F4F7F9] p-2.5 text-slate-600 hover:border-brand/40 hover:text-brand lg:min-h-0 lg:min-w-0 lg:p-2"
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >

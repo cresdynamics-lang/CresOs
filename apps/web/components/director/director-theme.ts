@@ -22,8 +22,8 @@ export const directorNeu = {
   chartPanel: lightSurface.chartPanel,
   kpiStrip: lightSurface.kpiStrip,
   listRow: lightSurface.listRow,
-  pageHero: "border-b border-sky-100 bg-gradient-to-b from-brand-light/50 to-transparent",
-  section: "border-b border-sky-100 py-6",
-  dataBlock: "border-b border-sky-100 px-5 py-4 last:border-b-0 lg:px-8",
+  pageHero: "border-b border-[#E5E9EF] bg-gradient-to-b from-brand-light/50 to-transparent",
+  section: "border-b border-[#E5E9EF] py-6",
+  dataBlock: "border-b border-[#E5E9EF] px-5 py-4 last:border-b-0 lg:px-8",
   input: lightSurface.input
 } as const;

@@ -464,7 +464,7 @@ export function EmailAutomationConsole() {
                       active ? "bg-brand/10 ring-1 ring-inset ring-brand/25" : ""
                     }`}
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ebf3fc] text-[11px] font-bold text-[#0b4a8f]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-light text-[11px] font-bold text-brand">
                       {initials(t.fromName, t.fromEmail)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -482,7 +482,7 @@ export function EmailAutomationConsole() {
                           {STATUS_LABELS[t.status as EmailStatus]}
                         </span>
                         {(t.ccEmails?.length ?? 0) > 0 ? (
-                          <span className="inline-flex rounded-full bg-[#ebf3fc] px-1.5 py-0.5 text-[9px] font-bold text-[#0b4a8f] ring-1 ring-inset ring-brand/30">
+                          <span className="inline-flex rounded-full bg-brand-light px-1.5 py-0.5 text-[9px] font-bold text-brand ring-1 ring-inset ring-brand/30">
                             CC {t.ccEmails!.length}
                           </span>
                         ) : null}

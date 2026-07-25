@@ -26,9 +26,9 @@ export type SettingsThemeTokens = {
 };
 
 const sharedFullscreen = {
-  section: "border-b border-sky-100 px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+  section: "border-b border-[#E5E9EF] px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
   heroBand:
-    "border-b border-sky-100 bg-gradient-to-br from-brand-light/60 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+    "border-b border-[#E5E9EF] bg-gradient-to-br from-brand-light/60 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
   sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500",
   listRow: lightSurface.listRow
 };
@@ -44,7 +44,7 @@ const globalTokens: SettingsThemeTokens = {
   navIdle: lightSurface.navIdle,
   input: lightSurface.input,
   inputReadonly:
-    "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
+    "w-full rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2.5 text-sm text-slate-500",
   btnPrimary: lightSurface.btnPrimary,
   btnGhost: lightSurface.btnGhost,
   accentText: "text-brand",
@@ -62,7 +62,7 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: devNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-sky-100 bg-gradient-to-br from-violet-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        "border-b border-[#E5E9EF] bg-gradient-to-br from-violet-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
       sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-700",
       listRow: devNeu.listRow,
       navActive: devNeu.navActive,
@@ -85,14 +85,14 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: financeNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-sky-100 bg-gradient-to-br from-emerald-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        "border-b border-[#E5E9EF] bg-gradient-to-br from-emerald-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
       sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-700",
       listRow: sharedFullscreen.listRow,
       navActive: financeNeu.navActive,
       navIdle: financeNeu.navIdle,
       input: financeNeu.input,
       inputReadonly:
-        "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
+        "w-full rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2.5 text-sm text-slate-500",
       btnPrimary: financeNeu.btnPrimary,
       btnGhost: financeNeu.btnGhost,
       accentText: "text-emerald-700",
@@ -109,14 +109,14 @@ export function getSettingsTheme(key: SettingsWorkspaceKey): SettingsThemeTokens
       panelInset: salesNeu.panelInset,
       section: sharedFullscreen.section,
       heroBand:
-        "border-b border-sky-100 bg-gradient-to-br from-amber-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        "border-b border-[#E5E9EF] bg-gradient-to-br from-amber-50 via-[#eef4fb] to-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
       sectionLabel: "font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-700",
       listRow: sharedFullscreen.listRow,
       navActive: salesNeu.navActive,
       navIdle: salesNeu.navIdle,
       input: salesNeu.input,
       inputReadonly:
-        "w-full rounded-xl border border-sky-100 bg-[#f5f9fc] px-3 py-2.5 text-sm text-slate-500",
+        "w-full rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] px-3 py-2.5 text-sm text-slate-500",
       btnPrimary: salesNeu.btnPrimary,
       btnGhost: salesNeu.btnGhost,
       accentText: "text-amber-700",
