@@ -300,8 +300,10 @@ export function EmailAutomationConsole() {
       <AdminPanel className="!shrink-0 !p-3 sm:!p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Command · Email AI</p>
-            <h1 className="mt-0.5 text-lg font-semibold text-slate-900 sm:text-xl">Inbox &amp; automated replies</h1>
+            <p className={adminNeu.eyebrow}>Command · Email AI</p>
+            <h1 className="mt-1 font-display text-xl font-bold tracking-tight text-[#111827] sm:text-2xl">
+              Inbox &amp; automated replies
+            </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {pollMsg ? (
@@ -324,7 +326,7 @@ export function EmailAutomationConsole() {
             <button
               type="button"
               onClick={() => setShowConfig((v) => !v)}
-              className={showConfig ? `${adminNeu.navActive} px-3 py-2 text-sm` : adminNeu.btnGhost}
+              className={showConfig ? adminNeu.segActive : adminNeu.btnGhost}
             >
               AI instructions
             </button>
@@ -475,7 +477,7 @@ export function EmailAutomationConsole() {
                       <p className="truncate text-[12px] font-medium text-slate-700">{t.subject}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-1">
                         <span
-                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] ring-1 ring-inset ${STATUS_TONE[t.status as EmailStatus]}`}
+                          className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] ${STATUS_TONE[t.status as EmailStatus]}`}
                         >
                           {STATUS_LABELS[t.status as EmailStatus]}
                         </span>
@@ -522,7 +524,7 @@ export function EmailAutomationConsole() {
               <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ring-1 ring-inset ${STATUS_TONE[selected.status]}`}
+                    className={`inline-flex rounded-md px-2 py-0.5 text-[10px] ${STATUS_TONE[selected.status]}`}
                   >
                     {STATUS_LABELS[selected.status]}
                   </span>

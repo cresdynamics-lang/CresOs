@@ -85,13 +85,13 @@ export const STATUS_FILTERS = [
 export const EMAIL_SIDEBAR_PRIMARY = ["", "awaiting_approval", "ignored"] as const;
 
 export const STATUS_TONE: Record<EmailStatus, string> = {
-  pending_draft: "bg-slate-200 text-slate-900 ring-slate-300 font-semibold",
-  awaiting_approval: "bg-amber-100 text-amber-950 ring-amber-300 font-semibold",
-  editing: "bg-sky-100 text-sky-950 ring-sky-300 font-semibold",
-  approved: "bg-teal-100 text-teal-950 ring-teal-300 font-semibold",
-  sent: "bg-emerald-100 text-emerald-950 ring-emerald-300 font-semibold",
-  failed: "bg-rose-100 text-rose-950 ring-rose-400 font-semibold",
-  ignored: "bg-slate-100 text-slate-700 ring-slate-300 font-semibold"
+  pending_draft: "border border-slate-300 bg-slate-200 font-label font-bold text-slate-900",
+  awaiting_approval: "border border-amber-400 bg-amber-200 font-label font-bold text-amber-950",
+  editing: "border border-sky-400 bg-sky-200 font-label font-bold text-sky-950",
+  approved: "border border-teal-400 bg-teal-200 font-label font-bold text-teal-950",
+  sent: "border border-emerald-400 bg-emerald-200 font-label font-bold text-emerald-950",
+  failed: "border border-rose-400 bg-rose-200 font-label font-bold text-rose-950",
+  ignored: "border border-slate-300 bg-slate-100 font-label font-bold text-slate-800"
 };
 
 export function formatRecipientLine(list: EmailRecipient[] | undefined): string {

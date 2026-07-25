@@ -226,14 +226,14 @@ export function AdminAiCommandConsole() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row sm:p-6">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <AdminPanel>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Command · AI</p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-900 sm:text-2xl">Admin AI Command</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+          <p className={adminNeu.eyebrow}>Command · AI</p>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#111827]">Admin AI Command</h1>
+          <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#374151]">
             Create meetings and tasks, or ask deep org intelligence — projects, people, hours vs days, and Cres Dynamics
             fit.
           </p>
 
-          <div className="mt-4 flex gap-2 border-b border-[#e1dfdd] pb-3">
+          <div className="mt-4 flex gap-2 border-b border-[#e5e7eb] pb-3">
             {isAdmin ? (
               <button
                 type="button"
@@ -242,9 +242,7 @@ export function AdminAiCommandConsole() {
                   setResult(null);
                   setError(null);
                 }}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  tab === "execute" ? adminNeu.navActive : adminNeu.navIdle
-                }`}
+                className={tab === "execute" ? adminNeu.segActive : adminNeu.segIdle}
               >
                 Execute
               </button>
@@ -256,9 +254,7 @@ export function AdminAiCommandConsole() {
                 setResult(null);
                 setError(null);
               }}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                tab === "intelligence" ? adminNeu.navActive : adminNeu.navIdle
-              }`}
+              className={tab === "intelligence" ? adminNeu.segActive : adminNeu.segIdle}
             >
               Intelligence
             </button>

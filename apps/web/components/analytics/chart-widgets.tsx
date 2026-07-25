@@ -2,6 +2,17 @@
 
 type BarItem = { label: string; value: number; color?: string };
 
+/** Professional chart palette — readable on light admin surfaces. */
+const CHART = {
+  track: "bg-slate-200",
+  label: "text-slate-800",
+  value: "text-slate-900",
+  muted: "text-slate-600",
+  axis: "border-slate-300",
+  barDefault: "bg-[#2D5A5A]",
+  barAlt: "bg-[#2067B0]"
+};
+
 export function HorizontalBarChart({
   items,
   emptyLabel = "No data yet",
@@ -12,23 +23,23 @@ export function HorizontalBarChart({
   valueSuffix?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   }
   const max = Math.max(...items.map((i) => i.value), 1);
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {items.map((item) => (
         <div key={item.label}>
-          <div className="mb-1 flex justify-between gap-2 text-[10px] sm:text-xs">
-            <span className="truncate text-slate-300">{item.label}</span>
-            <span className="shrink-0 font-medium text-slate-100">
+          <div className="mb-1.5 flex justify-between gap-2 font-body text-xs sm:text-sm">
+            <span className={`truncate font-semibold ${CHART.label}`}>{item.label}</span>
+            <span className={`shrink-0 font-bold tabular-nums ${CHART.value}`}>
               {item.value}
               {valueSuffix}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-800/90">
+          <div className={`h-2.5 overflow-hidden rounded-full ${CHART.track}`}>
             <div
-              className={`h-full rounded-full transition-all ${item.color ?? "bg-emerald-500"}`}
+              className={`h-full rounded-full transition-all ${item.color ?? CHART.barDefault}`}
               style={{ width: `${Math.max(4, (item.value / max) * 100)}%` }}
             />
           </div>
@@ -46,20 +57,27 @@ export function VerticalBarChart({
   emptyLabel?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   }
   const max = Math.max(...items.map((i) => i.value), 1);
   return (
-    <div className="flex h-44 items-end justify-between gap-1.5 border-b border-slate-700/60 pb-1 pt-2 sm:h-52 sm:gap-2">
+    <div className={`flex h-48 items-end justify-between gap-2 border-b pb-1 pt-2 sm:h-56 sm:gap-3 ${CHART.axis}`}>
       {items.map((item) => (
-        <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-          <span className="text-[9px] font-medium text-slate-200 sm:text-[10px]">{item.value}</span>
-          <div
-            className={`w-full max-w-[2.5rem] rounded-t-md ${item.color ?? "bg-sky-500"}`}
-            style={{ height: `${Math.max(8, (item.value / max) * 100)}%`, minHeight: 8 }}
-            title={`${item.label}: ${item.value}`}
-          />
-          <span className="max-w-full truncate text-center text-[8px] text-slate-500 sm:text-[9px]" title={item.label}>
+        <div key={item.label} className="flex h-full min-w-0 flex-1 flex-col items-center">
+          <span className={`mb-1 shrink-0 font-label text-[10px] font-bold tabular-nums ${CHART.value}`}>
+            {item.value}
+          </span>
+          <div className="flex min-h-0 w-full flex-1 items-end justify-center">
+            <div
+              className={`w-full max-w-[2.75rem] rounded-t-md ${item.color ?? CHART.barDefault}`}
+              style={{ height: `${Math.max(10, (item.value / max) * 100)}%` }}
+              title={`${item.label}: ${item.value}`}
+            />
+          </div>
+          <span
+            className={`chart-label mt-1.5 max-w-full shrink-0 truncate text-center font-label text-[9px] font-semibold ${CHART.muted}`}
+            title={item.label}
+          >
             {item.label}
           </span>
         </div>
@@ -80,25 +98,35 @@ export function StatTile({
   tone?: "emerald" | "sky" | "amber" | "rose" | "violet" | "slate";
 }) {
   const toneClass = {
-    emerald: "text-emerald-400",
-    sky: "text-sky-400",
-    amber: "text-amber-400",
-    rose: "text-rose-400",
-    violet: "text-violet-400",
-    slate: "text-slate-100"
+    emerald: "text-emerald-800",
+    sky: "text-[#1e3a8a]",
+    amber: "text-amber-900",
+    rose: "text-rose-900",
+    violet: "text-violet-900",
+    slate: "text-slate-900"
+  }[tone];
+  const tileBg = {
+    emerald: "border-emerald-300 bg-emerald-50",
+    sky: "border-sky-300 bg-sky-50",
+    amber: "border-amber-300 bg-amber-50",
+    rose: "border-rose-300 bg-rose-50",
+    violet: "border-violet-300 bg-violet-50",
+    slate: "border-slate-300 bg-white"
   }[tone];
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-950/40 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p>
-      <p className={`mt-1 text-xl font-bold sm:text-2xl ${toneClass}`}>{value}</p>
-      {hint && <p className="mt-1 text-[10px] text-slate-500 sm:text-xs">{hint}</p>}
+    <div className={`rounded-xl border p-3 shadow-sm ${tileBg}`}>
+      <p className={`font-label text-[10px] font-bold uppercase tracking-[0.1em] ${CHART.muted} sm:text-xs`}>
+        {label}
+      </p>
+      <p className={`mt-1 font-display text-xl font-bold tabular-nums sm:text-2xl ${toneClass}`}>{value}</p>
+      {hint && <p className={`mt-1 font-body text-[10px] font-medium ${CHART.muted} sm:text-xs`}>{hint}</p>}
     </div>
   );
 }
 
 export function MiniLineTrend({
   points,
-  stroke = "#34d399"
+  stroke = "#2067B0"
 }: {
   points: number[];
   stroke?: string;
@@ -117,8 +145,15 @@ export function MiniLineTrend({
     })
     .join(" ");
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-12 w-full text-emerald-400" aria-hidden>
-      <polyline fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={coords} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-12 w-full" aria-hidden>
+      <polyline
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={coords}
+      />
     </svg>
   );
 }
@@ -126,7 +161,7 @@ export function MiniLineTrend({
 /** Modern area + line chart with grid and month labels. */
 export function AreaTrendChart({
   items,
-  stroke = "#fb7185",
+  stroke = "#2067B0",
   emptyLabel = "No trend data yet",
   valueSuffix = ""
 }: {
@@ -136,7 +171,7 @@ export function AreaTrendChart({
   valueSuffix?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   }
   const w = 320;
   const h = 140;
@@ -161,7 +196,7 @@ export function AreaTrendChart({
       <svg viewBox={`0 0 ${w} ${h}`} className="h-36 w-full sm:h-40" aria-hidden>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
             <stop offset="100%" stopColor={stroke} stopOpacity="0.02" />
           </linearGradient>
         </defs>
@@ -172,24 +207,28 @@ export function AreaTrendChart({
             x2={w - padX}
             y1={padY + (h - padY * 2) * (1 - pct)}
             y2={padY + (h - padY * 2) * (1 - pct)}
-            stroke="rgba(148,163,184,0.12)"
+            stroke="#d1d5db"
             strokeWidth="1"
           />
         ))}
         <path d={areaPath} fill={`url(#${gradId})`} />
         <path d={linePath} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p) => (
-          <circle key={p.label} cx={p.x} cy={p.y} r="3.5" fill={stroke} stroke="#0b0f14" strokeWidth="1.5" />
+          <circle key={p.label} cx={p.x} cy={p.y} r="3.5" fill={stroke} stroke="#ffffff" strokeWidth="1.5" />
         ))}
       </svg>
-      <div className="mt-2 flex justify-between gap-1 text-[9px] text-slate-500 sm:text-[10px]">
+      <div className={`mt-2 flex justify-between gap-1 font-label text-[10px] font-semibold ${CHART.muted}`}>
         {items.map((item) => (
-          <span key={item.label} className="min-w-0 truncate text-center" title={`${item.label}: ${item.value}${valueSuffix}`}>
+          <span
+            key={item.label}
+            className="chart-label min-w-0 truncate text-center"
+            title={`${item.label}: ${item.value}${valueSuffix}`}
+          >
             {item.label}
           </span>
         ))}
       </div>
-      <p className="mt-2 text-center text-xs font-semibold text-slate-300">
+      <p className={`mt-2 text-center font-body text-sm font-bold ${CHART.value}`}>
         Latest: {items[items.length - 1].value.toLocaleString()}
         {valueSuffix}
       </p>
@@ -198,14 +237,14 @@ export function AreaTrendChart({
 }
 
 const PIE_COLORS = [
-  "#34d399",
-  "#38bdf8",
-  "#fbbf24",
-  "#f87171",
-  "#a78bfa",
-  "#fb7185",
-  "#2dd4bf",
-  "#94a3b8"
+  "#F8B042",
+  "#2067B0",
+  "#AF52BF",
+  "#4DB6AC",
+  "#7BB45D",
+  "#E85D5D",
+  "#2D5A5A",
+  "#8B93A1"
 ];
 
 export function PieChart({
@@ -214,7 +253,8 @@ export function PieChart({
   size = 140,
   valuePrefix = "",
   variant = "pie",
-  centerLabel
+  centerLabel,
+  showLegend = true
 }: {
   items: { label: string; value: number }[];
   emptyLabel?: string;
@@ -222,9 +262,10 @@ export function PieChart({
   valuePrefix?: string;
   variant?: "pie" | "donut";
   centerLabel?: string;
+  showLegend?: boolean;
 }) {
   if (items.length === 0) {
-    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   }
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
   const r = size / 2 - 4;
@@ -245,42 +286,39 @@ export function PieChart({
   });
 
   return (
-    <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+    <div className={`flex flex-col items-center gap-3 ${showLegend ? "sm:flex-row sm:items-start" : ""}`}>
       <div className="relative shrink-0">
         <svg width={size} height={size} aria-hidden>
           {slices.map((s) => (
-            <path key={s.label} d={s.d} fill={s.color} opacity={0.92} />
+            <path key={s.label} d={s.d} fill={s.color} opacity={0.95} />
           ))}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={variant === "donut" ? r * 0.58 : r * 0.45}
-            className="fill-[#0b0f14]"
-          />
+          <circle cx={cx} cy={cy} r={variant === "donut" ? r * 0.58 : r * 0.45} fill="#ffffff" />
         </svg>
         {variant === "donut" && centerLabel ? (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="text-lg font-bold tabular-nums text-slate-100">{centerLabel}</span>
+            <span className="font-display text-lg font-bold tabular-nums text-[#1A1D26]">{centerLabel}</span>
           </div>
         ) : null}
       </div>
-      <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
-        {slices.map((s) => (
-          <li key={s.label} className="flex items-center justify-between gap-2">
-            <span className="flex min-w-0 items-center gap-2 text-slate-300">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="truncate capitalize">{s.label.replace(/_/g, " ")}</span>
-            </span>
-            <span className="shrink-0 text-slate-400">
-              {valuePrefix}
-              {typeof s.value === "number" && s.value >= 1000
-                ? s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                : s.value}{" "}
-              ({s.pct}%)
-            </span>
-          </li>
-        ))}
-      </ul>
+      {showLegend ? (
+        <ul className="min-w-0 flex-1 space-y-1.5 font-body text-xs">
+          {slices.map((s) => (
+            <li key={s.label} className="flex items-center justify-between gap-2">
+              <span className={`flex min-w-0 items-center gap-2 font-semibold ${CHART.label}`}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                <span className="truncate capitalize">{s.label.replace(/_/g, " ")}</span>
+              </span>
+              <span className={`shrink-0 font-bold tabular-nums ${CHART.muted}`}>
+                {valuePrefix}
+                {typeof s.value === "number" && s.value >= 1000
+                  ? s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  : s.value}{" "}
+                ({s.pct}%)
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -290,7 +328,7 @@ export function RadialProgress({
   value,
   label,
   sublabel,
-  color = "#fb7185",
+  color = "#2D5A5A",
   size = 132
 }: {
   value: number;
@@ -310,14 +348,7 @@ export function RadialProgress({
     <div className="flex flex-col items-center text-center">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90" aria-hidden>
-          <circle
-            cx={center}
-            cy={center}
-            r={r}
-            fill="none"
-            stroke="rgba(30,41,59,0.9)"
-            strokeWidth={stroke}
-          />
+          <circle cx={center} cy={center} r={r} fill="none" stroke="#e5e7eb" strokeWidth={stroke} />
           <circle
             cx={center}
             cy={center}
@@ -332,11 +363,11 @@ export function RadialProgress({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold tabular-nums text-slate-100">{pct}%</span>
+          <span className="font-display text-2xl font-bold tabular-nums text-slate-900">{pct}%</span>
         </div>
       </div>
-      <p className="mt-2 text-sm font-medium text-slate-200">{label}</p>
-      {sublabel ? <p className="mt-0.5 text-[10px] text-slate-500">{sublabel}</p> : null}
+      <p className={`mt-2 font-body text-sm font-bold ${CHART.label}`}>{label}</p>
+      {sublabel ? <p className={`mt-0.5 font-body text-[10px] font-medium ${CHART.muted}`}>{sublabel}</p> : null}
     </div>
   );
 }
@@ -352,16 +383,16 @@ export function DualBarChart({
   labelB?: string;
   emptyLabel?: string;
 }) {
-  if (items.length === 0) return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+  if (items.length === 0) return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   const max = Math.max(...items.flatMap((i) => [i.a, i.b]), 1);
   return (
     <div>
-      <div className="mb-2 flex gap-3 text-[10px] text-slate-500">
+      <div className={`mb-2 flex gap-3 font-label text-[10px] font-bold ${CHART.muted}`}>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-emerald-500" /> {labelA}
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-600" /> {labelA}
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-rose-500" /> {labelB}
+          <span className="h-2.5 w-2.5 rounded-sm bg-rose-600" /> {labelB}
         </span>
       </div>
       <div className="flex h-40 items-end justify-between gap-1 sm:h-48 sm:gap-2">
@@ -369,21 +400,111 @@ export function DualBarChart({
           <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
             <div className="flex h-full w-full max-w-[2.5rem] items-end justify-center gap-0.5">
               <div
-                className="w-[42%] rounded-t bg-emerald-500/90"
+                className="w-[42%] rounded-t bg-emerald-600"
                 style={{ height: `${Math.max(6, (item.a / max) * 100)}%` }}
                 title={`${labelA}: ${item.a}`}
               />
               <div
-                className="w-[42%] rounded-t bg-rose-500/80"
+                className="w-[42%] rounded-t bg-rose-600"
                 style={{ height: `${Math.max(6, (item.b / max) * 100)}%` }}
                 title={`${labelB}: ${item.b}`}
               />
             </div>
-            <span className="max-w-full truncate text-[8px] text-slate-500 sm:text-[9px]" title={item.label}>
+            <span
+              className={`chart-label max-w-full truncate font-label text-[9px] font-semibold ${CHART.muted}`}
+              title={item.label}
+            >
               {item.label.slice(5)}
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** Dual line trend — GemMatrix “This month / Last month” style. */
+export function DualLineChart({
+  items,
+  labelA = "This period",
+  labelB = "Prior",
+  colorA = "#2067B0",
+  colorB = "#E85D5D",
+  emptyLabel = "No trend data yet"
+}: {
+  items: { label: string; a: number; b: number }[];
+  labelA?: string;
+  labelB?: string;
+  colorA?: string;
+  colorB?: string;
+  emptyLabel?: string;
+}) {
+  if (items.length === 0) {
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
+  }
+  const w = 360;
+  const h = 160;
+  const padX = 12;
+  const padY = 16;
+  const max = Math.max(...items.flatMap((i) => [i.a, i.b]), 1);
+
+  const toPoint = (value: number, i: number) => {
+    const x = padX + (i / Math.max(items.length - 1, 1)) * (w - padX * 2);
+    const y = padY + (h - padY * 2) - (value / max) * (h - padY * 2);
+    return { x, y };
+  };
+
+  const pathFor = (key: "a" | "b") =>
+    items
+      .map((item, i) => {
+        const p = toPoint(item[key], i);
+        return `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`;
+      })
+      .join(" ");
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-40 w-full sm:h-44" aria-hidden>
+        {[0.25, 0.5, 0.75, 1].map((pct) => (
+          <line
+            key={pct}
+            x1={padX}
+            x2={w - padX}
+            y1={padY + (h - padY * 2) * (1 - pct)}
+            y2={padY + (h - padY * 2) * (1 - pct)}
+            stroke="#E5E9EF"
+            strokeWidth="1"
+          />
+        ))}
+        <path d={pathFor("a")} fill="none" stroke={colorA} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={pathFor("b")} fill="none" stroke={colorB} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {items.map((item, i) => {
+          const pa = toPoint(item.a, i);
+          const pb = toPoint(item.b, i);
+          return (
+            <g key={item.label}>
+              <circle cx={pa.x} cy={pa.y} r="3.5" fill={colorA} stroke="#fff" strokeWidth="1.5" />
+              <circle cx={pb.x} cy={pb.y} r="3.5" fill={colorB} stroke="#fff" strokeWidth="1.5" />
+            </g>
+          );
+        })}
+      </svg>
+      <div className={`mt-1 flex justify-between gap-1 font-label text-[10px] font-semibold ${CHART.muted}`}>
+        {items.map((item) => (
+          <span key={item.label} className="min-w-0 truncate text-center">
+            {item.label}
+          </span>
+        ))}
+      </div>
+      <div className={`mt-3 flex justify-center gap-6 font-label text-[11px] font-bold ${CHART.muted}`}>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorA }} />
+          {labelA}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorB }} />
+          {labelB}
+        </span>
       </div>
     </div>
   );

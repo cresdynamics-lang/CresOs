@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { EmailAutomationConsole } from "./email-automation/email-automation-console";
 import { adminNeu } from "../../components/admin/admin-theme";
-import { AdminPanel } from "../../components/admin/admin-ui";
+import { AdminPageHeader, AdminPanel } from "../../components/admin/admin-ui";
 import {
   CreateEmployeeAccountModal,
   type CreateEmployeeAccountPayload
@@ -324,24 +324,22 @@ export function AdminConsole() {
   }
 
   return (
-    <section className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden text-sm leading-normal text-[#242424]">
+    <section className="flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-hidden font-body text-sm leading-normal text-[#111827]">
       {tab !== "email-automation" && (
-        <header className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#616161]">Administration</p>
-          <h1 className="mt-1 text-xl font-bold text-[#242424] sm:text-2xl">{TAB_META[tab].title}</h1>
-          <p className="mt-1 text-sm font-medium text-[#424242]">{TAB_META[tab].description}</p>
-        </header>
+        <AdminPageHeader title={TAB_META[tab].title} description={TAB_META[tab].description} />
       )}
 
       {loadError && (
-        <p className={`${adminNeu.alertDanger} px-3 py-2.5 text-sm font-semibold text-[#a4262c]`}>{loadError}</p>
+        <p className={`${adminNeu.alertDanger} px-3 py-2.5 font-body text-sm font-semibold text-[#7f1d1d]`}>
+          {loadError}
+        </p>
       )}
 
       {tab === "users" && (
         <>
           <div className={`${adminNeu.card} min-w-0 w-full max-w-full overflow-hidden`}>
             <div className={adminNeu.commandBar}>
-              <p className="text-sm font-semibold text-[#242424]">
+              <p className="font-body text-sm font-semibold text-[#111827]">
                 {usersWithRoles.length} user{usersWithRoles.length === 1 ? "" : "s"} in organisation
               </p>
               <button

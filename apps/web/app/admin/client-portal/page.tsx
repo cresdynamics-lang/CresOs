@@ -105,11 +105,13 @@ export default function AdminClientPortalPage() {
       <AdminPanel>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Client access</p>
-            <h1 className="mt-1 text-xl font-semibold text-slate-900 sm:text-2xl">Client portal oversight</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            <p className={adminNeu.eyebrow}>Client access</p>
+            <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#111827]">
+              Client portal oversight
+            </h1>
+            <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#374151]">
               All CRM clients with portal-linked projects, login sessions, and activity — cross-check with{" "}
-              <Link href="/activity" className="text-brand hover:text-brand">
+              <Link href="/activity" className="font-semibold text-[#1F6FEB] hover:underline">
                 Activity log
               </Link>
               .
@@ -134,8 +136,10 @@ export default function AdminClientPortalPage() {
               { label: "Linked projects", value: data.stats.totalProjects }
             ].map((s) => (
               <div key={s.label} className={`${adminNeu.panelInset} text-center`}>
-                <p className="text-2xl font-bold tabular-nums text-brand">{s.value}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">{s.label}</p>
+                <p className="font-display text-2xl font-bold tabular-nums text-[#1e3a8a]">{s.value}</p>
+                <p className="mt-1 font-label text-[10px] font-bold uppercase tracking-[0.1em] text-[#4b5563]">
+                  {s.label}
+                </p>
               </div>
             ))}
           </div>

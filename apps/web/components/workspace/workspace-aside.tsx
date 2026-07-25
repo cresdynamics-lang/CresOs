@@ -37,9 +37,9 @@ export const WORKSPACE_THEMES: Record<string, WorkspaceAsideTheme> = {
   },
   admin: {
     panel: "bg-white",
-    border: "border-[#e1dfdd]",
-    title: "text-[#0b4a8f]",
-    subtitle: "text-[#424242]"
+    border: "border-[#d1d5db]",
+    title: "font-display text-[#1e3a8a]",
+    subtitle: "font-body text-[#374151]"
   },
   client: {
     panel: "bg-white",
@@ -91,11 +91,11 @@ export function WorkspaceAside({
       className={`flex h-full max-h-[100dvh] w-[min(18rem,92vw)] shrink-0 flex-col border-r ${theme.border} ${theme.panel} ${className}`.trim()}
     >
       <div className={`shrink-0 border-b ${theme.border} px-4 py-4`}>
-        <p className={`font-label text-[10px] font-semibold uppercase tracking-[0.22em] ${theme.title}`}>
+        <p className={`font-label text-[10px] font-bold uppercase tracking-[0.2em] ${theme.title}`}>
           {title}
         </p>
         {subtitle ? (
-          <p className={`mt-1 text-xs leading-relaxed ${theme.subtitle}`}>{subtitle}</p>
+          <p className={`mt-1.5 text-xs font-medium leading-relaxed ${theme.subtitle}`}>{subtitle}</p>
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
