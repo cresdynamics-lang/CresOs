@@ -13,7 +13,8 @@ export async function processTaskDueReminders(prisma: PrismaClient): Promise<voi
       deletedAt: null,
       dueDate: { not: null },
       assigneeId: { not: null },
-      status: { not: "done" }
+      status: { not: "done" },
+      assignee: { status: "active", deletedAt: null }
     },
     include: {
       assignee: { select: { id: true, name: true, email: true, notificationEmail: true } },

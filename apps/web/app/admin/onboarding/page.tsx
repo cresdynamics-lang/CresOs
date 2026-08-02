@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { OnboardingConsole } from "../../../components/onboarding/onboarding-console";
-
-export default function AdminPlaybookPage() {
-  return <OnboardingConsole />;
+export default function AdminPlaybookRedirect() {
+  redirect("/admin/ai-command?tab=playbook");
 }

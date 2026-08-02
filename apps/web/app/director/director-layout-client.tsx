@@ -7,6 +7,7 @@ import { WorkspaceAside } from "../../components/workspace/workspace-aside";
 import { directorNeu } from "../../components/director/director-theme";
 import { DirectorNav, DirectorSideNav } from "./director-nav";
 import { isDirectorOnly } from "../../lib/is-director-only";
+import { WorkspaceBackBar } from "../../components/navigation/workspace-back-bar";
 
 export function DirectorLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -47,6 +48,7 @@ export function DirectorLayoutClient({ children }: { children: React.ReactNode }
         <div className="shrink-0 border-b border-white/[0.06] px-3 py-2 md:hidden">
           <DirectorNav />
         </div>
+        <WorkspaceBackBar tone="dark" fallbackHref="/dashboard" />
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
           {children}
         </div>

@@ -258,7 +258,7 @@ export default function DeveloperReportsPage() {
   }
 
   return (
-    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 px-3 py-4 sm:px-6 sm:py-5">
+    <section className="admin-reports-neu flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 bg-white px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title={isDirector ? "Developer reports" : "My reports"}
         description={
@@ -277,7 +277,7 @@ export default function DeveloperReportsPage() {
             <button
               type="button"
               onClick={startNew}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/35 hover:from-violet-500 hover:to-sky-500"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#005CAB] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#004A8C]"
             >
               <span className="text-lg leading-none" aria-hidden>
                 +
@@ -289,7 +289,7 @@ export default function DeveloperReportsPage() {
       />
 
       {loadError && (
-        <div className="shrink-0 rounded-2xl border border-rose-500/40 bg-[#FEF2F2] px-4 py-3 text-sm text-rose-100">
+        <div className="shrink-0 rounded-lg border border-[#E8A0A6] bg-white px-4 py-3 text-sm text-[#C50F1F]">
           {loadError}
         </div>
       )}
@@ -302,9 +302,9 @@ export default function DeveloperReportsPage() {
       >
         <div className="min-h-0 flex-1 overflow-auto">
         {list.length === 0 ? (
-          <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-violet-800/40 bg-gradient-to-br from-violet-950/25 via-slate-950/60 to-slate-950 px-6 py-12 text-center">
-            <p className="font-display text-xl font-bold tracking-tight text-violet-200/90">No reports yet</p>
-            <p className="mt-2 max-w-sm text-sm text-[#5B6472]">
+          <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-lg border border-dashed border-[#E1DFDD] bg-white px-6 py-12 text-center">
+            <p className="text-xl font-semibold tracking-tight text-[#242424]">No reports yet</p>
+            <p className="mt-2 max-w-sm text-sm text-[#605E5C]">
               {isDeveloper
                 ? "Submit your first daily report to keep delivery visible to leadership."
                 : "Reports from your team will appear here."}
@@ -313,7 +313,7 @@ export default function DeveloperReportsPage() {
               <button
                 type="button"
                 onClick={startNew}
-                className="mt-6 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-violet-500"
+                className="mt-6 rounded-md bg-[#005CAB] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#004A8C]"
               >
                 New report
               </button>

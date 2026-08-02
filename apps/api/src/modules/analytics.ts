@@ -994,7 +994,8 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
             updatedAt: true,
             endDate: true,
             price: true,
-            amountReceived: true
+            amountReceived: true,
+            managementProgressPercent: true
           }
         }),
         prisma.task.groupBy({
@@ -1159,6 +1160,44 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
         .sort((a, b) => b.overdueTasks - a.overdueTasks || b.daysActive - a.daysActive)
         .slice(0, 12);
 
+      /** Per-project delivery / payment / overdue series for admin bar charts (0–100). */
+      const healthSeries = projects
+        .filter((p) => ["active", "in_progress", "planned", "paused"].includes(String(p.status)))
+        .map((p) => {
+          const c = countsByProject[p.id] ?? { total: 0, done: 0, overdue: 0 };
+          let deliveryPercent =
+            c.total > 0
+              ? Math.round((c.done / c.total) * 100)
+              : p.status === "completed" || p.status === "done"
+                ? 100
+                : 0;
+          if (c.total === 0 && typeof p.managementProgressPercent === "number") {
+            deliveryPercent = Math.min(100, Math.max(0, p.managementProgressPercent));
+          }
+          const price = Number(p.price ?? 0);
+          const received = Number(p.amountReceived ?? 0);
+          const paymentPercent =
+            price > 0 ? Math.min(100, Math.round((received / price) * 100)) : received > 0 ? 100 : 0;
+          let overduePercent =
+            c.total > 0 ? Math.min(100, Math.round((c.overdue / c.total) * 100)) : 0;
+          if (p.endDate && p.endDate < now && deliveryPercent < 100) {
+            overduePercent = Math.max(overduePercent, Math.min(100, overduePercent + 25));
+          }
+          const shortName =
+            p.name.length > 14 ? `${p.name.slice(0, 12).trim()}…` : p.name;
+          return {
+            id: p.id,
+            name: p.name,
+            shortName,
+            deliveryPercent,
+            paymentPercent,
+            overduePercent,
+            overdueTasks: c.overdue
+          };
+        })
+        .sort((a, b) => b.deliveryPercent - a.deliveryPercent || a.name.localeCompare(b.name))
+        .slice(0, 14);
+
       const activeWithTasks = projects.filter((p) => {
         const c = countsByProject[p.id];
         return c && c.total > 0;
@@ -1311,7 +1350,8 @@ export default function analyticsRouter(prisma: PrismaClient): Router {
             { label: "At risk", value: completionBuckets.atRisk },
             { label: "Stalled", value: completionBuckets.stalled }
           ].filter((x) => x.value > 0),
-          slowProjects
+          slowProjects,
+          healthSeries
         },
         team,
         aiPredictions: aiPredictions.slice(0, 5)

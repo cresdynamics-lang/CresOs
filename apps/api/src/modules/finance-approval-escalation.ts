@@ -3,6 +3,7 @@
  * Idempotent: at most one escalation notification per approval per admin per 24h window.
  */
 import type { PrismaClient } from "@prisma/client";
+import { filterActiveUserIds } from "../lib/user-account-status";
 import { ROLE_KEYS } from "./auth-middleware";
 
 const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
@@ -33,7 +34,7 @@ export async function processFinanceApprovalEscalations(prisma: PrismaClient, or
 
   if (stale.length === 0) return;
 
-  const adminUserIds = await getAdminUserIds(prisma, orgId);
+  const adminUserIds = await filterActiveUserIds(prisma, await getAdminUserIds(prisma, orgId));
   if (adminUserIds.length === 0) return;
 
   const since = new Date(Date.now() - TWENTY_FOUR_H_MS);

@@ -135,11 +135,11 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => void toggleOpen()}
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E9EF] bg-white text-[#5B6472] hover:bg-[#F4F7F9] hover:text-[#1A1D26]"
         aria-label="Notifications"
       >
         <svg
-          className="h-5 w-5"
+          className="h-4 w-4"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"

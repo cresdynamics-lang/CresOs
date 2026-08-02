@@ -6,6 +6,7 @@ import { useAuth } from "../auth-context";
 import { hrNeu } from "../../components/hr/hr-theme";
 import { HrNav } from "./hr-nav";
 import { canAccessHrWorkspace } from "../../lib/is-hr-only";
+import { WorkspaceBackBar } from "../../components/navigation/workspace-back-bar";
 
 export function HrLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,6 +33,7 @@ export function HrLayoutClient({ children }: { children: React.ReactNode }) {
       <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1016]/90 px-3 py-2.5 shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)] md:hidden">
         <HrNav />
       </div>
+      <WorkspaceBackBar fallbackHref="/hr" />
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {children}
       </div>

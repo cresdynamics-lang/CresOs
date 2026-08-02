@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { AdminConsole } from "../admin-console";
-
-export default function AdminUsersPage() {
-  return <AdminConsole />;
+export default function AdminUsersRedirect() {
+  redirect("/admin/organisation?tab=users");
 }

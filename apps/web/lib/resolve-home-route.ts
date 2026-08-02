@@ -1,3 +1,5 @@
+import { isAdminOnly } from "./is-admin-only";
+
 const LEADERSHIP_ROLES = ["admin", "director_admin", "finance", "analyst"] as const;
 
 /** Sales reps use the fullscreen sales workspace instead of the legacy command-center dashboard. */
@@ -33,6 +35,8 @@ export function resolveHomeRouteForUser(roleKeys: string[]): string {
     roleKeys.includes("project_manager") &&
     !roleKeys.some((r) => ["admin", "director_admin", "finance", "sales", "developer", "analyst", "hr"].includes(r));
   if (isPmOnly) return "/pm";
+
+  if (isAdminOnly(roleKeys)) return "/admin";
 
   return "/dashboard";
 }

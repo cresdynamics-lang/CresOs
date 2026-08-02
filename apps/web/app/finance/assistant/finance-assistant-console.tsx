@@ -189,9 +189,9 @@ export function FinanceAssistantConsole() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
         <div className={`${financeNeu.panel} p-4 sm:p-6`}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1B6B3A]">Finance · AI</p>
-          <h1 className="mt-1 text-xl font-semibold text-[#1A1D26] sm:text-2xl">Finance AI Assistant</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#5B6472]">
+          <p className={financeNeu.eyebrow}>Finance · AI</p>
+          <h1 className={`mt-1 ${financeNeu.titleSm}`}>Finance AI Assistant</h1>
+          <p className={`mt-1 max-w-2xl ${financeNeu.body}`}>
             Ask streams live from the ledger + knowledge pool. Record mode previews expenses/payments for confirmation.
           </p>
 

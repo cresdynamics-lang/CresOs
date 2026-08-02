@@ -1,11 +1,11 @@
-"use client";
+import type { Metadata } from "next";
+import { AdminAiCommandHub } from "./admin-ai-hub";
 
-import { AdminAiCommandConsole } from "./admin-ai-command-console";
+export const metadata: Metadata = {
+  title: "AI Command | CresOS Admin",
+  description: "Playbook, AI intelligence, task creation, data pool, and email AI in one workspace."
+};
 
 export default function AdminAiCommandPage() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <AdminAiCommandConsole />
-    </div>
-  );
+  return <AdminAiCommandHub />;
 }

@@ -4,16 +4,12 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useAuth } from "../auth-context";
 import { formatMoney } from "../format-money";
-import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { HorizontalBarChart, PieChart, VerticalBarChart } from "../../components/analytics/chart-widgets";
 import { DevStatInline, DevStatRow } from "../../components/developer/developer-ui";
 import { devNeu } from "../../components/developer/developer-theme";
 import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
 import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
 import {
-  WorkspaceAlignedTips,
-  WorkspaceDashboardSection,
-  WorkspacePriorityGrid,
   dedupeAiHint,
   dedupeFocusTips,
   type WorkspacePriorityItem
@@ -76,7 +72,11 @@ const QUICK_LINKS = [
   { href: "/settings/account", label: "Settings" }
 ] as const;
 
-const CHART_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500"];
+const CHART_COLORS = ["bg-[#005CAB]", "bg-[#5C2D91]", "bg-[#0B6A0B]", "bg-[#C19C00]", "bg-[#C50F1F]"];
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[#8A8886]">{children}</p>;
+}
 
 export function DeveloperOverviewDashboard({
   queue,
@@ -108,10 +108,10 @@ export function DeveloperOverviewDashboard({
       items.push({
         id: "report-due",
         tone: "danger",
-        title: "Submit your developer report",
-        detail: "File today's report so leadership stays aligned on delivery.",
+        title: "Submit today's report",
+        detail: "File your developer report for leadership.",
         href: "/developer-reports",
-        action: "Submit now"
+        action: "Submit"
       });
     }
     if (queue.overdueTasks > 0) {
@@ -119,19 +119,19 @@ export function DeveloperOverviewDashboard({
         id: "overdue-tasks",
         tone: "danger",
         title: `${queue.overdueTasks} overdue task${queue.overdueTasks === 1 ? "" : "s"}`,
-        detail: "Clear overdue work on your assigned projects.",
+        detail: "Clear past-due work.",
         href: "/schedule",
-        action: "Open tasks"
+        action: "Tasks"
       });
     }
     if (queue.blockedTasks > 0) {
       items.push({
         id: "blocked-tasks",
         tone: "warning",
-        title: `${queue.blockedTasks} blocked task${queue.blockedTasks === 1 ? "" : "s"}`,
-        detail: "Unblock or escalate so delivery keeps moving.",
+        title: `${queue.blockedTasks} blocked`,
+        detail: "Unblock or escalate.",
         href: "/projects",
-        action: "View projects"
+        action: "Projects"
       });
     }
     for (const r of visibleReminders.slice(0, 2)) {
@@ -154,7 +154,7 @@ export function DeveloperOverviewDashboard({
         hasUnreadAlert: queue.unreadNotifications > 0,
         hasOverdueTasksAlert: queue.overdueTasks > 0,
         priorityTitles: alertItems.map((a) => a.title)
-      }),
+      }).slice(0, 3),
     [focusTips, reportReminderDue, queue.unreadNotifications, alertItems]
   );
 
@@ -165,11 +165,11 @@ export function DeveloperOverviewDashboard({
 
   const projectBars = projects
     .filter((p) => p.status === "active" || p.status === "planned")
-    .slice(0, 8)
+    .slice(0, 6)
     .map((p, idx) => {
       const name = p.name?.trim() || "Project";
       return {
-        label: name.length > 22 ? `${name.slice(0, 22)}…` : name,
+        label: name.length > 18 ? `${name.slice(0, 18)}…` : name,
         value: p.progressPercent ?? 0,
         color: CHART_COLORS[idx % CHART_COLORS.length]
       };
@@ -192,235 +192,260 @@ export function DeveloperOverviewDashboard({
   const taskBars =
     scheduleKpis != null
       ? [
-          { label: "done", value: scheduleKpis.completed, color: "bg-emerald-500" },
-          { label: "pending", value: scheduleKpis.pending, color: "bg-violet-500" }
+          { label: "done", value: scheduleKpis.completed, color: "bg-[#0B6A0B]" },
+          { label: "pending", value: scheduleKpis.pending, color: "bg-[#005CAB]" }
         ].filter((t) => t.value > 0)
       : [];
 
-  const alertClass = (tone: WorkspacePriorityItem["tone"]) => {
+  const attentionProjects = projects.filter((p) => p.overdueTasks > 0 || p.blockedTasks > 0).slice(0, 5);
+
+  const panelForTone = (tone: WorkspacePriorityItem["tone"]) => {
     if (tone === "danger") return devNeu.alertDanger;
     if (tone === "warning") return devNeu.alertWarning;
     return devNeu.alertInfo;
   };
 
+  const actionColor = (tone: WorkspacePriorityItem["tone"]) => {
+    if (tone === "danger") return "bg-[#C50F1F] hover:bg-[#A50D1A]";
+    if (tone === "warning") return "bg-[#C19C00] hover:bg-[#A68500]";
+    return "bg-[#005CAB] hover:bg-[#004A8C]";
+  };
+
   return (
-    <div className="flex w-full min-w-0 flex-1 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
+    <div className={`${devNeu.workspace} flex w-full min-w-0 flex-1 flex-col gap-3 bg-white pb-4`}>
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E1DFDD] pb-3">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#6D28D9]/90">
-            Developer
-          </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
-            {welcomeHeadline}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
-            Your delivery queue and milestone progress — use the sidebar for tasks, reports, and projects.
-          </p>
+          <p className={devNeu.eyebrow}>Developer</p>
+          <h1 className={`mt-0.5 ${devNeu.title}`}>{welcomeHeadline}</h1>
+          <p className={`mt-0.5 max-w-xl ${devNeu.body}`}>Queue, milestones, and reports.</p>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${devNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
+          className={`${devNeu.btnGhost} shrink-0 disabled:opacity-50`}
         >
-          {loading ? "Refreshing…" : "Refresh"}
+          {loading ? "…" : "Refresh"}
         </button>
       </header>
 
       {loadError ? (
-        <div className={`${devNeu.alertWarning} px-4 py-3 sm:px-5`}>
-          <p className="text-sm text-[#92400E]">{loadError}</p>
+        <div className={`${devNeu.alertWarning} px-2.5 py-2`}>
+          <p className="text-[12px] text-[#8A7000]">{loadError}</p>
         </div>
       ) : null}
 
-      {pendingPayments.length > 0 && (
-        <WorkspaceDashboardSection label="Confirm payments" roleKeys={auth.roleKeys}>
-          <ul className="mt-3 grid w-full gap-3">
+      {pendingPayments.length > 0 ? (
+        <section>
+          <SectionLabel>Payments to confirm</SectionLabel>
+          <ul className="grid gap-1.5">
             {pendingPayments.map((row) => (
-              <li key={row.id} className={devNeu.alertWarning}>
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
+              <li key={row.id} className={`${devNeu.alertWarning} px-2.5 py-2`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-display text-base font-semibold leading-snug text-amber-100 sm:text-lg">
-                      Finance payment recorded
-                    </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[#5B6472]">
+                    <p className="text-[12px] font-semibold text-[#242424]">Payment recorded</p>
+                    <p className="text-[11px] text-[#605E5C]">
                       {formatMoney(Number(row.amount))}
                       {row.currency && row.currency !== "KES" ? ` ${row.currency}` : ""} ·{" "}
-                      {row.description?.trim() || "Developer payment"} ·{" "}
-                      {new Date(row.spentAt).toLocaleDateString()}
+                      {row.description?.trim() || "Dev payment"} · {new Date(row.spentAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onAckPayment(row.id)}
-                    className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-bold uppercase tracking-wide sm:text-sm ${devNeu.btnPrimary}`}
-                  >
-                    Confirm receipt
+                  <button type="button" onClick={() => onAckPayment(row.id)} className={devNeu.btnPrimary}>
+                    Confirm
                   </button>
                 </div>
               </li>
             ))}
           </ul>
-        </WorkspaceDashboardSection>
-      )}
-
-      {alertItems.length > 0 ? (
-        <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>
-          <WorkspacePriorityGrid
-            items={alertItems}
-            panelClass={alertClass}
-            dismissible={(id) =>
-              visibleReminders.some((r) => r.reminderKey === id) ? (
-                <button
-                  type="button"
-                  onClick={() => onDismissReminder(id)}
-                  className="mt-2 text-xs text-[#5B6472] hover:text-[#5B6472]"
-                >
-                  Dismiss
-                </button>
-              ) : null
-            }
-          />
-        </WorkspaceDashboardSection>
+        </section>
       ) : null}
 
-      <WorkspaceAlignedTips
-        tips={alignedTips}
-        aiHint={alignedHint}
-        panelClass={`${devNeu.panelInset} p-4 sm:p-5`}
-        roleKeys={auth.roleKeys}
-      />
+      {alertItems.length > 0 ? (
+        <section>
+          <SectionLabel>Today</SectionLabel>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {alertItems.map((item) => (
+              <li key={item.id} className={`${panelForTone(item.tone)} px-2.5 py-2`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold leading-snug text-[#242424]">{item.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[#605E5C]">{item.detail}</p>
+                    {visibleReminders.some((r) => r.reminderKey === item.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => onDismissReminder(item.id)}
+                        className="mt-1 text-[10px] font-medium text-[#8A8886] hover:text-[#242424]"
+                      >
+                        Dismiss
+                      </button>
+                    ) : null}
+                  </div>
+                  <Link
+                    href={item.href}
+                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-white ${actionColor(item.tone)}`}
+                  >
+                    {item.action}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-      <WorkspaceDashboardSection label="Your queue" roleKeys={auth.roleKeys}>
-        <div className={`mt-3 ${devNeu.kpiStrip}`}>
-          <DevStatRow>
-            <Link href="/projects" className="min-w-0 hover:opacity-90">
-              <DevStatInline
-                label="Active projects"
-                value={loading ? "…" : queue.activeProjects}
-                hint="Planned or in flight"
-                tone="violet"
-              />
-            </Link>
-            <Link href="/schedule" className="min-w-0 hover:opacity-90">
-              <DevStatInline
-                label="Overdue tasks"
-                value={loading ? "…" : queue.overdueTasks}
-                hint="Past due date"
-                tone={queue.overdueTasks > 0 ? "rose" : "sky"}
-              />
-            </Link>
-            <DevStatInline
-              label="Milestone avg"
-              value={loading ? "…" : `${queue.avgProgress}%`}
-              hint="Completion on active projects"
-              tone="emerald"
-            />
-            <DevStatInline
-              label="Report streak"
-              value={loading ? "…" : queue.reportStreakDays}
-              hint="Consecutive days"
-              tone="amber"
-            />
-          </DevStatRow>
-          <DevStatRow className="mt-6 border-t border-[#E5E9EF] pt-6">
-            <DevStatInline
-              label="Blocked"
-              value={loading ? "…" : queue.blockedTasks}
-              hint="Needs unblock"
-              tone="amber"
-            />
-            <DevStatInline
-              label="Work progress"
-              value={loading ? "…" : `${queue.workProgressPercent}%`}
-              hint="Org delivery signal"
-              tone="sky"
-            />
-            <Link href="/community" className="min-w-0 hover:opacity-90">
-              <DevStatInline
-                label="Notifications"
-                value={loading ? "…" : queue.unreadNotifications}
-                hint="Unread in-app"
-                tone={queue.unreadNotifications > 0 ? "rose" : "sky"}
-              />
-            </Link>
-            <Link href="/developer-reports" className="min-w-0 hover:opacity-90">
-              <DevStatInline label="Reports" value="File" hint="Daily developer report" tone="violet" />
-            </Link>
-          </DevStatRow>
-        </div>
-      </WorkspaceDashboardSection>
+      {alignedTips.length > 0 || alignedHint ? (
+        <section className={devNeu.panelInset}>
+          <SectionLabel>Stay aligned</SectionLabel>
+          {alignedTips.length > 0 ? (
+            <ul className="space-y-1">
+              {alignedTips.map((tip) => (
+                <li key={tip} className="flex gap-1.5 text-[11px] leading-snug text-[#605E5C]">
+                  <span className="text-[#005CAB]" aria-hidden>
+                    ·
+                  </span>
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {alignedHint ? (
+            <p
+              className={`text-[11px] leading-snug text-[#5C2D91] ${alignedTips.length ? "mt-1.5 border-t border-[#E1DFDD] pt-1.5" : ""}`}
+            >
+              {alignedHint}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-      <nav aria-label="Developer quick links" className="flex w-full flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
+      <section>
+        <SectionLabel>Your queue</SectionLabel>
+        <DevStatRow>
+          <Link href="/projects" className="min-w-0">
+            <DevStatInline
+              label="Active projects"
+              value={loading ? "…" : queue.activeProjects}
+              hint="In flight"
+              tone="violet"
+            />
+          </Link>
+          <Link href="/schedule" className="min-w-0">
+            <DevStatInline
+              label="Overdue"
+              value={loading ? "…" : queue.overdueTasks}
+              hint="Past due"
+              tone={queue.overdueTasks > 0 ? "rose" : "sky"}
+            />
+          </Link>
+          <DevStatInline
+            label="Milestone avg"
+            value={loading ? "…" : `${queue.avgProgress}%`}
+            hint="Active projects"
+            tone="emerald"
+          />
+          <DevStatInline
+            label="Report streak"
+            value={loading ? "…" : queue.reportStreakDays}
+            hint="Days"
+            tone="amber"
+          />
+        </DevStatRow>
+        <DevStatRow className="mt-2">
+          <DevStatInline
+            label="Blocked"
+            value={loading ? "…" : queue.blockedTasks}
+            hint="Needs action"
+            tone="amber"
+          />
+          <DevStatInline
+            label="Work progress"
+            value={loading ? "…" : `${queue.workProgressPercent}%`}
+            hint="Org signal"
+            tone="sky"
+          />
+          <Link href="/community" className="min-w-0">
+            <DevStatInline
+              label="Notifications"
+              value={loading ? "…" : queue.unreadNotifications}
+              hint="Unread"
+              tone={queue.unreadNotifications > 0 ? "rose" : "sky"}
+            />
+          </Link>
+          <Link href="/developer-reports" className="min-w-0">
+            <DevStatInline label="Reports" value="File" hint="Daily" tone="violet" />
+          </Link>
+        </DevStatRow>
+      </section>
+
+      <nav aria-label="Developer quick links" className="flex flex-wrap gap-1.5 border-b border-[#E1DFDD] pb-3">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className={`${devNeu.navIdle} rounded-lg px-3 py-2 text-sm font-medium touch-manipulation`}
+            className="rounded-md border border-[#E1DFDD] bg-white px-2 py-1 text-[11px] font-semibold text-[#605E5C] hover:border-[#005CAB]/40 hover:text-[#005CAB]"
           >
             {link.label}
           </Link>
         ))}
       </nav>
 
-      <section aria-label="Progress charts" className="w-full flex-1">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
+      <section>
+        <div className="mb-1.5 flex flex-wrap items-end justify-between gap-1">
+          <SectionLabel>Progress</SectionLabel>
           {scheduleKpis ? (
-            <p className="text-xs text-[#5B6472]">
-              Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending
+            <p className={devNeu.muted}>
+              Week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending
             </p>
           ) : null}
         </div>
 
-        <div className="grid w-full gap-4 xl:grid-cols-2">
-          <ChartPanel title="Milestone completion">
+        <div className="grid w-full gap-2 sm:grid-cols-2">
+          <ChartPanel title="Milestones">
             <HorizontalBarChart
               items={projectBars}
               valueSuffix="%"
-              emptyLabel={loading ? "Loading projects…" : "No active projects yet"}
+              emptyLabel={loading ? "Loading…" : "No active projects"}
             />
           </ChartPanel>
 
-          <ChartPanel title="Your task mix">
-            <PieChart
-              items={taskMix}
-              size={220}
-              emptyLabel={loading ? "Loading tasks…" : "No tasks assigned yet"}
-            />
+          <ChartPanel title="Task mix">
+            <PieChart items={taskMix} size={140} emptyLabel={loading ? "Loading…" : "No tasks yet"} />
           </ChartPanel>
 
-          <ChartPanel title="Weekly schedule">
+          <ChartPanel title="This week">
             {taskBars.length > 0 ? (
               <VerticalBarChart items={taskBars} />
             ) : (
-              <p className="text-sm text-[#5B6472]">
-                {loading ? "Loading schedule…" : "No tasks scheduled this week — plan in Tasks"}
+              <p className="text-[11px] text-[#605E5C]">
+                {loading ? "Loading…" : "No tasks this week"}
               </p>
             )}
           </ChartPanel>
 
-          <ChartPanel title="Projects needing attention">
-            {projects.filter((p) => p.overdueTasks > 0 || p.blockedTasks > 0).length > 0 ? (
-              <ul className="w-full space-y-2 text-sm">
-                {projects
-                  .filter((p) => p.overdueTasks > 0 || p.blockedTasks > 0)
-                  .slice(0, 6)
-                  .map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#E5E9EF] bg-black/20 px-3 py-2">
-                      <Link href={`/projects/${p.id}`} className="truncate text-[#6D28D9] hover:underline">
-                        {p.name}
-                      </Link>
-                      <span className="shrink-0 text-xs text-[#5B6472]">
-                        {p.overdueTasks > 0 ? `${p.overdueTasks} overdue` : ""}
-                        {p.overdueTasks > 0 && p.blockedTasks > 0 ? " · " : ""}
-                        {p.blockedTasks > 0 ? `${p.blockedTasks} blocked` : ""}
-                      </span>
-                    </li>
-                  ))}
+          <ChartPanel title="Needs attention">
+            {attentionProjects.length > 0 ? (
+              <ul className="w-full space-y-1">
+                {attentionProjects.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 rounded border border-[#E1DFDD] bg-white px-2 py-1.5"
+                  >
+                    <Link
+                      href={`/projects/${p.id}`}
+                      className="truncate text-[11px] font-semibold text-[#005CAB] hover:underline"
+                    >
+                      {p.name}
+                    </Link>
+                    <span className="shrink-0 text-[10px] text-[#605E5C]">
+                      {p.overdueTasks > 0 ? `${p.overdueTasks} late` : ""}
+                      {p.overdueTasks > 0 && p.blockedTasks > 0 ? " · " : ""}
+                      {p.blockedTasks > 0 ? `${p.blockedTasks} blocked` : ""}
+                    </span>
+                  </li>
+                ))}
               </ul>
             ) : (
-              <p className="text-sm text-[#5B6472]">{loading ? "Loading…" : "All clear on assigned projects"}</p>
+              <p className="text-[11px] text-[#605E5C]">{loading ? "Loading…" : "All clear"}</p>
             )}
           </ChartPanel>
         </div>
@@ -432,8 +457,9 @@ export function DeveloperOverviewDashboard({
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={devNeu.chartPanel}>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6D28D9]/80">{title}</h3>
-      <div className="mt-5 flex flex-1 flex-col items-center justify-center w-full">{children}</div>
+      <div className="absolute inset-x-0 top-0 h-0.5 bg-[#005CAB]" aria-hidden />
+      <h3 className="text-[10px] font-semibold tracking-wide text-[#005CAB]">{title}</h3>
+      <div className="mt-2 flex min-h-0 w-full flex-1 flex-col items-center justify-center">{children}</div>
     </div>
   );
 }

@@ -97,7 +97,7 @@ export function PaymentCreateModal({
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div className="finance-neu relative z-10 flex max-h-[min(92dvh,680px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E5E9EF] bg-white shadow-[8px_8px_24px_rgba(15,23,42,0.06),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-[#E5E9EF] px-4 py-3 sm:px-5">
-          <h2 id="payment-modal-title" className="text-lg font-semibold text-emerald-100">
+          <h2 id="payment-modal-title" className="text-lg font-semibold tracking-tight text-[#242424]">
             {mode === "edit" ? "Edit payment" : "Record payment"}
           </h2>
           <button

@@ -2,15 +2,15 @@
 
 import type { ReactNode } from "react";
 import type { StatTone } from "../stat-card";
-import { adminNeu } from "./admin-theme";
+import { adminAccents, adminNeu, type AdminAccent } from "./admin-theme";
 
-const statToneClass: Record<StatTone, { value: string; label: string; tile: string }> = {
-  brand: { value: "text-[#2D5A5A]", label: "text-[#5B6472]", tile: "border-[#C5D6D6] bg-[#E8F0F0]" },
-  emerald: { value: "text-[#2E7D4F]", label: "text-[#5B6472]", tile: adminNeu.statEmerald },
-  amber: { value: "text-[#9A6B12]", label: "text-[#5B6472]", tile: adminNeu.statAmber },
-  rose: { value: "text-[#C62828]", label: "text-[#5B6472]", tile: adminNeu.statRose },
-  sky: { value: "text-[#2067B0]", label: "text-[#5B6472]", tile: adminNeu.statIndigo },
-  violet: { value: "text-[#7B2D8E]", label: "text-[#5B6472]", tile: adminNeu.statViolet }
+const toneToAccent: Record<StatTone, AdminAccent> = {
+  brand: "blue",
+  sky: "blue",
+  emerald: "green",
+  amber: "yellow",
+  rose: "red",
+  violet: "purple"
 };
 
 export function AdminStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -32,14 +32,20 @@ export function AdminStatInline({
   hint?: string;
   tone?: StatTone;
 }) {
-  const s = statToneClass[tone];
+  const accent = adminAccents[toneToAccent[tone] ?? "blue"];
   return (
-    <div className={`min-w-0 rounded-xl border p-3 ${s.tile}`}>
-      <p className={`font-label text-[10px] font-bold uppercase tracking-[0.1em] ${s.label}`}>{label}</p>
-      <p className={`mt-1 font-display text-2xl font-bold tabular-nums tracking-tight sm:text-3xl ${s.value}`}>
+    <div
+      className="relative min-w-0 overflow-hidden rounded-lg border bg-white p-3.5 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-4"
+      style={{ borderColor: accent.border, borderLeftWidth: 4, borderLeftColor: accent.solid }}
+    >
+      <p className="font-label text-[11px] font-semibold tracking-wide text-[#605E5C]">{label}</p>
+      <p
+        className="mt-2 font-display text-2xl font-bold tabular-nums tracking-tight sm:text-[1.75rem]"
+        style={{ color: accent.solid }}
+      >
         {value}
       </p>
-      {hint ? <p className="mt-0.5 font-body text-[11px] font-medium text-[#5B6472] sm:text-xs">{hint}</p> : null}
+      {hint ? <p className="mt-1 font-body text-[12px] font-medium text-[#8A8886]">{hint}</p> : null}
     </div>
   );
 }

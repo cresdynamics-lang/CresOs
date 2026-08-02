@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { isAccountActive } from "../lib/user-account-status";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 
@@ -18,11 +19,12 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       scheduledAt: { gt: now } // only future items — reminder fires X min before
     },
     include: {
-      user: { select: { id: true, name: true, email: true, notificationEmail: true } }
+      user: { select: { id: true, name: true, email: true, notificationEmail: true, status: true } }
     }
   });
 
   for (const item of items) {
+    if (!isAccountActive(item.user.status)) continue;
     const minutesBefore = item.reminderMinutesBefore!;
     const triggerAt = new Date(item.scheduledAt.getTime() - minutesBefore * 60 * 1000);
     if (now < triggerAt) continue;
@@ -99,7 +101,7 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       status: { in: ["scheduled", "rescheduled"] }
     },
     include: {
-      user: { select: { id: true, name: true, email: true, notificationEmail: true } }
+      user: { select: { id: true, name: true, email: true, notificationEmail: true, status: true } }
     }
   });
 
@@ -108,6 +110,8 @@ export async function processScheduleReminders(prisma: PrismaClient): Promise<vo
       where: { id: item.id },
       data: { status: "missed" }
     });
+
+    if (!isAccountActive(item.user.status)) continue;
 
     const typeLabel = item.type === "meeting" ? "Meeting" : "Call";
     const subject = `${typeLabel} missed: ${item.title}`;

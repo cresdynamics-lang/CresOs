@@ -193,36 +193,38 @@ export default function LeadDetailPage() {
 
   if (!lead) {
     return (
-      <section className="shell">
-        <p className="text-slate-400">Loading…</p>
+      <section className="flex w-full min-w-0 flex-col gap-4 bg-white pb-6">
+        <p className="text-[#605E5C]">Loading…</p>
       </section>
     );
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell flex flex-wrap items-start justify-between gap-4">
+    <section className="flex w-full min-w-0 flex-col gap-4 bg-white pb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5">
         <div>
-          <Link href="/leads" className="text-sm text-brand hover:underline">
+          <Link href="/leads" className="text-sm font-semibold text-[#005CAB] hover:underline">
             ← Back to leads
           </Link>
-          <h2 className="mt-2 text-lg font-semibold text-slate-50">{lead.title}</h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <h2 className="mt-2 text-lg font-semibold text-[#242424]">{lead.title}</h2>
+          <p className="mt-1 text-xs text-[#605E5C]">
             {lead.owner && <>Owner: {lead.owner.name ?? lead.owner.email}</>}
             {lead.approvalStatus === "approved" && lead.approvedBy && (
               <> · Approved by {lead.approvedBy.name ?? lead.approvedBy.email}</>
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300">{lead.status}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md border border-[#E1DFDD] bg-white px-2 py-1 text-xs font-semibold text-[#605E5C]">
+            {lead.status}
+          </span>
           <span
-            className={`rounded px-2 py-1 text-xs ${
+            className={`rounded-md px-2 py-1 text-xs font-bold text-white ${
               lead.approvalStatus === "approved"
-                ? "bg-emerald-900/60 text-emerald-300"
+                ? "bg-[#0B6A0B]"
                 : lead.approvalStatus === "rejected"
-                  ? "bg-rose-900/60 text-rose-300"
-                  : "bg-amber-900/60 text-amber-300"
+                  ? "bg-[#C50F1F]"
+                  : "bg-[#C19C00]"
             }`}
           >
             {lead.approvalStatus}
@@ -233,7 +235,7 @@ export default function LeadDetailPage() {
                 type="button"
                 disabled={loading}
                 onClick={() => handleApprove("approved")}
-                className="rounded bg-emerald-600 px-3 py-1 text-sm text-white hover:bg-emerald-500 disabled:opacity-60"
+                className="rounded-md bg-[#0B6A0B] px-3 py-1 text-sm font-semibold text-white hover:bg-[#095609] disabled:opacity-60"
               >
                 Approve
               </button>
@@ -241,7 +243,7 @@ export default function LeadDetailPage() {
                 type="button"
                 disabled={loading}
                 onClick={() => handleApprove("rejected")}
-                className="rounded bg-rose-600 px-3 py-1 text-sm text-white hover:bg-rose-500 disabled:opacity-60"
+                className="rounded-md bg-[#C50F1F] px-3 py-1 text-sm font-semibold text-white hover:bg-[#A50D1A] disabled:opacity-60"
               >
                 Reject
               </button>
@@ -251,8 +253,8 @@ export default function LeadDetailPage() {
       </div>
 
       {lead.status === "closed" && !lead.project && (
-        <div className="shell border-rose-900/50 bg-rose-950/20">
-          <p className="text-sm text-rose-200">
+        <div className="rounded-lg border border-[#E8A0A6] border-l-4 border-l-[#C50F1F] bg-white p-4">
+          <p className="text-sm text-[#C50F1F]">
             This lead is <span className="font-semibold">closed</span> but not linked to any project.
             Please link it to a project so delivery can be tracked.
           </p>
@@ -260,7 +262,7 @@ export default function LeadDetailPage() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="mt-2 rounded bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
+              className="mt-2 rounded-md bg-[#C50F1F] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#A50D1A]"
             >
               Link to project
             </button>
@@ -269,13 +271,13 @@ export default function LeadDetailPage() {
       )}
 
       {canEditLead && (
-        <div className="shell">
+        <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-200">Lead status & contact</h3>
+            <h3 className="text-sm font-semibold text-[#242424]">Lead status & contact</h3>
             <button
               type="button"
               onClick={() => setEditing((v) => !v)}
-              className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-900"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-1.5 text-sm text-[#242424] hover:bg-[#F5F5F5]"
             >
               {editing ? "Cancel" : "Edit"}
             </button>
@@ -283,11 +285,11 @@ export default function LeadDetailPage() {
           {editing && (
             <form onSubmit={handleSave} className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-400">Status</span>
+                <span className="mb-1 block text-xs text-[#605E5C]">Status</span>
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                 >
                   <option value="new">New</option>
                   <option value="contacted">Contacted</option>
@@ -300,11 +302,11 @@ export default function LeadDetailPage() {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-400">Project</span>
+                <span className="mb-1 block text-xs text-[#605E5C]">Project</span>
                 <select
                   value={editProjectId}
                   onChange={(e) => setEditProjectId(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                 >
                   <option value="">No project yet</option>
                   {projects.map((p) => (
@@ -316,27 +318,27 @@ export default function LeadDetailPage() {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-400">Client name</span>
+                <span className="mb-1 block text-xs text-[#605E5C]">Client name</span>
                 <input
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs text-slate-400">Client phone</span>
+                <span className="mb-1 block text-xs text-[#605E5C]">Client phone</span>
                 <input
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                 />
               </label>
               <label className="block sm:col-span-2">
-                <span className="mb-1 block text-xs text-slate-400">Client email</span>
+                <span className="mb-1 block text-xs text-[#605E5C]">Client email</span>
                 <input
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                 />
               </label>
 
@@ -344,7 +346,7 @@ export default function LeadDetailPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+                  className="rounded-md bg-[#005CAB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004A8C] disabled:opacity-60"
                 >
                   Save
                 </button>
@@ -355,76 +357,76 @@ export default function LeadDetailPage() {
       )}
 
       {(lead.client || lead.project) && (
-        <div className="shell border-sky-800/40 bg-sky-950/20">
-          <h3 className="mb-2 text-sm font-semibold text-slate-200">Client &amp; project</h3>
+        <div className="rounded-lg border border-[#B4CDE8] border-l-4 border-l-[#005CAB] bg-white p-4">
+          <h3 className="mb-2 text-sm font-semibold text-[#242424]">Client &amp; project</h3>
           {lead.client && (
-            <p className="text-sm text-slate-300">
-              <span className="text-slate-400">Client:</span> {lead.client.name}
+            <p className="text-sm text-[#242424]">
+              <span className="text-[#605E5C]">Client:</span> {lead.client.name}
               {lead.client.phone ? ` · ${lead.client.phone}` : ""}
               {lead.client.email ? ` · ${lead.client.email}` : ""}
             </p>
           )}
           {lead.project && (
             <p className="mt-2 text-sm">
-              <span className="text-slate-400">Project:</span>{" "}
-              <Link href={`/projects/${lead.project.id}`} className="text-sky-400 hover:underline">
+              <span className="text-[#605E5C]">Project:</span>{" "}
+              <Link href={`/projects/${lead.project.id}`} className="font-semibold text-[#005CAB] hover:underline">
                 {lead.project.name}
               </Link>
               {lead.project.approvalStatus && (
-                <span className="ml-2 text-xs text-slate-500">({lead.project.approvalStatus})</span>
+                <span className="ml-2 text-xs text-[#8A8886]">({lead.project.approvalStatus})</span>
               )}
             </p>
           )}
           {lead.source === "project" && (
-            <p className="mt-2 text-xs text-slate-500">Source: linked from project</p>
+            <p className="mt-2 text-xs text-[#8A8886]">Source: linked from project</p>
           )}
         </div>
       )}
 
-      <div className="shell">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">Comments</h3>
+      <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5">
+        <h3 className="mb-2 text-sm font-semibold text-[#242424]">Comments</h3>
         {isAdmin && (
           <form onSubmit={handleAddComment} className="mb-3 flex flex-col gap-2">
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={2}
-              className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
               placeholder="Add a comment…"
             />
             <button
               type="submit"
               disabled={loading || !comment.trim()}
-              className="w-fit rounded bg-brand px-3 py-1.5 text-sm text-white hover:bg-brand-dark disabled:opacity-60"
+              className="w-fit rounded-md bg-[#005CAB] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#004A8C] disabled:opacity-60"
             >
               Post comment
             </button>
           </form>
         )}
         {lead.comments.length > 0 ? (
-          <ul className={`space-y-2 ${isAdmin ? "mt-0 border-t border-slate-700 pt-3" : ""}`}>
+          <ul className={`space-y-2 ${isAdmin ? "mt-0 border-t border-[#E1DFDD] pt-3" : ""}`}>
             {lead.comments.map((c) => (
-              <li key={c.id} className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm">
-                <p className="text-slate-300">{c.content}</p>
-                <p className="mt-1 text-xs text-slate-500">
+              <li key={c.id} className="rounded-md border border-[#E1DFDD] bg-white px-3 py-2 text-sm">
+                <p className="text-[#242424]">{c.content}</p>
+                <p className="mt-1 text-xs text-[#8A8886]">
                   {c.author.name ?? c.author.email} · {new Date(c.createdAt).toLocaleString()}
                 </p>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">No comments yet.</p>
+          <p className="text-sm text-[#8A8886]">No comments yet.</p>
         )}
       </div>
 
-      <div className="shell">
-        <h3 className="mb-3 text-sm font-semibold text-slate-200">Schedule meeting or call</h3>
+      <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5">
+        <h3 className="mb-3 text-sm font-semibold text-[#242424]">Schedule meeting or call</h3>
         {!canScheduleFollowUp ? (
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-3 text-xs text-[#605E5C]">
             Scheduling is available to sales and analyst roles. Upcoming items are listed below when present.
           </p>
         ) : (
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-3 text-xs text-[#605E5C]">
             You will be notified by email and in-app at the chosen times before the meeting/call.
           </p>
         )}
@@ -438,7 +440,7 @@ export default function LeadDetailPage() {
                 checked={followUpType === "meeting"}
                 onChange={() => setFollowUpType("meeting")}
               />
-              <span className="text-sm">Meeting</span>
+              <span className="text-sm text-[#242424]">Meeting</span>
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -447,7 +449,7 @@ export default function LeadDetailPage() {
                 checked={followUpType === "call"}
                 onChange={() => setFollowUpType("call")}
               />
-              <span className="text-sm">Call</span>
+              <span className="text-sm text-[#242424]">Call</span>
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -456,45 +458,45 @@ export default function LeadDetailPage() {
               value={followName}
               onChange={(e) => setFollowName(e.target.value)}
               placeholder="Contact name"
-              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
             />
             <input
               type="text"
               value={followBusiness}
               onChange={(e) => setFollowBusiness(e.target.value)}
               placeholder="Business"
-              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
             />
             <input
               type="text"
               value={followReason}
               onChange={(e) => setFollowReason(e.target.value)}
               placeholder="Reason"
-              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
             />
             <input
               type="text"
               value={followPhone}
               onChange={(e) => setFollowPhone(e.target.value)}
               placeholder="Phone"
-              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Date & time</label>
+            <label className="mb-1 block text-xs text-[#605E5C]">Date & time</label>
             <input
               type="datetime-local"
               value={followScheduled}
               onChange={(e) => setFollowScheduled(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
               required
             />
           </div>
           <div>
-            <p className="mb-2 text-xs text-slate-400">Notify me</p>
+            <p className="mb-2 text-xs text-[#605E5C]">Notify me</p>
             <div className="flex flex-wrap gap-2">
               {REMINDER_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-1.5 text-sm">
+                <label key={opt.value} className="flex items-center gap-1.5 text-sm text-[#242424]">
                   <input
                     type="checkbox"
                     checked={followReminders.includes(opt.value)}
@@ -508,7 +510,7 @@ export default function LeadDetailPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-fit rounded bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+            className="w-fit rounded-md bg-[#005CAB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004A8C] disabled:opacity-60"
           >
             Schedule {followUpType}
           </button>
@@ -517,20 +519,20 @@ export default function LeadDetailPage() {
       </div>
 
       {lead.followUps.length > 0 && (
-        <div className="shell">
-          <h3 className="mb-2 text-sm font-semibold text-slate-200">Upcoming meetings & calls</h3>
+        <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5">
+          <h3 className="mb-2 text-sm font-semibold text-[#242424]">Upcoming meetings & calls</h3>
           <ul className="space-y-2">
             {lead.followUps
               .filter((f) => new Date(f.scheduledAt) >= new Date())
               .map((f) => (
                 <li
                   key={f.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#E1DFDD] bg-white px-3 py-2 text-sm"
                 >
-                  <span className="font-medium capitalize text-slate-200">{f.type}</span>
-                  <span className="text-slate-400">{formatNairobiDateTime(f.scheduledAt)}</span>
+                  <span className="font-medium capitalize text-[#242424]">{f.type}</span>
+                  <span className="text-[#605E5C]">{formatNairobiDateTime(f.scheduledAt)}</span>
                   {(f.name || f.business) && (
-                    <span className="text-slate-400">{[f.name, f.business].filter(Boolean).join(" · ")}</span>
+                    <span className="text-[#605E5C]">{[f.name, f.business].filter(Boolean).join(" · ")}</span>
                   )}
                 </li>
               ))}

@@ -8,8 +8,10 @@ import { SettingsPanel } from "./settings-panel";
 import { HeaderStatusStrip } from "./header-status";
 import { filterGlobalNavSections } from "../lib/global-nav-sections";
 import { resolveWorkspaceForUser } from "../lib/resolve-workspace-for-user";
+import { isAdminOnly } from "../lib/is-admin-only";
 import { WorkspaceAside } from "../components/workspace/workspace-aside";
 import { HeaderProfileMenu } from "../components/workspace/header-profile-menu";
+import { AppBackButton } from "../components/navigation/app-back-button";
 import { GlobalSideNav } from "../components/workspace/global-side-nav";
 import { workspaceMeta, WorkspaceNavContent } from "../components/workspace/workspace-nav-content";
 import {
@@ -331,8 +333,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const inWorkspace = workspace !== null;
 
   const isSettingsRoute = pathname.startsWith("/settings");
-  /** Admin brings its own top chrome with the profile menu. */
-  const hideTopHeader = pathname.startsWith("/admin");
+  /**
+   * Workspace clients that ship their own top bar (hamburger, notifications, profile).
+   * Hide the global AppShell header so those controls only appear once.
+   */
+  const hideTopHeader =
+    workspace === "admin" ||
+    workspace === "sales" ||
+    workspace === "developer" ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/sales") ||
+    pathname.startsWith("/developer") ||
+    isAdminOnly(roles);
   const hideShellChrome = false;
 
   const workspaceFooter = inWorkspace ? (
@@ -451,6 +463,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
+            <AppBackButton tone="brand" iconOnly className="!h-10 !w-10 !rounded-xl md:!h-9 md:!w-auto md:!px-2.5 md:!rounded-lg" />
             <button
               type="button"
               className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border-2 border-brand/40 bg-brand/10 p-2.5 text-brand hover:border-brand hover:bg-brand/15 hover:text-brand-dark active:bg-brand/20 md:hidden"
@@ -479,16 +492,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ? "mx-0 overflow-hidden px-0 py-0"
                 : "mx-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] overflow-hidden px-0 py-0 lg:pt-0"
               : isWorkspaceFullscreen
-                ? "mx-0 overflow-hidden px-0 py-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
-              : ""
+                ? hideTopHeader
+                  ? "mx-0 overflow-hidden px-0 py-0"
+                  : "mx-0 overflow-hidden px-0 py-0 max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
+                : ""
           }`}
         >
           <div
             className={`min-h-0 flex-1 overflow-x-hidden ${
               isFullscreenPage || isWorkspaceFullscreen
-                ? hideTopHeader && isFullscreenPage
-                  ? "flex flex-col overflow-hidden"
-                  : "flex min-h-0 flex-1 flex-col overflow-hidden"
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                 : isSettingsRoute
                   ? "flex min-h-0 flex-col overflow-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"
                   : "flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden max-lg:pt-[calc(3.75rem+env(safe-area-inset-top,0px))] lg:pt-0"

@@ -871,8 +871,7 @@ export default function userRouter(prisma: PrismaClient): Router {
         await prisma.user.update({
           where: { id: userId },
           data: {
-            passwordHash,
-            passwordLastChangedAt: new Date()
+            passwordHash
           }
         });
 

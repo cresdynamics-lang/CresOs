@@ -19,7 +19,8 @@ export type FinanceSection =
   | "approvals"
   | "reports"
   | "assistant"
-  | "onboarding";
+  | "onboarding"
+  | "etims";
 
 type NavItem = {
   href: string;
@@ -76,6 +77,14 @@ const FINANCE_NAV_ITEMS: NavItem[] = [
     label: "AI Assistant",
     shortLabel: "AI",
     section: "assistant",
+    group: "records",
+    roles: ["admin", "finance"]
+  },
+  {
+    href: "/finance/etims",
+    label: "eTIMS / OSCU",
+    shortLabel: "eTIMS",
+    section: "etims",
     group: "records",
     roles: ["admin", "finance"]
   },
@@ -205,8 +214,8 @@ function FinanceNavLinks({ vertical = false }: { vertical?: boolean }) {
   const linkClass = (active: boolean) =>
     [
       vertical
-        ? "min-h-[40px] rounded-lg px-3 py-2 text-[13px] font-medium transition-all touch-manipulation lg:min-h-0"
-        : "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-xl px-3 py-2.5 text-sm font-medium transition-all sm:min-h-0 sm:py-2",
+        ? "min-h-[40px] rounded-lg px-3 py-2 text-[13px] font-semibold transition-all touch-manipulation lg:min-h-0"
+        : "min-h-[44px] shrink-0 snap-start touch-manipulation rounded-xl px-3 py-2.5 text-sm font-semibold transition-all sm:min-h-0 sm:py-2",
       active ? financeNeu.navActive : financeNeu.navIdle
     ].join(" ");
 
@@ -218,7 +227,7 @@ function FinanceNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8A8886]">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -325,6 +334,11 @@ export const FINANCE_PAGE_TITLES: Record<FinanceSection, { title: string; descri
   assistant: {
     title: "Finance AI Assistant",
     description: "Voice or text to record expenses and payments, or ask about cash flow and invoices."
+  },
+  etims: {
+    title: "eTIMS / OSCU",
+    description:
+      "Kenya tax invoice filing — configure CRES SOFTWARE LIMITED (P052570833B), auto-file invoices, and store buyer KRA PINs for iTax."
   },
   onboarding: {
     title: "Finance playbook",

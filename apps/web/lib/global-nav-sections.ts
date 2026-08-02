@@ -11,11 +11,17 @@ export type GlobalNavSection = {
   items: GlobalNavItem[];
 };
 
+/**
+ * Global (non-workspace) side panel. Admin-only users use AdminSideNav instead.
+ * For admins who land here (multi-role / shared shell), combined areas point at hubs —
+ * not Finance/Sales/Projects/Approvals as separate buttons.
+ */
 export const GLOBAL_NAV_SECTIONS: GlobalNavSection[] = [
   {
     title: "Home",
     items: [
       { href: "/dashboard", label: "Dashboard", roles: [...ALL_APP_ROLE_KEYS] },
+      { href: "/admin", label: "Admin", roles: ["admin"] },
       { href: "/developer", label: "Developer workspace", roles: ["developer"] },
       { href: "/client", label: "Client portal", roles: ["client"] }
     ]
@@ -30,11 +36,17 @@ export const GLOBAL_NAV_SECTIONS: GlobalNavSection[] = [
   {
     title: "Workspaces",
     items: [
-      { href: "/sales", label: "Sales", roles: ["admin", "sales", "director_admin", "finance"] },
-      { href: "/finance", label: "Finance", roles: ["admin", "finance", "analyst", "director_admin"] },
+      // Admin hubs only — no Finance / Sales / Approvals / Projects duplicates
+      { href: "/admin/management", label: "Management", roles: ["admin"] },
+      { href: "/admin/reports", label: "Reports", roles: ["admin"] },
+      { href: "/admin/email-automation", label: "Email AI", roles: ["admin"] },
+      { href: "/admin/organisation", label: "Organisation", roles: ["admin"] },
+      { href: "/admin/ai-command", label: "AI Command", roles: ["admin"] },
+      // Role-specific workspaces (non-admin)
+      { href: "/sales", label: "Sales", roles: ["sales", "director_admin"] },
+      { href: "/finance", label: "Finance", roles: ["finance", "analyst", "director_admin"] },
       { href: "/hr", label: "HR", roles: ["admin", "hr"] },
-      { href: "/pm", label: "Project Management", roles: ["admin", "director_admin", "project_manager"] },
-      { href: "/admin/users", label: "Admin", roles: ["admin"] }
+      { href: "/pm", label: "Project Management", roles: ["admin", "director_admin", "project_manager"] }
     ]
   },
   {
@@ -43,12 +55,12 @@ export const GLOBAL_NAV_SECTIONS: GlobalNavSection[] = [
       {
         href: "/projects",
         label: "Projects",
-        roles: ["admin", "director_admin", "developer", "sales", "analyst", "finance"]
+        roles: ["director_admin", "developer", "sales", "analyst", "finance"]
       },
       {
         href: "/projects/management",
         label: "Managed projects",
-        roles: ["admin", "director_finance", "finance"]
+        roles: ["director_finance", "finance"]
       }
     ]
   },
@@ -56,7 +68,7 @@ export const GLOBAL_NAV_SECTIONS: GlobalNavSection[] = [
     title: "Insights",
     items: [
       { href: "/analytics", label: "Analytics", roles: ["admin", "director_admin", "finance", "analyst"] },
-      { href: "/approvals", label: "Approvals", roles: ["admin", "director_admin", "finance"] }
+      { href: "/approvals", label: "Approvals", roles: ["director_admin", "finance"] }
     ]
   }
 ];

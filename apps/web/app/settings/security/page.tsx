@@ -105,8 +105,14 @@ export default function SecurityPage() {
         setPassword({ currentPassword: "", newPassword: "", confirmPassword: "" });
         setMessage({ type: "ok", text: "Password changed successfully." });
       } else {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        setMessage({ type: "error", text: err.error ?? "Failed to change password." });
+        const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        const text =
+          err.error ??
+          (typeof err.message === "string" && !err.message.includes("Prisma")
+            ? err.message
+            : null) ??
+          (res.status >= 500 ? "Server error changing password. Try again." : "Failed to change password.");
+        setMessage({ type: "error", text });
       }
     } catch {
       setMessage({ type: "error", text: "Network error." });

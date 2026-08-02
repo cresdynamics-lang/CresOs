@@ -178,18 +178,14 @@ export function FinanceOverviewDashboard({
   };
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
+    <div className={`${financeNeu.workspace} flex w-full min-w-0 flex-col gap-6 bg-white pb-6`}>
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E1DFDD] pb-5">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1B6B3A]/90">
-            {roleLabel}
-          </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
-            {welcomeHeadline}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
+          <p className={financeNeu.eyebrow}>{roleLabel}</p>
+          <h1 className={`mt-0.5 ${financeNeu.title}`}>{welcomeHeadline}</h1>
+          <p className={`mt-2 max-w-3xl ${financeNeu.body}`}>
             Client payments in, salaries and ops out — all amounts in{" "}
-            <span className="font-medium text-[#5B6472]">Kenyan Shillings (KES)</span>. Use the sidebar or quick links
+            <span className="font-semibold text-[#242424]">Kenyan Shillings (KES)</span>. Use the sidebar or quick links
             below.
           </p>
         </div>
@@ -254,7 +250,7 @@ export function FinanceOverviewDashboard({
           <Link
             key={link.href}
             href={link.href}
-            className={`${financeNeu.navIdle} rounded-lg px-3 py-2 text-sm font-medium touch-manipulation`}
+            className={`${financeNeu.navIdle} rounded-lg px-3 py-2 text-sm font-semibold touch-manipulation`}
           >
             {link.label}
           </Link>
@@ -264,8 +260,8 @@ export function FinanceOverviewDashboard({
       {/* Live data mapping — how sources feed the dashboard */}
       <section aria-label="Data mapping">
         <FinanceNeuPanel inset className="p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-[#1A1D26]">How numbers stay in sync</h2>
-          <p className="mt-1 text-xs text-[#5B6472]">
+          <h2 className={financeNeu.sectionTitle}>How numbers stay in sync</h2>
+          <p className={`mt-1 ${financeNeu.muted}`}>
             All figures come from the database — no manual totals. Confirming a payment updates everything below
             automatically.
           </p>
@@ -292,7 +288,7 @@ export function FinanceOverviewDashboard({
             />
           </ol>
           {report?.projects != null && (
-            <p className="mt-4 rounded-lg border border-emerald-500/15 bg-[#F2F9EF] px-3 py-2 text-xs text-[#1B6B3A]/90">
+            <p className="mt-4 rounded-lg border border-[#A8D5A8] bg-white px-3 py-2 text-xs font-medium text-[#0B6A0B]">
               Projects: {formatMoney(report.projects.totalReceived)} collected of{" "}
               {formatMoney(report.projects.totalContractValue)} contract ·{" "}
               {formatMoney(report.invoices.outstandingAmount)} still outstanding
@@ -316,19 +312,19 @@ export function FinanceOverviewDashboard({
           <FinanceNeuPanel inset className="p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold text-[#1A1D26]">Period summary</h2>
-                <p className="mt-0.5 text-xs text-[#5B6472]">
+                <h2 className={financeNeu.sectionTitle}>Period summary</h2>
+                <p className={`mt-0.5 ${financeNeu.muted}`}>
                   Updated {new Date(report.generatedAt).toLocaleString()}
                 </p>
               </div>
               <Link
-                href="/finance/reports"
-                className="rounded-lg border border-emerald-500/30 bg-[#F2F9EF] px-3 py-1.5 text-xs font-medium text-[#1B6B3A] hover:bg-[#F2F9EF]"
+                href="/admin/reports?tab=finance"
+                className="rounded-md border border-[#005CAB] bg-white px-3 py-1.5 text-xs font-semibold text-[#005CAB] hover:bg-[#005CAB] hover:text-white"
               >
                 Full reports →
               </Link>
             </div>
-            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryItem label="All-time revenue" value={formatMoney(report.revenue.allTime)} />
               <SummaryItem
                 label="Open invoice balance"
@@ -369,11 +365,11 @@ function DataFlowStep({
   feeds: string;
 }) {
   return (
-    <li className="rounded-lg border border-[#E5E9EF] bg-black/20 px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1B6B3A]/90">{source}</p>
-      <p className="mt-1 text-xs leading-relaxed text-[#5B6472]">{detail}</p>
-      <p className="mt-2 text-[11px] text-[#5B6472]">
-        → <span className="text-[#5B6472]">{feeds}</span>
+    <li className="rounded-lg border border-[#E1DFDD] bg-white px-3 py-2.5">
+      <p className="text-[11px] font-semibold tracking-wide text-[#0B6A0B]">{source}</p>
+      <p className="mt-1 text-xs font-medium leading-relaxed text-[#605E5C]">{detail}</p>
+      <p className="mt-2 text-[11px] font-medium text-[#8A8886]">
+        → <span className="text-[#242424]">{feeds}</span>
       </p>
     </li>
   );
@@ -389,18 +385,18 @@ function SummaryItem({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#E5E9EF] bg-black/20 px-3 py-2.5">
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#5B6472]">{label}</dt>
-      <dd className="mt-1 tabular-nums text-[#1A1D26]">{value}</dd>
-      {hint ? <dd className="mt-0.5 text-[11px] text-[#5B6472]">{hint}</dd> : null}
+    <div className="rounded-lg border border-[#E1DFDD] bg-white px-3 py-2.5">
+      <dt className="text-[11px] font-semibold tracking-wide text-[#605E5C]">{label}</dt>
+      <dd className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-[#242424]">{value}</dd>
+      {hint ? <dd className="mt-0.5 text-[11px] font-medium text-[#8A8886]">{hint}</dd> : null}
     </div>
   );
 }
 
 function AdminFinanceRulesCollapsible() {
   return (
-    <details className={`${financeNeu.panel} rounded-2xl border border-[#E5E9EF]/60 p-4 sm:p-5`}>
-      <summary className="cursor-pointer text-sm font-semibold text-[#5B6472] hover:text-[#1A1D26]">
+    <details className={`${financeNeu.panel}`}>
+      <summary className="cursor-pointer text-sm font-semibold text-[#605E5C] hover:text-[#242424]">
         Admin finance access rules
       </summary>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -429,18 +425,17 @@ function RuleCard({
   title: string;
   children: ReactNode;
 }) {
-  const border =
-    tone === "emerald"
-      ? "border-emerald-800/40"
-      : tone === "rose"
-        ? "border-l-4 border-rose-500/70 pl-4"
-        : "border-sky-800/40";
-  const label =
-    tone === "emerald" ? "text-[#1B6B3A]/90" : tone === "rose" ? "text-[#C62828]" : "text-[#2563EB]";
+  const edge =
+    tone === "emerald" ? "#0B6A0B" : tone === "rose" ? "#C50F1F" : "#005CAB";
   return (
-    <div className={`rounded-lg border bg-[#F4F7F9] p-3 ${border}`}>
-      <p className={`text-xs font-semibold uppercase tracking-wide ${label}`}>{title}</p>
-      <p className="mt-2 text-sm leading-relaxed text-[#5B6472]">{children}</p>
+    <div
+      className="rounded-lg border border-[#E1DFDD] bg-white p-3"
+      style={{ borderLeftWidth: 4, borderLeftColor: edge }}
+    >
+      <p className="text-xs font-semibold tracking-wide" style={{ color: edge }}>
+        {title}
+      </p>
+      <p className="mt-2 text-sm font-medium leading-relaxed text-[#605E5C]">{children}</p>
     </div>
   );
 }

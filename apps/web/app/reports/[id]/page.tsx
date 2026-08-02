@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
+import { formatNairobiDateTime } from "../../../lib/nairobi-datetime";
 
 type Comment = {
   id: string;
@@ -13,7 +14,6 @@ type Comment = {
   authorId: string;
   author: { id: string; name: string | null; email: string };
   parentId: string | null;
-  /** When "ai_auto", CresOS added this thread reply after submit (same style as a director note). */
   source?: string | null;
   replies?: Comment[];
 };
@@ -72,13 +72,21 @@ function normalizeReport(next: Partial<Report> | null | undefined, prev?: Report
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 function isOverdue(askedAt: string): boolean {
-  const deadline = new Date(askedAt).getTime() + TWENTY_FOUR_HOURS_MS;
-  return Date.now() > deadline;
+  return Date.now() > new Date(askedAt).getTime() + TWENTY_FOUR_HOURS_MS;
 }
 
 function deadlineFor(askedAt: string): Date {
   return new Date(new Date(askedAt).getTime() + TWENTY_FOUR_HOURS_MS);
 }
+
+function reviewChip(review: string | undefined): string {
+  if (review === "checked") return "bg-[#E8F5E9] text-[#0B6A0B]";
+  if (review === "viewed") return "bg-[#E8F1F8] text-[#005CAB]";
+  return "bg-[#FFF8E1] text-[#8A7000]";
+}
+
+const inputClass =
+  "w-full rounded-md border border-[#D1D1D1] bg-white px-2.5 py-2 text-[13px] font-medium text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20";
 
 export default function ReportDetailPage() {
   const params = useParams();
@@ -90,11 +98,12 @@ export default function ReportDetailPage() {
   const [newKind, setNewKind] = useState<"comment" | "question">("comment");
   const [responseByParent, setResponseByParent] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  /** Appended to report remarks (does not remove existing text unless “Replace entire remarks” is checked). */
   const [directorNoteAppend, setDirectorNoteAppend] = useState("");
   const [replaceEntireRemarks, setReplaceEntireRemarks] = useState(false);
 
-  const isDirector = auth.roleKeys.some((r) => ["director_admin", "director", "admin"].includes(r));
+  const isDirector = auth.roleKeys.some((r) =>
+    ["director_admin", "director", "admin"].includes(r)
+  );
   const remarkReplacePrefilledRef = useRef(false);
 
   useEffect(() => {
@@ -108,6 +117,7 @@ export default function ReportDetailPage() {
       remarkReplacePrefilledRef.current = true;
     }
   }, [replaceEntireRemarks, report]);
+
   const isAuthor = report?.submittedBy?.id === auth.userId;
 
   useEffect(() => {
@@ -126,7 +136,7 @@ export default function ReportDetailPage() {
         // ignore
       }
     }
-    load();
+    void load();
   }, [id, apiFetch, router]);
 
   const handleAddComment = async () => {
@@ -172,22 +182,14 @@ export default function ReportDetailPage() {
     }
   };
 
-  if (!report) {
-    return (
-      <section className="shell border-cres-border bg-cres-surface/70">
-        <p className="text-cres-muted">Loading…</p>
-      </section>
-    );
-  }
-
-  const comments = report.comments ?? [];
-  const topLevel = comments.filter((c) => !c.parentId);
-
   const setReview = async (reviewStatus: "viewed" | "checked") => {
     if (!report) return;
     const append = !replaceEntireRemarks;
-    const payloadRemarks = append ? directorNoteAppend.trim() : (directorNoteAppend || report.remarks || "").trim();
-    if (reviewStatus === "checked" && append && !payloadRemarks && !(report.remarks?.trim())) {
+    const payloadRemarks = append
+      ? directorNoteAppend.trim()
+      : (directorNoteAppend || report.remarks || "").trim();
+    if (reviewStatus === "checked" && append && !payloadRemarks && !report.remarks?.trim()) {
+      const comments = report.comments ?? [];
       const hasLeadershipThread = comments.some(
         (c) =>
           !c.parentId &&
@@ -195,12 +197,14 @@ export default function ReportDetailPage() {
           (c.source === "ai_auto" || c.content.includes("Marked reviewed"))
       );
       if (!hasLeadershipThread) {
-        alert("Add a director note on the report, append remarks, or ensure there is a leadership comment on this submission before marking checked.");
+        alert(
+          "Add a director note, append remarks, or ensure there is a leadership comment before marking checked."
+        );
         return;
       }
     }
     if (reviewStatus === "checked" && !append && !payloadRemarks) {
-      alert("Remarks are required when replacing the entire remarks field to mark checked.");
+      alert("Remarks are required when replacing the entire remarks field.");
       return;
     }
     setLoading(true);
@@ -230,53 +234,72 @@ export default function ReportDetailPage() {
     }
   };
 
+  if (!report) {
+    return (
+      <div className="flex min-h-[8rem] items-center justify-center text-[13px] text-[#8A8886]">
+        Loading report…
+      </div>
+    );
+  }
+
+  const comments = report.comments ?? [];
+  const topLevel = comments.filter((c) => !c.parentId);
+
   return (
-    <section className="flex flex-col gap-4 max-sm:gap-3">
-      <div className="shell flex flex-wrap items-start justify-between gap-3 border-cres-border bg-cres-surface/70 sm:gap-4">
-        <div>
-          <Link href="/reports" className="text-xs text-cres-accent hover:underline sm:text-sm">
-            ← Back to reports
+    <div className="flex w-full min-w-0 flex-col gap-3 bg-white pb-4 text-[#242424] antialiased">
+      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-[#E1DFDD] pb-3">
+        <div className="min-w-0">
+          <Link
+            href="/reports"
+            className="text-[11px] font-semibold text-[#005CAB] hover:underline"
+          >
+            ← Reports
           </Link>
-          <h2 className="mt-2 text-base font-semibold text-cres-text sm:text-lg">{report.title}</h2>
-          <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
+          <h1 className="mt-1 text-lg font-semibold tracking-tight sm:text-xl">{report.title}</h1>
+          <p className="mt-0.5 text-[12px] text-[#605E5C]">
             By {report.submittedBy?.name ?? report.submittedBy?.email ?? "Unknown"}
-            {report.submittedAt && (
-              <> · Submitted {new Date(report.submittedAt).toLocaleString()}</>
-            )}
+            {report.submittedAt ? (
+              <> · Submitted {formatNairobiDateTime(report.submittedAt)}</>
+            ) : null}
           </p>
         </div>
         <span
-          className={
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
             report.status === "submitted"
-              ? "rounded bg-cres-accent/20 px-2 py-0.5 text-xs text-cres-accent sm:px-3 sm:py-1 sm:text-sm"
-              : "rounded bg-cres-border px-2 py-0.5 text-xs text-cres-text-muted sm:px-3 sm:py-1 sm:text-sm"
-          }
+              ? "bg-[#E8F5E9] text-[#0B6A0B]"
+              : "bg-[#F5F5F5] text-[#605E5C]"
+          }`}
         >
           {report.status}
         </span>
-      </div>
+      </header>
 
-      <div className="shell border-cres-border bg-cres-card/80">
-        <p className="whitespace-pre-wrap text-xs leading-relaxed text-cres-text sm:text-sm sm:leading-normal">
+      <section className="rounded-md border border-[#E1DFDD] bg-white p-3 sm:p-4">
+        <p className="text-[10px] font-semibold tracking-wide text-[#005CAB]">Activities</p>
+        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-[#242424]">
           {report.body}
         </p>
-      </div>
+      </section>
 
-      {report.status === "submitted" && (
+      {report.status === "submitted" ? (
         <>
-          {isDirector && (
-            <div className="shell border-cres-border bg-cres-card/80">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+          {isDirector ? (
+            <section className="rounded-md border border-[#E1DFDD] bg-white p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">Review status</p>
-                  <p className="mt-1 text-xs text-cres-text sm:text-sm">{report.reviewStatus ?? "pending"}</p>
+                  <p className="text-[10px] font-semibold tracking-wide text-[#8A8886]">Review</p>
+                  <span
+                    className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${reviewChip(report.reviewStatus)}`}
+                  >
+                    {report.reviewStatus ?? "pending"}
+                  </span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   <button
                     type="button"
                     disabled={loading}
                     onClick={() => void setReview("viewed")}
-                    className="rounded border border-cres-border px-2.5 py-1.5 text-xs text-cres-text hover:bg-cres-surface disabled:opacity-60 sm:px-3 sm:py-2 sm:text-sm"
+                    className="rounded-md border border-[#D1D1D1] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#242424] hover:border-[#005CAB]/40 disabled:opacity-50"
                   >
                     Mark viewed
                   </button>
@@ -284,180 +307,178 @@ export default function ReportDetailPage() {
                     type="button"
                     disabled={loading}
                     onClick={() => void setReview("checked")}
-                    className="rounded bg-cres-accent px-2.5 py-1.5 text-xs font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60 sm:px-3 sm:py-2 sm:text-sm"
+                    className="rounded-md bg-[#005CAB] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
                   >
                     Mark checked
                   </button>
                 </div>
               </div>
-              <div className="mt-3 space-y-3">
+
+              <div className="mt-3 space-y-2.5">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-cres-muted sm:text-xs">Saved remarks (on report)</p>
-                  <p className="mt-1 whitespace-pre-wrap rounded-lg border border-cres-border/60 bg-cres-surface/40 px-2 py-2 text-xs text-cres-text sm:text-sm">
+                  <p className="text-[11px] font-semibold text-[#605E5C]">Saved remarks</p>
+                  <p className="mt-1 whitespace-pre-wrap rounded-md border border-[#E1DFDD] bg-[#FAFAFA] px-2.5 py-2 text-[12px] text-[#242424]">
                     {report.remarks?.trim() ? report.remarks.trim() : "— None yet —"}
                   </p>
-                  <p className="mt-1 text-[11px] text-cres-muted sm:text-xs">
-                    Leadership replies appear in <strong>Comments</strong> below. Add a note here to append to saved
-                    remarks without removing prior text, unless you choose replace.
-                  </p>
                 </div>
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-cres-text sm:text-sm">
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#605E5C]">
                   <input
                     type="checkbox"
                     checked={replaceEntireRemarks}
                     onChange={(e) => setReplaceEntireRemarks(e.target.checked)}
-                    className="rounded border-cres-border"
+                    className="rounded border-[#D1D1D1]"
                   />
-                  Replace entire remarks (overwrites saved remarks; use when correcting the full note)
+                  Replace entire remarks
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs text-cres-text-muted sm:text-sm">
-                    {replaceEntireRemarks
-                      ? "Full remarks (saved on report)"
-                      : "Add director / admin note (appended to saved remarks)"}
-                  </span>
+                <label className="block text-[11px] font-semibold text-[#605E5C]">
+                  {replaceEntireRemarks ? "Full remarks" : "Add note (appended)"}
                   <textarea
                     value={directorNoteAppend}
                     onChange={(e) => setDirectorNoteAppend(e.target.value)}
-                    rows={4}
-                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-2 py-1.5 text-xs text-cres-text sm:px-3 sm:py-2 sm:text-sm"
+                    rows={3}
+                    className={`${inputClass} mt-1 resize-y`}
                     placeholder={
                       replaceEntireRemarks
                         ? "Edit the complete remarks text…"
-                        : "Type an additional note for the sales submitter…"
+                        : "Additional note for the salesperson…"
                     }
                   />
                 </label>
               </div>
-            </div>
-          )}
+            </section>
+          ) : null}
 
-          {!isDirector && isAuthor && (
-            <div className="shell border-cres-border bg-cres-card/80">
-              <p className="text-xs uppercase tracking-wide text-cres-muted">Director review</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+          {!isDirector && isAuthor ? (
+            <section className="rounded-md border border-[#E1DFDD] bg-white p-3 sm:p-4">
+              <p className="text-[10px] font-semibold tracking-wide text-[#8A8886]">
+                Director review
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <span
-                  className={
-                    report.reviewStatus === "checked"
-                      ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-[#1B6B3A]"
-                      : report.reviewStatus === "viewed"
-                        ? "rounded bg-sky-500/15 px-2 py-0.5 text-xs text-[#2563EB]"
-                        : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-[#92400E]"
-                  }
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${reviewChip(report.reviewStatus)}`}
                 >
                   {report.reviewStatus ?? "pending"}
                 </span>
-                <span className="text-xs text-cres-muted">
+                <span className="text-[12px] text-[#605E5C]">
                   {report.reviewStatus === "checked"
-                    ? "Checked — see remarks below"
+                    ? "Checked"
                     : report.reviewStatus === "viewed"
                       ? "Viewed"
                       : "Pending review"}
                 </span>
               </div>
-              <div className="mt-3">
-                <p className="text-xs text-cres-text-muted sm:text-sm">Remarks</p>
-                <p className="mt-1 whitespace-pre-wrap text-xs text-cres-text sm:text-sm">
-                  {report.remarks?.trim() ? report.remarks.trim() : "—"}
-                </p>
-              </div>
-            </div>
-          )}
+              <p className="mt-2 text-[11px] font-semibold text-[#605E5C]">Remarks</p>
+              <p className="mt-1 whitespace-pre-wrap text-[12px] text-[#242424]">
+                {report.remarks?.trim() ? report.remarks.trim() : "—"}
+              </p>
+            </section>
+          ) : null}
 
-          <div className="shell border-cres-border bg-cres-card/80">
-            <h3 className="mb-3 text-xs font-semibold text-cres-text sm:text-sm">Comments & questions</h3>
+          <section className="rounded-md border border-[#E1DFDD] bg-white p-3 sm:p-4">
+            <h2 className="text-[13px] font-semibold text-[#242424]">Comments & questions</h2>
 
-            {topLevel.length === 0 && !isDirector && (
-              <p className="text-xs text-cres-muted sm:text-sm">No comments yet from director.</p>
-            )}
-            {topLevel.length === 0 && isDirector && (
-              <p className="text-xs text-cres-muted sm:text-sm">No comments yet. Add a comment or question below.</p>
-            )}
+            {topLevel.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[#8A8886]">
+                {isDirector
+                  ? "No comments yet. Add one below."
+                  : "No comments yet from leadership."}
+              </p>
+            ) : null}
 
-            <ul className="space-y-4">
+            <ul className="mt-3 space-y-2">
               {topLevel.map((c) => {
                 const replies = comments.filter((r) => r.parentId === c.id);
-                const questionOverdue = c.kind === "question" && replies.length === 0 && isOverdue(c.createdAt);
+                const questionOverdue =
+                  c.kind === "question" && replies.length === 0 && isOverdue(c.createdAt);
                 const deadline = c.kind === "question" ? deadlineFor(c.createdAt) : null;
                 return (
                   <li
                     key={c.id}
-                    className={`rounded-lg border px-3 py-3 ${
-                      c.kind === "question" ? "border-cres-accent/40 bg-cres-accent/10" : "border-cres-border bg-cres-surface/50"
+                    className={`rounded-md border px-2.5 py-2 ${
+                      c.kind === "question"
+                        ? "border-[#B4CDE8] border-l-[3px] border-l-[#005CAB] bg-[#F8FBFD]"
+                        : "border-[#E1DFDD] bg-white"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-cres-muted">
-                      <span className="font-medium text-cres-text-muted">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[#8A8886]">
+                      <span className="font-semibold text-[#242424]">
                         {c.author?.name ?? c.author?.email ?? "User"}
                       </span>
                       <span>{c.kind === "question" ? "asked" : "commented"}</span>
-                      <span>{new Date(c.createdAt).toLocaleString()}</span>
-                      {deadline && (
-                        <span className={questionOverdue ? "text-cres-accent" : "text-cres-muted"}>
+                      <span>{formatNairobiDateTime(c.createdAt)}</span>
+                      {deadline ? (
+                        <span
+                          className={
+                            questionOverdue
+                              ? "font-semibold text-[#C50F1F]"
+                              : "text-[#C19C00]"
+                          }
+                        >
                           {questionOverdue
-                            ? "Overdue — answer required"
-                            : `Due ${deadline.toLocaleString()}`}
+                            ? "Overdue"
+                            : `Due ${formatNairobiDateTime(deadline)}`}
                         </span>
-                      )}
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-xs text-cres-text sm:text-sm">{c.content}</p>
+                    <p className="mt-1 text-[12px] leading-snug text-[#242424]">{c.content}</p>
 
                     {replies.map((r) => (
                       <div
                         key={r.id}
-                        className="ml-4 mt-2 rounded border border-cres-border bg-cres-surface/60 px-3 py-2"
+                        className="mt-2 ml-3 rounded-md border border-[#E1DFDD] bg-[#FAFAFA] px-2.5 py-1.5"
                       >
-                        <p className="text-xs text-cres-muted">
-                          {r.author?.name ?? r.author?.email ?? "User"} answered{" "}
-                          {new Date(r.createdAt).toLocaleString()}
+                        <p className="text-[10px] text-[#8A8886]">
+                          {r.author?.name ?? r.author?.email ?? "User"} ·{" "}
+                          {formatNairobiDateTime(r.createdAt)}
                         </p>
-                        <p className="mt-1 text-xs text-cres-text sm:text-sm">{r.content}</p>
+                        <p className="mt-0.5 text-[12px] text-[#242424]">{r.content}</p>
                       </div>
                     ))}
 
-                    {c.kind === "question" && replies.length === 0 && isAuthor && (
-                      <div className="mt-3 flex gap-2">
+                    {c.kind === "question" && replies.length === 0 && isAuthor ? (
+                      <div className="mt-2 flex flex-col gap-1.5 sm:flex-row">
                         <input
                           type="text"
                           value={responseByParent[c.id] ?? ""}
                           onChange={(e) =>
-                            setResponseByParent((prev) => ({ ...prev, [c.id]: e.target.value }))
+                            setResponseByParent((prev) => ({
+                              ...prev,
+                              [c.id]: e.target.value
+                            }))
                           }
                           placeholder="Your answer"
-                          className="flex-1 rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
+                          className={`${inputClass} flex-1`}
                         />
                         <button
                           type="button"
                           disabled={loading}
-                          onClick={() => handleAddResponse(c.id)}
-                          className="rounded bg-cres-accent px-3 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                          onClick={() => void handleAddResponse(c.id)}
+                          className="rounded-md bg-[#005CAB] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
                         >
                           Submit answer
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </li>
                 );
               })}
             </ul>
 
-            {isDirector && (
-              <div className="mt-6 border-t border-cres-border pt-4">
-                <label className="block">
-                  <span className="mb-1 block text-sm text-cres-text-muted">Add comment or question</span>
-                  <textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text"
-                    placeholder="Comment or question for the sales person..."
-                  />
-                </label>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+            {isDirector ? (
+              <div className="mt-4 border-t border-[#E1DFDD] pt-3">
+                <p className="text-[11px] font-semibold text-[#605E5C]">Add comment or question</p>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  className={`${inputClass} mt-1 resize-y`}
+                  placeholder="Note for the salesperson…"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <select
                     value={newKind}
                     onChange={(e) => setNewKind(e.target.value as "comment" | "question")}
-                    className="rounded border border-cres-border bg-cres-surface px-3 py-2 text-sm text-cres-text"
+                    className="rounded-md border border-[#D1D1D1] bg-white px-2.5 py-1.5 text-[12px] text-[#242424] focus:border-[#005CAB] focus:outline-none"
                   >
                     <option value="comment">Comment</option>
                     <option value="question">Question</option>
@@ -465,21 +486,23 @@ export default function ReportDetailPage() {
                   <button
                     type="button"
                     disabled={loading || !newComment.trim()}
-                    onClick={handleAddComment}
-                    className="rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
+                    onClick={() => void handleAddComment()}
+                    className="rounded-md bg-[#005CAB] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
                   >
                     Post
                   </button>
                 </div>
               </div>
-            )}
-          </div>
+            ) : null}
+          </section>
         </>
-      )}
+      ) : null}
 
-      {report.status === "draft" && isAuthor && (
-        <div className="shell flex flex-wrap items-center gap-4">
-          <p className="text-sm text-[#5B6472]">This report is a draft. Submit it to make it visible to the director.</p>
+      {report.status === "draft" && isAuthor ? (
+        <section className="flex flex-wrap items-center gap-2 rounded-md border border-[#B4CDE8] border-l-[3px] border-l-[#005CAB] bg-[#F8FBFD] px-3 py-2.5">
+          <p className="flex-1 text-[12px] text-[#605E5C]">
+            Draft — submit to make it visible to your director.
+          </p>
           <button
             type="button"
             disabled={loading}
@@ -498,15 +521,12 @@ export default function ReportDetailPage() {
                 setLoading(false);
               }
             }}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+            className="rounded-md bg-[#005CAB] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
           >
-            Submit report
+            {loading ? "…" : "Submit report"}
           </button>
-          <Link href="/reports" className="text-sm text-brand hover:underline">
-            Back to reports
-          </Link>
-        </div>
-      )}
-    </section>
+        </section>
+      ) : null}
+    </div>
   );
 }

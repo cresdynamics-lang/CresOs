@@ -10,7 +10,7 @@ export function resolveSettingsWorkspace(roleKeys: string[]): SettingsWorkspaceK
   return "global";
 }
 
-export function settingsBackLink(key: SettingsWorkspaceKey): { href: string; label: string } {
+export function settingsBackLink(key: SettingsWorkspaceKey, roleKeys?: string[]): { href: string; label: string } {
   switch (key) {
     case "developer":
       return { href: "/developer", label: "← Back to Developer" };
@@ -19,6 +19,9 @@ export function settingsBackLink(key: SettingsWorkspaceKey): { href: string; lab
     case "sales":
       return { href: "/sales", label: "← Back to Sales" };
     default:
+      if (roleKeys?.includes("admin") && !roleKeys?.includes("director_admin")) {
+        return { href: "/admin", label: "← Back to Admin" };
+      }
       return { href: "/dashboard", label: "← Back to dashboard" };
   }
 }

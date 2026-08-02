@@ -86,6 +86,7 @@ model Org {
 
   emailThreads          EmailThread[]
   emailAutomationConfig EmailAutomationConfig?
+  etimsConfig           OrgEtimsConfig?
 
   @@index([slug])
 }
@@ -143,7 +144,7 @@ model User {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   deletedAt               DateTime?
-  status                  String    @default("active") // active, locked, suspended
+  status                  String    @default("active") // active, pending, disabled, locked, suspended
 
   // New profile fields
   profilePicture String? // URL to profile picture
@@ -353,6 +354,8 @@ model Client {
   name               String
   email              String?
   phone              String?
+  /// Buyer KRA PIN (TIN) for eTIMS / iTax filing — e.g. P051234567A
+  kraPin             String?
   reminderDayOfMonth Int? // 1-28: day of month to send payment reminder
   lastReminderAt     DateTime?
   createdAt          DateTime  @default(now())
@@ -364,6 +367,37 @@ model Client {
   deals    Deal[]
   projects Project[]
   invoices Invoice[]
+}
+
+/// OSCU eTIMS credentials and device state per organisation (seller PIN + CMC key).
+model OrgEtimsConfig {
+  id              String    @id @default(cuid())
+  orgId           String    @unique
+  /// Seller taxpayer PIN — CRES SOFTWARE LIMITED default P052570833B
+  tin             String
+  taxpayerName    String?
+  bhfId           String    @default("00")
+  dvcSrlNo        String
+  /// Communication key from KRA selectInitOsdcInfo (null until initialized / token received)
+  cmcKey          String?
+  sdcId           String?
+  mrcNo           String?
+  dvcId           String?
+  /// mock | sandbox | production
+  mode            String    @default("mock")
+  enabled         Boolean   @default(true)
+  autoSubmit      Boolean   @default(true)
+  /// A exempt | B VAT 16% | C zero-rated | D non-VAT | E (legacy)
+  defaultTaxTyCd  String    @default("B")
+  /// When true, line totals include VAT; when false, unit prices are tax-exclusive
+  vatInclusive    Boolean   @default(false)
+  lastInvcNo      Int       @default(0)
+  lastInitAt      DateTime?
+  lastError       String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id])
 }
 
 model Lead {
@@ -887,6 +921,21 @@ model Invoice {
   currency    String    @default("USD")
   totalAmount Decimal   @db.Decimal(14, 2)
   notes       String?   @db.Text // client-facing / PDF notes
+  /// Buyer PIN used when filing to eTIMS (may override client.kraPin)
+  buyerKraPin String?
+  /// pending | submitted | failed | skipped | mock
+  etimsStatus String?
+  etimsInvcNo Int?
+  etimsSdcId  String?
+  etimsMrcNo  String?
+  etimsRcptNo String?
+  etimsInternalData String? @db.Text
+  etimsReceiptSign  String? @db.Text
+  etimsQrCodeUrl    String? @db.Text
+  etimsSubmittedAt  DateTime?
+  etimsResultCd     String?
+  etimsResultMsg    String? @db.Text
+  etimsRawResponse  String? @db.Text
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -899,6 +948,7 @@ model Invoice {
   managementMonthRows ProjectManagementMonth[]
 
   @@unique([orgId, number])
+  @@index([orgId, etimsStatus])
 }
 
 model InvoiceItem {

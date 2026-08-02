@@ -105,6 +105,27 @@ export async function sendWelcomeEmail(to: string, name?: string | null): Promis
   return sendOutboundEmail({ to, subject, text, html });
 }
 
+/**
+ * Confirmation that an admin approved the account (after self-registration).
+ */
+export async function sendAccountApprovedEmail(to: string, name?: string | null): Promise<SendResult> {
+  const displayName = name?.trim() || "there";
+  const subject = "Your CresOS account has been approved";
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #333; max-width: 560px;">
+  <p>Hi ${escapeHtml(displayName)},</p>
+  <p>Great news — your CresOS account has been approved by an administrator.</p>
+  <p>You can now sign in with the email and password you registered with. An admin will assign your roles so you can access the right workspaces.</p>
+  <p style="color: #666; font-size: 0.9em;">— CresOS · Cres Dynamics</p>
+</body>
+</html>`.trim();
+  const text = `Hi ${displayName},\n\nGreat news — your CresOS account has been approved by an administrator.\n\nYou can now sign in with the email and password you registered with. An admin will assign your roles so you can access the right workspaces.\n\n— CresOS · Cres Dynamics`;
+  return sendOutboundEmail({ to, subject, text, html });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

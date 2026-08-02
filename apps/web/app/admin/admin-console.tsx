@@ -17,7 +17,8 @@ type TabKey = "users" | "departments" | "roles" | "email-automation";
 const TAB_META: Record<TabKey, { title: string; description: string }> = {
   users: {
     title: "Users & access",
-    description: "Create accounts, assign roles, reporting lines, and capability flags."
+    description:
+      "Approve registrations, assign roles, and manage reporting lines. Self-registered users start as pending."
   },
   departments: {
     title: "Departments",
@@ -53,16 +54,40 @@ function statusBadgeClass(status: string): string {
   const s = status.toLowerCase();
   if (s === "active") return adminNeu.badgeSuccess;
   if (s === "invited" || s === "pending") return adminNeu.badgeWarning;
+  if (s === "disabled" || s === "suspended" || s === "locked") return adminNeu.badgeDanger;
   return adminNeu.badge;
+}
+
+function statusLabel(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "suspended" || s === "locked") return "disabled";
+  return status;
+}
+
+function isUserPending(status: string): boolean {
+  return status.toLowerCase() === "pending";
+}
+
+function isUserDisabled(status: string): boolean {
+  const s = status.toLowerCase();
+  return s === "disabled" || s === "suspended" || s === "locked";
 }
 
 function tabFromPathname(path: string | null): TabKey {
   if (!path) return "users";
-  if (path.startsWith("/admin/org")) return "departments";
   if (path.startsWith("/admin/roles")) return "roles";
   if (path.startsWith("/admin/email-automation")) return "email-automation";
+  if (path === "/admin/org" || path.startsWith("/admin/org/")) return "departments";
+  if (path.startsWith("/admin/organisation") || path.startsWith("/admin/organization")) return "users";
   return "users";
 }
+
+type AdminConsoleProps = {
+  /** When set, ignore URL path and show this panel (used by Organisation hub). */
+  forceTab?: TabKey;
+  /** Compact chrome when nested under the Organisation hub. */
+  embedded?: boolean;
+};
 
 type CapabilityFlags = {
   canSeeFinance?: boolean;
@@ -90,6 +115,7 @@ type DepartmentRow = {
   _count?: { roles: number };
   roles?: { id: string; name: string; key: string; _count?: { users: number } }[];
 };
+
 type RoleRow = {
   id: string;
   name: string;
@@ -102,10 +128,10 @@ type UserWithRoles = UserRow & {
   roles?: { roleId: string; role: { id: string; name: string; key: string } }[];
 };
 
-export function AdminConsole() {
+export function AdminConsole({ forceTab, embedded = false }: AdminConsoleProps = {}) {
   const { auth, apiFetch } = useAuth();
   const pathname = usePathname();
-  const tab = tabFromPathname(pathname);
+  const tab = forceTab ?? tabFromPathname(pathname);
   const isAdmin = auth.roleKeys.includes("admin");
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -136,6 +162,8 @@ export function AdminConsole() {
   const [editCanSubmitReports, setEditCanSubmitReports] = useState(true);
   const [editCanReviewTeamReports, setEditCanReviewTeamReports] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -164,6 +192,12 @@ export function AdminConsole() {
       }
 
       const userList = (await uRes.json()) as UserRow[];
+      userList.sort((a, b) => {
+        const ap = a.status.toLowerCase() === "pending" ? 0 : 1;
+        const bp = b.status.toLowerCase() === "pending" ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return (a.name ?? a.email).localeCompare(b.name ?? b.email);
+      });
       if (!rRes.ok) {
         setUsersWithRoles(userList.map((u) => ({ ...u, roles: [] })));
         setLoadError(`Loaded users but roles failed (${rRes.status})`);
@@ -290,6 +324,64 @@ export function AdminConsole() {
     }
   }
 
+  async function setUserDisabled(u: UserRow, disable: boolean) {
+    if (auth.userId === u.id) {
+      window.alert("You cannot disable your own account.");
+      return;
+    }
+    if (isUserPending(u.status) && disable) {
+      window.alert("Reject pending registrations with Delete, or Approve them first.");
+      return;
+    }
+    const action = disable ? "disable" : "enable";
+    if (
+      !confirm(
+        disable
+          ? `Disable ${u.email}? They will not be able to sign in and will stop receiving communications until re-enabled.`
+          : `Enable ${u.email}? They will be notified that their account is active again.`
+      )
+    ) {
+      return;
+    }
+    setStatusBusyId(u.id);
+    try {
+      const res = await apiFetch(`/admin/users/${u.id}/${disable ? "suspend" : "reactivate"}`, {
+        method: "POST"
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        window.alert(data.error ?? `Failed to ${action} account (${res.status})`);
+        return;
+      }
+      await loadUsersWithRoles();
+    } finally {
+      setStatusBusyId(null);
+    }
+  }
+
+  async function approveUser(u: UserRow) {
+    if (!isUserPending(u.status)) return;
+    if (
+      !confirm(
+        `Approve ${u.email}? They will receive a confirmation email and can sign in. Assign roles afterwards.`
+      )
+    ) {
+      return;
+    }
+    setApprovingId(u.id);
+    try {
+      const res = await apiFetch(`/admin/users/${u.id}/approve`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        window.alert(data.error ?? `Approve failed (${res.status})`);
+        return;
+      }
+      await loadUsersWithRoles();
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
   async function createUser(payload: CreateEmployeeAccountPayload) {
     setCreateUserError(null);
     if (!payload.email.trim() || !payload.password) {
@@ -341,8 +433,14 @@ export function AdminConsole() {
 
   return (
     <section className="flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-hidden font-body text-sm leading-normal text-[#1A1D26]">
-      {tab !== "email-automation" && (
+      {tab !== "email-automation" && !embedded && (
         <AdminPageHeader title={TAB_META[tab].title} description={TAB_META[tab].description} />
+      )}
+      {tab !== "email-automation" && embedded && (
+        <div className="min-w-0">
+          <h2 className="font-display text-lg font-bold tracking-tight text-[#1A1D26]">{TAB_META[tab].title}</h2>
+          <p className="mt-0.5 max-w-2xl font-body text-sm font-medium text-[#5B6472]">{TAB_META[tab].description}</p>
+        </div>
       )}
 
       {loadError && (
@@ -387,7 +485,7 @@ export function AdminConsole() {
                           <p className="truncate text-sm font-semibold text-[#1A1D26]">{u.name ?? "—"}</p>
                           <p className="mt-0.5 break-all text-xs font-medium text-[#5B6472]">{u.email}</p>
                           <div className="mt-1.5">
-                            <span className={statusBadgeClass(u.status)}>{u.status}</span>
+                            <span className={statusBadgeClass(u.status)}>{statusLabel(u.status)}</span>
                           </div>
                           <p className="mt-1.5 text-xs font-medium text-[#5B6472]">
                             <span className="font-semibold text-[#1A1D26]">Reports to: </span>
@@ -395,10 +493,31 @@ export function AdminConsole() {
                           </p>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {isUserPending(u.status) && (
+                            <button
+                              type="button"
+                              disabled={approvingId === u.id}
+                              onClick={() => void approveUser(u)}
+                              className={adminNeu.btnPrimary}
+                            >
+                              {approvingId === u.id ? "…" : "Approve"}
+                            </button>
+                          )}
                           <button type="button" onClick={() => openEdit(u)} className={adminNeu.btnGhost}>
                             Edit
                           </button>
+                          {!isUserPending(u.status) && (
+                            <button
+                              type="button"
+                              disabled={auth.userId === u.id || statusBusyId === u.id}
+                              title={auth.userId === u.id ? "You cannot disable your own account" : undefined}
+                              onClick={() => void setUserDisabled(u, !isUserDisabled(u.status))}
+                              className={adminNeu.btnGhost}
+                            >
+                              {statusBusyId === u.id ? "…" : isUserDisabled(u.status) ? "Enable" : "Disable"}
+                            </button>
+                          )}
                           <button
                             type="button"
                             disabled={auth.userId === u.id || deletingId === u.id}
@@ -406,7 +525,7 @@ export function AdminConsole() {
                             onClick={() => void deleteUser(u)}
                             className={adminNeu.btnDanger}
                           >
-                            {deletingId === u.id ? "…" : "Delete"}
+                            {deletingId === u.id ? "…" : isUserPending(u.status) ? "Reject" : "Delete"}
                           </button>
                         </div>
                       </div>
@@ -495,7 +614,7 @@ export function AdminConsole() {
                             </div>
                           </td>
                           <td className={adminNeu.td}>
-                            <span className={statusBadgeClass(u.status)}>{u.status}</span>
+                            <span className={statusBadgeClass(u.status)}>{statusLabel(u.status)}</span>
                           </td>
                           <td className={`${adminNeu.td} font-medium text-[#5B6472]`}>
                             {u.reportsToDirector?.name ?? u.reportsToDirector?.email ?? "—"}
@@ -559,9 +678,30 @@ export function AdminConsole() {
                           </td>
                           <td className={adminNeu.td}>
                             <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              {isUserPending(u.status) && (
+                                <button
+                                  type="button"
+                                  disabled={approvingId === u.id}
+                                  onClick={() => void approveUser(u)}
+                                  className={adminNeu.btnPrimary}
+                                >
+                                  {approvingId === u.id ? "…" : "Approve"}
+                                </button>
+                              )}
                               <button type="button" onClick={() => openEdit(u)} className={adminNeu.btnGhost}>
                                 Edit
                               </button>
+                              {!isUserPending(u.status) && (
+                                <button
+                                  type="button"
+                                  disabled={auth.userId === u.id || statusBusyId === u.id}
+                                  title={auth.userId === u.id ? "You cannot disable your own account" : undefined}
+                                  onClick={() => void setUserDisabled(u, !isUserDisabled(u.status))}
+                                  className={adminNeu.btnGhost}
+                                >
+                                  {statusBusyId === u.id ? "…" : isUserDisabled(u.status) ? "Enable" : "Disable"}
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 disabled={auth.userId === u.id || deletingId === u.id}
@@ -569,7 +709,7 @@ export function AdminConsole() {
                                 onClick={() => void deleteUser(u)}
                                 className={adminNeu.btnDanger}
                               >
-                                {deletingId === u.id ? "…" : "Delete"}
+                                {deletingId === u.id ? "…" : isUserPending(u.status) ? "Reject" : "Delete"}
                               </button>
                             </div>
                           </td>

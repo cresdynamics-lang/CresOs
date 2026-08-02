@@ -73,14 +73,14 @@ export default function DirectorReportsPage() {
 
   if (!isAdmin && !isDirector) {
     return (
-      <div className="shell">
-        <p className="text-slate-400">You do not have access to director reports.</p>
+      <div className="admin-reports-neu p-4">
+        <p className="text-sm text-[#605E5C]">You do not have access to director reports.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="admin-reports-neu flex flex-col gap-4 bg-white px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title={isAdmin ? "Director reports to Admin" : "Reports to Admin"}
         description={
@@ -93,28 +93,28 @@ export default function DirectorReportsPage() {
       />
 
       {isDirector && (
-        <div className="shell border border-brand/25">
-          <h2 className="mb-3 text-sm font-semibold text-slate-100">New report to Admin</h2>
+        <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]">
+          <h2 className="mb-3 text-sm font-semibold text-[#242424]">New report to Admin</h2>
           <div className="flex flex-col gap-3">
             <input
               type="text"
               placeholder="Report title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424]"
             />
             <textarea
               placeholder="Summary, team progress, risks, decisions needed…"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={6}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424]"
             />
             <button
               type="button"
               disabled={busy || !title.trim() || !body.trim()}
               onClick={() => void createDraft()}
-              className="w-fit rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="w-fit rounded-md bg-[#005CAB] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {busy ? "Submitting…" : "Submit to Admin"}
             </button>
@@ -122,30 +122,30 @@ export default function DirectorReportsPage() {
         </div>
       )}
 
-      <div className="shell">
-        <h2 className="mb-3 text-sm font-semibold text-slate-100">
+      <div className="rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]">
+        <h2 className="mb-3 text-sm font-semibold text-[#242424]">
           {isAdmin ? "Submitted reports" : "Your reports"}
         </h2>
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <p className="text-sm text-[#8A8886]">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-sm text-slate-400">No reports yet.</p>
+          <p className="text-sm text-[#8A8886]">No reports yet.</p>
         ) : (
           <ul className="space-y-3">
             {list.map((r) => (
               <li
                 key={r.id}
-                className="rounded-xl border border-slate-700/80 bg-slate-900/50 p-4"
+                className="rounded-lg border border-[#E1DFDD] bg-white p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium text-slate-100">{r.title}</p>
+                    <p className="font-medium text-[#242424]">{r.title}</p>
                     {r.submittedBy && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-[#8A8886]">
                         {r.submittedBy.name ?? r.submittedBy.email}
                       </p>
                     )}
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[#8A8886]">
                       {r.status} · {r.reviewStatus}
                       {r.submittedAt
                         ? ` · ${new Date(r.submittedAt).toLocaleString()}`
@@ -157,31 +157,37 @@ export default function DirectorReportsPage() {
                       <button
                         type="button"
                         onClick={() => void review(r.id, "viewed")}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300"
+                        className="rounded-md border border-[#D1D1D1] px-2 py-1 text-xs font-semibold text-[#605E5C]"
                       >
                         Mark viewed
                       </button>
                       <button
                         type="button"
                         onClick={() => void review(r.id, "checked")}
-                        className="rounded bg-emerald-600/80 px-2 py-1 text-xs text-white"
+                        className="rounded-md bg-[#0B6A0B] px-2 py-1 text-xs font-semibold text-white"
                       >
                         Checked
                       </button>
                     </div>
                   )}
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300 line-clamp-6">{r.body}</p>
+                <p className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm text-[#605E5C]">{r.body}</p>
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-4 text-xs text-slate-500">
-          <Link href="/reports" className="text-brand hover:underline">
+        <p className="mt-4 text-xs text-[#8A8886]">
+          <Link
+            href={isAdmin ? "/admin/reports?tab=sales" : "/reports"}
+            className="font-semibold text-[#005CAB] hover:underline"
+          >
             Sales team reports
           </Link>
           {" · "}
-          <Link href="/developer-reports" className="text-brand hover:underline">
+          <Link
+            href={isAdmin ? "/admin/reports?tab=developers" : "/developer-reports"}
+            className="font-semibold text-[#005CAB] hover:underline"
+          >
             Developer team reports
           </Link>
         </p>

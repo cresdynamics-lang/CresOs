@@ -16,7 +16,11 @@ export default function SalesMessagesPage() {
   }, [hydrated, auth.accessToken, allowed, router]);
 
   if (!hydrated || !auth.accessToken) {
-    return <div className="text-sm text-[#5B6472]">Loading…</div>;
+    return (
+      <div className="flex min-h-[8rem] items-center justify-center text-[13px] text-[#8A8886]">
+        Loading mails…
+      </div>
+    );
   }
   if (!allowed) return null;
 

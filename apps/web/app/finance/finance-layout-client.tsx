@@ -9,6 +9,7 @@ import { FinanceSideNav } from "./finance-nav";
 import { LeadershipLayoutGate } from "../../components/workspace/leadership-layout-gate";
 import { isDirectorOnly } from "../../lib/is-director-only";
 import { isAdminOnly } from "../../lib/is-admin-only";
+import { WorkspaceBackBar } from "../../components/navigation/workspace-back-bar";
 
 export function FinanceLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -29,7 +30,9 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
 
   if (!hydrated || !auth.accessToken) {
     return (
-      <div className={`${financeNeu.workspace} finance-fullscreen flex h-full items-center justify-center text-sm text-slate-400`}>
+      <div
+        className={`${financeNeu.workspace} finance-fullscreen flex h-full items-center justify-center text-sm font-medium text-[#8A8886]`}
+      >
         Loading finance…
       </div>
     );
@@ -38,7 +41,9 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
   if (!canAccessFinance) return null;
 
   return (
-    <div className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}>
+    <div
+      className={`${financeNeu.workspace} finance-fullscreen ${financeNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
+    >
       <WorkspaceAside
         title="Finance"
         subtitle="Payments in · salaries & ops out"
@@ -49,6 +54,7 @@ export function FinanceLayoutClient({ children }: { children: React.ReactNode })
       </WorkspaceAside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <WorkspaceBackBar fallbackHref="/finance" />
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
           {children}
         </div>

@@ -162,7 +162,7 @@ async function sendChatMessageEmailNotification(
     if (recipientIds.length === 0) return;
 
     const recipients = await prisma.user.findMany({
-      where: { id: { in: recipientIds } },
+      where: { id: { in: recipientIds }, deletedAt: null, status: "active" },
       select: { name: true, email: true }
     });
 

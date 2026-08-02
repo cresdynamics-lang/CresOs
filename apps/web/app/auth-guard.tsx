@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { resolveHomeRouteForUser } from "../lib/resolve-home-route";
 import { useAuth } from "./auth-context";
 import { AppShell } from "./app-shell";
+import { NavigationHistoryProvider } from "../components/navigation/navigation-history";
 
 const PUBLIC_PATHS = ["/", "/login", "/register"];
 
@@ -53,5 +54,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   if (pathname === "/login" || pathname === "/" || pathname === "/register") return null;
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <NavigationHistoryProvider>
+      <AppShell>{children}</AppShell>
+    </NavigationHistoryProvider>
+  );
 }

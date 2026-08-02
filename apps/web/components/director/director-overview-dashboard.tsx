@@ -43,15 +43,12 @@ const QUICK_LINKS = [
 ] as const;
 
 const ADMIN_QUICK_LINKS = [
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/org", label: "Departments" },
-  { href: "/admin/roles", label: "Roles" },
+  { href: "/admin/organisation", label: "Organisation" },
   { href: "/admin/ai-command", label: "AI Command" },
-  { href: "/admin/email-automation", label: "Email AI" },
+  { href: "/admin/reports", label: "Reports" },
   { href: "/analytics", label: "Analytics" },
   { href: "/approvals", label: "Approvals" },
   { href: "/projects", label: "Projects" },
-  { href: "/reports/ai", label: "AI briefings" },
   { href: "/activity", label: "Activity" },
   { href: "/community", label: "Community" }
 ] as const;

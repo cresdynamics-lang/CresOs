@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../auth-context";
 import { DirectorBriefingDocument, briefingAtAGlance } from "../../../components/director/director-briefing-view";
 import { directorNeu } from "../../../components/director/director-theme";
@@ -25,12 +25,14 @@ function formatDateKey(dateKey: string): string {
 
 export default function AiReportsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { apiFetch, auth, hydrated } = useAuth();
   const [reports, setReports] = useState<AiReport[]>([]);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const canAccess = auth.roleKeys.some((r) => ["director_admin", "admin"].includes(r));
+  const embeddedInAdminHub = pathname.startsWith("/admin/reports");
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;
@@ -68,15 +70,20 @@ export default function AiReportsPage() {
   );
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-4 px-3 py-4 sm:px-6 sm:py-5">
+    <section className="admin-reports-neu flex min-h-0 flex-1 flex-col gap-4 bg-white px-3 py-4 sm:px-6 sm:py-5">
       <WorkspaceDashboardIntro
         title="Director briefings"
         description="End-of-day AI summaries for leadership — structured by delivery, pipeline, team accountability, and risks. Generated automatically around 7pm org time."
         eyebrow="AI reports"
         actions={
-          <Link href="/reports" className={`shrink-0 ${directorNeu.btnGhost}`}>
-            ← Back to reports
-          </Link>
+          embeddedInAdminHub ? undefined : (
+            <Link
+              href={auth.roleKeys.includes("admin") ? "/admin/reports" : "/reports"}
+              className="shrink-0 rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm font-semibold text-[#242424] hover:bg-[#F5F5F5]"
+            >
+              ← Back to reports
+            </Link>
+          )
         }
       />
 

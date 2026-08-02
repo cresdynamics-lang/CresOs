@@ -16,7 +16,9 @@ type GlobalSideNavProps = {
 function isNavActive(pathname: string, href: string, communityChatUnread: number): boolean {
   if (href === "/finance") return pathname.startsWith("/finance") || pathname.startsWith("/approvals");
   if (href === "/sales") return pathname.startsWith("/sales") || pathname.startsWith("/leads") || pathname.startsWith("/crm");
-  if (href === "/admin/users") return pathname.startsWith("/admin");
+  if (href === "/admin" || href === "/admin/users" || href === "/admin/organisation") {
+    return pathname.startsWith("/admin");
+  }
   if (href === "/community" && communityChatUnread > 0 && !pathname.startsWith("/community")) return true;
   return pathname === href || pathname.startsWith(`${href}/`);
 }

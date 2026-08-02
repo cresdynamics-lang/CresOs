@@ -3,15 +3,11 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useAuth } from "../auth-context";
-import { DashboardSectionLabel } from "../../components/dashboard-welcome-banner";
 import { HorizontalBarChart, PieChart, VerticalBarChart } from "../../components/analytics/chart-widgets";
 import { SalesStatInline, SalesStatRow } from "../../components/sales/sales-ui";
 import { salesNeu } from "../../components/sales/sales-theme";
 import type { ScheduleKpiStats } from "../../components/schedule-kpi-strip";
 import {
-  WorkspaceAlignedTips,
-  WorkspaceDashboardSection,
-  WorkspacePriorityGrid,
   dedupeAiHint,
   dedupeFocusTips,
   type WorkspacePriorityItem
@@ -45,7 +41,6 @@ const QUICK_LINKS = [
   { href: "/leads", label: "Leads" },
   { href: "/crm", label: "CRM" },
   { href: "/reports", label: "Reports" },
-  { href: "/reports/new", label: "Submit report" },
   { href: "/projects", label: "Projects" },
   { href: "/schedule", label: "Tasks" },
   { href: "/community", label: "Community" }
@@ -76,7 +71,11 @@ type SalesOverviewDashboardProps = {
   onRefresh: () => void;
 };
 
-const CHART_COLORS = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
+const CHART_COLORS = ["bg-[#005CAB]", "bg-[#5C2D91]", "bg-[#0B6A0B]", "bg-[#C19C00]", "bg-[#C50F1F]"];
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[#8A8886]">{children}</p>;
+}
 
 export function SalesOverviewDashboard({
   kpis,
@@ -105,10 +104,10 @@ export function SalesOverviewDashboard({
       items.push({
         id: "report-due",
         tone: "danger",
-        title: "Submit your sales report",
-        detail: "It's been 12+ hours since your last report. Leadership uses this for pipeline alignment.",
+        title: "Submit today's report",
+        detail: "File your sales report for leadership.",
         href: "/reports/new",
-        action: "Submit now"
+        action: "Submit"
       });
     }
 
@@ -116,10 +115,10 @@ export function SalesOverviewDashboard({
       items.push({
         id: "unread-notifs",
         tone: "warning",
-        title: `${queue!.unreadNotifications} unread notification${queue!.unreadNotifications === 1 ? "" : "s"}`,
-        detail: "Clear the bell and Community so messages don't pile up.",
+        title: `${queue!.unreadNotifications} unread`,
+        detail: "Clear notifications.",
         href: "/community",
-        action: "Open Community"
+        action: "Open"
       });
     }
 
@@ -128,18 +127,18 @@ export function SalesOverviewDashboard({
         id: "overdue-invoices",
         tone: "danger",
         title: `${alerts.overdueInvoices} overdue invoice${alerts.overdueInvoices === 1 ? "" : "s"}`,
-        detail: "Follow up with clients before finance escalates collection.",
+        detail: "Follow up before collection escalates.",
         href: "/sales/invoices",
-        action: "Open invoices"
+        action: "Invoices"
       });
     } else if (alerts.outstandingInvoices > 0) {
       items.push({
         id: "outstanding-invoices",
         tone: "warning",
         title: `${alerts.outstandingInvoices} open invoice${alerts.outstandingInvoices === 1 ? "" : "s"}`,
-        detail: "Draft, sent, or partial invoices still awaiting payment.",
+        detail: "Awaiting payment.",
         href: "/sales/invoices",
-        action: "Review invoices"
+        action: "Review"
       });
     }
 
@@ -148,9 +147,9 @@ export function SalesOverviewDashboard({
         id: "leads-pending",
         tone: "warning",
         title: `${alerts.leadsPendingApproval} lead${alerts.leadsPendingApproval === 1 ? "" : "s"} need approval`,
-        detail: "New leads stay blocked until leadership approves them.",
+        detail: "Blocked until leadership approves.",
         href: "/leads",
-        action: "View leads"
+        action: "Leads"
       });
     }
 
@@ -159,9 +158,9 @@ export function SalesOverviewDashboard({
         id: "deals-prospect",
         tone: "warning",
         title: `${alerts.dealsInProspect} deals in prospect`,
-        detail: "Move qualified deals to proposal or won to keep pipeline velocity.",
+        detail: "Advance or qualify pipeline.",
         href: "/crm",
-        action: "Open CRM"
+        action: "CRM"
       });
     }
 
@@ -169,10 +168,10 @@ export function SalesOverviewDashboard({
       items.push({
         id: "report-questions",
         tone: "danger",
-        title: `${overdueReportQuestions} report question${overdueReportQuestions === 1 ? "" : "s"} overdue`,
-        detail: "Answer director questions on your reports.",
+        title: `${overdueReportQuestions} report Q overdue`,
+        detail: "Answer director questions.",
         href: "/reports",
-        action: "Answer now"
+        action: "Answer"
       });
     }
 
@@ -180,10 +179,10 @@ export function SalesOverviewDashboard({
       items.push({
         id: "tasks-pending",
         tone: "warning",
-        title: `${scheduleKpis.pending} open task${scheduleKpis.pending === 1 ? "" : "s"} this week`,
-        detail: "Complete scheduled tasks to keep delivery on track.",
+        title: `${scheduleKpis.pending} open task${scheduleKpis.pending === 1 ? "" : "s"}`,
+        detail: "This week's schedule.",
         href: "/schedule",
-        action: "Open tasks"
+        action: "Tasks"
       });
     }
 
@@ -199,7 +198,7 @@ export function SalesOverviewDashboard({
         hasOutstandingInvoiceAlert: alerts.outstandingInvoices > 0 && alerts.overdueInvoices === 0,
         hasOverdueInvoiceAlert: alerts.overdueInvoices > 0,
         priorityTitles: alertItems.map((a) => a.title)
-      }),
+      }).slice(0, 3),
     [focusTips, reportReminderDue, overdueReportQuestions, queue, alerts, alertItems]
   );
 
@@ -216,228 +215,260 @@ export function SalesOverviewDashboard({
 
   const messageHref = (queue?.messagesToReply ?? 0) > 0 ? "/reports" : "/community";
 
+  const panelForTone = (tone: WorkspacePriorityItem["tone"]) => {
+    if (tone === "danger") return salesNeu.alertDanger;
+    if (tone === "warning") return salesNeu.alertWarning;
+    return salesNeu.alertInfo;
+  };
+
+  const actionColor = (tone: WorkspacePriorityItem["tone"]) => {
+    if (tone === "danger") return "bg-[#C50F1F] hover:bg-[#A50D1A]";
+    if (tone === "warning") return "bg-[#C19C00] hover:bg-[#A68500]";
+    return "bg-[#005CAB] hover:bg-[#004A8C]";
+  };
+
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6 pb-6">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
+    <div className={`${salesNeu.workspace} flex w-full min-w-0 flex-1 flex-col gap-3 bg-white pb-4`}>
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E1DFDD] pb-3">
         <div className="min-w-0">
-          <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#B45309]/90">
-            Sales
-          </p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl">
-            {welcomeHeadline}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">
-            Your pipeline queue and charts — use the sidebar to jump between CRM, reports, invoices, and tasks.
-          </p>
+          <p className={salesNeu.eyebrow}>Sales</p>
+          <h1 className={`mt-0.5 ${salesNeu.title}`}>{welcomeHeadline}</h1>
+          <p className={`mt-0.5 max-w-xl ${salesNeu.body}`}>Pipeline, invoices, and reports.</p>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${salesNeu.navIdle} shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-[#1A1D26] disabled:opacity-50`}
+          className={`${salesNeu.btnGhost} shrink-0 disabled:opacity-50`}
         >
-          {loading ? "Refreshing…" : "Refresh"}
+          {loading ? "…" : "Refresh"}
         </button>
       </header>
 
       {alertItems.length > 0 ? (
-        <WorkspaceDashboardSection label="Today's priorities" roleKeys={auth.roleKeys}>
-          <WorkspacePriorityGrid
-            items={alertItems}
-            panelClass={(tone) => (tone === "danger" ? salesNeu.alertDanger : salesNeu.alertWarning)}
-          />
-        </WorkspaceDashboardSection>
+        <section>
+          <SectionLabel>Today</SectionLabel>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {alertItems.map((item) => (
+              <li key={item.id} className={`${panelForTone(item.tone)} px-2.5 py-2`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold leading-snug text-[#242424]">{item.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[#605E5C]">{item.detail}</p>
+                  </div>
+                  <Link
+                    href={item.href}
+                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-white ${actionColor(item.tone)}`}
+                  >
+                    {item.action}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
-      {isSalesRep ? (
-        <WorkspaceAlignedTips
-          tips={alignedTips}
-          aiHint={alignedHint}
-          panelClass={`${salesNeu.panelInset} p-4 sm:p-5`}
-          roleKeys={auth.roleKeys}
-        />
-      ) : null}
-
-      <WorkspaceDashboardSection label="Your queue" roleKeys={auth.roleKeys}>
-        <div className={`mt-3 ${salesNeu.kpiStrip}`}>
-          <SalesStatRow>
-            <Link href="/community" className="min-w-0 hover:opacity-90">
-              <SalesStatInline
-                label="Notifications"
-                value={loading ? "…" : (queue?.unreadNotifications ?? 0)}
-                hint="Unread in-app"
-                tone={(queue?.unreadNotifications ?? 0) > 0 ? "rose" : "sky"}
-              />
-            </Link>
-            <Link href={messageHref} className="min-w-0 hover:opacity-90">
-              <SalesStatInline
-                label="Messages"
-                value={loading ? "…" : (queue?.messagesToReply ?? 0)}
-                hint="Need reply"
-                tone={(queue?.messagesToReply ?? 0) > 0 ? "amber" : "sky"}
-              />
-            </Link>
-            <Link href="/leads" className="min-w-0 hover:opacity-90">
-              <SalesStatInline
-                label="Due today"
-                value={loading ? "…" : (queue?.dueToday ?? 0)}
-                hint="Follow-ups"
-                tone={(queue?.dueToday ?? 0) > 0 ? "amber" : "sky"}
-              />
-            </Link>
-            <Link href="/projects" className="min-w-0 hover:opacity-90">
-              <SalesStatInline
-                label="Projects"
-                value={loading ? "…" : (queue?.visibleProjects ?? 0)}
-                hint="Active / in-flight"
-                tone="violet"
-              />
-            </Link>
-          </SalesStatRow>
-          {isSalesRep ? (
-            <SalesStatRow className="mt-6 border-t border-[#E5E9EF] pt-6">
-              <SalesStatInline
-                label="Report streak"
-                value={loading ? "…" : (queue?.reportStreakDays ?? 0)}
-                hint="Consecutive days"
-                tone="amber"
-              />
-              <SalesStatInline
-                label="Work progress"
-                value={loading ? "…" : `${queue?.workProgressPercent ?? 0}%`}
-                hint="Delivery"
-                tone="emerald"
-              />
-              <SalesStatInline
-                label="Leads this week"
-                value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
-                hint="New captures"
-                tone="sky"
-              />
-              <SalesStatInline
-                label="Active deals"
-                value={loading ? "…" : (kpis?.activeDeals ?? 0)}
-                hint="Prospect & proposal"
-                tone="amber"
-              />
-            </SalesStatRow>
+      {isSalesRep && (alignedTips.length > 0 || alignedHint) ? (
+        <section className={salesNeu.panelInset}>
+          <SectionLabel>Stay aligned</SectionLabel>
+          {alignedTips.length > 0 ? (
+            <ul className="space-y-1">
+              {alignedTips.map((tip) => (
+                <li key={tip} className="flex gap-1.5 text-[11px] leading-snug text-[#605E5C]">
+                  <span className="text-[#005CAB]" aria-hidden>
+                    ·
+                  </span>
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
           ) : null}
-        </div>
-      </WorkspaceDashboardSection>
+          {alignedHint ? (
+            <p
+              className={`text-[11px] leading-snug text-[#5C2D91] ${
+                alignedTips.length ? "mt-1.5 border-t border-[#E1DFDD] pt-1.5" : ""
+              }`}
+            >
+              {alignedHint}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-      {!isSalesRep && (
-        <WorkspaceDashboardSection label="Pipeline snapshot" roleKeys={auth.roleKeys}>
-          <div className={`mt-3 ${salesNeu.kpiStrip}`}>
-            <SalesStatRow>
-              <SalesStatInline
-                label="Leads this week"
-                value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
-                hint="New captures"
-                tone="sky"
-              />
-              <SalesStatInline
-                label="Active deals"
-                value={loading ? "…" : (kpis?.activeDeals ?? 0)}
-                hint="Prospect & proposal"
-                tone="amber"
-              />
-              <SalesStatInline
-                label="Won deals"
-                value={loading ? "…" : (kpis?.wonDeals ?? 0)}
-                hint="Closed"
-                tone="emerald"
-              />
-              <SalesStatInline
-                label="Open invoices"
-                value={loading ? "…" : (kpis?.openInvoices ?? 0)}
-                hint={`${kpis?.paidInvoices ?? 0} paid · ${kpis?.overdueInvoices ?? 0} overdue`}
-                tone="violet"
-              />
-            </SalesStatRow>
-          </div>
-        </WorkspaceDashboardSection>
-      )}
+      <section>
+        <SectionLabel>Your queue</SectionLabel>
+        <SalesStatRow>
+          <Link href="/community" className="min-w-0">
+            <SalesStatInline
+              label="Notifications"
+              value={loading ? "…" : (queue?.unreadNotifications ?? 0)}
+              hint="Unread"
+              tone={(queue?.unreadNotifications ?? 0) > 0 ? "rose" : "sky"}
+            />
+          </Link>
+          <Link href={messageHref} className="min-w-0">
+            <SalesStatInline
+              label="Messages"
+              value={loading ? "…" : (queue?.messagesToReply ?? 0)}
+              hint="Need reply"
+              tone={(queue?.messagesToReply ?? 0) > 0 ? "amber" : "sky"}
+            />
+          </Link>
+          <Link href="/leads" className="min-w-0">
+            <SalesStatInline
+              label="Due today"
+              value={loading ? "…" : (queue?.dueToday ?? 0)}
+              hint="Follow-ups"
+              tone={(queue?.dueToday ?? 0) > 0 ? "amber" : "sky"}
+            />
+          </Link>
+          <Link href="/projects" className="min-w-0">
+            <SalesStatInline
+              label="Projects"
+              value={loading ? "…" : (queue?.visibleProjects ?? 0)}
+              hint="In flight"
+              tone="violet"
+            />
+          </Link>
+        </SalesStatRow>
+        {isSalesRep ? (
+          <SalesStatRow className="mt-2">
+            <SalesStatInline
+              label="Report streak"
+              value={loading ? "…" : (queue?.reportStreakDays ?? 0)}
+              hint="Days"
+              tone="amber"
+            />
+            <SalesStatInline
+              label="Work progress"
+              value={loading ? "…" : `${queue?.workProgressPercent ?? 0}%`}
+              hint="Delivery"
+              tone="emerald"
+            />
+            <SalesStatInline
+              label="Leads this week"
+              value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
+              hint="New"
+              tone="sky"
+            />
+            <SalesStatInline
+              label="Active deals"
+              value={loading ? "…" : (kpis?.activeDeals ?? 0)}
+              hint="Pipeline"
+              tone="amber"
+            />
+          </SalesStatRow>
+        ) : null}
+      </section>
 
-      <nav aria-label="Sales quick links" className="flex w-full flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
+      {!isSalesRep ? (
+        <section>
+          <SectionLabel>Pipeline snapshot</SectionLabel>
+          <SalesStatRow>
+            <SalesStatInline
+              label="Leads this week"
+              value={loading ? "…" : (kpis?.leadsThisWeek ?? 0)}
+              hint="New"
+              tone="sky"
+            />
+            <SalesStatInline
+              label="Active deals"
+              value={loading ? "…" : (kpis?.activeDeals ?? 0)}
+              hint="Pipeline"
+              tone="amber"
+            />
+            <SalesStatInline
+              label="Won deals"
+              value={loading ? "…" : (kpis?.wonDeals ?? 0)}
+              hint="Closed"
+              tone="emerald"
+            />
+            <SalesStatInline
+              label="Open invoices"
+              value={loading ? "…" : (kpis?.openInvoices ?? 0)}
+              hint={`${kpis?.paidInvoices ?? 0} paid · ${kpis?.overdueInvoices ?? 0} late`}
+              tone="violet"
+            />
+          </SalesStatRow>
+        </section>
+      ) : null}
+
+      <nav aria-label="Sales quick links" className="flex flex-wrap gap-1.5 border-b border-[#E1DFDD] pb-3">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className={`${salesNeu.navIdle} rounded-lg px-3 py-2 text-sm font-medium touch-manipulation`}
+            className="rounded-md border border-[#E1DFDD] bg-white px-2 py-1 text-[11px] font-semibold text-[#605E5C] hover:border-[#005CAB]/40 hover:text-[#005CAB]"
           >
             {link.label}
           </Link>
         ))}
       </nav>
 
-      <section aria-label="Progress charts" className="w-full flex-1">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <DashboardSectionLabel roleKeys={auth.roleKeys}>Progress charts</DashboardSectionLabel>
+      <section>
+        <div className="mb-1.5 flex flex-wrap items-end justify-between gap-1">
+          <SectionLabel>Progress</SectionLabel>
           {scheduleKpis ? (
-            <p className="text-xs text-[#5B6472]">
-              Tasks this week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending · {scheduleKpis.total}{" "}
-              total
+            <p className={salesNeu.muted}>
+              Week: {scheduleKpis.completed} done · {scheduleKpis.pending} pending
             </p>
           ) : null}
         </div>
 
-        <div className="grid w-full gap-4 xl:grid-cols-2">
-          <ChartPanel title="Invoice status mix">
+        <div className="grid w-full gap-2 sm:grid-cols-2">
+          <ChartPanel title="Invoices">
             <PieChart
               items={charts.invoices}
-              size={220}
-              emptyLabel={loading ? "Loading invoice data…" : "No invoices yet — create one under Invoices"}
+              size={140}
+              emptyLabel={loading ? "Loading…" : "No invoices yet"}
             />
           </ChartPanel>
 
-          <ChartPanel title="Deal pipeline by stage">
-            <PieChart
-              items={charts.deals}
-              size={220}
-              emptyLabel={loading ? "Loading deals…" : "No deals yet — add from CRM"}
-            />
+          <ChartPanel title="Deal stages">
+            <PieChart items={charts.deals} size={140} emptyLabel={loading ? "Loading…" : "No deals yet"} />
           </ChartPanel>
 
-          <ChartPanel title="Projects by status">
+          <ChartPanel title="Projects">
             <HorizontalBarChart
               items={charts.projects.map((p, idx) => ({
                 label: p.label.replace(/_/g, " "),
                 value: p.value,
                 color: CHART_COLORS[idx % CHART_COLORS.length]
               }))}
-              emptyLabel={loading ? "Loading projects…" : "No projects in org yet"}
+              emptyLabel={loading ? "Loading…" : "No projects yet"}
             />
           </ChartPanel>
 
-          <ChartPanel title="Weekly task progress">
+          <ChartPanel title="This week">
             {taskBars.length > 0 ? (
               <VerticalBarChart items={taskBars} />
             ) : (
-              <p className="text-sm text-[#5B6472]">
-                {loading ? "Loading schedule…" : "No tasks scheduled this week — open Tasks to plan your week"}
-              </p>
+              <p className="text-[11px] text-[#605E5C]">{loading ? "Loading…" : "No tasks this week"}</p>
             )}
           </ChartPanel>
         </div>
       </section>
 
-      {isSalesRep && (
-        <section aria-label="Work history" className={`w-full ${salesNeu.panelInset}`}>
-          <h3 className="text-sm font-semibold text-[#1A1D26]">Your work history (read-only)</h3>
-          <p className="mt-2 text-sm text-[#5B6472]">
-            Past report submissions stay on record. File new daily reports anytime — they won&apos;t overwrite locked
-            entries.
+      {isSalesRep ? (
+        <section className={salesNeu.panelInset}>
+          <p className="text-[12px] font-semibold text-[#242424]">Work history</p>
+          <p className="mt-1 text-[11px] leading-snug text-[#605E5C]">
+            Past reports stay on record. New daily entries don&apos;t overwrite locked ones.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/reports" className={`${salesNeu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`}>
-              Sales reports →
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Link
+              href="/reports"
+              className="rounded-md border border-[#E1DFDD] px-2 py-1 text-[11px] font-semibold text-[#605E5C] hover:border-[#005CAB]/40 hover:text-[#005CAB]"
+            >
+              Reports →
             </Link>
-            <Link href="/reports/new" className={`${salesNeu.btnPrimary} inline-flex rounded-lg px-3 py-2 text-sm`}>
+            <Link href="/reports/new" className={salesNeu.btnPrimary}>
               Submit report
             </Link>
           </div>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -445,8 +476,9 @@ export function SalesOverviewDashboard({
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={salesNeu.chartPanel}>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B45309]/80">{title}</h3>
-      <div className="mt-5 flex flex-1 flex-col items-center justify-center">{children}</div>
+      <div className="absolute inset-x-0 top-0 h-0.5 bg-[#005CAB]" aria-hidden />
+      <h3 className="text-[10px] font-semibold tracking-wide text-[#005CAB]">{title}</h3>
+      <div className="mt-2 flex min-h-0 w-full flex-1 flex-col items-center justify-center">{children}</div>
     </div>
   );
 }

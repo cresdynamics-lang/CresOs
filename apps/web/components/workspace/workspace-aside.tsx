@@ -36,6 +36,8 @@ type WorkspaceAsideProps = {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** e.g. hamburger / close control in the side panel header */
+  headerAction?: ReactNode;
 };
 
 export function WorkspaceAside({
@@ -44,7 +46,8 @@ export function WorkspaceAside({
   themeKey,
   children,
   footer,
-  className = ""
+  className = "",
+  headerAction
 }: WorkspaceAsideProps) {
   const theme = WORKSPACE_THEMES[themeKey] ?? WORKSPACE_THEMES.finance;
 
@@ -52,13 +55,16 @@ export function WorkspaceAside({
     <aside
       className={`flex h-full max-h-[100dvh] w-[min(18rem,92vw)] shrink-0 flex-col border-r ${theme.border} ${theme.panel} ${className}`.trim()}
     >
-      <div className={`shrink-0 border-b ${theme.border} px-4 py-4`}>
-        <p className={`font-label text-[10px] font-bold uppercase tracking-[0.2em] ${theme.title}`}>
-          {title}
-        </p>
-        {subtitle ? (
-          <p className={`mt-1.5 text-xs font-medium leading-relaxed ${theme.subtitle}`}>{subtitle}</p>
-        ) : null}
+      <div className={`flex shrink-0 items-start justify-between gap-2 border-b ${theme.border} px-3 py-3 sm:px-4 sm:py-3.5`}>
+        <div className="min-w-0">
+          <p className={`font-label text-[10px] font-bold uppercase tracking-[0.2em] ${theme.title}`}>
+            {title}
+          </p>
+          {subtitle ? (
+            <p className={`mt-1 text-xs font-medium leading-relaxed ${theme.subtitle}`}>{subtitle}</p>
+          ) : null}
+        </div>
+        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
       {footer ? <div className={`shrink-0 border-t ${theme.border} p-2`}>{footer}</div> : null}

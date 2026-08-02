@@ -301,7 +301,7 @@ export default function CrmPage() {
   const contactsWithEmail = contacts.filter((c) => c.email && String(c.email).trim());
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex w-full min-w-0 flex-col gap-4 bg-white pb-6">
       <WorkspaceDashboardIntro
         title="CRM"
         description="Contacts below can receive bulk emails (templates for invoices, new products, or new services)."
@@ -311,16 +311,16 @@ export default function CrmPage() {
         actions={
           <Link
             href="/leads"
-            className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/25"
+            className="shrink-0 rounded-md border border-[#C19C00] bg-white px-4 py-2 text-sm font-semibold text-[#8A7000] transition-colors hover:bg-[#C19C00] hover:text-white"
           >
             Open Leads →
           </Link>
         }
       />
 
-      <p className="-mt-2 text-xs text-slate-500">
-        Message templates: use <code className="rounded bg-slate-800 px-1 text-amber-400/90">{"{{name}}"}</code> and{" "}
-        <code className="rounded bg-slate-800 px-1 text-amber-400/90">{"{{org}}"}</code> in the body.
+      <p className="-mt-1 font-body text-[12px] text-[#8A8886]">
+        Message templates: use <code className="rounded border border-[#E1DFDD] bg-white px-1 text-[#005CAB]">{"{{name}}"}</code> and{" "}
+        <code className="rounded border border-[#E1DFDD] bg-white px-1 text-[#005CAB]">{"{{org}}"}</code> in the body.
       </p>
 
       {loadedOnce && (
@@ -351,7 +351,7 @@ export default function CrmPage() {
         </>
       )}
 
-      {!loadedOnce && <p className="text-sm text-slate-400">Loading CRM…</p>}
+      {!loadedOnce && <p className="text-sm text-[#605E5C]">Loading CRM…</p>}
 
       {loadedOnce && (
         <>
@@ -367,12 +367,12 @@ export default function CrmPage() {
                     </CrmTableHead>
                     <tbody>
                       {leads.map((lead) => (
-                        <tr key={lead.id} className="border-b border-slate-800/60 text-slate-200 last:border-0">
-                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-slate-100">
+                        <tr key={lead.id} className="border-b border-[#F5F5F5] text-[#242424] last:border-0">
+                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-[#242424]">
                             {lead.title}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2.5">
-                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
+                            <span className="rounded-md border border-[#E8D48A] bg-white px-2 py-0.5 text-xs font-semibold text-[#8A7000]">
                               {lead.status}
                             </span>
                           </td>
@@ -395,12 +395,12 @@ export default function CrmPage() {
                     </CrmTableHead>
                     <tbody>
                       {deals.map((deal) => (
-                        <tr key={deal.id} className="border-b border-slate-800/60 text-slate-200 last:border-0">
-                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-slate-100">
+                        <tr key={deal.id} className="border-b border-[#F5F5F5] text-[#242424] last:border-0">
+                          <td className="max-w-[20rem] break-words px-3 py-2.5 font-medium text-[#242424]">
                             {deal.title}
                           </td>
-                          <td className="px-3 py-2.5 text-violet-300">{deal.stage}</td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-400">
+                          <td className="px-3 py-2.5 font-medium text-[#5C2D91]">{deal.stage}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-[#0B6A0B]">
                             {deal.value !== undefined ? formatMoney(deal.value) : "—"}
                           </td>
                         </tr>
@@ -436,18 +436,18 @@ export default function CrmPage() {
                     {(clientSummary?.clients ?? []).slice(0, 30).flatMap((c) =>
                       c.projects.length === 0
                         ? [
-                            <tr key={c.key} className="border-b border-slate-800/80 text-slate-200">
-                              <td className="max-w-[12rem] px-3 py-2 font-medium text-slate-100 break-words">{c.name}</td>
-                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-400">
+                            <tr key={c.key} className="border-b border-[#F5F5F5] text-[#242424]">
+                              <td className="max-w-[12rem] px-3 py-2 font-medium text-[#242424] break-words">{c.name}</td>
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-[#605E5C]">
                                 {c.email ? (
-                                  <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
+                                  <a className="text-[#005CAB] hover:underline" href={`mailto:${c.email}`}>
                                     {c.email}
                                   </a>
                                 ) : (
                                   "—"
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-3 py-2 text-slate-400">
+                              <td className="whitespace-nowrap px-3 py-2 text-[#605E5C]">
                                 {c.phone ? (
                                   <a className="hover:underline" href={`tel:${c.phone}`}>
                                     {c.phone}
@@ -456,24 +456,24 @@ export default function CrmPage() {
                                   "—"
                                 )}
                               </td>
-                              <td colSpan={4} className="px-3 py-2 text-slate-500">
+                              <td colSpan={4} className="px-3 py-2 text-[#8A8886]">
                                 No linked projects
                               </td>
                             </tr>
                           ]
                         : c.projects.map((p) => (
-                            <tr key={`${c.key}-${p.id}`} className="border-b border-slate-800/80 text-slate-200">
-                              <td className="max-w-[12rem] px-3 py-2 font-medium text-slate-100 break-words">{c.name}</td>
-                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-400">
+                            <tr key={`${c.key}-${p.id}`} className="border-b border-[#F5F5F5] text-[#242424]">
+                              <td className="max-w-[12rem] px-3 py-2 font-medium text-[#242424] break-words">{c.name}</td>
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-[#605E5C]">
                                 {c.email ? (
-                                  <a className="text-sky-400 hover:underline" href={`mailto:${c.email}`}>
+                                  <a className="text-[#005CAB] hover:underline" href={`mailto:${c.email}`}>
                                     {c.email}
                                   </a>
                                 ) : (
                                   "—"
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-3 py-2 text-slate-400">
+                              <td className="whitespace-nowrap px-3 py-2 text-[#605E5C]">
                                 {c.phone ? (
                                   <a className="hover:underline" href={`tel:${c.phone}`}>
                                     {c.phone}
@@ -482,13 +482,13 @@ export default function CrmPage() {
                                   "—"
                                 )}
                               </td>
-                              <td className="max-w-[14rem] px-3 py-2 break-words text-slate-200">
-                                <Link href={`/projects/${p.id}`} className="text-sky-300 hover:underline">
+                              <td className="max-w-[14rem] px-3 py-2 break-words text-[#242424]">
+                                <Link href={`/projects/${p.id}`} className="text-[#005CAB] hover:underline">
                                   {p.name}
                                 </Link>
                               </td>
-                              <td className="whitespace-nowrap px-3 py-2 capitalize text-slate-400">{p.status}</td>
-                              <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{p.approvalStatus}</td>
+                              <td className="whitespace-nowrap px-3 py-2 capitalize text-[#605E5C]">{p.status}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-[#8A8886]">{p.approvalStatus}</td>
                               <td className="whitespace-nowrap px-3 py-2 text-right">
                                 <CrmActionLink href={`/projects/${p.id}`}>View</CrmActionLink>
                               </td>
@@ -508,20 +508,20 @@ export default function CrmPage() {
               description="Choose recipients with email, pick a sample message or write your own, then queue. Messages are sent through the same email queue as the rest of the app (not instant)."
             >
               <form onSubmit={handleBulkSend} className="flex flex-col gap-4">
-                <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/50 p-2">
+                <div className="max-h-52 overflow-y-auto rounded-lg border border-[#E1DFDD] bg-white p-2">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <p className="text-xs font-medium text-slate-500">Recipients ({selectedIds.size} selected)</p>
+                    <p className="text-xs font-medium text-[#8A8886]">Recipients ({selectedIds.size} selected)</p>
                     <button
                       type="button"
                       onClick={selectAllWithEmail}
-                      className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+                      className="rounded border border-[#D1D1D1] px-2 py-0.5 text-xs text-[#605E5C] hover:bg-[#F5F5F5]"
                     >
                       Select all with email ({contactsWithEmail.length})
                     </button>
                     <button
                       type="button"
                       onClick={clearSelection}
-                      className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+                      className="rounded border border-[#D1D1D1] px-2 py-0.5 text-xs text-[#605E5C] hover:bg-[#F5F5F5]"
                     >
                       Clear
                     </button>
@@ -536,17 +536,17 @@ export default function CrmPage() {
                             checked={selectedIds.has(c.id)}
                             onChange={() => toggleContact(c.id)}
                             disabled={!hasEmail}
-                            className="rounded border-slate-600"
+                            className="rounded border-[#D1D1D1]"
                           />
-                          <span className={hasEmail ? "text-slate-200" : "text-slate-500"}>
+                          <span className={hasEmail ? "text-[#242424]" : "text-[#8A8886]"}>
                             {c.name || c.email || c.phone || "—"}
                             {c.kind === "client_with_project" && (
-                              <span className="ml-1 text-[10px] text-emerald-400">· client</span>
+                              <span className="ml-1 text-[10px] text-[#0B6A0B]">· client</span>
                             )}
                             {hasEmail ? (
-                              <span className="ml-2 text-xs text-slate-500">{c.email}</span>
+                              <span className="ml-2 text-xs text-[#8A8886]">{c.email}</span>
                             ) : (
-                              <span className="ml-2 text-xs text-amber-500/90">(add email to include)</span>
+                              <span className="ml-2 text-xs text-[#8A7000]">(add email to include)</span>
                             )}
                           </span>
                         </li>
@@ -555,11 +555,11 @@ export default function CrmPage() {
                   </ul>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-slate-400">Sample message:</span>
+                  <span className="text-xs text-[#605E5C]">Sample message:</span>
                   <select
                     value={templateChoice}
                     onChange={(e) => setTemplateChoice(e.target.value)}
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    className="rounded-lg border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424]"
                   >
                     <option value="">Custom only (no template)</option>
                     {templates.map((t) => (
@@ -570,30 +570,30 @@ export default function CrmPage() {
                   </select>
                 </div>
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Subject</span>
+                  <span className="text-xs text-[#605E5C]">Subject</span>
                   <input
                     type="text"
                     value={bulkSubject}
                     onChange={(e) => setBulkSubject(e.target.value)}
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    className="rounded-lg border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424]"
                     placeholder="Email subject line"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Message</span>
+                  <span className="text-xs text-[#605E5C]">Message</span>
                   <textarea
                     value={bulkBody}
                     onChange={(e) => setBulkBody(e.target.value)}
                     rows={10}
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    className="rounded-lg border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424]"
                     placeholder="Email body — use {{name}} for the contact name, {{org}} for your org name"
                   />
                 </label>
-                {bulkMessage && <p className="text-sm text-sky-300">{bulkMessage}</p>}
+                {bulkMessage && <p className="text-sm text-[#005CAB]">{bulkMessage}</p>}
                 <button
                   type="submit"
                   disabled={bulkSending || selectedIds.size === 0}
-                  className="w-fit rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-6px_rgba(14,165,233,0.5)] hover:bg-sky-500 disabled:opacity-50"
+                  className="w-fit rounded-md bg-[#005CAB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
                 >
                   {bulkSending ? "Queueing…" : "Queue bulk emails"}
                 </button>
@@ -610,77 +610,77 @@ export default function CrmPage() {
             {canManageContacts && (
               <form onSubmit={handleAddContact} className="mb-4 flex flex-wrap items-end gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Name</span>
+                  <span className="text-xs text-[#605E5C]">Name</span>
                   <input
                     type="text"
                     value={contactForm.name}
                     onChange={(e) => setContactForm((p) => ({ ...p, name: e.target.value }))}
                     placeholder="Optional"
-                    className="w-40 rounded border border-slate-700 bg-slate-800/80 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+                    className="w-40 rounded border border-[#D1D1D1] bg-white px-2 py-1.5 text-sm text-[#242424] placeholder:text-[#8A8886]"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Email</span>
+                  <span className="text-xs text-[#605E5C]">Email</span>
                   <input
                     type="email"
                     value={contactForm.email}
                     onChange={(e) => setContactForm((p) => ({ ...p, email: e.target.value }))}
                     placeholder="email@example.com"
-                    className="w-48 rounded border border-slate-700 bg-slate-800/80 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+                    className="w-48 rounded border border-[#D1D1D1] bg-white px-2 py-1.5 text-sm text-[#242424] placeholder:text-[#8A8886]"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Phone</span>
+                  <span className="text-xs text-[#605E5C]">Phone</span>
                   <input
                     type="tel"
                     value={contactForm.phone}
                     onChange={(e) => setContactForm((p) => ({ ...p, phone: e.target.value }))}
                     placeholder="Optional"
-                    className="w-36 rounded border border-slate-700 bg-slate-800/80 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+                    className="w-36 rounded border border-[#D1D1D1] bg-white px-2 py-1.5 text-sm text-[#242424] placeholder:text-[#8A8886]"
                   />
                 </label>
                 <button
                   type="submit"
                   disabled={contactSubmitting}
-                  className="rounded bg-slate-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+                  className="rounded bg-[#005CAB] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#004A8C] disabled:opacity-50"
                 >
                   {contactSubmitting ? "Adding…" : "Add contact"}
                 </button>
-                {contactError && <p className="w-full text-sm text-amber-400">{contactError}</p>}
+                {contactError && <p className="w-full text-sm text-[#C50F1F]">{contactError}</p>}
               </form>
             )}
             <ul className="space-y-2 text-sm">
               {contacts.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center justify-between rounded-xl border border-violet-500/20 bg-slate-950/50 px-3 py-2.5 transition-colors hover:border-violet-500/35"
+                  className="flex items-center justify-between rounded-lg border border-[#C5B0DF] bg-white px-3 py-2.5 transition-colors hover:border-[#5C2D91]"
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     {c.name && (
-                      <span className="text-slate-100">
+                      <span className="text-[#242424]">
                         {c.name}
                         {c.kind === "client_with_project" && (
-                          <span className="ml-1 text-[10px] uppercase text-emerald-400">· client (with project)</span>
+                          <span className="ml-1 text-[10px] uppercase text-[#0B6A0B]">· client (with project)</span>
                         )}
                       </span>
                     )}
                     {c.email && (
-                      <a href={`mailto:${c.email}`} className="text-sky-400 hover:underline">
+                      <a href={`mailto:${c.email}`} className="text-[#005CAB] hover:underline">
                         {c.email}
                       </a>
                     )}
                     {c.phone && (
-                      <a href={`tel:${c.phone}`} className="text-slate-300 hover:underline">
+                      <a href={`tel:${c.phone}`} className="text-[#605E5C] hover:underline">
                         {c.phone}
                       </a>
                     )}
-                    {!c.name && !c.email && !c.phone && <span className="text-slate-500">—</span>}
+                    {!c.name && !c.email && !c.phone && <span className="text-[#8A8886]">—</span>}
                   </div>
                   {canManageContacts && c.kind !== "client_with_project" && (
                     <button
                       type="button"
                       onClick={() => handleRemoveContact(c.id)}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                      className="rounded p-1 text-[#605E5C] hover:bg-[#F5F5F5] hover:text-[#242424]"
                       aria-label="Remove contact"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -696,7 +696,7 @@ export default function CrmPage() {
                 </li>
               ))}
               {contacts.length === 0 && (
-                <li className="rounded-xl border border-dashed border-violet-500/25 bg-violet-500/5 px-4 py-8 text-center font-display text-sm text-violet-300/80">
+                <li className="rounded-lg border border-dashed border-[#C5B0DF] bg-white px-4 py-8 text-center font-display text-sm text-[#5C2D91]">
                   No outreach contacts yet. Add emails or phones to reach out about your services.
                 </li>
               )}

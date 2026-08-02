@@ -7,6 +7,11 @@ import { ROLE_KEYS } from "./auth-middleware";
 import { logAdminActivity } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { resolveClientPortalLogin } from "../lib/client-portal-login";
+import {
+  accountBlockCode,
+  accountBlockMessage,
+  isAccountDisabled
+} from "../lib/user-account-status";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const JWT_EXPIRES_IN = "1h";
@@ -14,6 +19,37 @@ const REFRESH_EXPIRES_IN = "7d";
 
 function normalizeEmail(raw: string): string {
   return String(raw ?? "").trim().toLowerCase();
+}
+
+/** Org that self-service signups join (pending admin approval). */
+async function resolveRegistrationOrg(
+  prisma: PrismaClient
+): Promise<{ id: string; name: string; slug: string } | null> {
+  const slugPref = (process.env.REGISTER_ORG_SLUG || "cresdynamics").trim().toLowerCase();
+  if (slugPref) {
+    const bySlug = await prisma.org.findFirst({ where: { slug: slugPref } });
+    if (bySlug) return { id: bySlug.id, name: bySlug.name, slug: bySlug.slug };
+  }
+  const first = await prisma.org.findFirst({ orderBy: { createdAt: "asc" } });
+  return first ? { id: first.id, name: first.name, slug: first.slug } : null;
+}
+
+async function ensureOrgDefaultRoles(tx: any, orgId: string) {
+  const defs: { name: string; key: string }[] = [
+    { name: "Director", key: ROLE_KEYS.director },
+    { name: "Admin", key: ROLE_KEYS.admin },
+    { name: "Sales", key: ROLE_KEYS.sales },
+    { name: "Developer", key: ROLE_KEYS.developer },
+    { name: "Finance", key: ROLE_KEYS.finance },
+    { name: "Analyst", key: ROLE_KEYS.analyst },
+    { name: "Client", key: ROLE_KEYS.client }
+  ];
+  for (const d of defs) {
+    const existing = await tx.role.findFirst({ where: { orgId, key: d.key } });
+    if (!existing) {
+      await tx.role.create({ data: { orgId, name: d.name, key: d.key } });
+    }
+  }
 }
 
 function signTokens(payload: {
@@ -37,130 +73,171 @@ function signTokens(payload: {
 export default function authRouter(prisma: PrismaClient): Router {
   const router = createRouter();
 
-  // Register creates org + owner user
+  // Self-service signup: join existing org as pending (admin must approve).
+  // If no org exists yet, bootstrap first workspace owner (director) as active.
   router.post("/register", async (req, res) => {
     const { orgName, name, email, password } = req.body as {
-      orgName: string;
-      name: string;
+      orgName?: string;
+      name?: string;
       email: string;
       password: string;
     };
 
-    if (!orgName || !email || !password) {
-      res.status(400).json({ error: "Missing fields" });
+    if (!email || !password) {
+      res.status(400).json({ error: "Email and password are required" });
+      return;
+    }
+    if (String(password).length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
       return;
     }
 
     const emailNorm = normalizeEmail(email);
-    if (!emailNorm) {
-      res.status(400).json({ error: "Missing fields" });
+    if (!emailNorm || !emailNorm.includes("@")) {
+      res.status(400).json({ error: "Enter a valid email" });
       return;
     }
 
     try {
-    const existing = await prisma.user.findFirst({
-      where: {
-        email: { equals: emailNorm, mode: "insensitive" },
-        deletedAt: null
+      const existing = await prisma.user.findFirst({
+        where: {
+          email: { equals: emailNorm, mode: "insensitive" },
+          deletedAt: null
+        }
+      });
+      if (existing) {
+        if ((existing.status ?? "").toLowerCase() === "pending") {
+          res.status(400).json({
+            error: "This email is already registered and awaiting admin approval."
+          });
+          return;
+        }
+        res.status(400).json({ error: "Email already in use" });
+        return;
       }
-    });
-    if (existing) {
-      res.status(400).json({ error: "Email already in use" });
-      return;
-    }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, 10);
+      const existingOrg = await resolveRegistrationOrg(prisma);
 
-    const slug = orgName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    if (!slug) {
-      res.status(400).json({ error: "Organization name must include a letter or number" });
-      return;
-    }
+      // First install only: allow bootstrap when no organisations exist.
+      if (!existingOrg) {
+        if (!orgName || !String(orgName).trim()) {
+          res.status(400).json({
+            error: "Workspace name is required",
+            hint: "No organisation exists yet. Provide an organisation name to create the first workspace."
+          });
+          return;
+        }
+        const slug = String(orgName)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        if (!slug) {
+          res.status(400).json({ error: "Organization name must include a letter or number" });
+          return;
+        }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const org = await tx.org.create({
-        data: { name: orgName, slug }
+        const result = await prisma.$transaction(async (tx) => {
+          const org = await tx.org.create({
+            data: { name: String(orgName).trim(), slug }
+          });
+          const user = await tx.user.create({
+            data: {
+              email: emailNorm,
+              name: name?.trim() || null,
+              passwordHash,
+              status: "active",
+              org: { connect: { id: org.id } }
+            }
+          });
+          await ensureOrgDefaultRoles(tx, org.id);
+          const directorRole = await tx.role.findFirst({
+            where: { orgId: org.id, key: ROLE_KEYS.director }
+          });
+          if (!directorRole) throw new Error("Director role missing after bootstrap");
+          await tx.orgMember.create({
+            data: { orgId: org.id, userId: user.id, roleId: directorRole.id }
+          });
+          await tx.userRole.create({
+            data: { userId: user.id, roleId: directorRole.id }
+          });
+          const session = await tx.session.create({
+            data: { orgId: org.id, userId: user.id }
+          });
+          return {
+            org,
+            user,
+            roleKeys: [directorRole.key],
+            sessionId: session.id
+          };
+        });
+
+        const tokens = signTokens({
+          userId: result.user.id,
+          orgId: result.org.id,
+          roleKeys: result.roleKeys,
+          sessionId: result.sessionId
+        });
+
+        res.json({
+          status: "active",
+          bootstrapped: true,
+          org: { id: result.org.id, name: result.org.name, slug: result.org.slug },
+          user: { id: result.user.id, email: result.user.email, name: result.user.name },
+          orgId: result.org.id,
+          roleKeys: result.roleKeys,
+          ...tokens
+        });
+        return;
+      }
+
+      // Normal path: pending membership, no roles until admin assigns them.
+      const user = await prisma.$transaction(async (tx) => {
+        await ensureOrgDefaultRoles(tx, existingOrg.id);
+        const created = await tx.user.create({
+          data: {
+            email: emailNorm,
+            name: name?.trim() || null,
+            passwordHash,
+            status: "pending",
+            org: { connect: { id: existingOrg.id } }
+          }
+        });
+        await tx.orgMember.create({
+          data: {
+            orgId: existingOrg.id,
+            userId: created.id,
+            roleId: null
+          }
+        });
+        return created;
       });
 
-      const user = await tx.user.create({
+      await prisma.eventLog.create({
         data: {
-          email: emailNorm,
-          name,
-          passwordHash,
-          org: { connect: { id: org.id } }
+          orgId: existingOrg.id,
+          actorId: user.id,
+          type: "auth.register.pending",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { email: emailNorm }
         }
       });
 
-      // Basic roles for this org
-      const directorRole = await tx.role.create({
-        data: { orgId: org.id, name: "Director", key: ROLE_KEYS.director }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Admin", key: ROLE_KEYS.admin }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Sales", key: ROLE_KEYS.sales }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Developer", key: ROLE_KEYS.developer }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Finance", key: ROLE_KEYS.finance }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Analyst", key: ROLE_KEYS.analyst }
-      });
-      await tx.role.create({
-        data: { orgId: org.id, name: "Client", key: ROLE_KEYS.client }
-      });
+      await notifyAdminsInApp(
+        prisma,
+        existingOrg.id,
+        "New registration awaiting approval",
+        `${user.name?.trim() || user.email} (${user.email}) requested access. Approve them under Admin → Users, then assign roles.`,
+        { type: "admin.user.pending_registration", tier: "structural" }
+      );
 
-      await tx.orgMember.create({
-        data: {
-          orgId: org.id,
-          userId: user.id,
-          roleId: directorRole.id
-        }
+      res.status(201).json({
+        status: "pending",
+        pendingApproval: true,
+        message:
+          "Registration received. An administrator must approve your account before you can sign in. You will receive an email when approved."
       });
-
-      await tx.userRole.create({
-        data: {
-          userId: user.id,
-          roleId: directorRole.id
-        }
-      });
-
-      const session = await tx.session.create({
-        data: {
-          orgId: org.id,
-          userId: user.id
-        }
-      });
-
-      return {
-        org,
-        user,
-        roleKeys: [directorRole.key],
-        sessionId: session.id
-      };
-    });
-
-    const tokens = signTokens({
-      userId: result.user.id,
-      orgId: result.org.id,
-      roleKeys: result.roleKeys,
-      sessionId: result.sessionId
-    });
-
-    res.json({
-      org: { id: result.org.id, name: result.org.name, slug: result.org.slug },
-      user: { id: result.user.id, email: result.user.email, name: result.user.name },
-      orgId: result.org.id,
-      roleKeys: result.roleKeys,
-      ...tokens
-    });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("POST /auth/register failed", e);
@@ -168,6 +245,62 @@ export default function authRouter(prisma: PrismaClient): Router {
         error: "Registration failed",
         hint: "Ensure the database is migrated (e.g. prisma migrate deploy) and DATABASE_URL is correct."
       });
+    }
+  });
+
+  /**
+   * Email-step for progressive login UI.
+   * Reports whether this address can proceed to password (user or client portal), without revealing secrets.
+   */
+  router.post("/check-email", async (req, res) => {
+    const emailNorm = normalizeEmail((req.body as { email?: string })?.email ?? "");
+    if (!emailNorm || !emailNorm.includes("@")) {
+      res.status(400).json({ error: "Enter a valid email", exists: false });
+      return;
+    }
+
+    try {
+      const user = await prisma.user.findFirst({
+        where: {
+          email: { equals: emailNorm, mode: "insensitive" },
+          deletedAt: null
+        },
+        select: { id: true, status: true }
+      });
+
+      if (user) {
+        const block = accountBlockCode(user.status);
+        if (block) {
+          res.json({
+            exists: true,
+            canLogin: false,
+            code: block,
+            message: accountBlockMessage(block)
+          });
+          return;
+        }
+        res.json({ exists: true, canLogin: true });
+        return;
+      }
+
+      const client = await prisma.client.findFirst({
+        where: {
+          email: { equals: emailNorm, mode: "insensitive" },
+          deletedAt: null
+        },
+        select: { id: true }
+      });
+
+      if (client) {
+        res.json({ exists: true, canLogin: true });
+        return;
+      }
+
+      res.json({ exists: false, canLogin: false });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("POST /auth/check-email failed", e);
+      res.status(500).json({ error: "Could not verify email", exists: false });
     }
   });
 
@@ -224,8 +357,16 @@ export default function authRouter(prisma: PrismaClient): Router {
           });
         }
         res.status(400).json({
-          error: "Invalid credentials",
-          hint: "Check the email and password. Clients: use your email and password as FirstName+project number (e.g. Charles13)."
+          error: "Invalid credentials. Check with admin."
+        });
+        return;
+      }
+
+      if (isAccountDisabled(user.status)) {
+        const code = accountBlockCode(user.status) ?? "ACCOUNT_DISABLED";
+        res.status(403).json({
+          error: accountBlockMessage(code),
+          code
         });
         return;
       }

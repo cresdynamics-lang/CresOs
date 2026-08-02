@@ -145,35 +145,43 @@ export default function accountRouter(prisma: PrismaClient): Router {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash,
-        passwordLastChangedAt: new Date()
-      }
-    });
-
-    const member = await prisma.orgMember.findFirst({
-      where: { userId },
-      select: { orgId: true }
-    });
-    if (member?.orgId) {
-      await logAdminActivity(prisma, {
-        orgId: member.orgId,
-        type: "account.password_changed",
-        summary: "User changed their password",
-        actorId: userId,
-        entityType: "user",
-        entityId: userId
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash }
       });
+    } catch (err) {
+      console.error("[account] change-password update failed", err);
+      res.status(500).json({ error: "Failed to change password" });
+      return;
+    }
 
-      await notifyAdminsInApp(
-        prisma,
-        member.orgId,
-        "[Visibility] Password changed",
-        "A user changed their password.",
-        { type: "account.password_changed", tier: "structural", excludeUserIds: [userId] }
-      );
+    try {
+      const member = await prisma.orgMember.findFirst({
+        where: { userId },
+        select: { orgId: true }
+      });
+      if (member?.orgId) {
+        await logAdminActivity(prisma, {
+          orgId: member.orgId,
+          type: "account.password_changed",
+          summary: "User changed their password",
+          actorId: userId,
+          entityType: "user",
+          entityId: userId
+        });
+
+        await notifyAdminsInApp(
+          prisma,
+          member.orgId,
+          "[Visibility] Password changed",
+          "A user changed their password.",
+          { type: "account.password_changed", tier: "structural", excludeUserIds: [userId] }
+        );
+      }
+    } catch (err) {
+      // Password already updated — do not fail the response for side-effects.
+      console.error("[account] change-password side effects failed", err);
     }
 
     res.status(204).send();

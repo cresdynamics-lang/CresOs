@@ -3,6 +3,7 @@ import { channelFromNotificationType, renderSalesBulkEmail } from "../lib/email-
 import { loadOrgEmailTemplates, renderFromTemplate } from "../lib/email-template-engine";
 import { sendInvoiceEmailToClient } from "../lib/invoice-email";
 import { sendOutboundEmail } from "../lib/resend";
+import { isRecipientDisabledUser } from "../lib/user-account-status";
 
 function toText(subject: string, body: string): string {
   const s = (subject ?? "").trim();
@@ -54,6 +55,17 @@ export async function processQueuedEmails(prisma: PrismaClient, orgId: string, l
         data: {
           status: "cancelled",
           error: "Suppressed: digest/briefing kept internal (no outbound email)",
+          sentAt: new Date()
+        }
+      });
+      continue;
+    }
+    if (await isRecipientDisabledUser(prisma, orgId, to)) {
+      await prisma.notification.update({
+        where: { id: n.id },
+        data: {
+          status: "cancelled",
+          error: "Suppressed: recipient account is disabled",
           sentAt: new Date()
         }
       });

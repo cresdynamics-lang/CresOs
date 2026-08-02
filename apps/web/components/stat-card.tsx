@@ -4,46 +4,17 @@ import type { ReactNode } from "react";
 
 export type StatTone = "brand" | "emerald" | "amber" | "rose" | "sky" | "violet";
 
+/** Deep solids matching admin dashboard palette. */
 const toneStyles: Record<
   StatTone,
-  { border: string; bg: string; value: string; label: string }
+  { solid: string; border: string }
 > = {
-  brand: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#2D5A5A]",
-    label: "text-[#5B6472]"
-  },
-  emerald: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#1B6B3A]",
-    label: "text-[#5B6472]"
-  },
-  amber: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#B45309]",
-    label: "text-[#5B6472]"
-  },
-  rose: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#C62828]",
-    label: "text-[#5B6472]"
-  },
-  sky: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#1A1D26]",
-    label: "text-[#5B6472]"
-  },
-  violet: {
-    border: "border-[#E5E9EF]",
-    bg: "bg-white",
-    value: "text-[#2D5A5A]",
-    label: "text-[#5B6472]"
-  }
+  brand: { solid: "#005CAB", border: "#B4CDE8" },
+  sky: { solid: "#005CAB", border: "#B4CDE8" },
+  emerald: { solid: "#0B6A0B", border: "#A8D5A8" },
+  amber: { solid: "#C19C00", border: "#E8D48A" },
+  rose: { solid: "#C50F1F", border: "#E8A0A6" },
+  violet: { solid: "#5C2D91", border: "#C5B0DF" }
 };
 
 export function StatCard({
@@ -64,22 +35,27 @@ export function StatCard({
   const s = toneStyles[tone];
   return (
     <div
-      className={`flex min-h-[5.5rem] h-full flex-col justify-between rounded-xl border p-4 shadow-sm ${s.border} ${s.bg} ${className}`.trim()}
+      className={`flex min-h-[5.5rem] h-full flex-col justify-between rounded-lg border bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] ${className}`.trim()}
+      style={{ borderColor: s.border, borderLeftWidth: 4, borderLeftColor: s.solid }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={`text-xs font-medium uppercase tracking-wide ${s.label}`}>{label}</p>
-        {icon ? <span className="text-lg opacity-80">{icon}</span> : null}
+        <p className="text-[11px] font-semibold tracking-wide text-[#605E5C]">{label}</p>
+        {icon ? <span className="text-lg" style={{ color: s.solid }}>{icon}</span> : null}
       </div>
       <div>
-        <p className={`text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
-        {hint ? <p className="mt-1 text-[11px] text-[#5B6472] sm:text-xs">{hint}</p> : null}
+        <p className="text-2xl font-bold tabular-nums sm:text-3xl" style={{ color: s.solid }}>
+          {value}
+        </p>
+        {hint ? <p className="mt-1 text-[11px] text-[#8A8886] sm:text-xs">{hint}</p> : null}
       </div>
     </div>
   );
 }
 
-export function StatCardGrid({ children }: { children: ReactNode }) {
+export function StatCardGrid({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
+    <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${className}`.trim()}>
+      {children}
+    </div>
   );
 }

@@ -33,6 +33,15 @@ import {
   recalcProjectAmountReceived,
   validateInvoiceClientProject
 } from "../lib/project-payment-sync";
+import {
+  ensureOrgEtimsConfig,
+  initializeEtimsDevice,
+  maybeAutoSubmitInvoice,
+  normalizeKenyaPin,
+  submitInvoiceToEtims,
+  toPublicConfig,
+  DEFAULT_SELLER_TIN
+} from "../services/etims/oscu-client";
 
 /** Avoid Invalid Date from empty due-date strings (breaks Prisma / Postgres). */
 function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
@@ -1059,7 +1068,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
       orderBy: { issueDate: "desc" },
       include: {
         project: { select: { id: true, name: true } },
-        client: { select: { id: true, name: true, email: true } },
+        client: { select: { id: true, name: true, email: true, kraPin: true } },
         items: {
           select: { id: true, description: true, quantity: true, unitPrice: true },
           orderBy: { id: "asc" }
@@ -1092,7 +1101,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
           })),
           paidAmount,
           amountRemaining,
-          totalAmount: total
+          totalAmount: total,
+          buyerKraPin: inv.buyerKraPin,
+          etimsStatus: inv.etimsStatus,
+          etimsInvcNo: inv.etimsInvcNo,
+          etimsSdcId: inv.etimsSdcId,
+          etimsMrcNo: inv.etimsMrcNo,
+          etimsQrCodeUrl: inv.etimsQrCodeUrl,
+          etimsResultMsg: inv.etimsResultMsg,
+          etimsSubmittedAt: inv.etimsSubmittedAt?.toISOString() ?? null
         };
       })
     );
@@ -1105,7 +1122,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
-      const { clientId, projectId, issueDate, dueDate, currency, items, notes } =
+      const { clientId, projectId, issueDate, dueDate, currency, items, notes, buyerKraPin } =
         req.body as {
           clientId: string;
           projectId?: string;
@@ -1113,6 +1130,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           dueDate?: string;
           currency?: string;
           notes?: string | null;
+          buyerKraPin?: string | null;
           items: { description: string; quantity: number; unitPrice: string | number }[];
         };
 
@@ -1132,11 +1150,28 @@ export default function financeRouter(prisma: PrismaClient): Router {
       try {
         const client = await prisma.client.findFirst({
           where: { id: clientId, orgId, deletedAt: null },
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true, email: true, kraPin: true }
         });
         if (!client) {
           res.status(404).json({ error: "Client not found" });
           return;
+        }
+
+        const resolvedBuyerPin = normalizeKenyaPin(buyerKraPin) || normalizeKenyaPin(client.kraPin);
+        if (buyerKraPin && String(buyerKraPin).trim() && !resolvedBuyerPin) {
+          res.status(400).json({
+            error: "Invalid buyer KRA PIN",
+            message: "Buyer PIN must look like P051234567A (letter + 9 digits + letter)."
+          });
+          return;
+        }
+
+        // Persist buyer PIN onto client when provided so iTax filing stays reusable
+        if (resolvedBuyerPin && resolvedBuyerPin !== client.kraPin) {
+          await prisma.client.update({
+            where: { id: client.id },
+            data: { kraPin: resolvedBuyerPin }
+          });
         }
 
         const issue = new Date(issueDate);
@@ -1171,7 +1206,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
               dueDate: parseInvoiceDueDate(dueDate),
               currency: currency ?? "KES",
               totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
-              notes: notes?.trim() ? notes.trim() : null
+              notes: notes?.trim() ? notes.trim() : null,
+              buyerKraPin: resolvedBuyerPin,
+              etimsStatus: "pending"
             }
           });
 
@@ -1227,6 +1264,16 @@ export default function financeRouter(prisma: PrismaClient): Router {
           }
         }
 
+        // Auto-file to eTIMS / OSCU (mock until CMC key + KRA token)
+        let etims = null;
+        try {
+          etims = await maybeAutoSubmitInvoice(prisma, orgId, result.id);
+        } catch (etimsErr) {
+          console.error("eTIMS auto-submit after invoice create:", etimsErr);
+        }
+
+        const fresh = await prisma.invoice.findUnique({ where: { id: result.id } });
+
         const invoiceJson = {
           id: result.id,
           orgId: result.orgId,
@@ -1239,6 +1286,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
           currency: result.currency,
           totalAmount: Number(result.totalAmount),
           notes: result.notes ?? null,
+          buyerKraPin: fresh?.buyerKraPin ?? resolvedBuyerPin ?? null,
+          etimsStatus: fresh?.etimsStatus ?? null,
+          etimsInvcNo: fresh?.etimsInvcNo ?? null,
+          etimsSdcId: fresh?.etimsSdcId ?? null,
+          etimsMrcNo: fresh?.etimsMrcNo ?? null,
+          etimsReceiptSign: fresh?.etimsReceiptSign ?? null,
+          etimsQrCodeUrl: fresh?.etimsQrCodeUrl ?? null,
+          etimsResultMsg: fresh?.etimsResultMsg ?? null,
+          etimsSubmittedAt: fresh?.etimsSubmittedAt ?? null,
           createdAt: result.createdAt,
           updatedAt: result.updatedAt
         };
@@ -1248,7 +1304,8 @@ export default function financeRouter(prisma: PrismaClient): Router {
           data: {
             invoice: invoiceJson,
             downloadUrl: `/finance/invoices/${result.id}/pdf`,
-            emailSent: Boolean(clientEmail)
+            emailSent: Boolean(clientEmail),
+            etims
           }
         });
       } catch (e: unknown) {
@@ -3018,6 +3075,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
           name: c.name,
           email: c.email,
           phone: c.phone,
+          kraPin: c.kraPin,
           amountDue,
           reminderDayOfMonth: c.reminderDayOfMonth,
           lastReminderAt: c.lastReminderAt?.toISOString() ?? null
@@ -3589,6 +3647,201 @@ export default function financeRouter(prisma: PrismaClient): Router {
           error: "Failed to generate PDF", 
           message: error instanceof Error ? error.message : "Unknown error" 
         });
+      }
+    }
+  );
+
+  // —— eTIMS OSCU (Kenya tax invoice filing) ——
+  router.get(
+    "/etims/config",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const cfg = await ensureOrgEtimsConfig(prisma, orgId);
+        res.json({
+          success: true,
+          data: {
+            config: toPublicConfig(cfg),
+            defaults: {
+              sellerTin: DEFAULT_SELLER_TIN,
+              sellerName: "CRES SOFTWARE LIMITED",
+              note:
+                "Request a custom OSCU integration token from KRA for PIN P052570833B. Until then, mode=mock files invoices locally with mock SCU data."
+            },
+            hasCmcKey: Boolean(cfg.cmcKey)
+          }
+        });
+      } catch (e) {
+        console.error("GET /finance/etims/config", e);
+        res.status(500).json({ error: "Failed to load eTIMS config" });
+      }
+    }
+  );
+
+  router.put(
+    "/etims/config",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        await ensureOrgEtimsConfig(prisma, orgId);
+        const body = req.body as {
+          tin?: string;
+          taxpayerName?: string;
+          bhfId?: string;
+          dvcSrlNo?: string;
+          cmcKey?: string | null;
+          mode?: string;
+          enabled?: boolean;
+          autoSubmit?: boolean;
+          defaultTaxTyCd?: string;
+          vatInclusive?: boolean;
+        };
+
+        const tin = body.tin != null ? normalizeKenyaPin(body.tin) : undefined;
+        if (body.tin != null && !tin) {
+          res.status(400).json({ error: "Invalid seller PIN", message: "PIN format: P052570833B" });
+          return;
+        }
+
+        const mode = body.mode?.toLowerCase();
+        if (mode && !["mock", "sandbox", "production"].includes(mode)) {
+          res.status(400).json({ error: "mode must be mock, sandbox, or production" });
+          return;
+        }
+
+        const updated = await prisma.orgEtimsConfig.update({
+          where: { orgId },
+          data: {
+            ...(tin ? { tin } : {}),
+            ...(body.taxpayerName != null ? { taxpayerName: String(body.taxpayerName).trim() || null } : {}),
+            ...(body.bhfId != null ? { bhfId: String(body.bhfId).slice(0, 2) } : {}),
+            ...(body.dvcSrlNo != null ? { dvcSrlNo: String(body.dvcSrlNo).trim() } : {}),
+            ...(body.cmcKey !== undefined
+              ? { cmcKey: body.cmcKey ? String(body.cmcKey).trim() : null }
+              : {}),
+            ...(mode ? { mode } : {}),
+            ...(body.enabled != null ? { enabled: Boolean(body.enabled) } : {}),
+            ...(body.autoSubmit != null ? { autoSubmit: Boolean(body.autoSubmit) } : {}),
+            ...(body.defaultTaxTyCd != null
+              ? { defaultTaxTyCd: String(body.defaultTaxTyCd).toUpperCase().slice(0, 1) }
+              : {}),
+            ...(body.vatInclusive != null ? { vatInclusive: Boolean(body.vatInclusive) } : {})
+          }
+        });
+
+        res.json({ success: true, data: { config: toPublicConfig(updated), hasCmcKey: Boolean(updated.cmcKey) } });
+      } catch (e) {
+        console.error("PUT /finance/etims/config", e);
+        res.status(500).json({ error: "Failed to update eTIMS config" });
+      }
+    }
+  );
+
+  router.post(
+    "/etims/initialize",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const result = await initializeEtimsDevice(prisma, orgId);
+        res.status(result.ok ? 200 : 400).json({
+          success: result.ok,
+          message: result.message,
+          data: { config: result.config }
+        });
+      } catch (e) {
+        console.error("POST /finance/etims/initialize", e);
+        res.status(500).json({ error: "Failed to initialize eTIMS device" });
+      }
+    }
+  );
+
+  router.post(
+    "/invoices/:id/etims/submit",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const id = String(req.params.id);
+        const force = Boolean((req.body as { force?: boolean })?.force);
+        const buyerKraPin = normalizeKenyaPin((req.body as { buyerKraPin?: string })?.buyerKraPin);
+
+        if (buyerKraPin) {
+          await prisma.invoice.updateMany({
+            where: { id, orgId },
+            data: { buyerKraPin }
+          });
+          // Also update client PIN for future invoices
+          const inv = await prisma.invoice.findFirst({
+            where: { id, orgId },
+            select: { clientId: true }
+          });
+          if (inv) {
+            await prisma.client.update({
+              where: { id: inv.clientId },
+              data: { kraPin: buyerKraPin }
+            });
+          }
+        }
+
+        const result = await submitInvoiceToEtims(prisma, orgId, id, { force });
+        const fresh = await prisma.invoice.findFirst({
+          where: { id, orgId },
+          select: {
+            id: true,
+            number: true,
+            buyerKraPin: true,
+            etimsStatus: true,
+            etimsInvcNo: true,
+            etimsSdcId: true,
+            etimsMrcNo: true,
+            etimsReceiptSign: true,
+            etimsQrCodeUrl: true,
+            etimsResultCd: true,
+            etimsResultMsg: true,
+            etimsSubmittedAt: true
+          }
+        });
+        res.status(result.ok ? 200 : 400).json({ success: result.ok, data: { result, invoice: fresh } });
+      } catch (e) {
+        console.error("POST /finance/invoices/:id/etims/submit", e);
+        res.status(500).json({ error: "Failed to submit invoice to eTIMS" });
+      }
+    }
+  );
+
+  router.patch(
+    "/clients/:id/kra-pin",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const id = String(req.params.id);
+        const raw = (req.body as { kraPin?: string | null })?.kraPin;
+        const pin = raw === null || raw === "" ? null : normalizeKenyaPin(raw);
+        if (raw && String(raw).trim() && !pin) {
+          res.status(400).json({
+            error: "Invalid KRA PIN",
+            message: "Format: letter + 9 digits + letter (e.g. P051234567A)"
+          });
+          return;
+        }
+        const client = await prisma.client.findFirst({ where: { id, orgId, deletedAt: null } });
+        if (!client) {
+          res.status(404).json({ error: "Client not found" });
+          return;
+        }
+        const updated = await prisma.client.update({
+          where: { id },
+          data: { kraPin: pin },
+          select: { id: true, name: true, email: true, kraPin: true }
+        });
+        res.json({ success: true, data: updated });
+      } catch (e) {
+        console.error("PATCH /finance/clients/:id/kra-pin", e);
+        res.status(500).json({ error: "Failed to update client PIN" });
       }
     }
   );

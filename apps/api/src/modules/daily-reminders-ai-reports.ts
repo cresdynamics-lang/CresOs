@@ -123,7 +123,7 @@ async function sendReportRemindersForOrg(
   const [salesUsers, devUsers] = await Promise.all([
     salesUserIds.length
       ? prisma.user.findMany({
-          where: { id: { in: salesUserIds }, deletedAt: null },
+          where: { id: { in: salesUserIds }, deletedAt: null, status: "active" },
           select: {
             id: true,
             name: true,
@@ -135,7 +135,7 @@ async function sendReportRemindersForOrg(
       : Promise.resolve([]),
     developerUserIds.length
       ? prisma.user.findMany({
-          where: { id: { in: developerUserIds }, deletedAt: null },
+          where: { id: { in: developerUserIds }, deletedAt: null, status: "active" },
           select: {
             id: true,
             name: true,

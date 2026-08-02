@@ -9,6 +9,7 @@ import {
 import { loadOrgEmailTemplates, renderFromTemplate } from "../lib/email-template-engine";
 import { getEmailSender } from "../lib/email-senders";
 import { sendOutboundEmail } from "../lib/resend";
+import { isRecipientDisabledUser } from "../lib/user-account-status";
 import { ROLE_KEYS } from "./auth-middleware";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -63,6 +64,10 @@ export default function messagesRouter(prisma: PrismaClient): Router {
 
     const orgId = req.auth!.orgId;
     const userId = req.auth!.userId;
+    if (await isRecipientDisabledUser(prisma, orgId, to)) {
+      res.status(400).json({ error: "Cannot message a disabled user account" });
+      return;
+    }
     const templates = await loadOrgEmailTemplates(prisma, orgId);
     const templateKey = `compose_${channel}` as const;
     const channelLabels: Record<ComposeChannel, string> = {

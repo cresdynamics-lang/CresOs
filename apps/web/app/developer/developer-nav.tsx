@@ -147,7 +147,7 @@ function DeveloperNavLinks({ vertical = false }: { vertical?: boolean }) {
             {group.title === "App" ? (
               <div className="mx-2 mb-3 border-t border-white/[0.06] pt-3" aria-hidden />
             ) : null}
-            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold tracking-wide text-[#8A8886]">
               {group.title}
             </p>
             <div className="flex flex-col gap-0.5">

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "../auth-context";
 import { subscribeDataRefresh } from "../data-refresh";
-import { WorkspaceDashboardIntro } from "../../components/workspace-dashboard-intro";
+import { adminNeu, adminAccents } from "../../components/admin/admin-theme";
 
 type Lead = {
   id: string;
@@ -16,6 +16,12 @@ type Lead = {
   project?: { id: string; name: string };
   owner?: { id: string; name: string | null; email: string };
 };
+
+function approvalStyle(status: string): { bg: string; color: string } {
+  if (status === "approved") return { bg: "#0B6A0B", color: "#fff" };
+  if (status === "rejected") return { bg: "#C50F1F", color: "#fff" };
+  return { bg: "#C19C00", color: "#fff" };
+}
 
 export default function LeadsPage() {
   const { apiFetch, auth, hydrated } = useAuth();
@@ -62,12 +68,11 @@ export default function LeadsPage() {
   }, [load]);
 
   useEffect(() => {
-    // Load projects to tie leads to existing work
     (async () => {
       try {
         const res = await apiFetch("/projects");
         if (res.ok) {
-          const data = (await res.json()) as { id: string; name: string; approvalStatus?: string }[];
+          const data = (await res.json()) as { id: string; name: string }[];
           setProjects(data);
         }
       } catch {
@@ -98,136 +103,200 @@ export default function LeadsPage() {
       setNewSource("");
       setSelectedProjectId("");
       setShowAdd(false);
-      load();
+      void load();
     } catch {
       setError("Network error");
     }
   };
 
+  const pending = leads.filter((l) => l.approvalStatus === "pending_approval").length;
+  const approved = leads.filter((l) => l.approvalStatus === "approved").length;
+
   return (
-    <section className="flex flex-col gap-4">
-      <WorkspaceDashboardIntro
-        title="Leads"
-        description="New projects automatically create or update a client and a linked lead (project name, phone, email). This list refreshes when projects change. Manual adds may require admin approval."
-        eyebrow="Sales"
-        showWelcomeBanner={false}
-        actions={
-          auth.roleKeys.some((r) => ["sales", "admin"].includes(r)) ? (
-            <button
-              type="button"
-              onClick={() => setShowAdd(!showAdd)}
-              className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-            >
-              {showAdd ? "Cancel" : "Add lead"}
-            </button>
-          ) : undefined
-        }
-      />
-
-      {showAdd && (
-        <form onSubmit={handleAdd} className="shell flex flex-col gap-3">
-          <label className="block">
-            <span className="mb-1 block text-sm text-slate-300">Title *</span>
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm text-slate-300">Project *</span>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-            >
-              <option value="">No project yet</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm text-slate-300">Source</span>
-            <input
-              type="text"
-              value={newSource}
-              onChange={(e) => setNewSource(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-              placeholder="e.g. website, referral"
-            />
-          </label>
-          {error && <p className="text-sm text-rose-400">{error}</p>}
-          <button type="submit" className="w-fit rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
-            Add lead (pending approval)
+    <section className="flex w-full min-w-0 flex-col gap-5 bg-white pb-6">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E1DFDD] pb-4">
+        <div className="min-w-0">
+          <p className="font-label text-[11px] font-semibold tracking-wide text-[#8A8886]">Leads</p>
+          <h1 className="mt-0.5 font-display text-2xl font-semibold tracking-tight text-[#242424]">Lead pipeline</h1>
+          <p className="mt-1 max-w-2xl font-body text-[13px] font-medium leading-relaxed text-[#605E5C]">
+            Project clients create leads automatically. Manual adds may need approval.
+          </p>
+        </div>
+        {auth.roleKeys.some((r) => ["sales", "admin"].includes(r)) ? (
+          <button
+            type="button"
+            onClick={() => setShowAdd(!showAdd)}
+            className={`${adminNeu.btnPrimary} !py-2 !text-[12px]`}
+          >
+            {showAdd ? "Cancel" : "+ Add lead"}
           </button>
-        </form>
-      )}
+        ) : null}
+      </header>
 
-      <div className="shell">
-        {loadedOnce && leads.length === 0 ? (
-          <p className="text-slate-400">No leads yet. Create or update a project with client details to generate one automatically.</p>
-        ) : leads.length > 0 ? (
-          <ul className="space-y-2">
-            {leads.map((lead) => (
-              <li key={lead.id}>
-                <Link
-                  href={`/leads/${lead.id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 hover:border-slate-700"
-                >
-                  <div className="min-w-0 flex-1">
-                    <span className="font-medium text-slate-100">{lead.title}</span>
-                    {lead.source === "project" && (
-                      <span className="ml-2 rounded bg-sky-900/50 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
-                        Project
-                      </span>
-                    )}
-                    {lead.client && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Client: {lead.client.name}
-                        {lead.client.phone ? ` · ${lead.client.phone}` : ""}
-                        {lead.client.email ? ` · ${lead.client.email}` : ""}
-                      </p>
-                    )}
-                    {lead.owner && (
-                      <p className="mt-0.5 text-xs text-slate-500">Owner: {lead.owner.name ?? lead.owner.email}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-shrink-0 flex-wrap items-center gap-2 text-xs">
-                    {lead.project && (
-                      <span className="text-slate-400">Project: {lead.project.name}</span>
-                    )}
-                    {lead.status === "closed" && !lead.project && (
-                      <span className="rounded bg-rose-900/50 px-2 py-0.5 text-rose-200">Closed: link a project</span>
-                    )}
-                    <span className="rounded bg-slate-700 px-2 py-0.5 text-slate-300">
-                      {lead.status}
-                    </span>
-                    <span
-                      className={`rounded px-2 py-0.5 ${
-                        lead.approvalStatus === "approved"
-                          ? "bg-emerald-900/60 text-emerald-300"
-                          : lead.approvalStatus === "rejected"
-                            ? "bg-rose-900/60 text-rose-300"
-                            : "bg-amber-900/60 text-amber-300"
-                      }`}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div
+          className="rounded-lg border bg-white p-3.5 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]"
+          style={{ borderColor: adminAccents.blue.border, borderLeftWidth: 4, borderLeftColor: adminAccents.blue.solid }}
+        >
+          <p className="font-label text-[11px] font-semibold text-[#605E5C]">Total</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums" style={{ color: adminAccents.blue.solid }}>
+            {loadedOnce ? leads.length : "…"}
+          </p>
+        </div>
+        <div
+          className="rounded-lg border bg-white p-3.5 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]"
+          style={{
+            borderColor: adminAccents.yellow.border,
+            borderLeftWidth: 4,
+            borderLeftColor: adminAccents.yellow.solid
+          }}
+        >
+          <p className="font-label text-[11px] font-semibold text-[#605E5C]">Pending</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums" style={{ color: adminAccents.yellow.solid }}>
+            {loadedOnce ? pending : "…"}
+          </p>
+        </div>
+        <div
+          className="rounded-lg border bg-white p-3.5 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]"
+          style={{
+            borderColor: adminAccents.green.border,
+            borderLeftWidth: 4,
+            borderLeftColor: adminAccents.green.solid
+          }}
+        >
+          <p className="font-label text-[11px] font-semibold text-[#605E5C]">Approved</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums" style={{ color: adminAccents.green.solid }}>
+            {loadedOnce ? approved : "…"}
+          </p>
+        </div>
+      </div>
+
+      {showAdd ? (
+        <form
+          onSubmit={(e) => void handleAdd(e)}
+          className="relative overflow-hidden rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5"
+        >
+          <div className="absolute inset-x-0 top-0 h-1 bg-[#005CAB]" aria-hidden />
+          <p className="font-body text-[13px] font-semibold text-[#005CAB]">Add lead</p>
+          <div className="mt-3 flex flex-col gap-3">
+            <label className="block">
+              <span className="mb-1 block font-label text-[11px] font-semibold text-[#605E5C]">Title *</span>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className={adminNeu.input}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-label text-[11px] font-semibold text-[#605E5C]">Project</span>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className={adminNeu.input}
+              >
+                <option value="">No project yet</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-label text-[11px] font-semibold text-[#605E5C]">Source</span>
+              <input
+                type="text"
+                value={newSource}
+                onChange={(e) => setNewSource(e.target.value)}
+                className={adminNeu.input}
+                placeholder="e.g. website, referral"
+              />
+            </label>
+            {error ? <p className="font-body text-sm text-[#C50F1F]">{error}</p> : null}
+            <button type="submit" className={`${adminNeu.btnPrimary} w-fit`}>
+              Add lead (pending approval)
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      <div
+        className="relative overflow-hidden rounded-lg border border-[#E1DFDD] bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] sm:p-5"
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-[#0B6A0B]" aria-hidden />
+        <p className="font-body text-[13px] font-semibold text-[#0B6A0B]">All leads</p>
+        <div className="mt-3">
+          {!loadedOnce ? (
+            <p className="py-8 text-center font-body text-sm text-[#8A8886]">Loading…</p>
+          ) : leads.length === 0 ? (
+            <p className="py-8 text-center font-body text-sm text-[#8A8886]">
+              No leads yet. Create or update a project with client details to generate one.
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {leads.map((lead) => {
+                const appr = approvalStyle(lead.approvalStatus);
+                return (
+                  <li key={lead.id}>
+                    <Link
+                      href={`/leads/${lead.id}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E1DFDD] bg-white px-3.5 py-3 transition hover:border-[#005CAB]/40"
+                      style={{ borderLeftWidth: 4, borderLeftColor: appr.bg }}
                     >
-                      {lead.approvalStatus === "pending_approval"
-                        ? "Pending approval"
-                        : lead.approvalStatus}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          !loadedOnce && <p className="text-slate-400">Loading…</p>
-        )}
+                      <div className="min-w-0 flex-1">
+                        <span className="font-body text-[14px] font-semibold text-[#242424]">{lead.title}</span>
+                        {lead.source === "project" ? (
+                          <span
+                            className="ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white"
+                            style={{ backgroundColor: adminAccents.blue.solid }}
+                          >
+                            Project
+                          </span>
+                        ) : null}
+                        {lead.client ? (
+                          <p className="mt-1 font-body text-[12px] text-[#605E5C]">
+                            Client: {lead.client.name}
+                            {lead.client.phone ? ` · ${lead.client.phone}` : ""}
+                            {lead.client.email ? ` · ${lead.client.email}` : ""}
+                          </p>
+                        ) : null}
+                        {lead.owner ? (
+                          <p className="mt-0.5 font-body text-[11px] text-[#8A8886]">
+                            Owner: {lead.owner.name ?? lead.owner.email}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-shrink-0 flex-wrap items-center gap-2 text-[11px]">
+                        {lead.project ? (
+                          <span className="font-medium text-[#605E5C]">Project: {lead.project.name}</span>
+                        ) : null}
+                        {lead.status === "closed" && !lead.project ? (
+                          <span
+                            className="rounded-md px-2 py-0.5 font-semibold text-white"
+                            style={{ backgroundColor: adminAccents.red.solid }}
+                          >
+                            Closed: link a project
+                          </span>
+                        ) : null}
+                        <span className="rounded-md border border-[#E1DFDD] bg-white px-2 py-0.5 font-semibold text-[#605E5C]">
+                          {lead.status}
+                        </span>
+                        <span
+                          className="rounded-md px-2 py-0.5 font-bold text-white"
+                          style={{ backgroundColor: appr.bg, color: appr.color }}
+                        >
+                          {lead.approvalStatus === "pending_approval" ? "Pending approval" : lead.approvalStatus}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   );

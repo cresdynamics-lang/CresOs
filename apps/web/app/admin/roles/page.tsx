@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { AdminConsole } from "../admin-console";
-
-export default function AdminRolesPage() {
-  return <AdminConsole />;
+export default function AdminRolesRedirect() {
+  redirect("/admin/organisation?tab=roles");
 }

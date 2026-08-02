@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../auth-context";
 
+const inputClass =
+  "mt-1 w-full rounded-md border border-[#D1D1D1] bg-white px-2.5 py-2 text-[13px] font-medium text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20";
+
+const labelClass = "block text-[11px] font-semibold text-[#605E5C]";
+
 export default function NewReportPage() {
   const { apiFetch, auth, hydrated } = useAuth();
   const router = useRouter();
@@ -39,13 +44,14 @@ export default function NewReportPage() {
       cancelled = true;
     };
   }, [apiFetch]);
+
   const handleCreate = async (andSubmit: boolean) => {
     if (!title.trim() || !body.trim()) {
       setError("Title and activities are required.");
       return;
     }
     if (andSubmit && body.trim().length < 40) {
-      setError("Write at least 40 characters in Activities so the director gets a useful record (same rule on the server).");
+      setError("Write at least 40 characters in Activities for a useful director record.");
       return;
     }
     setLoading(true);
@@ -81,78 +87,85 @@ export default function NewReportPage() {
 
   if (!hydrated || !canCreate) {
     return (
-      <div className="flex h-48 items-center justify-center">
-        <p className="text-sm text-[#5B6472]">Loading…</p>
+      <div className="flex min-h-[8rem] items-center justify-center text-[13px] text-[#8A8886]">
+        Loading…
       </div>
     );
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="shell border-cres-border bg-cres-surface/70">
-        <h2 className="mb-2 text-lg font-semibold text-cres-text">Create report</h2>
-        <p className="text-sm text-cres-text-muted">
-          Describe the activities you’ve done. You can save as draft or submit for director review.
-          {directorLabel ? (
-            <>
-              {" "}
-              When you submit, your report goes to <strong className="font-medium text-cres-text">{directorLabel}</strong>{" "}
-              for review.
-            </>
-          ) : (
-            " When you submit, directors see it in-app and in email."
-          )}{" "}
-          The server records the exact time (Nairobi) when you submit.
+    <div className="flex w-full min-w-0 flex-col gap-3 bg-white pb-4 text-[#242424] antialiased">
+      <header className="border-b border-[#E1DFDD] pb-3">
+        <p className="text-[10px] font-semibold tracking-wide text-[#005CAB]">Sales reports</p>
+        <h1 className="mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">New report</h1>
+        <p className="mt-0.5 max-w-xl text-[12px] font-medium leading-snug text-[#605E5C]">
+          {directorLabel
+            ? `Save a draft or submit to ${directorLabel} for review.`
+            : "Save a draft or submit for director review. Submit time is recorded in Nairobi time."}
         </p>
-      </div>
+      </header>
 
-      <div className="shell flex flex-col gap-4 border-cres-border bg-cres-card/80">
-        <label className="block">
-          <span className="mb-1 block text-sm text-cres-text-muted">Title</span>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text outline-none focus:border-cres-accent"
-            placeholder="e.g. Weekly client follow-ups"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm text-cres-text-muted">Activities done</span>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={8}
-            className="w-full rounded-lg border border-cres-border bg-cres-surface px-3 py-2 text-cres-text outline-none focus:border-cres-accent"
-            placeholder="Describe what you did..."
-          />
-        </label>
-        {error && <p className="text-sm text-cres-accent">{error}</p>}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => handleCreate(false)}
-            className="rounded-lg border border-cres-border bg-cres-surface px-4 py-2 text-sm font-medium text-cres-text-muted hover:bg-cres-card disabled:opacity-60"
-          >
-            Save draft
-          </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => handleCreate(true)}
-            className="rounded-lg bg-cres-accent px-4 py-2 text-sm font-medium text-cres-bg hover:bg-cres-accent-hover disabled:opacity-60"
-          >
-            {loading ? "Saving…" : "Save and submit"}
-          </button>
-          <Link
-            href="/reports"
-            className="rounded-lg border border-cres-border px-4 py-2 text-sm font-medium text-cres-text-muted hover:bg-cres-surface"
-          >
-            Cancel
-          </Link>
+      <section className="mx-auto w-full max-w-2xl rounded-md border border-[#E1DFDD] bg-white p-3 sm:p-4">
+        <div className="space-y-3">
+          <label className={labelClass}>
+            Title
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Weekly client follow-ups"
+            />
+          </label>
+          <label className={labelClass}>
+            Activities done
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              className={`${inputClass} min-h-[12rem] resize-y leading-relaxed`}
+              placeholder="Describe what you did, who you contacted, and next steps…"
+            />
+            <span className="mt-1 block text-[10px] font-medium text-[#8A8886]">
+              {body.trim().length} characters
+              {body.trim().length > 0 && body.trim().length < 40
+                ? " · need 40+ to submit"
+                : ""}
+            </span>
+          </label>
+
+          {error ? (
+            <p className="rounded-md border border-[#E8A0A6] border-l-[3px] border-l-[#C50F1F] px-2.5 py-2 text-[12px] text-[#C50F1F]">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleCreate(true)}
+              className="rounded-md bg-[#005CAB] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[#004A8C] disabled:opacity-50"
+            >
+              {loading ? "Saving…" : "Save and submit"}
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleCreate(false)}
+              className="rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-[12px] font-semibold text-[#242424] hover:border-[#005CAB]/40 hover:text-[#005CAB] disabled:opacity-50"
+            >
+              Save draft
+            </button>
+            <Link
+              href="/reports"
+              className="rounded-md px-3 py-2 text-[12px] font-semibold text-[#605E5C] hover:text-[#005CAB]"
+            >
+              Cancel
+            </Link>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

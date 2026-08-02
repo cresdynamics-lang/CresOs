@@ -16,14 +16,28 @@ import { PmNav } from "../../app/pm/pm-nav";
 import { directorNeu } from "../director/director-theme";
 import { hrNeu } from "../hr/hr-theme";
 import { pmNeu } from "../pm/pm-theme";
+import { WorkspaceBackBar } from "../navigation/workspace-back-bar";
 
 type WorkspaceRouteShellProps = {
   workspace: WorkspaceKey;
   children: ReactNode;
 };
 
+function homeForWorkspace(workspace: WorkspaceKey): string {
+  if (workspace === "finance") return "/finance";
+  if (workspace === "sales") return "/sales";
+  if (workspace === "developer") return "/developer";
+  if (workspace === "director") return "/dashboard";
+  if (workspace === "hr") return "/hr";
+  if (workspace === "pm") return "/pm";
+  if (workspace === "admin") return "/admin";
+  if (workspace === "client") return "/client";
+  return "/dashboard";
+}
+
 export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShellProps) {
   const meta = workspaceMeta(workspace);
+  const backFallback = homeForWorkspace(workspace);
 
   const aside = (
     <WorkspaceAside
@@ -39,9 +53,12 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
     </WorkspaceAside>
   );
 
+  const backBar = <WorkspaceBackBar fallbackHref={backFallback} />;
+
   const content = (
-    <div className="min-h-0 min-w-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
-      {children}
+    <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
+      {backBar}
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
     </div>
   );
 
@@ -55,6 +72,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
           <div className="shrink-0 border-b border-[#E5E9EF] px-3 py-2 md:hidden">
             <DeveloperNav />
           </div>
+          {backBar}
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
             {children}
           </div>
@@ -95,6 +113,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
           <div className="shrink-0 border-b border-[#E5E9EF] px-3 py-2 md:hidden">
             <DirectorNav />
           </div>
+          {backBar}
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
             {children}
           </div>
@@ -109,6 +128,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
         <div className="shrink-0 border-b border-[#E5E9EF] bg-white px-3 py-2.5 md:hidden">
           <HrNav />
         </div>
+        {backBar}
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </div>
@@ -122,6 +142,7 @@ export function WorkspaceRouteShell({ workspace, children }: WorkspaceRouteShell
         <div className="shrink-0 border-b border-[#E5E9EF] bg-white px-3 py-2.5 md:hidden">
           <PmNav />
         </div>
+        {backBar}
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </div>

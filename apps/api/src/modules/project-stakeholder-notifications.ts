@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { getAcceptedDeveloperIds } from "../lib/project-access";
+import { filterActiveUserIds } from "../lib/user-account-status";
 import { logAdminActivity } from "./admin-activity";
 import { getAdminUsers, getDirectorUsers } from "./director-notifications";
 
@@ -38,13 +39,15 @@ export async function notifyProjectExecutionStakeholders(
   }
   if (options?.excludeUserId) recipientIds.delete(options.excludeUserId);
 
-  if (recipientIds.size === 0) return;
+  const activeRecipientIds = await filterActiveUserIds(prisma, [...recipientIds]);
+  if (activeRecipientIds.length === 0) return;
+  const activeSet = new Set(activeRecipientIds);
 
   const type = options?.type ?? DEFAULT_TYPE;
   const emailSubject = `[CresOS] ${subject}`;
   const emailDirectors = options?.emailDirectors !== false;
 
-  const inAppRows = [...recipientIds].map((to) => ({
+  const inAppRows = activeRecipientIds.map((to) => ({
     orgId,
     channel: "in_app" as const,
     to,
@@ -68,6 +71,7 @@ export async function notifyProjectExecutionStakeholders(
   if (emailDirectors) {
     for (const d of directors) {
       if (options?.excludeUserId && d.id === options.excludeUserId) continue;
+      if (!activeSet.has(d.id)) continue;
       emailRows.push({
         orgId,
         channel: "email",

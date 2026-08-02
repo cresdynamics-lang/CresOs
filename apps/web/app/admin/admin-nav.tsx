@@ -9,60 +9,34 @@ type NavItem = {
   href: string;
   label: string;
   shortLabel?: string;
-  group: "overview" | "command" | "workspaces" | "governance" | "pipeline" | "insights" | "administration" | "portal" | "app";
+  group: "primary" | "more";
   match?: "exact" | "prefix";
   badge?: number;
-  icon: "grid" | "spark" | "book" | "mail" | "chart" | "pulse" | "wallet" | "cart" | "check" | "folder" | "users" | "building" | "shield" | "globe" | "calendar" | "chat" | "settings";
+  icon: "grid" | "spark" | "chart" | "briefcase" | "building" | "calendar" | "chat" | "mail";
 };
 
+/**
+ * Side panel order: Dashboard → Tasks → Management → Reports → Community,
+ * then Email AI, AI Command, Analytics, Organisation.
+ */
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "Dashboard", shortLabel: "Home", group: "overview", match: "exact", icon: "grid" },
-  { href: "/admin/ai-command", label: "AI Command", group: "command", match: "prefix", icon: "spark" },
-  { href: "/admin/onboarding", label: "Playbook", group: "command", match: "prefix", icon: "book" },
-  { href: "/admin/email-automation", label: "Email AI", group: "command", match: "prefix", icon: "mail" },
-  { href: "/analytics", label: "Analytics", group: "command", match: "prefix", icon: "chart" },
-  { href: "/activity", label: "Activity log", shortLabel: "Activity", group: "command", match: "prefix", icon: "pulse" },
-  { href: "/finance", label: "Finance", group: "workspaces", match: "prefix", icon: "wallet" },
-  { href: "/sales", label: "Sales", group: "workspaces", match: "prefix", icon: "cart" },
-  { href: "/approvals", label: "Approvals", group: "governance", match: "prefix", icon: "check" },
-  { href: "/projects", label: "Projects", group: "governance", match: "prefix", icon: "folder" },
-  { href: "/projects/management", label: "Managed projects", shortLabel: "Managed", group: "governance", match: "prefix", icon: "folder" },
-  { href: "/leads", label: "Leads", group: "pipeline", match: "prefix", icon: "users" },
-  { href: "/crm", label: "CRM & clients", shortLabel: "CRM", group: "pipeline", match: "prefix", icon: "users" },
-  { href: "/reports", label: "Sales reports", shortLabel: "Sales RPT", group: "insights", match: "prefix", icon: "chart" },
-  { href: "/developer-reports", label: "Developer reports", shortLabel: "Dev RPT", group: "insights", match: "prefix", icon: "chart" },
-  { href: "/reports/ai", label: "AI briefings", group: "insights", match: "prefix", icon: "spark" },
-  { href: "/admin/users", label: "Users", group: "administration", match: "prefix", icon: "users" },
-  { href: "/admin/org", label: "Departments", group: "administration", match: "prefix", icon: "building" },
-  { href: "/admin/roles", label: "Roles", group: "administration", match: "prefix", icon: "shield" },
-  { href: "/admin/client-portal", label: "Client portal", shortLabel: "Clients", group: "portal", match: "prefix", icon: "globe" },
-  { href: "/schedule", label: "Tasks", group: "app", match: "prefix", icon: "calendar" },
-  { href: "/community", label: "Community", group: "app", match: "prefix", icon: "chat" }
+  { href: "/admin", label: "Dashboard", shortLabel: "Home", group: "primary", match: "exact", icon: "grid" },
+  { href: "/schedule", label: "Tasks", group: "primary", match: "prefix", icon: "calendar" },
+  { href: "/admin/management", label: "Management", shortLabel: "Manage", group: "primary", match: "prefix", icon: "briefcase" },
+  { href: "/admin/reports", label: "Reports", group: "primary", match: "prefix", icon: "chart" },
+  { href: "/community", label: "Community", group: "primary", match: "prefix", icon: "chat" },
+  { href: "/admin/email-automation", label: "Email AI", shortLabel: "Email", group: "more", match: "prefix", icon: "mail" },
+  { href: "/admin/ai-command", label: "AI Command", shortLabel: "AI", group: "more", match: "prefix", icon: "spark" },
+  { href: "/analytics", label: "Analytics", group: "more", match: "prefix", icon: "chart" },
+  { href: "/admin/organisation", label: "Organisation", shortLabel: "Org", group: "more", match: "prefix", icon: "building" }
 ];
 
 const GROUP_LABELS: Record<NavItem["group"], string> = {
-  overview: "Overview",
-  command: "Command",
-  workspaces: "Workspaces",
-  governance: "Governance",
-  pipeline: "Pipeline",
-  insights: "Insights",
-  administration: "Administration",
-  portal: "Client access",
-  app: "General"
+  primary: "Main",
+  more: "More"
 };
 
-const GROUP_ORDER: NavItem["group"][] = [
-  "overview",
-  "command",
-  "workspaces",
-  "governance",
-  "pipeline",
-  "insights",
-  "administration",
-  "portal",
-  "app"
-];
+const GROUP_ORDER: NavItem["group"][] = ["primary", "more"];
 
 function NavIcon({ name }: { name: NavItem["icon"] }) {
   const common = {
@@ -75,36 +49,67 @@ function NavIcon({ name }: { name: NavItem["icon"] }) {
   const paths: Record<NavItem["icon"], ReactNode> = {
     grid: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z" />,
     spark: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z" />,
-    book: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z" />,
-    mail: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16v12H4V6zm0 0l8 7 8-7" />,
     chart: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 19V9m5 10V5m5 14v-8m5 8V8" />,
-    pulse: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 12h4l2-5 4 10 2-5h6" />,
-    wallet: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 7h18v12H3V7zm14 6h4M3 10h18" />,
-    cart: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 5h2l2 12h12l2-8H7M9 21a1 1 0 100-2 1 1 0 000 2zm9 0a1 1 0 100-2 1 1 0 000 2z" />,
-    check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />,
-    folder: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />,
-    users: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8zm9 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />,
+    briefcase: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M4 9h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V9zm0 4h16"
+      />
+    ),
     building: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 21V5a1 1 0 011-1h8a1 1 0 011 1v16M9 9h2M9 13h2M9 17h2M14 21h6V10h-4" />,
-    shield: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z" />,
-    globe: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.5 0 4.5-4 4.5-9S14.5 3 12 3 7.5 7 7.5 12s2 9 4.5 9zM3 12h18" />,
     calendar: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 3v3M16 3v3M4 8h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />,
     chat: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M21 12a8 8 0 01-8 8H7l-4 3V12a8 8 0 118-8 8 8 0 0110 5z" />,
-    settings: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1l2-1.5-2-3.5-2.4 1a7.6 7.6 0 00-1.7-1L12.8 2h-1.6L10.8 4.5a7.6 7.6 0 00-1.7 1l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 000 2l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 001.7 1L11.2 22h1.6l.4-2.5a7.6 7.6 0 001.7-1l2.4 1 2-3.5-2-1.5c.1-.3.1-.7.1-1z" />
+    mail: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16v12H4V6zm0 0l8 7 8-7" />
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
 
+function isManagementPath(pathname: string): boolean {
+  if (pathname.startsWith("/admin/management")) return true;
+  if (pathname.startsWith("/approvals")) return true;
+  if (pathname.startsWith("/sales")) return true;
+  if (pathname.startsWith("/leads")) return true;
+  if (pathname.startsWith("/crm")) return true;
+  if (pathname.startsWith("/finance") && !pathname.startsWith("/finance/reports")) return true;
+  if (pathname === "/projects" || pathname.startsWith("/projects/")) return true;
+  return false;
+}
+
 function isActive(pathname: string, item: NavItem): boolean {
   if (item.match === "exact") return pathname === item.href || (item.href === "/admin" && pathname === "/admin/");
-  if (item.href === "/reports") {
+  if (item.href === "/admin/management") {
+    return isManagementPath(pathname);
+  }
+  if (item.href === "/admin/reports") {
     return (
-      (pathname === "/reports" || pathname.startsWith("/reports/")) && !pathname.startsWith("/reports/ai")
+      pathname.startsWith("/admin/reports") ||
+      pathname === "/reports" ||
+      pathname.startsWith("/reports/") ||
+      pathname === "/developer-reports" ||
+      pathname.startsWith("/developer-reports/") ||
+      pathname === "/director-reports" ||
+      pathname.startsWith("/director-reports/") ||
+      pathname === "/finance/reports" ||
+      pathname.startsWith("/finance/reports/")
     );
   }
-  if (item.href === "/projects") {
+  if (item.href === "/admin/ai-command") {
+    return pathname.startsWith("/admin/ai-command") || pathname.startsWith("/admin/onboarding");
+  }
+  if (item.href === "/admin/email-automation") {
+    return pathname.startsWith("/admin/email-automation");
+  }
+  if (item.href === "/admin/organisation") {
     return (
-      (pathname === "/projects" || pathname.startsWith("/projects/")) &&
-      !pathname.startsWith("/projects/management")
+      pathname.startsWith("/admin/organisation") ||
+      pathname.startsWith("/admin/organization") ||
+      pathname.startsWith("/admin/users") ||
+      pathname === "/admin/org" ||
+      pathname.startsWith("/admin/org/") ||
+      pathname.startsWith("/admin/roles") ||
+      pathname.startsWith("/admin/client-portal")
     );
   }
   if (item.href === "/admin") return pathname === "/admin" || pathname === "/admin/";
@@ -116,7 +121,7 @@ function AdminNavLinks({ vertical = false }: { vertical?: boolean }) {
   const groups = GROUP_ORDER.map((group) => ({
     title: GROUP_LABELS[group],
     items: ADMIN_NAV.filter((item) => item.group === group)
-  }));
+  })).filter((g) => g.items.length > 0);
 
   const linkClass = (active: boolean) =>
     [

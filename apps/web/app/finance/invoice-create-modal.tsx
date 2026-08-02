@@ -7,7 +7,7 @@ import { formatMoney } from "../format-money";
 
 export type InvoiceLineForm = { id: string; description: string; quantity: string; unitPrice: string };
 
-type ClientOption = { id: string; name: string };
+type ClientOption = { id: string; name: string; kraPin?: string | null };
 type ProjectOption = {
   id: string;
   name: string;
@@ -25,6 +25,8 @@ export type InvoiceFormState = {
   dueDate: string;
   lines: InvoiceLineForm[];
   notes: string;
+  /** Buyer KRA PIN for eTIMS / iTax (optional; falls back to client.kraPin) */
+  buyerKraPin: string;
 };
 
 type InvoiceCreateModalProps = {
@@ -91,7 +93,7 @@ export function InvoiceCreateModal({
         className={`finance-neu relative z-10 flex max-h-[min(92dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-[#E5E9EF] bg-white shadow-[8px_8px_24px_rgba(15,23,42,0.06),-4px_-4px_16px_rgba(255,255,255,0.04)] sm:rounded-2xl`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[#E5E9EF] px-4 py-3 sm:px-5">
-          <h2 id="invoice-modal-title" className="text-lg font-semibold text-emerald-100">
+          <h2 id="invoice-modal-title" className="text-lg font-semibold tracking-tight text-[#242424]">
             New invoice
           </h2>
           <button
@@ -121,9 +123,11 @@ export function InvoiceCreateModal({
                 value={form.clientId}
                 onChange={(e) => {
                   const clientId = e.target.value;
+                  const c = clients.find((x) => x.id === clientId);
                   setForm((f) => ({
                     ...f,
                     clientId,
+                    buyerKraPin: c?.kraPin?.trim() || f.buyerKraPin || "",
                     projectId:
                       f.projectId && projects.some((p) => p.id === f.projectId && p.clientId === clientId)
                         ? f.projectId
@@ -214,6 +218,23 @@ export function InvoiceCreateModal({
                 placeholder="Due date"
               />
             </div>
+
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
+                Buyer KRA PIN (iTax / eTIMS)
+              </span>
+              <input
+                type="text"
+                value={form.buyerKraPin}
+                onChange={(e) => setForm((f) => ({ ...f, buyerKraPin: e.target.value.toUpperCase() }))}
+                className={financeNeu.input}
+                placeholder="e.g. P051234567A — vendor / client tax PIN"
+                autoComplete="off"
+              />
+              <p className="mt-1 text-[11px] text-[#5B6472]">
+                Required for B2B eTIMS filing. Saved on the client for the next invoice. Format: letter + 9 digits + letter.
+              </p>
+            </label>
 
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Line items</p>

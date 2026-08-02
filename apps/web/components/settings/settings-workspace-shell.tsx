@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { DeveloperNav, DeveloperSideNav } from "../../app/developer/developer-nav";
 import { FinanceSideNav } from "../../app/finance/finance-nav";
 import { SalesSideNav } from "../../app/sales/sales-workspace-nav";
@@ -10,7 +11,9 @@ import { workspaceMeta } from "../workspace/workspace-nav-content";
 import { WorkspaceAside } from "../workspace/workspace-aside";
 import { useSettingsTheme } from "./settings-primitives";
 import { SettingsSideNav } from "../../app/settings/settings-nav";
-import Link from "next/link";
+import { AppBackButton } from "../navigation/app-back-button";
+import { WorkspaceBackBar } from "../navigation/workspace-back-bar";
+import { useAuth } from "../../app/auth-context";
 
 type SettingsWorkspaceShellProps = {
   workspaceKey: SettingsWorkspaceKey;
@@ -26,9 +29,11 @@ function workspaceAsideTheme(key: SettingsWorkspaceKey) {
 
 export function SettingsWorkspaceShell({ workspaceKey, children }: SettingsWorkspaceShellProps) {
   const theme = useSettingsTheme();
+  const { auth } = useAuth();
   const asideTheme = workspaceAsideTheme(workspaceKey);
   const usesWorkspaceNav = workspaceKey !== "global";
   const meta = usesWorkspaceNav ? workspaceMeta(workspaceKey) : null;
+  const back = settingsBackLink(workspaceKey, auth.roleKeys);
 
   return (
     <div
@@ -60,6 +65,8 @@ export function SettingsWorkspaceShell({ workspaceKey, children }: SettingsWorks
           </div>
         ) : null}
 
+        <WorkspaceBackBar fallbackHref={back.href} />
+
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
       </div>
     </div>
@@ -80,13 +87,21 @@ export function SettingsPageChrome({
   children: ReactNode;
 }) {
   const theme = useSettingsTheme();
-  const back = settingsBackLink(workspaceKey);
+  const { auth } = useAuth();
+  const back = settingsBackLink(workspaceKey, auth.roleKeys);
 
   return (
     <>
       <header className="shrink-0 border-b border-[#E5E9EF] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-2">
+              <AppBackButton
+                tone="light"
+                fallbackHref={back.href}
+                label="Back"
+              />
+            </div>
             <p className={`${theme.sectionLabel}`}>Settings</p>
             <h1
               className={`mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26] sm:text-3xl`}

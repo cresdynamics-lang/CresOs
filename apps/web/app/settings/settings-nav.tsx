@@ -6,6 +6,7 @@ import { useSettingsTheme } from "../../components/settings/settings-primitives"
 import { SETTINGS_TABS } from "../../components/settings/settings-tabs-nav";
 import { settingsBackLink } from "../../lib/resolve-settings-workspace";
 import type { SettingsWorkspaceKey } from "../../lib/resolve-settings-workspace";
+import { useAuth } from "../auth-context";
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -15,7 +16,8 @@ function isActive(pathname: string, href: string): boolean {
 export function SettingsSideNav({ workspaceKey = "global" }: { workspaceKey?: SettingsWorkspaceKey }) {
   const pathname = usePathname();
   const theme = useSettingsTheme();
-  const back = settingsBackLink(workspaceKey);
+  const { auth } = useAuth();
+  const back = settingsBackLink(workspaceKey, auth.roleKeys);
 
   return (
     <nav aria-label="Settings" className="flex flex-col gap-4 px-2 py-3">

@@ -22,10 +22,11 @@ import { shouldUseSalesWorkspace } from "../../lib/resolve-home-route";
 import { formatNairobiDateTime } from "../../lib/nairobi-datetime";
 import type { DeveloperProgressReminder } from "../../components/developer-dashboard";
 import { WorkspaceLiveAnalytics } from "../../components/analytics/workspace-live-analytics";
-import { DirectorOverviewDashboard, AdminOverviewDashboard } from "../../components/director/director-overview-dashboard";
+import { DirectorOverviewDashboard } from "../../components/director/director-overview-dashboard";
 import { DirectorBriefingPreview } from "../../components/director/director-briefing-view";
 import { isDirectorOnly } from "../../lib/is-director-only";
 import { isAdminOnly } from "../../lib/is-admin-only";
+import { AdminDashboardConsole } from "../admin/admin-dashboard-console";
 
 type Summary = {
   leadsThisWeek: number;
@@ -255,7 +256,7 @@ const ROLE_QUICK_LINKS: Record<string, { href: string; label: string }[]> = {
   ],
   admin: [
     { href: "/schedule", label: "Tasks" },
-    { href: "/admin/users", label: "Users & org" },
+    { href: "/admin/organisation", label: "Users & org" },
     { href: "/analytics", label: "Analytics" }
   ],
   client: [{ href: "/schedule", label: "Tasks" }]
@@ -698,7 +699,7 @@ export default function DashboardPage() {
           description: "Extended admin analytics dashboard."
         },
         {
-          href: "/admin/users",
+          href: "/admin/organisation",
           title: "Users & org",
           description: "Users, departments, roles (admin tools)."
         },
@@ -1062,34 +1063,8 @@ export default function DashboardPage() {
 
   if (isAdminOnlyUser) {
     return (
-      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
-        <AdminOverviewDashboard
-          welcomeHeadline={welcomeHeadline}
-          roleKeys={auth.roleKeys}
-          attention={attention}
-          directorDashboard={directorDashboard}
-          kpis={kpis}
-          kpisError={kpisError}
-          canViewFinanceKpis={canViewFinanceKpis}
-          projects={projects}
-          focusTips={focusCoach?.deterministicTips ?? []}
-          aiHint={focusCoach?.aiHint ?? null}
-          directorSummaryFeed={directorSummaryFeed}
-          directorSummaryFeedFailed={directorSummaryFeedFailed}
-          directorAiBriefings={directorAiBriefings}
-          queue={{
-            unreadNotifications: unreadCount,
-            messagesCount,
-            dueToday: dueCount,
-            workProgressPercent: workProgress,
-            reportStreakDays: reportStreak,
-            approvalsPending: attention?.approvalsPending?.length ?? directorDashboard?.approvalQueue.totalPending ?? 0,
-            leadsPendingApproval: attention?.leadsPendingApproval?.length ?? 0,
-            communityUnread
-          }}
-          loading={directorDashboard === null && directorSummaryFeed === null && directorAiBriefings === null}
-          onRefresh={refreshDirectorDashboard}
-        />
+      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden">
+        <AdminDashboardConsole />
       </section>
     );
   }
@@ -1428,7 +1403,7 @@ export default function DashboardPage() {
               Admin-scoped items only: pending approvals, access requests, and governance reviews — not developer or sales task lists.
             </p>
             <Link
-              href="/admin/users"
+              href="/admin/organisation"
               className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-rose-200/90 hover:text-rose-100"
             >
               Users &amp; org →

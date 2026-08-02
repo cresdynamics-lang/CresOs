@@ -7,7 +7,6 @@ import { useAuth } from "../../auth-context";
 import { formatMoney } from "../../format-money";
 import { financeNeu } from "../../../components/finance/finance-theme";
 import { FinanceStatInline, FinanceStatRow } from "../../../components/finance/finance-ui";
-import { DashboardSectionLabel } from "../../../components/dashboard-welcome-banner";
 import { FINANCE_PAGE_TITLES } from "../finance-nav";
 import {
   categoryLabel,
@@ -171,19 +170,20 @@ export default function FinanceReportsPage() {
   const meta = FINANCE_PAGE_TITLES.reports;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-10">
+    <div className={`${financeNeu.workspace} admin-reports-neu mx-auto flex w-full max-w-5xl flex-col gap-6 pb-10`}>
       <header>
-        <DashboardSectionLabel>{meta.title}</DashboardSectionLabel>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[#5B6472]">{meta.description}</p>
+        <p className={financeNeu.eyebrow}>Finance</p>
+        <h1 className={`mt-0.5 ${financeNeu.titleSm}`}>{meta.title}</h1>
+        <p className={`mt-2 max-w-2xl ${financeNeu.body}`}>{meta.description}</p>
       </header>
 
       {notice && (
-        <div className="rounded-lg border border-emerald-500/30 bg-[#F2F9EF] px-4 py-3 text-sm text-[#1B6B3A]">
+        <div className="rounded-lg border border-[#A8D5A8] bg-white px-4 py-3 text-sm font-medium text-[#0B6A0B]">
           {notice}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-rose-500/30 bg-[#FEF2F2] px-4 py-3 text-sm text-[#C62828]">
+        <div className="rounded-lg border border-[#E8A0A6] bg-white px-4 py-3 text-sm font-medium text-[#C50F1F]">
           {error}
         </div>
       )}
@@ -320,19 +320,19 @@ export default function FinanceReportsPage() {
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500/90">Money in</p>
+              <p className="text-[11px] font-semibold tracking-wide text-[#0B6A0B]">Money in</p>
               <p className="mt-1 text-sm text-[#1A1D26]">Client payments: {formatMoney(report.revenue.thisMonth)}</p>
               <p className="text-xs text-[#5B6472]">All time: {formatMoney(report.revenue.allTime)}</p>
             </div>
             <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#B45309]/90">HR & payroll</p>
+              <p className="text-[11px] font-semibold tracking-wide text-[#8A7000]">HR & payroll</p>
               <p className="mt-1 text-sm text-[#1A1D26]">
                 Salaries: {formatMoney(report.salaries?.inPeriod ?? 0)}
               </p>
               <p className="text-xs text-[#5B6472]">{report.salaries?.count ?? 0} salary expense(s) in period</p>
             </div>
             <div className="rounded-xl border border-[#E5E9EF] bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6D28D9]/90">Project ops</p>
+              <p className="text-[11px] font-semibold tracking-wide text-[#5C2D91]">Project ops</p>
               <p className="mt-1 text-sm text-[#1A1D26]">
                 Developer payments: {formatMoney(report.developerPayments?.inPeriod ?? 0)}
               </p>

@@ -40,10 +40,17 @@ function PromptChips({ prompts, onPick }: { prompts: string[]; onPick: (p: strin
   );
 }
 
-export function AdminAiCommandConsole() {
+export function AdminAiCommandConsole({
+  forceMode,
+  embedded = false
+}: {
+  /** When set, lock to this mode (used by AI Command hub tabs). */
+  forceMode?: AdminAssistantMode;
+  embedded?: boolean;
+} = {}) {
   const { apiFetch, auth } = useAuth();
   const isAdmin = auth.roleKeys.includes("admin");
-  const [tab, setTab] = useState<Tab>("intelligence");
+  const [tab, setTab] = useState<Tab>(() => forceMode ?? "intelligence");
   const [focus, setFocus] = useState<IntelligenceFocus>("general");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,6 +63,14 @@ export function AdminAiCommandConsole() {
     Record<string, { assigneeId?: string; projectId?: string }>
   >({});
   const [sessions, setSessions] = useState<AssistantSessionRow[]>([]);
+
+  useEffect(() => {
+    if (forceMode) {
+      setTab(forceMode);
+      setResult(null);
+      setError(null);
+    }
+  }, [forceMode]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -149,14 +164,15 @@ export function AdminAiCommandConsole() {
 
   const runVoice = useCallback(
     async (blob: Blob, mimeType: string) => {
+      const mode = forceMode ?? tab;
       setLoading(true);
       setError(null);
       try {
         const form = new FormData();
         const ext = mimeType.includes("mp4") ? "m4a" : "webm";
         form.append("audio", blob, `admin-command.${ext}`);
-        form.append("mode", tab);
-        if (tab === "intelligence" && focus !== "general") form.append("focus", focus);
+        form.append("mode", mode);
+        if (mode === "intelligence" && focus !== "general") form.append("focus", focus);
         const res = await apiFetch("/admin/assistant/from-voice", { method: "POST", body: form });
         const data = (await res.json().catch(() => ({}))) as AdminAssistantResponse & { error?: string };
         if (!res.ok) {
@@ -174,18 +190,19 @@ export function AdminAiCommandConsole() {
         setLoading(false);
       }
     },
-    [apiFetch, tab, focus, loadSessions]
+    [apiFetch, tab, forceMode, focus, loadSessions]
   );
 
   const runAudioFile = useCallback(
     async (file: File) => {
+      const mode = forceMode ?? tab;
       setLoading(true);
       setError(null);
       try {
         const form = new FormData();
         form.append("audio", file, file.name || "admin-audio-entry");
-        form.append("mode", tab);
-        if (tab === "intelligence" && focus !== "general") form.append("focus", focus);
+        form.append("mode", mode);
+        if (mode === "intelligence" && focus !== "general") form.append("focus", focus);
         const res = await apiFetch("/admin/assistant/from-audio", { method: "POST", body: form });
         const data = (await res.json().catch(() => ({}))) as AdminAssistantResponse & { error?: string };
         if (!res.ok) {
@@ -203,7 +220,7 @@ export function AdminAiCommandConsole() {
         setLoading(false);
       }
     },
-    [apiFetch, tab, focus, loadSessions]
+    [apiFetch, tab, forceMode, focus, loadSessions]
   );
 
   const resolveCandidate = useCallback(
@@ -220,54 +237,72 @@ export function AdminAiCommandConsole() {
     [runExecute]
   );
 
-  const prompts = tab === "execute" ? EXECUTE_PROMPTS : INTELLIGENCE_PROMPTS;
+  const lockedMode = Boolean(forceMode);
+  const activeMode = forceMode ?? tab;
+  const prompts = activeMode === "execute" ? EXECUTE_PROMPTS : INTELLIGENCE_PROMPTS;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-row">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <AdminPanel className="!p-4 sm:!p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className={adminNeu.eyebrow}>Command · AI</p>
-              <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26]">
-                Admin AI Command
-              </h1>
-              <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#5B6472]">
-                Create meetings and tasks, or ask deep org intelligence — projects, people, hours vs days, and Cres
-                Dynamics fit.
+          {!embedded ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className={adminNeu.eyebrow}>Command · AI</p>
+                <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-[#1A1D26]">
+                  {activeMode === "execute" ? "AI task creation" : "Admin AI Command"}
+                </h1>
+                <p className="mt-1.5 max-w-2xl font-body text-sm font-medium leading-relaxed text-[#5B6472]">
+                  {activeMode === "execute"
+                    ? "Preview and create meetings, schedule tasks, and project tasks from natural language or voice."
+                    : "Ask deep org intelligence — projects, people, hours vs days, and Cres Dynamics fit."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <h2 className="font-display text-lg font-bold tracking-tight text-[#1A1D26]">
+                {activeMode === "execute" ? "AI tasks & creation" : "Org intelligence"}
+              </h2>
+              <p className="mt-0.5 max-w-2xl font-body text-sm font-medium text-[#5B6472]">
+                {activeMode === "execute"
+                  ? "Create meetings and tasks; confirm actions before they land on the schedule."
+                  : "Analyze projects, people, delivery hours, and services fit."}
               </p>
             </div>
-          </div>
+          )}
 
-          <div className="mt-4 flex flex-wrap gap-2 border-b border-[#E5E9EF] pb-3">
-            {isAdmin ? (
+          {!lockedMode ? (
+            <div className="mt-4 flex flex-wrap gap-2 border-b border-[#E5E9EF] pb-3">
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("execute");
+                    setResult(null);
+                    setError(null);
+                  }}
+                  className={activeMode === "execute" ? adminNeu.segActive : adminNeu.segIdle}
+                >
+                  Execute
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
-                  setTab("execute");
+                  setTab("intelligence");
                   setResult(null);
                   setError(null);
                 }}
-                className={tab === "execute" ? adminNeu.segActive : adminNeu.segIdle}
+                className={activeMode === "intelligence" ? adminNeu.segActive : adminNeu.segIdle}
               >
-                Execute
+                Intelligence
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                setTab("intelligence");
-                setResult(null);
-                setError(null);
-              }}
-              className={tab === "intelligence" ? adminNeu.segActive : adminNeu.segIdle}
-            >
-              Intelligence
-            </button>
-          </div>
+            </div>
+          ) : null}
 
-          {tab === "intelligence" ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
+          {activeMode === "intelligence" ? (
+            <div className={`${lockedMode || embedded ? "mt-3" : "mt-3"} flex flex-wrap gap-1.5`}>
               {INTELLIGENCE_FOCUS_OPTIONS.map((f) => (
                 <button
                   key={f.id}
@@ -293,16 +328,16 @@ export function AdminAiCommandConsole() {
             <AssistantInputPanel
               value={message}
               onChange={setMessage}
-              onSubmit={() => void runChat(message, tab)}
+              onSubmit={() => void runChat(message, activeMode)}
               onVoiceResult={(blob, mime) => void runVoice(blob, mime)}
               onAudioFile={(file) => void runAudioFile(file)}
               loading={loading}
               placeholder={
-                tab === "execute"
+                activeMode === "execute"
                   ? "e.g. Meet Paul Tuesday 3pm, assign Wilson 4h on ERP scope…"
                   : "e.g. Summarize all projects, how is Wilson doing, convert report days to hours…"
               }
-              submitLabel={tab === "execute" ? "Preview actions" : "Analyze"}
+              submitLabel={activeMode === "execute" ? "Preview actions" : "Analyze"}
             />
           </div>
 
@@ -324,7 +359,7 @@ export function AdminAiCommandConsole() {
               ) : null}
             </div>
 
-            {tab === "execute" ? (
+            {activeMode === "execute" ? (
               <div className="space-y-4">
                 <p className="whitespace-pre-wrap font-body text-sm font-medium leading-relaxed text-[#1A1D26]">
                   {result.reply}

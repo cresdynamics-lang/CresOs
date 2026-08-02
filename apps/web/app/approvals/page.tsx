@@ -197,7 +197,7 @@ export default function ApprovalsPage() {
   );
 
   return (
-    <section className="flex flex-col gap-6">
+    <section className="flex w-full min-w-0 flex-col gap-5 bg-white pb-6">
       <WorkspaceDashboardIntro
         title="Approval queue"
         eyebrow={isFinanceRole ? "Finance" : "Approvals"}
@@ -209,8 +209,8 @@ export default function ApprovalsPage() {
             <DashboardSectionLabel roleKeys={auth.roleKeys}>
               Today&apos;s priorities (your queue)
             </DashboardSectionLabel>
-            <p className="font-body text-sm leading-relaxed text-slate-400">
-              Use <span className="font-medium text-emerald-300">Approval queue</span> and the sections below for live
+            <p className="font-body text-sm leading-relaxed text-[#605E5C]">
+              Use <span className="font-semibold text-[#0B6A0B]">Approval queue</span> and the sections below for live
               data.
             </p>
           </>
@@ -244,21 +244,21 @@ export default function ApprovalsPage() {
               </CrmTableHead>
               <tbody>
                 {pendingFinance.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-800/60 hover:bg-amber-500/5">
-                    <td className="py-3 pr-3 align-top text-slate-200">
-                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs capitalize text-amber-300">
+                  <tr key={a.id} className="border-b border-[#F5F5F5] hover:bg-[#FAFAFA]">
+                    <td className="py-3 pr-3 align-top text-[#242424]">
+                      <span className="rounded-md border border-[#E8D48A] bg-white px-2 py-0.5 text-xs font-semibold capitalize text-[#8A7000]">
                         {a.entityType}
                       </span>
-                      <span className="ml-1 font-mono text-xs text-slate-500">{a.entityId.slice(0, 8)}…</span>
-                      <p className="mt-1 text-xs text-slate-500">{a.description ?? a.reason ?? "—"}</p>
+                      <span className="ml-1 font-mono text-xs text-[#8A8886]">{a.entityId.slice(0, 8)}…</span>
+                      <p className="mt-1 text-xs text-[#605E5C]">{a.description ?? a.reason ?? "—"}</p>
                     </td>
-                    <td className="whitespace-nowrap py-3 pr-3 text-right align-top font-mono tabular-nums font-semibold text-emerald-400">
+                    <td className="whitespace-nowrap py-3 pr-3 text-right align-top font-mono tabular-nums font-semibold text-[#0B6A0B]">
                       {a.amount != null ? formatMoney(a.amount) : "—"}
                     </td>
-                    <td className="py-3 pr-3 align-top text-slate-300">
+                    <td className="py-3 pr-3 align-top text-[#242424]">
                       {a.requester?.name ?? a.requester?.email ?? "—"}
                     </td>
-                    <td className="whitespace-nowrap py-3 pr-3 align-top text-slate-400">
+                    <td className="whitespace-nowrap py-3 pr-3 align-top text-[#605E5C]">
                       {new Date(a.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 text-right align-top">
@@ -268,7 +268,7 @@ export default function ApprovalsPage() {
                             type="button"
                             onClick={() => decideFinance(a.id, "approved")}
                             disabled={decidingId === a.id}
-                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                            className="rounded-md bg-[#0B6A0B] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#095609] disabled:opacity-50"
                           >
                             Approve
                           </button>
@@ -276,13 +276,13 @@ export default function ApprovalsPage() {
                             type="button"
                             onClick={() => rejectWithNote(a.id)}
                             disabled={decidingId === a.id}
-                            className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                            className="rounded-md bg-[#C50F1F] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#A50D1A] disabled:opacity-50"
                           >
                             Decline
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs font-medium text-amber-400">View only</span>
+                        <span className="text-xs font-medium text-[#8A7000]">View only</span>
                       )}
                     </td>
                   </tr>
@@ -305,31 +305,31 @@ export default function ApprovalsPage() {
               </CrmTableHead>
               <tbody>
                 {pendingInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-800/60 hover:bg-sky-500/5">
-                    <td className="whitespace-nowrap py-3 pr-3 align-top font-medium text-sky-300">
+                  <tr key={inv.id} className="border-b border-[#F5F5F5] hover:bg-[#FAFAFA]">
+                    <td className="whitespace-nowrap py-3 pr-3 align-top font-medium text-[#005CAB]">
                       {inv.invoiceNumber}
                     </td>
-                    <td className="py-3 pr-3 align-top text-slate-300">
+                    <td className="py-3 pr-3 align-top text-[#242424]">
                       <div className="min-w-0">
-                        <p className="truncate text-slate-200">{inv.client?.name ?? "—"}</p>
+                        <p className="truncate text-[#242424]">{inv.client?.name ?? "—"}</p>
                         {inv.project?.name ? (
-                          <p className="truncate text-xs text-slate-500">Project: {inv.project.name}</p>
+                          <p className="truncate text-xs text-[#605E5C]">Project: {inv.project.name}</p>
                         ) : null}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap py-3 pr-3 text-right align-top font-mono tabular-nums font-semibold text-emerald-400">
+                    <td className="whitespace-nowrap py-3 pr-3 text-right align-top font-mono tabular-nums font-semibold text-[#0B6A0B]">
                       {formatMoney(inv.totalAmount)}{" "}
-                      {inv.currency ? <span className="text-xs font-normal text-slate-500">{inv.currency}</span> : null}
+                      {inv.currency ? <span className="text-xs font-normal text-[#8A8886]">{inv.currency}</span> : null}
                     </td>
-                    <td className="py-3 pr-3 align-top text-slate-300">{inv.createdBy?.displayName ?? "—"}</td>
-                    <td className="whitespace-nowrap py-3 pr-3 align-top text-slate-400">
+                    <td className="py-3 pr-3 align-top text-[#242424]">{inv.createdBy?.displayName ?? "—"}</td>
+                    <td className="whitespace-nowrap py-3 pr-3 align-top text-[#605E5C]">
                       {new Date(inv.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 text-right align-top">
                       <button
                         type="button"
                         onClick={() => setSelectedInvoice(inv)}
-                        className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-300 hover:bg-sky-500/20"
+                        className="rounded-md border border-[#005CAB] bg-white px-2.5 py-1 text-xs font-semibold text-[#005CAB] hover:bg-[#005CAB] hover:text-white"
                       >
                         Review
                       </button>
@@ -343,7 +343,7 @@ export default function ApprovalsPage() {
       </CrmSectionPanel>
 
       <div>
-        <p className="mb-3 font-label text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+        <p className="mb-3 font-label text-[11px] font-semibold tracking-wide text-[#605E5C]">
           How to decide
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -376,18 +376,18 @@ export default function ApprovalsPage() {
             {historyItems.map((a) => (
               <li
                 key={a.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-500/20 bg-slate-950/40 px-3 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#C5B0DF] bg-white px-3 py-2.5 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]"
               >
                 <div>
-                  <p className="font-medium text-slate-100">
+                  <p className="font-medium text-[#242424]">
                     {a.entityType} · {a.entityId.slice(0, 8)}…
                   </p>
-                  <p className="text-xs text-slate-400">{a.reason ?? "No reason provided"}</p>
+                  <p className="text-xs text-[#605E5C]">{a.reason ?? "No reason provided"}</p>
                   {isDirector && isFinanceSubmission(a) && !isAdmin && (
-                    <p className="mt-1 text-xs text-amber-400">View only — admin approves</p>
+                    <p className="mt-1 text-xs text-[#8A7000]">View only — admin approves</p>
                   )}
                 </div>
-                <span className="rounded-full border border-slate-600/50 bg-slate-800/60 px-2 py-0.5 text-xs uppercase text-slate-400">
+                <span className="rounded-md border border-[#E1DFDD] bg-white px-2 py-0.5 text-xs font-semibold uppercase text-[#605E5C]">
                   {a.status}
                 </span>
               </li>
@@ -397,12 +397,12 @@ export default function ApprovalsPage() {
       )}
 
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-sky-500/30 bg-slate-950 shadow-[0_0_48px_-12px_rgba(14,165,233,0.35)]">
-            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-3xl overflow-hidden rounded-lg border border-[#E1DFDD] bg-white shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)]">
+            <div className="flex items-center justify-between border-b border-[#E1DFDD] px-5 py-4">
               <div>
-                <p className="font-display text-lg font-bold text-sky-300">Invoice {selectedInvoice.invoiceNumber}</p>
-                <p className="text-xs text-slate-500">
+                <p className="font-display text-lg font-bold text-[#005CAB]">Invoice {selectedInvoice.invoiceNumber}</p>
+                <p className="text-xs text-[#605E5C]">
                   {selectedInvoice.client?.name ?? "—"} · {new Date(selectedInvoice.createdAt).toLocaleString()}
                 </p>
               </div>
@@ -413,40 +413,40 @@ export default function ApprovalsPage() {
                   setInvoiceRejectionReason("");
                   setInvoiceApprovalNotes("");
                 }}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+                className="rounded-md border border-[#D1D1D1] bg-white px-3 py-1.5 text-sm text-[#242424] hover:bg-[#F5F5F5]"
               >
                 Close
               </button>
             </div>
             <div className="space-y-4 px-5 py-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-400/80">Total</p>
-                  <p className="mt-1 font-display text-xl font-bold text-emerald-300">
+                <div className="rounded-lg border border-[#A8D5A8] border-l-4 border-l-[#0B6A0B] bg-white p-4">
+                  <p className="text-xs font-semibold tracking-wide text-[#605E5C]">Total</p>
+                  <p className="mt-1 font-display text-xl font-bold text-[#0B6A0B]">
                     {formatMoney(selectedInvoice.totalAmount)}
                   </p>
                 </div>
-                <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-sky-400/80">Created by</p>
-                  <p className="mt-1 text-sm font-medium text-slate-200">{selectedInvoice.createdBy?.displayName ?? "—"}</p>
+                <div className="rounded-lg border border-[#B4CDE8] border-l-4 border-l-[#005CAB] bg-white p-4">
+                  <p className="text-xs font-semibold tracking-wide text-[#605E5C]">Created by</p>
+                  <p className="mt-1 text-sm font-medium text-[#242424]">{selectedInvoice.createdBy?.displayName ?? "—"}</p>
                 </div>
               </div>
 
               {Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0 && (
-                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                  <p className="mb-2 font-label text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                <div className="rounded-lg border border-[#E1DFDD] bg-white p-4">
+                  <p className="mb-2 font-label text-[11px] font-semibold tracking-wide text-[#605E5C]">
                     Items
                   </p>
                   <ul className="space-y-2 text-sm">
                     {selectedInvoice.items.map((it) => (
                       <li
                         key={it.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#E1DFDD] bg-white px-3 py-2"
                       >
-                        <span className="text-slate-200">{it.description}</span>
-                        <span className="text-slate-400">
+                        <span className="text-[#242424]">{it.description}</span>
+                        <span className="text-[#605E5C]">
                           {it.quantity} × {formatMoney(it.unitPrice)} ={" "}
-                          <span className="font-mono tabular-nums text-slate-100">{formatMoney(it.total)}</span>
+                          <span className="font-mono tabular-nums text-[#242424]">{formatMoney(it.total)}</span>
                         </span>
                       </li>
                     ))}
@@ -456,45 +456,45 @@ export default function ApprovalsPage() {
 
               {isAdmin ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                    <p className="mb-2 text-xs font-medium text-emerald-400">Approval notes (optional)</p>
+                  <div className="rounded-lg border border-[#A8D5A8] border-l-4 border-l-[#0B6A0B] bg-white p-4">
+                    <p className="mb-2 text-xs font-semibold text-[#0B6A0B]">Approval notes (optional)</p>
                     <textarea
                       value={invoiceApprovalNotes}
                       onChange={(e) => setInvoiceApprovalNotes(e.target.value)}
                       rows={3}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                      className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                       placeholder="Optional notes for approval…"
                     />
                     <button
                       type="button"
                       onClick={() => approveInvoice(selectedInvoice.id)}
                       disabled={decidingId === selectedInvoice.id}
-                      className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      className="mt-3 rounded-md bg-[#0B6A0B] px-3 py-2 text-sm font-semibold text-white hover:bg-[#095609] disabled:opacity-50"
                     >
                       Approve invoice
                     </button>
                   </div>
-                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
-                    <p className="mb-2 text-xs font-medium text-rose-400">Rejection reason (required)</p>
+                  <div className="rounded-lg border border-[#E8A0A6] border-l-4 border-l-[#C50F1F] bg-white p-4">
+                    <p className="mb-2 text-xs font-semibold text-[#C50F1F]">Rejection reason (required)</p>
                     <textarea
                       value={invoiceRejectionReason}
                       onChange={(e) => setInvoiceRejectionReason(e.target.value)}
                       rows={3}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                      className="w-full rounded-md border border-[#D1D1D1] bg-white px-3 py-2 text-sm text-[#242424] placeholder:text-[#8A8886] focus:border-[#005CAB] focus:outline-none focus:ring-2 focus:ring-[#005CAB]/20"
                       placeholder="Why is this invoice rejected?"
                     />
                     <button
                       type="button"
                       onClick={() => rejectInvoice(selectedInvoice.id)}
                       disabled={decidingId === selectedInvoice.id}
-                      className="mt-3 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                      className="mt-3 rounded-md bg-[#C50F1F] px-3 py-2 text-sm font-semibold text-white hover:bg-[#A50D1A] disabled:opacity-50"
                     >
                       Reject invoice
                     </button>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm font-medium text-amber-300">View only — Admin approves invoices.</p>
+                <p className="text-sm font-medium text-[#8A7000]">View only — Admin approves invoices.</p>
               )}
             </div>
           </div>

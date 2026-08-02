@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { isAccountActive } from "../lib/user-account-status";
 import { generateCallReminder, generateMeetingReminder } from "./ai-reminders";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
@@ -18,12 +19,13 @@ export async function processDueReminders(prisma: PrismaClient): Promise<void> {
   const followUps = await prisma.leadFollowUp.findMany({
     where: { scheduledAt: { gte: fiveMinutesAgo } }, // from 5 min ago so "0" reminder can fire
     include: {
-      assignedTo: { select: { id: true, name: true, email: true, notificationEmail: true } },
+      assignedTo: { select: { id: true, name: true, email: true, notificationEmail: true, status: true } },
       lead: { select: { id: true, title: true } }
     }
   });
 
   for (const fu of followUps) {
+    if (!isAccountActive(fu.assignedTo?.status)) continue;
     const slots = (fu.reminderSlots as number[] | null) ?? [2880, 1440, 60, 30, 5];
     const scheduledMs = fu.scheduledAt.getTime();
 

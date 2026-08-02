@@ -495,7 +495,7 @@ export async function processDeveloperProgressRemindersForOrg(prisma: PrismaClie
     .filter((id) => memberIds.has(id));
 
   const users = await prisma.user.findMany({
-    where: { id: { in: devIds }, deletedAt: null },
+    where: { id: { in: devIds }, deletedAt: null, status: "active" },
     select: { id: true, name: true, email: true }
   });
 

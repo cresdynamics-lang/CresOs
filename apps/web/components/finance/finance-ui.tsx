@@ -4,37 +4,13 @@ import type { ReactNode } from "react";
 import type { StatTone } from "../stat-card";
 import { financeNeu } from "./finance-theme";
 
-const statToneClass: Record<StatTone, { shell: string; value: string; label: string }> = {
-  brand: {
-    shell: "border-brand/25 bg-brand-light/70",
-    value: "text-brand",
-    label: "text-slate-500"
-  },
-  emerald: {
-    shell: financeNeu.statEmerald,
-    value: "text-emerald-700",
-    label: "text-slate-500"
-  },
-  amber: {
-    shell: financeNeu.statAmber,
-    value: "text-amber-700",
-    label: "text-slate-500"
-  },
-  rose: {
-    shell: financeNeu.statRose,
-    value: "text-rose-700",
-    label: "text-slate-500"
-  },
-  sky: {
-    shell: "border-[#E5E9EF] bg-sky-50",
-    value: "text-sky-700",
-    label: "text-slate-500"
-  },
-  violet: {
-    shell: financeNeu.statViolet,
-    value: "text-violet-700",
-    label: "text-slate-500"
-  }
+const statToneClass: Record<StatTone, { solid: string; border: string }> = {
+  brand: { solid: "#005CAB", border: "#B4CDE8" },
+  emerald: { solid: "#0B6A0B", border: "#A8D5A8" },
+  amber: { solid: "#C19C00", border: "#E8D48A" },
+  rose: { solid: "#C50F1F", border: "#E8A0A6" },
+  sky: { solid: "#005CAB", border: "#B4CDE8" },
+  violet: { solid: "#5C2D91", border: "#C5B0DF" }
 };
 
 export function FinanceNeuPanel({
@@ -69,15 +45,18 @@ export function FinanceStatCard({
   const s = statToneClass[tone];
   return (
     <div
-      className={`flex min-h-[5.5rem] h-full flex-col justify-between rounded-2xl border p-4 ${s.shell} ${className}`.trim()}
+      className={`flex min-h-[5.5rem] h-full flex-col justify-between rounded-lg border bg-white p-4 shadow-[0_0.3px_0.9px_rgba(0,0,0,0.08),0_1.6px_3.6px_rgba(0,0,0,0.08)] ${className}`.trim()}
+      style={{ borderColor: s.border, borderLeftWidth: 4, borderLeftColor: s.solid }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={`text-xs font-medium uppercase tracking-wide ${s.label}`}>{label}</p>
-        {icon ? <span className="text-lg opacity-80">{icon}</span> : null}
+        <p className="text-[11px] font-semibold tracking-wide text-[#605E5C]">{label}</p>
+        {icon ? <span style={{ color: s.solid }}>{icon}</span> : null}
       </div>
       <div>
-        <p className={`text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
-        {hint ? <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
+        <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-[1.75rem]" style={{ color: s.solid }}>
+          {value}
+        </p>
+        {hint ? <p className="mt-1 text-[11px] font-medium text-[#8A8886] sm:text-xs">{hint}</p> : null}
       </div>
     </div>
   );
@@ -90,7 +69,7 @@ export function FinanceStatGrid({ children }: { children: ReactNode }) {
 export function FinanceStatRow({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-[#E5E9EF] pb-6 sm:grid-cols-4 ${className}`.trim()}
+      className={`grid grid-cols-2 gap-x-6 gap-y-4 border-b border-[#E1DFDD] pb-6 sm:grid-cols-4 ${className}`.trim()}
     >
       {children}
     </div>
@@ -113,9 +92,11 @@ export function FinanceStatInline({
   const s = statToneClass[tone];
   return (
     <div className={`min-w-0 ${className}`.trim()}>
-      <p className={`text-[10px] font-semibold uppercase tracking-wide ${s.label}`}>{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums sm:text-3xl ${s.value}`}>{value}</p>
-      {hint ? <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
+      <p className="text-[11px] font-semibold tracking-wide text-[#605E5C]">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight sm:text-[1.75rem]" style={{ color: s.solid }}>
+        {value}
+      </p>
+      {hint ? <p className="mt-0.5 text-[11px] font-medium text-[#8A8886] sm:text-xs">{hint}</p> : null}
     </div>
   );
 }
@@ -148,15 +129,13 @@ export function FinanceFlatTable({
 export function FinanceFlatTableHead({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-        {children}
-      </tr>
+      <tr className={`border-b border-[#E1DFDD] ${financeNeu.tableHead}`}>{children}</tr>
     </thead>
   );
 }
 
 export function FinanceFlatTableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-sky-100">{children}</tbody>;
+  return <tbody className="divide-y divide-[#F5F5F5]">{children}</tbody>;
 }
 
 export function FinanceFlatTableRow({
@@ -166,7 +145,7 @@ export function FinanceFlatTableRow({
   children: ReactNode;
   className?: string;
 }) {
-  return <tr className={`text-slate-700 ${className}`.trim()}>{children}</tr>;
+  return <tr className={`${financeNeu.tableCell} ${className}`.trim()}>{children}</tr>;
 }
 
 export function FinanceFlatTh({
@@ -180,7 +159,7 @@ export function FinanceFlatTh({
 }) {
   return (
     <th
-      className={`py-2.5 pr-4 font-medium last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
+      className={`py-2.5 pr-4 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#605E5C] last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
     >
       {children}
     </th>
@@ -201,7 +180,7 @@ export function FinanceFlatTd({
   return (
     <td
       colSpan={colSpan}
-      className={`py-3 pr-4 align-middle last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
+      className={`py-3 pr-4 align-middle text-sm text-[#242424] last:pr-0 ${align === "right" ? "text-right" : "text-left"} ${className}`.trim()}
     >
       {children}
     </td>
@@ -209,16 +188,20 @@ export function FinanceFlatTd({
 }
 
 const statusTone: Record<string, string> = {
-  sent: "text-sky-700",
-  paid: "text-emerald-700",
-  partial: "text-amber-700",
-  draft: "text-slate-500",
-  overdue: "text-rose-700"
+  sent: "text-[#005CAB]",
+  paid: "text-[#0B6A0B]",
+  partial: "text-[#8A7000]",
+  draft: "text-[#605E5C]",
+  overdue: "text-[#C50F1F]"
 };
 
 export function FinanceStatusLabel({ status }: { status: string }) {
-  const tone = statusTone[status.toLowerCase()] ?? "text-slate-500";
-  return <span className={`text-xs font-medium capitalize ${tone}`}>{status.replace(/_/g, " ")}</span>;
+  const tone = statusTone[status.toLowerCase()] ?? "text-[#605E5C]";
+  return (
+    <span className={`text-xs font-semibold capitalize ${tone}`}>
+      {status.replace(/_/g, " ")}
+    </span>
+  );
 }
 
 export function FinanceTextAction({
@@ -236,11 +219,11 @@ export function FinanceTextAction({
 }) {
   const cls =
     tone === "danger"
-      ? "text-rose-600 hover:text-rose-700"
-      : "text-slate-500 hover:text-emerald-700";
+      ? "text-[#C50F1F] hover:text-[#A50D1A]"
+      : "text-[#605E5C] hover:text-[#005CAB]";
   if (href) {
     return (
-      <a href={href} className={`text-xs font-medium transition-colors ${cls} ${className}`.trim()}>
+      <a href={href} className={`text-xs font-semibold transition-colors ${cls} ${className}`.trim()}>
         {children}
       </a>
     );
@@ -249,7 +232,7 @@ export function FinanceTextAction({
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs font-medium transition-colors ${cls} ${className}`.trim()}
+      className={`text-xs font-semibold transition-colors ${cls} ${className}`.trim()}
     >
       {children}
     </button>

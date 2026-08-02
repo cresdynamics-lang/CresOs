@@ -4,13 +4,13 @@ type BarItem = { label: string; value: number; color?: string };
 
 /** Professional chart palette — readable on light admin surfaces. */
 const CHART = {
-  track: "bg-slate-200",
-  label: "text-slate-800",
-  value: "text-slate-900",
-  muted: "text-slate-600",
-  axis: "border-slate-300",
-  barDefault: "bg-[#2D5A5A]",
-  barAlt: "bg-[#2067B0]"
+  track: "bg-[#E8ECF1]",
+  label: "text-[#242424]",
+  value: "text-[#242424]",
+  muted: "text-[#605E5C]",
+  axis: "border-[#D1D1D1]",
+  barDefault: "bg-[#005CAB]",
+  barAlt: "bg-[#0B6A0B]"
 };
 
 export function HorizontalBarChart({
@@ -237,14 +237,14 @@ export function AreaTrendChart({
 }
 
 const PIE_COLORS = [
-  "#F8B042",
-  "#2067B0",
-  "#AF52BF",
-  "#4DB6AC",
-  "#7BB45D",
-  "#E85D5D",
-  "#2D5A5A",
-  "#8B93A1"
+  "#005CAB", // deep blue
+  "#0B6A0B", // deep green
+  "#C19C00", // deep yellow / gold
+  "#C50F1F", // deep red
+  "#5C2D91", // deep purple
+  "#0078A8", // deep cyan-blue
+  "#8A3B12", // deep brown-orange
+  "#1B4F72" // navy
 ];
 
 export function PieChart({
@@ -254,7 +254,8 @@ export function PieChart({
   valuePrefix = "",
   variant = "pie",
   centerLabel,
-  showLegend = true
+  showLegend = true,
+  colors
 }: {
   items: { label: string; value: number }[];
   emptyLabel?: string;
@@ -263,10 +264,13 @@ export function PieChart({
   variant?: "pie" | "donut";
   centerLabel?: string;
   showLegend?: boolean;
+  /** Override palette — deep solid hex colours preferred. */
+  colors?: string[];
 }) {
   if (items.length === 0) {
     return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
   }
+  const palette = colors && colors.length > 0 ? colors : PIE_COLORS;
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
   const r = size / 2 - 4;
   const cx = size / 2;
@@ -280,7 +284,7 @@ export function PieChart({
     const x2 = cx + r * Math.cos(angle);
     const y2 = cy + r * Math.sin(angle);
     const large = slice > Math.PI ? 1 : 0;
-    const color = PIE_COLORS[idx % PIE_COLORS.length];
+    const color = palette[idx % palette.length];
     const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
     return { ...item, d, color, pct: Math.round((item.value / total) * 100) };
   });
@@ -290,7 +294,7 @@ export function PieChart({
       <div className="relative shrink-0">
         <svg width={size} height={size} aria-hidden>
           {slices.map((s) => (
-            <path key={s.label} d={s.d} fill={s.color} opacity={0.95} />
+            <path key={s.label} d={s.d} fill={s.color} />
           ))}
           <circle cx={cx} cy={cy} r={variant === "donut" ? r * 0.58 : r * 0.45} fill="#ffffff" />
         </svg>
@@ -305,7 +309,7 @@ export function PieChart({
           {slices.map((s) => (
             <li key={s.label} className="flex items-center justify-between gap-2">
               <span className={`flex min-w-0 items-center gap-2 font-semibold ${CHART.label}`}>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: s.color }} />
                 <span className="truncate capitalize">{s.label.replace(/_/g, " ")}</span>
               </span>
               <span className={`shrink-0 font-bold tabular-nums ${CHART.muted}`}>
@@ -506,6 +510,163 @@ export function DualLineChart({
           {labelB}
         </span>
       </div>
+    </div>
+  );
+}
+
+export type ProjectHealthBarItem = {
+  id: string;
+  name: string;
+  shortName?: string;
+  /** Delivery / task progress 0–100 (blue). */
+  deliveryPercent: number;
+  /** Payment collection vs project price 0–100 (green). */
+  paymentPercent: number;
+  /** Overdue pressure 0–100 (red). */
+  overduePercent: number;
+};
+
+/**
+ * Per-project grouped bars (delivery blue · payment green · overdue red)
+ * plus a yellow trend line for delivery % across projects.
+ * All fills are deep solid colours — no gradients or translucency.
+ */
+export function ProjectHealthComboChart({
+  items,
+  emptyLabel = "No project health data yet"
+}: {
+  items: ProjectHealthBarItem[];
+  emptyLabel?: string;
+}) {
+  if (items.length === 0) {
+    return <p className={`font-body text-xs font-medium ${CHART.muted}`}>{emptyLabel}</p>;
+  }
+
+  const BLUE = "#005CAB";
+  const GREEN = "#0B6A0B";
+  const RED = "#C50F1F";
+  const YELLOW = "#C19C00";
+
+  const plotH = 160;
+  const padTop = 10;
+  const usable = plotH - padTop;
+  const yOf = (pct: number) => padTop + usable * (1 - Math.min(100, Math.max(0, pct)) / 100);
+
+  const linePoints = items.map((item, i) => {
+    const x = ((i + 0.5) / items.length) * 100;
+    return { x, y: yOf(item.deliveryPercent) };
+  });
+
+  return (
+    <div className="w-full">
+      <div className={`mb-2 flex flex-wrap gap-3 font-label text-[10px] font-bold ${CHART.muted}`}>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: BLUE }} /> Progress
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: GREEN }} /> Payments
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: RED }} /> Overdue
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-0.5 w-3 rounded-full" style={{ backgroundColor: YELLOW }} /> Delivery trend
+        </span>
+      </div>
+
+      <div className="relative w-full overflow-x-auto pb-1">
+        <div
+          className="relative min-w-0"
+          style={{ minWidth: items.length > 6 ? `${items.length * 3.4}rem` : undefined }}
+        >
+          <div className={`relative border-b ${CHART.axis}`} style={{ height: plotH }}>
+            <svg
+              className="pointer-events-none absolute inset-0 z-[1] h-full w-full"
+              viewBox={`0 0 100 ${plotH}`}
+              preserveAspectRatio="none"
+              aria-hidden
+            >
+              <polyline
+                fill="none"
+                stroke={YELLOW}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+                points={linePoints.map((p) => `${p.x},${p.y}`).join(" ")}
+              />
+              {linePoints.map((p, i) => (
+                <circle
+                  key={items[i].id}
+                  cx={p.x}
+                  cy={p.y}
+                  r="2"
+                  fill={YELLOW}
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </svg>
+
+            <div className="relative z-0 flex h-full items-end justify-between gap-1.5 px-0.5 sm:gap-2">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex h-full min-w-0 flex-1 items-end justify-center"
+                >
+                  <div className="flex h-full w-full max-w-[3.25rem] items-end justify-center gap-0.5">
+                    <div
+                      className="w-[30%] rounded-t"
+                      style={{
+                        height: `${Math.max(3, Math.min(100, item.deliveryPercent))}%`,
+                        backgroundColor: BLUE
+                      }}
+                      title={`${item.name} · Progress ${item.deliveryPercent}%`}
+                    />
+                    <div
+                      className="w-[30%] rounded-t"
+                      style={{
+                        height: `${Math.max(3, Math.min(100, item.paymentPercent))}%`,
+                        backgroundColor: GREEN
+                      }}
+                      title={`${item.name} · Payments ${item.paymentPercent}%`}
+                    />
+                    <div
+                      className="w-[30%] rounded-t"
+                      style={{
+                        height: `${item.overduePercent > 0 ? Math.max(3, Math.min(100, item.overduePercent)) : 3}%`,
+                        backgroundColor: RED,
+                        opacity: item.overduePercent > 0 ? 1 : 0.25
+                      }}
+                      title={`${item.name} · Overdue ${item.overduePercent}%`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-1.5 flex justify-between gap-1.5 sm:gap-2">
+            {items.map((item) => {
+              const label = item.shortName || item.name;
+              return (
+                <div key={item.id} className="min-w-0 flex-1 text-center">
+                  <span
+                    className={`chart-label block truncate font-label text-[9px] font-semibold ${CHART.muted}`}
+                    title={item.name}
+                  >
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <p className={`mt-2 font-body text-[10px] font-medium ${CHART.muted}`}>
+        Each cluster is one project (0–100%). Yellow line joins delivery progress across projects.
+      </p>
     </div>
   );
 }

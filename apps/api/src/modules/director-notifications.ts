@@ -26,7 +26,7 @@ async function getOrgUsersForRoleKeys(
   const ids = [...new Set(memberIds.filter((id) => matchedUserIds.includes(id)))];
   if (ids.length === 0) return [];
   const users = await prisma.user.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, deletedAt: null, status: "active" },
     select: { id: true, email: true, notificationEmail: true }
   });
   return users.map((u) => ({ id: u.id, email: u.notificationEmail?.trim() || u.email }));

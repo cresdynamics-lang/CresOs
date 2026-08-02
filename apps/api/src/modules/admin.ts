@@ -6,7 +6,8 @@ import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { requireRoles, ROLE_KEYS } from "./auth-middleware";
 import { PERMISSIONS } from "./permissions-registry";
-import { sendWelcomeEmail } from "../lib/resend";
+import { sendAccountApprovedEmail, sendOutboundEmail, sendWelcomeEmail } from "../lib/resend";
+import { isAccountActive, isAccountPending } from "../lib/user-account-status";
 import { logEmailSent } from "./admin-activity";
 import { notifyAdminsInApp } from "./director-notifications";
 import { processFinanceApprovalEscalations } from "./finance-approval-escalation";
@@ -993,7 +994,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
   );
 
   router.post(
-    "/users/:id/suspend",
+    "/users/:id/approve",
     requireRoles([ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
@@ -1005,10 +1006,114 @@ export default function adminRouter(prisma: PrismaClient): Router {
         res.status(404).json({ error: "User not found" });
         return;
       }
+      if (!isAccountPending(existing.status)) {
+        res.status(400).json({
+          error:
+            existing.status === "active"
+              ? "User is already active"
+              : `User status is "${existing.status}" and cannot be approved from pending`
+        });
+        return;
+      }
+
+      // Approve only — roles are assigned separately by admin via role-assignments.
+      const user = await prisma.user.update({
+        where: { id },
+        data: { status: "active" }
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          orgId,
+          actorId: adminId,
+          type: "admin.user.approved",
+          entityType: "user",
+          entityId: id,
+          metadata: { email: user.email }
+        }
+      });
+
+      const displayName = user.name?.trim() || "there";
+      const subject = "Your CresOS account has been approved";
+      const body =
+        "Your account has been approved. You can sign in with your registered email and password. An administrator will assign your roles for workspace access.";
+
+      await prisma.notification.create({
+        data: {
+          orgId,
+          channel: "in_app",
+          to: user.id,
+          subject,
+          body,
+          status: "sent",
+          type: "account.approved",
+          tier: "account"
+        }
+      });
+
+      const toEmail = (user.notificationEmail?.trim() || user.email).trim();
+      if (toEmail) {
+        const result = await sendAccountApprovedEmail(toEmail, user.name);
+        await prisma.notification.create({
+          data: {
+            orgId,
+            channel: "email",
+            to: toEmail,
+            subject,
+            body,
+            status: result.ok ? "sent" : "failed",
+            error: result.ok ? null : result.error.slice(0, 900),
+            sentAt: new Date(),
+            type: "account.approved",
+            tier: "account"
+          }
+        });
+        if (result.ok) {
+          await logEmailSent(prisma, {
+            orgId,
+            to: toEmail,
+            subject,
+            body,
+            type: "account.approved",
+            actorId: adminId
+          });
+        }
+      }
+
+      await notifyAdminsInApp(
+        prisma,
+        orgId,
+        "Registration approved",
+        `${user.name?.trim() || user.email} was approved. Assign roles under Users if needed.`,
+        { type: "admin.user.approved", tier: "structural", excludeUserIds: [adminId] }
+      );
+
+      res.json(user);
+    }
+  );
+
+  router.post(
+    "/users/:id/suspend",
+    requireRoles([ROLE_KEYS.admin]),
+    async (req, res) => {
+      const orgId = req.auth!.orgId;
+      const adminId = req.auth!.userId;
+      const { id } = req.params;
+
+      if (id === adminId) {
+        res.status(400).json({ error: "You cannot disable your own account" });
+        return;
+      }
+
+      const existing = await prisma.user.findFirst({ where: { id, orgId, deletedAt: null } });
+      if (!existing) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
 
       const user = await prisma.user.update({
         where: { id },
-        data: { status: "suspended" }
+        data: { status: "disabled" }
       });
 
       await prisma.session.updateMany({
@@ -1020,12 +1125,13 @@ export default function adminRouter(prisma: PrismaClient): Router {
         data: {
           orgId: user.orgId!,
           actorId: adminId,
-          type: "admin.user.suspended",
+          type: "admin.user.disabled",
           entityType: "user",
           entityId: id
         }
       });
 
+      // No notification when disabling — user is told on next login attempt only.
       res.json(user);
     }
   );
@@ -1044,6 +1150,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
         return;
       }
 
+      const wasInactive = !isAccountActive(existing.status);
       const user = await prisma.user.update({
         where: { id },
         data: { status: "active" }
@@ -1058,6 +1165,45 @@ export default function adminRouter(prisma: PrismaClient): Router {
           entityId: id
         }
       });
+
+      if (wasInactive) {
+        const displayName = user.name?.trim() || "there";
+        const subject = "Your CresOS account has been activated";
+        const body =
+          "Your account is active again. You can sign in to CresOS with your usual email and password.";
+        await prisma.notification.create({
+          data: {
+            orgId,
+            channel: "in_app",
+            to: user.id,
+            subject,
+            body,
+            status: "sent",
+            type: "account.activated",
+            tier: "account"
+          }
+        });
+        const toEmail = (user.notificationEmail?.trim() || user.email).trim();
+        if (toEmail) {
+          const text = `Hi ${displayName},\n\n${body}\n\n— CresOS`;
+          const html = `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#333;max-width:560px"><p>Hi ${displayName.replace(/&/g, "&amp;").replace(/</g, "&lt;")},</p><p>${body}</p><p style="color:#666;font-size:0.9em">— CresOS</p></body></html>`;
+          const result = await sendOutboundEmail({ to: toEmail, subject, text, html });
+          await prisma.notification.create({
+            data: {
+              orgId,
+              channel: "email",
+              to: toEmail,
+              subject,
+              body,
+              status: result.ok ? "sent" : "failed",
+              error: result.ok ? null : result.error.slice(0, 900),
+              sentAt: new Date(),
+              type: "account.activated",
+              tier: "account"
+            }
+          });
+        }
+      }
 
       res.json(user);
     }
@@ -1704,7 +1850,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
 
       // Send a confirmation email when profile/contact details are updated by admin
       const toEmail = updated.notificationEmail?.trim() || updated.email;
-      if (toEmail) {
+      if (toEmail && isAccountActive(updated.status)) {
         try {
           const result = await sendWelcomeEmail(toEmail, updated.name);
           if (result.ok) {
@@ -1832,8 +1978,7 @@ export default function adminRouter(prisma: PrismaClient): Router {
       await prisma.user.update({
         where: { id },
         data: {
-          passwordHash,
-          passwordLastChangedAt: new Date()
+          passwordHash
         }
       });
 

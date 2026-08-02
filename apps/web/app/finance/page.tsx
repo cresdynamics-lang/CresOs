@@ -37,8 +37,16 @@ type Invoice = {
   projectId: string | null;
   clientId?: string;
   project: { id: string; name: string } | null;
-  client?: { id: string; name: string; email?: string | null } | null;
+  client?: { id: string; name: string; email?: string | null; kraPin?: string | null } | null;
   items: InvoiceItem[];
+  buyerKraPin?: string | null;
+  etimsStatus?: string | null;
+  etimsInvcNo?: number | null;
+  etimsSdcId?: string | null;
+  etimsMrcNo?: string | null;
+  etimsQrCodeUrl?: string | null;
+  etimsResultMsg?: string | null;
+  etimsSubmittedAt?: string | null;
 };
 
 function formatShortDate(iso: string | null | undefined): string {
@@ -339,7 +347,7 @@ export default function FinancePage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string; kraPin?: string | null }[]>([]);
   const [projects, setProjects] = useState<
     {
       id: string;
@@ -368,13 +376,15 @@ export default function FinancePage() {
     dueDate: string;
     lines: InvoiceLineForm[];
     notes: string;
+    buyerKraPin: string;
   }>({
     clientId: "",
     projectId: "",
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: "",
     lines: [emptyInvoiceLine()],
-    notes: ""
+    notes: "",
+    buyerKraPin: ""
   });
   const [invoiceSubmitError, setInvoiceSubmitError] = useState<string | null>(null);
 
@@ -471,6 +481,14 @@ export default function FinancePage() {
             project: inv.project ?? null,
             clientId: inv.clientId ?? inv.client?.id,
             client: inv.client ?? null,
+            buyerKraPin: inv.buyerKraPin ?? null,
+            etimsStatus: inv.etimsStatus ?? null,
+            etimsInvcNo: inv.etimsInvcNo ?? null,
+            etimsSdcId: inv.etimsSdcId ?? null,
+            etimsMrcNo: inv.etimsMrcNo ?? null,
+            etimsQrCodeUrl: inv.etimsQrCodeUrl ?? null,
+            etimsResultMsg: inv.etimsResultMsg ?? null,
+            etimsSubmittedAt: inv.etimsSubmittedAt ?? null,
             items: Array.isArray(inv.items)
               ? inv.items.map((it: any) => ({
                   id: it.id,
@@ -999,6 +1017,7 @@ export default function FinancePage() {
           dueDate: invoiceForm.dueDate || undefined,
           currency: "KES",
           notes: invoiceForm.notes.trim() || undefined,
+          buyerKraPin: invoiceForm.buyerKraPin.trim() || undefined,
           items
         })
       });
@@ -1007,7 +1026,11 @@ export default function FinancePage() {
             success?: boolean;
             error?: string;
             message?: string;
-            data?: { invoice?: { id?: string }; downloadUrl?: string };
+            data?: {
+              invoice?: { id?: string; etimsStatus?: string | null };
+              downloadUrl?: string;
+              etims?: { ok?: boolean; status?: string; resultMsg?: string };
+            };
           }
         | null;
       if (!res.ok) {
@@ -1020,10 +1043,17 @@ export default function FinancePage() {
       const downloadUrl = j?.data?.downloadUrl ? String(j.data.downloadUrl) : null;
       if (downloadUrl) await downloadWithAuth(downloadUrl, `invoice-${createdId ?? "download"}.pdf`);
       else if (createdId) await downloadWithAuth(`/finance/invoices/${createdId}/pdf`, `invoice-${createdId}.pdf`);
-      setInvoiceForm((f) => ({ ...f, lines: [emptyInvoiceLine()], notes: "" }));
+      setInvoiceForm((f) => ({ ...f, lines: [emptyInvoiceLine()], notes: "", buyerKraPin: "" }));
       setInvoiceSubmitError(null);
       setShowInvoiceModal(false);
       loadData();
+      const etims = j?.data?.etims;
+      if (etims?.resultMsg) {
+        // light confirmation via error channel only on failure
+        if (!etims.ok && etims.status === "failed") {
+          console.warn("eTIMS:", etims.resultMsg);
+        }
+      }
     } catch (err) {
       setInvoiceSubmitError(err instanceof Error ? err.message : "Network error creating invoice.");
     }
@@ -1080,7 +1110,7 @@ export default function FinancePage() {
   const pageMeta = FINANCE_PAGE_TITLES[section];
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-6">
+    <section className={`${financeNeu.workspace} flex min-h-0 w-full min-w-0 flex-1 flex-col gap-6 bg-white`}>
       {section === "overview" && canSeeMoneyStats ? (
         <FinanceOverviewDashboard
           report={report}
@@ -1097,12 +1127,12 @@ export default function FinancePage() {
           showWelcomeBanner
         />
       ) : (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E1DFDD] pb-4">
           <div className="min-w-0">
-            <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-500/80">Finance</p>
-            <h1 className="mt-1 text-xl font-semibold text-[#1A1D26] sm:text-2xl">{pageMeta.title}</h1>
+            <p className={financeNeu.eyebrow}>Finance</p>
+            <h1 className={`mt-0.5 ${financeNeu.titleSm}`}>{pageMeta.title}</h1>
             {pageMeta.description ? (
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5B6472]">{pageMeta.description}</p>
+              <p className={`mt-2 max-w-3xl ${financeNeu.body}`}>{pageMeta.description}</p>
             ) : null}
           </div>
           {section === "invoices" && canCreateInvoice && (isFinance || isAdmin) && clients.length > 0 && (
@@ -1586,6 +1616,21 @@ export default function FinancePage() {
                 </FinanceFlatTd>
                 <FinanceFlatTd>
                   <FinanceStatusLabel status={inv.status} />
+                  {inv.etimsStatus ? (
+                    <p
+                      className={`mt-1 text-[10px] font-semibold uppercase tracking-wide ${
+                        inv.etimsStatus === "submitted" || inv.etimsStatus === "mock"
+                          ? "text-[#1B6B3A]"
+                          : inv.etimsStatus === "failed"
+                            ? "text-[#C62828]"
+                            : "text-[#5B6472]"
+                      }`}
+                      title={inv.etimsResultMsg || undefined}
+                    >
+                      eTIMS: {inv.etimsStatus}
+                      {inv.buyerKraPin ? ` · ${inv.buyerKraPin}` : inv.client?.kraPin ? ` · ${inv.client.kraPin}` : ""}
+                    </p>
+                  ) : null}
                 </FinanceFlatTd>
                 <FinanceFlatTd align="right">
                   <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
@@ -1594,6 +1639,29 @@ export default function FinancePage() {
                     >
                       Download PDF
                     </FinanceTextAction>
+                    {isFinance && inv.etimsStatus !== "submitted" && inv.etimsStatus !== "mock" ? (
+                      <FinanceTextAction
+                        onClick={() => {
+                          void (async () => {
+                            const pin = window.prompt(
+                              "Buyer KRA PIN for eTIMS filing (optional if already saved)",
+                              inv.buyerKraPin || inv.client?.kraPin || ""
+                            );
+                            if (pin === null) return;
+                            await apiFetch(`/finance/invoices/${inv.id}/etims/submit`, {
+                              method: "POST",
+                              body: JSON.stringify({
+                                force: true,
+                                buyerKraPin: pin.trim() || undefined
+                              })
+                            });
+                            loadData();
+                          })();
+                        }}
+                      >
+                        File eTIMS
+                      </FinanceTextAction>
+                    ) : null}
                     {isFinance && (
                       <FinanceTextAction tone="danger" onClick={() => void deleteInvoice(inv.id)}>
                         Delete

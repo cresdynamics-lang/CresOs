@@ -1,16 +1,38 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { WorkspaceAside } from "../../components/workspace/workspace-aside";
 import { salesNeu } from "../../components/sales/sales-theme";
 import { SalesSideNav } from "./sales-workspace-nav";
 import { isDirectorOnly } from "../../lib/is-director-only";
 import { DirectorLayoutClient } from "../director/director-layout-client";
+import {
+  SidePanelHamburgerButton,
+  WorkspaceSidePanelShell
+} from "../../components/workspace/workspace-side-panel-shell";
+
+const SIDEBAR_STORAGE_KEY = "cresos.sales.sidebarOpen";
+
+function pageTitle(pathname: string | null): string {
+  if (!pathname) return "Overview";
+  if (pathname === "/sales" || pathname === "/sales/") return "Overview";
+  if (pathname.startsWith("/sales/messages")) return "Mails";
+  if (pathname.startsWith("/sales/invoices")) return "Invoices";
+  if (pathname.startsWith("/sales/onboarding")) return "Playbook";
+  if (pathname.startsWith("/leads")) return "Leads";
+  if (pathname.startsWith("/crm")) return "CRM";
+  if (pathname.startsWith("/reports")) return "Reports";
+  if (pathname.startsWith("/projects")) return "Projects";
+  if (pathname.startsWith("/community")) return "Community";
+  if (pathname.startsWith("/settings")) return "Settings";
+  return "Sales";
+}
 
 export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { auth, hydrated } = useAuth();
 
   if (isDirectorOnly(auth.roleKeys)) {
@@ -29,7 +51,7 @@ export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
   if (!hydrated || !auth.accessToken) {
     return (
       <div
-        className={`${salesNeu.workspace} sales-fullscreen flex h-full items-center justify-center text-sm text-slate-400 ${salesNeu.canvas}`}
+        className={`${salesNeu.workspace} sales-fullscreen flex h-full items-center justify-center text-sm text-[#8A8886] ${salesNeu.canvas}`}
       >
         Loading sales…
       </div>
@@ -39,23 +61,24 @@ export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
   if (!canAccessSales) return null;
 
   return (
-    <div
-      className={`${salesNeu.workspace} sales-fullscreen ${salesNeu.canvas} flex h-full min-h-0 w-full flex-1 overflow-hidden`}
+    <WorkspaceSidePanelShell
+      storageKey={SIDEBAR_STORAGE_KEY}
+      shellClassName={`${salesNeu.workspace} sales-fullscreen ${salesNeu.canvas}`}
+      pageTitle={pageTitle(pathname)}
+      fallbackHref="/sales"
+      renderPanel={({ toggleSidebar }) => (
+        <WorkspaceAside
+          title="Sales"
+          subtitle="Pipeline · delivery · revenue"
+          themeKey="sales"
+          className="!h-full !w-full !max-w-none"
+          headerAction={<SidePanelHamburgerButton open onClick={toggleSidebar} />}
+        >
+          <SalesSideNav />
+        </WorkspaceAside>
+      )}
     >
-      <WorkspaceAside
-        title="Sales"
-        subtitle="Pipeline · delivery · revenue"
-        themeKey="sales"
-        className="hidden w-[15rem] md:flex"
-      >
-        <SalesSideNav />
-      </WorkspaceAside>
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
-          {children}
-        </div>
-      </div>
-    </div>
+      {children}
+    </WorkspaceSidePanelShell>
   );
 }

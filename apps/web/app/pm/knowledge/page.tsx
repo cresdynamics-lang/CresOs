@@ -23,9 +23,10 @@ type KnowledgeChunk = {
   projectId: string | null;
 };
 
-export default function PmKnowledgePage() {
+export function KnowledgePoolConsole({ variant = "pm" }: { variant?: "pm" | "admin" } = {}) {
   const { apiFetch, auth } = useAuth();
-  const canAccess = canAccessKnowledgePool(auth.roleKeys);
+  const isAdminShell = variant === "admin";
+  const canAccess = canAccessKnowledgePool(auth.roleKeys) || auth.roleKeys.includes("admin");
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([]);
   const [insights, setInsights] = useState<string | null>(null);
@@ -174,35 +175,123 @@ export default function PmKnowledgePage() {
     void loadInsights();
   }, [canAccess, loadInsights]);
 
-  if (!canAccess) return null;
+  if (!canAccess) {
+    return (
+      <p className="px-4 py-8 text-sm text-[#8B93A1]">
+        You don’t have access to the knowledge data pool.
+      </p>
+    );
+  }
 
-  return (
-    <PmFullscreenPage>
-      <PmPageHero
-        eyebrow="CresOS intelligence"
-        title="Knowledge pool"
-        description="Searchable copy of every action, project update, dev/sales/director communication, report, and email — full org history."
-        backHref="/pm"
-        backLabel="PM overview"
-        actions={
+  const panelInset = pmNeu.panelInset;
+  const listRow = pmNeu.listRow;
+  const btnPrimary = pmNeu.btnPrimary;
+  const btnGhost = pmNeu.btnGhost;
+
+  const feedBody = (
+    <>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <input
+          className="min-w-[12rem] flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26]"
+          placeholder="Search — developers, Wilson, project name, blockers…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void runSearch();
+          }}
+        />
+        <button type="button" className={btnPrimary} disabled={searching} onClick={() => void runSearch()}>
+          {searching ? "Searching…" : "Search with AI"}
+        </button>
+        {sourceFilter ? (
+          <button type="button" className={btnGhost} onClick={() => setSourceFilter("")}>
+            Clear filter
+          </button>
+        ) : null}
+      </div>
+      {searchAnswer ? (
+        <div className={`${panelInset} mb-4 whitespace-pre-wrap border border-teal-500/20 px-4 py-3 text-sm leading-relaxed text-[#1A1D26]`}>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#2D5A5A]">
+            {searchAi ? "AI answer from knowledge pool" : "Search summary"}
+          </p>
+          {searchAnswer}
+        </div>
+      ) : null}
+      {error ? <p className="mb-3 text-sm text-[#C62828]">{error}</p> : null}
+      {loading ? (
+        <p className="text-sm text-[#5B6472]">Loading knowledge…</p>
+      ) : chunks.length === 0 ? (
+        <p className="text-sm text-[#5B6472]">
+          No knowledge indexed yet. Click <strong className="text-[#5B6472]">Sync full history</strong> to copy all
+          existing actions, communications, and reports into the pool.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {chunks.map((c) => (
+            <li key={c.id} className={`${listRow} px-3 py-3`}>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-[#5B6472]">
+                <span>
+                  {c.kind} · {c.sourceType}
+                </span>
+                <span>{new Date(c.occurredAt).toLocaleString()}</span>
+              </div>
+              {c.title ? <p className="mt-1 text-sm font-medium text-[#1A1D26]">{c.title}</p> : null}
+              <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#5B6472]">
+                {c.content.length > 500 ? `${c.content.slice(0, 500)}…` : c.content}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+
+  const content = (
+    <>
+      {!isAdminShell ? (
+        <PmPageHero
+          eyebrow="CresOS intelligence"
+          title="Knowledge pool"
+          description="Searchable copy of every action, project update, dev/sales/director communication, report, and email — full org history."
+          backHref="/pm"
+          backLabel="PM overview"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={btnGhost} disabled={syncing} onClick={() => void syncPool()}>
+                {syncing ? "Indexing all data…" : "Sync full history"}
+              </button>
+              <button type="button" className={btnPrimary} disabled={loadingInsights} onClick={() => void loadInsights()}>
+                {loadingInsights ? "Analyzing…" : "Refresh AI insights"}
+              </button>
+            </div>
+          }
+        />
+      ) : (
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-display text-lg font-bold tracking-tight text-[#1A1D26]">Data pool</h2>
+            <p className="mt-0.5 max-w-2xl font-body text-sm font-medium text-[#5B6472]">
+              Searchable org history — actions, reports, messages, and AI insights.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={pmNeu.btnGhost} disabled={syncing} onClick={() => void syncPool()}>
-              {syncing ? "Indexing all data…" : "Sync full history"}
+            <button type="button" className={btnGhost} disabled={syncing} onClick={() => void syncPool()}>
+              {syncing ? "Indexing…" : "Sync full history"}
             </button>
-            <button type="button" className={pmNeu.btnPrimary} disabled={loadingInsights} onClick={() => void loadInsights()}>
+            <button type="button" className={btnPrimary} disabled={loadingInsights} onClick={() => void loadInsights()}>
               {loadingInsights ? "Analyzing…" : "Refresh AI insights"}
             </button>
           </div>
-        }
-      />
+        </div>
+      )}
 
       {stats ? (
-        <div className="mx-5 mb-4 flex flex-wrap gap-3 lg:mx-8">
-          <div className={`${pmNeu.panelInset} min-w-[8rem] px-4 py-3`}>
+        <div className={`mb-4 flex flex-wrap gap-3 ${isAdminShell ? "" : "mx-5 lg:mx-8"}`}>
+          <div className={`${panelInset} min-w-[8rem] px-4 py-3`}>
             <p className="text-[10px] uppercase tracking-wide text-[#5B6472]">Total indexed</p>
             <p className="text-2xl font-bold tabular-nums text-[#2D5A5A]">{stats.total}</p>
           </div>
-          <div className={`${pmNeu.panelInset} min-w-[8rem] px-4 py-3`}>
+          <div className={`${panelInset} min-w-[8rem] px-4 py-3`}>
             <p className="text-[10px] uppercase tracking-wide text-[#5B6472]">Last 30 days</p>
             <p className="text-2xl font-bold tabular-nums text-[#1A1D26]">{stats.recent30Days}</p>
           </div>
@@ -217,7 +306,7 @@ export default function PmKnowledgePage() {
                     onClick={() => {
                       setSourceFilter((cur) => (cur === source ? "" : source));
                     }}
-                    className={`${pmNeu.panelInset} min-w-[7rem] px-4 py-3 text-left transition ${
+                    className={`${panelInset} min-w-[7rem] px-4 py-3 text-left transition ${
                       sourceFilter === source ? "ring-1 ring-teal-500/50" : ""
                     }`}
                   >
@@ -230,65 +319,48 @@ export default function PmKnowledgePage() {
       ) : null}
 
       {insights ? (
-        <PmSection label={insightsAi ? "AI delivery intelligence" : "Delivery intelligence"}>
-          <div className={`${pmNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-[#5B6472]`}>{insights}</div>
-        </PmSection>
+        isAdminShell ? (
+          <div className="mb-4">
+            <p className="mb-2 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-[#8B93A1]">
+              {insightsAi ? "AI delivery intelligence" : "Delivery intelligence"}
+            </p>
+            <div className={`${panelInset} whitespace-pre-wrap text-sm leading-relaxed text-[#5B6472]`}>{insights}</div>
+          </div>
+        ) : (
+          <PmSection label={insightsAi ? "AI delivery intelligence" : "Delivery intelligence"}>
+            <div className={`${pmNeu.panelInset} whitespace-pre-wrap text-sm leading-relaxed text-[#5B6472]`}>{insights}</div>
+          </PmSection>
+        )
       ) : null}
 
-      <PmSection label="Knowledge feed" description="Search across all indexed copies — team profiles, tasks, comments, messages, reports, CRM, emails, and platform actions.">
-        <div className="mb-4 flex flex-wrap gap-2">
-          <input
-            className="min-w-[12rem] flex-1 rounded-lg border border-[#E5E9EF] bg-white px-3 py-2 text-sm text-[#1A1D26]"
-            placeholder="Search — developers, Wilson, project name, blockers…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void runSearch();
-            }}
-          />
-          <button type="button" className={pmNeu.btnPrimary} disabled={searching} onClick={() => void runSearch()}>
-            {searching ? "Searching…" : "Search with AI"}
-          </button>
-          {sourceFilter ? (
-            <button type="button" className={pmNeu.btnGhost} onClick={() => { setSourceFilter(""); }}>
-              Clear filter
-            </button>
-          ) : null}
-        </div>
-        {searchAnswer ? (
-          <div className={`${pmNeu.panelInset} mb-4 whitespace-pre-wrap border border-teal-500/20 px-4 py-3 text-sm leading-relaxed text-[#1A1D26]`}>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#2D5A5A]">
-              {searchAi ? "AI answer from knowledge pool" : "Search summary"}
-            </p>
-            {searchAnswer}
-          </div>
-        ) : null}
-        {error ? <p className="mb-3 text-sm text-[#C62828]">{error}</p> : null}
-        {loading ? (
-          <p className="text-sm text-[#5B6472]">Loading knowledge…</p>
-        ) : chunks.length === 0 ? (
-          <p className="text-sm text-[#5B6472]">
-            No knowledge indexed yet. Click <strong className="text-[#5B6472]">Sync full history</strong> to copy all existing actions, communications, and reports into the pool.
+      {isAdminShell ? (
+        <div>
+          <p className="mb-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-[#8B93A1]">
+            Knowledge feed
           </p>
-        ) : (
-          <ul className="space-y-2">
-            {chunks.map((c) => (
-              <li key={c.id} className={`${pmNeu.listRow} px-3 py-3`}>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-[#5B6472]">
-                  <span>
-                    {c.kind} · {c.sourceType}
-                  </span>
-                  <span>{new Date(c.occurredAt).toLocaleString()}</span>
-                </div>
-                {c.title ? <p className="mt-1 text-sm font-medium text-[#1A1D26]">{c.title}</p> : null}
-                <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-[#5B6472]">
-                  {c.content.length > 500 ? `${c.content.slice(0, 500)}…` : c.content}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </PmSection>
-    </PmFullscreenPage>
+          <p className="mb-4 font-body text-xs font-medium text-[#5B6472]">
+            Search across team profiles, tasks, messages, reports, CRM, emails, and platform actions.
+          </p>
+          {feedBody}
+        </div>
+      ) : (
+        <PmSection
+          label="Knowledge feed"
+          description="Search across all indexed copies — team profiles, tasks, comments, messages, reports, CRM, emails, and platform actions."
+        >
+          {feedBody}
+        </PmSection>
+      )}
+    </>
   );
+
+  if (isAdminShell) {
+    return <div className="flex min-h-0 w-full flex-col">{content}</div>;
+  }
+
+  return <PmFullscreenPage>{content}</PmFullscreenPage>;
+}
+
+export default function PmKnowledgePage() {
+  return <KnowledgePoolConsole variant="pm" />;
 }

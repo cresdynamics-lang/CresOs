@@ -1,11 +1,11 @@
-"use client";
-
+import type { Metadata } from "next";
 import { EmailAutomationConsole } from "./email-automation-console";
 
-export default function EmailAutomationPage() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <EmailAutomationConsole />
-    </div>
-  );
+export const metadata: Metadata = {
+  title: "Email AI | CresOS Admin",
+  description: "Inbox drafts, approvals, and email automation for the admin workspace."
+};
+
+export default function AdminEmailAutomationPage() {
+  return <EmailAutomationConsole />;
 }

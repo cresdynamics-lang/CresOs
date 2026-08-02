@@ -21,6 +21,11 @@ export async function inviteDevelopersToProject(
 
   let invited = 0;
   for (const uid of userIds) {
+    const target = await prisma.user.findFirst({
+      where: { id: uid, orgId, deletedAt: null, status: "active" },
+      select: { id: true }
+    });
+    if (!target) continue;
     const hasDev = await prisma.userRole.findFirst({ where: { userId: uid, roleId: developerRole.id } });
     if (!hasDev) continue;
     const row = await prisma.projectDeveloperAssignment
