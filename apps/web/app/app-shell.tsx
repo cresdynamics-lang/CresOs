@@ -341,9 +341,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     workspace === "admin" ||
     workspace === "sales" ||
     workspace === "developer" ||
+    workspace === "director" ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/sales") ||
     pathname.startsWith("/developer") ||
+    pathname.startsWith("/director") ||
     isAdminOnly(roles);
   const hideShellChrome = false;
 

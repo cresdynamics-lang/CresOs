@@ -56,7 +56,7 @@ export const adminNeu = {
   panel: `rounded-lg border border-[#E1DFDD] bg-white p-4 ${fluentCardShadow} sm:p-5`,
   panelInset: `rounded-lg border border-[#E1DFDD] bg-white p-3 sm:p-4 ${fluentCardShadow}`,
   card: `rounded-lg border border-[#E1DFDD] bg-white ${fluentCardShadow}`,
-  chartPanel: `relative flex min-h-[min(16rem,36vh)] w-full flex-col overflow-hidden rounded-lg border border-[#E1DFDD] bg-white p-4 pt-5 ${fluentCardShadow} sm:p-5 sm:pt-5`,
+  chartPanel: `relative flex min-h-[min(12rem,32vh)] w-full flex-col overflow-hidden rounded-lg border border-[#E1DFDD] bg-white p-3 pt-3.5 ${fluentCardShadow} sm:p-4 sm:pt-4`,
   kpiStrip: "bg-transparent p-0",
   commandBar:
     "flex flex-wrap items-center justify-between gap-2 border-b border-[#E1DFDD] bg-white px-3 py-3 sm:px-4",
@@ -76,9 +76,9 @@ export const adminNeu = {
   navActive: "bg-[#343741] font-semibold text-white shadow-[inset_3px_0_0_0_#FFFFFF]",
 
   segIdle:
-    "rounded-md border border-[#E1DFDD] bg-white px-3 py-1.5 text-sm font-semibold text-[#605E5C] hover:bg-[#F5F5F5]",
+    "rounded-md border border-[#E1DFDD] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#605E5C] hover:bg-[#F5F5F5]",
   segActive:
-    "rounded-md border border-[#005CAB] bg-[#005CAB] px-3 py-1.5 text-sm font-semibold text-white",
+    "rounded-md border border-[#005CAB] bg-[#005CAB] px-2.5 py-1 text-[12px] font-semibold text-white",
 
   btnPrimary:
     "rounded-md bg-[#005CAB] px-4 py-2.5 font-label text-sm font-semibold tracking-wide text-white shadow-sm hover:bg-[#004A8C] disabled:opacity-50",

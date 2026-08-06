@@ -1029,7 +1029,7 @@ export default function DashboardPage() {
 
   if (isDirectorOnlyUser) {
     return (
-      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden px-3 py-4 sm:px-6 sm:py-5">
+      <section className="flex min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden">
         <DirectorOverviewDashboard
           welcomeHeadline={welcomeHeadline}
           roleKeys={auth.roleKeys}

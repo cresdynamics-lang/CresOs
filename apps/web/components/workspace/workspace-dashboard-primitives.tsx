@@ -41,15 +41,15 @@ export function WorkspaceDashboardSection({
 }
 
 const URGENCY_TITLE: Record<WorkspaceUrgencyTone, string> = {
-  danger: "font-display text-lg font-bold leading-snug tracking-tight text-[#C62828] sm:text-xl",
-  warning: "font-display text-base font-semibold leading-snug tracking-tight text-amber-100 sm:text-lg",
-  info: "font-display text-base font-semibold leading-snug text-[#1A1D26]"
+  danger: "font-display text-[1.125rem] font-bold leading-snug tracking-tight text-[#C50F1F] sm:text-[1.35rem]",
+  warning: "font-display text-[1.125rem] font-bold leading-snug tracking-tight text-[#8A7000] sm:text-[1.35rem]",
+  info: "font-display text-[1.125rem] font-bold leading-snug tracking-tight text-[#005CAB] sm:text-[1.35rem]"
 };
 
 const URGENCY_ACTION: Record<WorkspaceUrgencyTone, string> = {
-  danger: "bg-rose-600/95 text-white hover:bg-rose-500 shadow-[0_4px_14px_rgba(244,63,94,0.35)]",
-  warning: "bg-amber-600/95 text-white hover:bg-amber-500 shadow-[0_4px_14px_rgba(245,158,11,0.3)]",
-  info: "bg-sky-600/95 text-white hover:bg-sky-500"
+  danger: "bg-[#C50F1F] text-white hover:bg-[#A50D19]",
+  warning: "bg-[#C19C00] text-white hover:bg-[#A68500]",
+  info: "bg-[#005CAB] text-white hover:bg-[#004A8C]"
 };
 
 type WorkspacePriorityGridProps = {
@@ -61,18 +61,18 @@ type WorkspacePriorityGridProps = {
 export function WorkspacePriorityGrid({ items, panelClass, dismissible }: WorkspacePriorityGridProps) {
   if (items.length === 0) return null;
   return (
-    <ul className="mt-3 grid w-full gap-3 lg:grid-cols-2">
+    <ul className="mt-2 grid w-full gap-2 lg:grid-cols-2">
       {items.map((item) => (
-        <li key={item.id} className={panelClass(item.tone)}>
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-4">
+        <li key={item.id} className={`${panelClass(item.tone)} bg-white`}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3.5 sm:px-4">
             <div className="min-w-0 flex-1">
               <p className={URGENCY_TITLE[item.tone]}>{item.title}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-[#5B6472]">{item.detail}</p>
+              <p className="mt-1.5 font-body text-[13px] font-medium leading-relaxed text-[#605E5C]">{item.detail}</p>
               {dismissible?.(item.id)}
             </div>
             <Link
               href={item.href}
-              className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-bold uppercase tracking-wide sm:text-sm ${URGENCY_ACTION[item.tone]}`}
+              className={`shrink-0 rounded-md px-3 py-1.5 font-label text-[11px] font-bold uppercase tracking-[0.08em] transition-colors ${URGENCY_ACTION[item.tone]}`}
             >
               {item.action} →
             </Link>
@@ -94,22 +94,27 @@ export function WorkspaceAlignedTips({ tips, aiHint, panelClass, roleKeys = [] }
   if (tips.length === 0 && !aiHint) return null;
   return (
     <WorkspaceDashboardSection label="Stay aligned" roleKeys={roleKeys} tone="focus">
-      <div className={`mt-0 ${panelClass}`}>
+      <div className={`mt-0 bg-white ${panelClass}`}>
         {tips.length > 0 ? (
-          <ul className="space-y-2.5">
+          <ul className="space-y-3">
             {tips.map((tip) => (
-              <li key={tip} className="flex gap-2.5 text-sm leading-relaxed text-[#5B6472]">
-                <span className="mt-0.5 shrink-0 text-amber-500/90" aria-hidden>
-                  •
+              <li key={tip} className="flex gap-3">
+                <span
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#005CAB]"
+                  aria-hidden
+                />
+                <span className="font-body text-[14px] font-medium leading-relaxed tracking-[-0.01em] text-[#3B3A39]">
+                  {tip}
                 </span>
-                <span>{tip}</span>
               </li>
             ))}
           </ul>
         ) : null}
         {aiHint ? (
           <p
-            className={`text-sm leading-relaxed text-violet-200/90 ${tips.length > 0 ? "mt-4 border-t border-[#E5E9EF] pt-4" : ""}`}
+            className={`font-display text-[15px] font-semibold leading-snug tracking-tight text-[#005CAB] ${
+              tips.length > 0 ? "mt-4 border-t border-[#E1DFDD] pt-4" : ""
+            }`}
           >
             {aiHint}
           </p>

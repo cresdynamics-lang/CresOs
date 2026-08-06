@@ -106,7 +106,7 @@ function projectIsInvoiceReady(project: Project): boolean {
 export default function SalesInvoicesPage() {
   const router = useRouter();
   const { auth, apiFetch, hydrated } = useAuth();
-  const canAccessSalesInvoices = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
+  const canAccessSalesInvoices = auth.roleKeys.some((r) => ["admin", "sales", "director_admin"].includes(r));
   const isAdmin = auth.roleKeys.includes("admin");
   const [activeTab, setActiveTab] = useState<"dashboard" | "create" | "invoices">("dashboard");
   const [invoices, setInvoices] = useState<Invoice[]>([]);

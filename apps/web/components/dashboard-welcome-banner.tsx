@@ -46,14 +46,14 @@ const ROLE_THEMES: Record<RoleThemeKey, RoleTheme> = {
     dot: "text-[#2D5A5A]"
   },
   director_admin: {
-    border: "border-[#2D5A5A]",
+    border: "border-[#005CAB]",
     bg: "bg-white",
     glow: "shadow-sm",
-    nameColor: "text-[#1A1D26]",
-    roleText: "text-[#2D5A5A]",
-    rolePill: "border-[#E5E9EF] bg-[#E8F0F0] text-[#2D5A5A]",
-    sectionLabel: "text-[#5B6472]",
-    dot: "text-[#2D5A5A]"
+    nameColor: "text-[#201F1E]",
+    roleText: "text-[#005CAB]",
+    rolePill: "border-[#B4CDE8] bg-white text-[#005CAB]",
+    sectionLabel: "text-[#005CAB]",
+    dot: "text-[#005CAB]"
   },
   developer: {
     border: "border-[#2D5A5A]",
@@ -216,14 +216,14 @@ export function DashboardSectionLabel({
   const theme = resolveRoleTheme(roleKeys);
   const color =
     tone === "focus"
-      ? "text-[#2D5A5A]"
+      ? "text-[#005CAB]"
       : tone === "dashboard"
-        ? "text-[#2D5A5A]"
+        ? "text-[#005CAB]"
         : theme.sectionLabel;
 
   return (
     <p
-      className={`mb-3 font-label text-[11px] font-semibold uppercase tracking-[0.22em] ${color}`}
+      className={`mb-2.5 font-label text-[11px] font-bold uppercase tracking-[0.18em] ${color}`}
     >
       {children}
     </p>

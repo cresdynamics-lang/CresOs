@@ -9,7 +9,6 @@ import { SalesSideNav } from "./sales-workspace-nav";
 import { isDirectorOnly } from "../../lib/is-director-only";
 import { DirectorLayoutClient } from "../director/director-layout-client";
 import {
-  SidePanelHamburgerButton,
   WorkspaceSidePanelShell
 } from "../../components/workspace/workspace-side-panel-shell";
 
@@ -68,13 +67,12 @@ export function SalesLayoutClient({ children }: { children: React.ReactNode }) {
       shellClassName={`${salesNeu.workspace} sales-fullscreen ${salesNeu.canvas}`}
       pageTitle={pageTitle(pathname)}
       fallbackHref="/sales"
-      renderPanel={({ toggleSidebar, closeSidebarMobile }) => (
+      renderPanel={({ closeSidebarMobile }) => (
         <WorkspaceAside
           title="Sales"
           subtitle="CRM · pipeline · delivery"
           themeKey="sales"
           className="!h-full !w-full !max-w-none"
-          headerAction={<SidePanelHamburgerButton open onClick={toggleSidebar} />}
         >
           <SalesSideNav onNavigate={closeSidebarMobile} />
         </WorkspaceAside>

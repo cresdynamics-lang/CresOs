@@ -8,7 +8,7 @@ import { ComposeMessagesPage } from "../../../components/messages/compose-messag
 export default function SalesMessagesPage() {
   const router = useRouter();
   const { auth, hydrated } = useAuth();
-  const allowed = auth.roleKeys.some((r) => ["admin", "sales"].includes(r));
+  const allowed = auth.roleKeys.some((r) => ["admin", "sales", "director_admin"].includes(r));
 
   useEffect(() => {
     if (!hydrated || !auth.accessToken) return;

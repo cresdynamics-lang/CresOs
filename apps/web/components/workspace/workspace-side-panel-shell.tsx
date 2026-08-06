@@ -124,8 +124,9 @@ type WorkspaceSidePanelShellProps = {
 };
 
 /**
- * Shared chrome for admin / sales / developer:
- * hamburger opens/collapses the left side panel.
+ * Shared chrome for admin / sales / developer / director:
+ * one hamburger toggles the left side panel; one profile + bell on the right.
+ * Back is omitted on the workspace home / overview.
  */
 export function WorkspaceSidePanelShell({
   storageKey,
@@ -142,8 +143,14 @@ export function WorkspaceSidePanelShell({
   fab,
   panelWidthClassName = "w-[15rem]"
 }: WorkspaceSidePanelShellProps) {
+  const pathname = usePathname();
   const controls = useWorkspaceSidePanel(storageKey);
   const { sidebarOpen, setSidebarOpen, toggleSidebar, closeSidebarMobile } = controls;
+
+  const isHome =
+    pathname === fallbackHref ||
+    pathname === `${fallbackHref}/` ||
+    (fallbackHref === "/dashboard" && (pathname === "/dashboard" || pathname === "/"));
 
   return (
     <div className={`${shellClassName} flex h-full min-h-0 w-full flex-1 overflow-hidden`}>
@@ -180,8 +187,7 @@ export function WorkspaceSidePanelShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className={`flex shrink-0 items-center gap-2 px-3 py-2 sm:gap-2.5 sm:px-4 ${topBarClassName}`}>
-          <AppBackButton tone="light" fallbackHref={fallbackHref} />
-          {/* Always available so you can re-open a collapsed panel */}
+          {!isHome ? <AppBackButton tone="light" fallbackHref={fallbackHref} iconOnly /> : null}
           <SidePanelHamburgerButton open={sidebarOpen} onClick={toggleSidebar} />
           <h1 className={titleClassName}>{pageTitle}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">

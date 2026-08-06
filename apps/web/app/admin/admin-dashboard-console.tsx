@@ -119,28 +119,28 @@ function SectionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`${adminNeu.cardInteractive} group relative flex min-h-[7.25rem] flex-col justify-between overflow-hidden p-4`}
+      className={`${adminNeu.cardInteractive} group relative flex min-h-[6.25rem] flex-col justify-between overflow-hidden p-3`}
       style={{ borderTopWidth: 3, borderTopColor: a.solid }}
     >
       <div className="flex items-start justify-between gap-2">
         <span
-          className="flex h-9 w-9 items-center justify-center rounded-md text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-white"
           style={{ backgroundColor: a.solid }}
         >
           {icon}
         </span>
         {count !== undefined ? (
           <span
-            className="rounded-md px-2 py-0.5 font-label text-[11px] font-bold tabular-nums text-white"
+            className="rounded-md px-1.5 py-0.5 font-label text-[10px] font-bold tabular-nums text-white"
             style={{ backgroundColor: a.solid }}
           >
             {count}
           </span>
         ) : null}
       </div>
-      <div className="mt-3 min-w-0">
-        <p className="truncate font-body text-[14px] font-semibold leading-tight text-[#242424]">{title}</p>
-        <p className="mt-1 line-clamp-2 font-body text-[12px] font-medium leading-snug text-[#605E5C]">
+      <div className="mt-2 min-w-0">
+        <p className="truncate font-body text-[13px] font-semibold leading-tight text-[#242424]">{title}</p>
+        <p className="mt-0.5 line-clamp-2 font-body text-[11px] font-medium leading-snug text-[#605E5C]">
           {subtitle}
         </p>
       </div>
@@ -552,7 +552,7 @@ export function AdminDashboardConsole() {
         </div>
 
         {canViewFinance && dash?.financialHealth ? (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <AdminStatInline
               label="Revenue"
               value={formatMoney(dash.financialHealth.revenueThisPeriod)}
@@ -579,7 +579,7 @@ export function AdminDashboardConsole() {
         <p className="mb-3 font-body text-[12px] font-medium text-[#8A8886]">
           Click a card for full detail, or open Organisation for users, departments, roles, and clients.
         </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7">
           <SectionCard
             title="Organisation"
             subtitle="Users · depts · roles · clients"

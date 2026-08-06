@@ -667,13 +667,13 @@ html.theme-dark .shell {
   padding-top: 0;
 }
 
-/* Director — bright (brand / sky) */
+/* Director — pure white canvas */
 .director-neu {
-  --director-neu-bg: #f4f7f9;
+  --director-neu-bg: #ffffff;
   --director-neu-surface: #ffffff;
-  --director-neu-inset: #f4f7f9;
-  --director-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --director-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  --director-neu-inset: #ffffff;
+  --director-neu-raised: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --director-neu-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .director-neu .shell {
@@ -687,7 +687,7 @@ html.theme-dark .shell {
 .director-neu textarea {
   border-radius: 0.75rem;
   border-color: #e5e9ef;
-  background-color: #f4f7f9;
+  background-color: #ffffff;
   color: #1e293b;
   box-shadow: var(--director-neu-inset-shadow);
 }

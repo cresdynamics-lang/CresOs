@@ -27,8 +27,8 @@ export type SalesCrmToggle = {
 
 /** CRM activities — toggled after opening CRM in the side panel. */
 export const SALES_CRM_TOGGLES: SalesCrmToggle[] = [
-  { href: "/sales/messages", label: "Mails", roles: ["admin", "sales"], match: "prefix" },
-  { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales"], match: "prefix" },
+  { href: "/sales/messages", label: "Mails", roles: ["admin", "sales", "director_admin"], match: "prefix" },
+  { href: "/sales/invoices", label: "Invoices", roles: ["admin", "sales", "director_admin"], match: "prefix" },
   { href: "/leads", label: "Leads", roles: ["admin", "director_admin", "sales", "finance"], match: "prefix" },
   { href: "/crm", label: "Contacts", roles: ["admin", "sales", "director_admin", "finance"], match: "prefix" },
   { href: "/schedule", label: "Tasks", roles: [...ALL_APP_ROLE_KEYS], match: "prefix" }

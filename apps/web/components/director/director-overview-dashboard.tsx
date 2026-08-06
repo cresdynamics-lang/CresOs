@@ -31,15 +31,12 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const QUICK_LINKS = [
-  { href: "/schedule", label: "Tasks" },
+  { href: "/director/crm", label: "CRM" },
+  { href: "/director/reports", label: "Reports" },
   { href: "/projects", label: "Projects" },
-  { href: "/leads", label: "Leads" },
   { href: "/approvals", label: "Approvals" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/reports", label: "Reports" },
-  { href: "/developer-reports", label: "Dev reports" },
-  { href: "/community", label: "Community" },
-  { href: "/reports/ai", label: "AI summaries" }
+  { href: "/community", label: "Community" }
 ] as const;
 
 const ADMIN_QUICK_LINKS = [
@@ -53,8 +50,8 @@ const ADMIN_QUICK_LINKS = [
   { href: "/community", label: "Community" }
 ] as const;
 
-const CHART_COLORS = ["bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
-const ADMIN_CHART_COLORS = ["bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
+const CHART_COLORS = ["bg-[#005CAB]", "bg-[#0B6A0B]", "bg-[#C19C00]", "bg-[#5C2D91]", "bg-[#C50F1F]"];
+const ADMIN_CHART_COLORS = ["bg-[#005CAB]", "bg-[#0B6A0B]", "bg-[#C19C00]", "bg-[#5C2D91]", "bg-[#C50F1F]"];
 
 type OverviewVariant = "director" | "admin";
 
@@ -217,15 +214,16 @@ export function DirectorOverviewDashboard({
   variant = "director"
 }: DirectorOverviewDashboardProps) {
   const neu = variant === "admin" ? adminNeu : directorNeuTokens;
-  const accentMuted = variant === "admin" ? "text-indigo-400/90" : "text-sky-400/90";
-  const accentSoft = variant === "admin" ? "text-indigo-300/90" : "text-sky-300/90";
-  const accentLink = variant === "admin" ? "text-indigo-400" : "text-sky-400";
-  const chartAccent = variant === "admin" ? "text-indigo-400/80" : "text-sky-400/80";
+  const isDirector = variant === "director";
+  const accentMuted = isDirector ? "text-[#005CAB]" : "text-indigo-600";
+  const accentSoft = isDirector ? "text-[#005CAB]" : "text-indigo-600";
+  const accentLink = isDirector ? "text-[#005CAB] hover:text-[#004A8C]" : "text-indigo-600";
+  const chartAccent = isDirector ? "text-[#005CAB]" : "text-indigo-600";
   const workspaceLabel = variant === "admin" ? "Admin" : "Director";
   const headerSubtitle =
     variant === "admin"
       ? "Governance command center for users, org, approvals, and org-wide delivery — live from the database."
-      : "Command center for delivery, pipeline, and team alignment — live from the database, no calls required.";
+      : "Command center for delivery, pipeline, and team alignment — live from the database.";
   const queueLabel = variant === "admin" ? "Your governance queue" : "Your command queue";
   const quickLinks = variant === "admin" ? ADMIN_QUICK_LINKS : QUICK_LINKS;
   const chartColors = variant === "admin" ? ADMIN_CHART_COLORS : CHART_COLORS;
@@ -233,6 +231,28 @@ export function DirectorOverviewDashboard({
   const StatRow = variant === "admin" ? AdminStatRow : DirectorStatRow;
   const StatInline = variant === "admin" ? AdminStatInline : DirectorStatInline;
   const analyticsVariant = variant === "admin" ? "admin" : "director";
+  const quickLinkClass = isDirector ? directorNeuTokens.quickLink : `${neu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`;
+  const bodyMuted = isDirector ? "text-[#605E5C]" : "text-slate-500";
+  const bodyStrong = isDirector ? "text-[#201F1E]" : "text-slate-900";
+  const bodySecondary = isDirector ? "text-[#3B3A39]" : "text-slate-600";
+  const clearQueueClass = isDirector
+    ? "rounded-md border border-[#0B6A0B] border-l-4 border-l-[#0B6A0B] bg-white p-3.5 sm:p-4"
+    : `${neu.panelInset} p-4 sm:p-5`;
+  const clearQueueText = isDirector
+    ? "font-body text-[13px] font-medium leading-relaxed text-[#0B6A0B]"
+    : "text-sm text-emerald-700";
+  const hoverLead = isDirector ? "hover:text-[#005CAB]" : "hover:text-indigo-600";
+  const hoverAi = isDirector ? "hover:text-[#005CAB]" : "hover:text-indigo-600";
+
+  const greetingParts = useMemo(() => {
+    const raw = welcomeHeadline.trim();
+    const comma = raw.indexOf(",");
+    if (comma === -1) return { lead: raw, name: "" };
+    return {
+      lead: raw.slice(0, comma).trim(),
+      name: raw.slice(comma + 1).trim()
+    };
+  }, [welcomeHeadline]);
 
   const alertItems = useMemo((): WorkspacePriorityItem[] => {
     const items: WorkspacePriorityItem[] = [];
@@ -288,7 +308,7 @@ export function DirectorOverviewDashboard({
         tone: "warning",
         title: `${dd!.salesHealth.stalledDealsCount} stalled deal${dd!.salesHealth.stalledDealsCount === 1 ? "" : "s"}`,
         detail: "Pipeline velocity is slowing — align with Sales on next steps.",
-        href: "/crm",
+        href: "/director/crm",
         action: "Open CRM"
       });
     }
@@ -299,7 +319,7 @@ export function DirectorOverviewDashboard({
         tone: "warning",
         title: `${queue.messagesCount} report thread${queue.messagesCount === 1 ? "" : "s"} need a reply`,
         detail: "Sales or developer questions on submitted reports.",
-        href: "/reports",
+        href: "/director/reports",
         action: "Open reports"
       });
     }
@@ -327,9 +347,9 @@ export function DirectorOverviewDashboard({
   const projectHealthBars = useMemo(() => {
     if (!kpis) return [];
     return [
-      { label: "active", value: kpis.projectHealth.activeProjects, color: "bg-sky-500" },
-      { label: "overdue", value: kpis.projectHealth.overdueTasks, color: "bg-rose-500" },
-      { label: "blocked", value: kpis.projectHealth.blockedTasks, color: "bg-amber-500" }
+      { label: "active", value: kpis.projectHealth.activeProjects, color: "bg-[#005CAB]" },
+      { label: "overdue", value: kpis.projectHealth.overdueTasks, color: "bg-[#C50F1F]" },
+      { label: "blocked", value: kpis.projectHealth.blockedTasks, color: "bg-[#C19C00]" }
     ].filter((b) => b.value > 0);
   }, [kpis]);
 
@@ -359,17 +379,17 @@ export function DirectorOverviewDashboard({
       {
         label: "Pipeline",
         value: Math.round(directorDashboard.salesHealth.totalPipelineValue / 1000),
-        color: "bg-sky-500"
+        color: "bg-[#005CAB]"
       },
       {
         label: "Stalled deals",
         value: directorDashboard.salesHealth.stalledDealsCount,
-        color: "bg-amber-500"
+        color: "bg-[#C19C00]"
       },
       {
         label: "At-risk projects",
         value: directorDashboard.operationalHealth.projectsAtRisk,
-        color: "bg-rose-500"
+        color: "bg-[#C50F1F]"
       }
     ].filter((b) => b.value > 0);
   }, [directorDashboard]);
@@ -383,22 +403,48 @@ export function DirectorOverviewDashboard({
   };
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E5E9EF] pb-5">
-        <div className="min-w-0">
-          <p className={`font-label text-[10px] font-semibold uppercase tracking-[0.22em] ${accentMuted}`}>{workspaceLabel}</p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            {welcomeHeadline}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{headerSubtitle}</p>
+    <div className={`flex w-full min-w-0 flex-col gap-5 bg-white pb-6 ${isDirector ? "director-neu" : ""}`}>
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[#E1DFDD] bg-white pb-5">
+        <div className="min-w-0 max-w-3xl">
+          {isDirector ? (
+            <>
+              <p className="font-label text-[11px] font-bold uppercase tracking-[0.2em] text-[#005CAB]">
+                Director · command center
+              </p>
+              <h1 className="mt-2 font-display text-[1.85rem] font-bold leading-[1.1] tracking-[-0.035em] text-[#201F1E] sm:text-[2.35rem]">
+                <span className="font-semibold text-[#605E5C]">{greetingParts.lead}</span>
+                {greetingParts.name ? (
+                  <>
+                    <span className="font-semibold text-[#C8C6C4]">,</span>{" "}
+                    <span className="text-[#005CAB]">{greetingParts.name}</span>
+                  </>
+                ) : null}
+              </h1>
+              <p className="mt-3 max-w-2xl font-body text-[15px] font-medium leading-[1.55] tracking-[-0.01em] text-[#605E5C]">
+                {headerSubtitle}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`font-label text-[11px] font-semibold tracking-wide ${accentMuted}`}>
+                {workspaceLabel}
+              </p>
+              <h1 className={`mt-0.5 font-display text-2xl font-semibold tracking-tight ${bodyStrong}`}>
+                {welcomeHeadline}
+              </h1>
+              <p className={`mt-1 max-w-xl font-body text-[13px] font-medium leading-relaxed ${bodyMuted}`}>
+                {headerSubtitle}
+              </p>
+            </>
+          )}
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className={`${neu.btnGhost} shrink-0 disabled:opacity-50`}
+          className={`${isDirector ? `${directorNeuTokens.btnGhost} !px-3.5 !py-2 !text-[12px] !font-semibold` : neu.btnGhost} shrink-0 disabled:opacity-50`}
         >
-          {loading ? "Refreshing…" : "Refresh all"}
+          {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
@@ -409,25 +455,25 @@ export function DirectorOverviewDashboard({
           <WorkspacePriorityGrid items={alertItems} panelClass={alertClass} />
         </WorkspaceDashboardSection>
       ) : (
-        <Panel inset className="p-4 sm:p-5">
-          <p className="text-sm text-emerald-300/90">
-            <span className="font-semibold">Queue clear</span> — no urgent approvals, risks, or unread signals flagged
-            right now. Charts and team focus below stay live.
+        <div className={clearQueueClass}>
+          <p className={clearQueueText}>
+            <span className="font-display font-bold tracking-tight">Queue clear</span>
+            <span className="font-body"> — no urgent approvals, risks, or unread signals right now. Charts and team focus below stay live.</span>
           </p>
-        </Panel>
+        </div>
       )}
 
       <WorkspaceAlignedTips
         tips={alignedTips}
         aiHint={alignedHint}
-        panelClass={`${neu.panelInset} p-4 sm:p-5`}
+        panelClass={`${neu.panelInset} !bg-white p-3.5 sm:p-4`}
         roleKeys={roleKeys}
       />
 
       <WorkspaceDashboardSection label={queueLabel} roleKeys={roleKeys}>
-        <div className={`mt-3 ${neu.kpiStrip}`}>
+        <div className={`mt-2 ${neu.kpiStrip}`}>
           <StatRow>
-            <Link href="/approvals" className="min-w-0 hover:opacity-90">
+            <Link href="/approvals" className="min-w-0 transition hover:opacity-95">
               <StatInline
                 label="Approvals"
                 value={queue.approvalsPending}
@@ -435,7 +481,7 @@ export function DirectorOverviewDashboard({
                 tone={queue.approvalsPending > 0 ? "amber" : "sky"}
               />
             </Link>
-            <Link href="/leads" className="min-w-0 hover:opacity-90">
+            <Link href="/leads" className="min-w-0 transition hover:opacity-95">
               <StatInline
                 label="Leads queue"
                 value={queue.leadsPendingApproval}
@@ -443,7 +489,7 @@ export function DirectorOverviewDashboard({
                 tone={queue.leadsPendingApproval > 0 ? "amber" : "sky"}
               />
             </Link>
-            <Link href="/community" className="min-w-0 hover:opacity-90">
+            <Link href="/community" className="min-w-0 transition hover:opacity-95">
               <StatInline
                 label="Notifications"
                 value={queue.unreadNotifications}
@@ -451,7 +497,7 @@ export function DirectorOverviewDashboard({
                 tone={queue.unreadNotifications > 0 ? "rose" : "sky"}
               />
             </Link>
-            <Link href="/projects" className="min-w-0 hover:opacity-90">
+            <Link href="/projects" className="min-w-0 transition hover:opacity-95">
               <StatInline
                 label="Projects"
                 value={directorDashboard?.operationalHealth.activeProjects ?? projects.length}
@@ -459,19 +505,31 @@ export function DirectorOverviewDashboard({
                 tone="violet"
               />
             </Link>
-            <StatInline
-              label="Work progress"
-              value={`${queue.workProgressPercent}%`}
-              hint="Org delivery signal"
-              tone="emerald"
-            />
+            {directorDashboard ? (
+              <StatInline
+                label="Pipeline"
+                value={formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
+                hint={`Win ${directorDashboard.salesHealth.winRate.toFixed(0)}% · ${directorDashboard.salesHealth.stalledDealsCount} stalled`}
+                tone="sky"
+              />
+            ) : (
+              <StatInline
+                label="Work progress"
+                value={`${queue.workProgressPercent}%`}
+                hint="Org delivery signal"
+                tone="emerald"
+              />
+            )}
           </StatRow>
         </div>
       </WorkspaceDashboardSection>
 
-      <nav aria-label="Director quick links" className="flex flex-wrap gap-2 border-b border-[#E5E9EF] pb-5">
+      <nav
+        aria-label="Director quick links"
+        className={`flex flex-wrap gap-1.5 border-b pb-3 ${isDirector ? "border-[#E1DFDD]" : "border-[#E5E9EF]"}`}
+      >
         {quickLinks.map((link) => (
-          <Link key={link.href} href={link.href} className={`${neu.navIdle} rounded-lg px-3 py-2 text-sm font-medium`}>
+          <Link key={link.href} href={link.href} className={quickLinkClass}>
             {link.label}
           </Link>
         ))}
@@ -479,46 +537,50 @@ export function DirectorOverviewDashboard({
 
       {directorDashboard && (
         <WorkspaceDashboardSection label="Org pulse" roleKeys={roleKeys}>
-          <div className={`mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${neu.kpiStrip}`}>
-            <StatInline
-              label="Pipeline"
-              value={formatMoney(directorDashboard.salesHealth.totalPipelineValue)}
-              hint={`Win ${directorDashboard.salesHealth.winRate.toFixed(0)}% · ${directorDashboard.salesHealth.stalledDealsCount} stalled`}
-              tone="sky"
-            />
-            <StatInline
-              label="Active projects"
-              value={directorDashboard.operationalHealth.activeProjects}
-              hint={`${directorDashboard.operationalHealth.projectsAtRisk} at risk`}
-              tone="violet"
-            />
-            <StatInline
-              label="Blocked tasks"
-              value={directorDashboard.operationalHealth.blockedTasksAboveThreshold}
-              hint="Above threshold"
-              tone="rose"
-            />
-            <Link href="/approvals" className="min-w-0 hover:opacity-90">
+          <div className={`mt-2 ${neu.kpiStrip}`}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               <StatInline
-                label="Approval queue"
-                value={directorDashboard.approvalQueue.totalPending}
-                hint="Finance & ops"
-                tone="amber"
+                label="Active projects"
+                value={directorDashboard.operationalHealth.activeProjects}
+                hint={`${directorDashboard.operationalHealth.projectsAtRisk} at risk`}
+                tone="violet"
               />
-            </Link>
+              <StatInline
+                label="Blocked tasks"
+                value={directorDashboard.operationalHealth.blockedTasksAboveThreshold}
+                hint="Above threshold"
+                tone="rose"
+              />
+              <Link href="/approvals" className="min-w-0 transition hover:opacity-95">
+                <StatInline
+                  label="Approval queue"
+                  value={directorDashboard.approvalQueue.totalPending}
+                  hint="Finance & ops"
+                  tone="amber"
+                />
+              </Link>
+              <StatInline
+                label="Work progress"
+                value={`${queue.workProgressPercent}%`}
+                hint="Org delivery signal"
+                tone="emerald"
+              />
+            </div>
           </div>
           {!canViewFinanceKpis && (
-            <p className="mt-3 text-xs text-slate-500">
-              Finance totals restricted — Admin can enable <span className="text-slate-600">Can see finance</span> on
+            <p className={`mt-2 text-[11px] ${bodyMuted}`}>
+              Finance totals restricted — Admin can enable <span className={`font-semibold ${bodyStrong}`}>Can see finance</span> on
               your profile.
             </p>
           )}
           {canViewFinanceKpis && directorDashboard.financialHealth && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatInline label="Revenue" value={formatMoney(directorDashboard.financialHealth.revenueThisPeriod)} tone="emerald" />
-              <StatInline label="Outstanding" value={formatMoney(directorDashboard.financialHealth.outstandingInvoices)} tone="amber" />
-              <StatInline label="Net flow" value={formatMoney(directorDashboard.financialHealth.netFlow)} tone="sky" />
-              <StatInline label="Expense approvals" value={directorDashboard.financialHealth.pendingExpenseApprovals} tone="rose" />
+            <div className={`mt-2 ${neu.kpiStrip}`}>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <StatInline label="Revenue" value={formatMoney(directorDashboard.financialHealth.revenueThisPeriod)} tone="emerald" />
+                <StatInline label="Outstanding" value={formatMoney(directorDashboard.financialHealth.outstandingInvoices)} tone="amber" />
+                <StatInline label="Net flow" value={formatMoney(directorDashboard.financialHealth.netFlow)} tone="sky" />
+                <StatInline label="Expense approvals" value={directorDashboard.financialHealth.pendingExpenseApprovals} tone="rose" />
+              </div>
             </div>
           )}
         </WorkspaceDashboardSection>
@@ -526,7 +588,7 @@ export function DirectorOverviewDashboard({
 
       <section aria-label="Progress charts" className="w-full">
         <DashboardSectionLabel roleKeys={roleKeys}>Progress charts</DashboardSectionLabel>
-        <div className="mt-3 grid w-full gap-4 xl:grid-cols-2">
+        <div className="mt-2 grid w-full gap-3 sm:grid-cols-2">
           <ChartPanel title="Project health" neu={neu} accentClass={chartAccent}>
             <HorizontalBarChart items={projectHealthBars} emptyLabel={kpisError ? "Could not load KPIs" : "No project task data yet"} />
           </ChartPanel>
@@ -545,33 +607,33 @@ export function DirectorOverviewDashboard({
                 }))}
               />
             ) : (
-              <p className="text-sm text-slate-500">Loading pipeline signals…</p>
+              <p className={`text-sm ${bodyMuted}`}>Loading pipeline signals…</p>
             )}
           </ChartPanel>
         </div>
       </section>
 
       <WorkspaceDashboardSection label="Active projects" roleKeys={roleKeys}>
-        <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
-          <table className="min-w-full text-left text-sm">
+          <div className={`mt-2 overflow-x-auto ${neu.panelInset}`}>
+          <table className="min-w-full text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                <th className="px-3 py-2">Project</th>
-                <th className="px-3 py-2">Created by</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Approval</th>
-                <th className="px-3 py-2 text-right">Action</th>
+              <tr className={`border-b ${isDirector ? "border-[#E1DFDD]" : "border-[#D6E4E4]"} text-[10px] font-bold uppercase tracking-wider ${bodyMuted}`}>
+                <th className="px-2.5 py-2">Project</th>
+                <th className="px-2.5 py-2">Created by</th>
+                <th className="px-2.5 py-2">Status</th>
+                <th className="px-2.5 py-2">Approval</th>
+                <th className="px-2.5 py-2 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {projects.slice(0, 12).map((p) => (
-                <tr key={p.id} className="border-b border-[#E5E9EF] text-slate-700">
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{p.name}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{p.createdBy?.name ?? p.createdBy?.email ?? "—"}</td>
-                  <td className="px-3 py-2.5 capitalize text-slate-600">{p.status}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500">{p.approvalStatus ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Link href={`/projects/${p.id}`} className={`text-xs font-medium ${accentLink} hover:underline`}>
+                <tr key={p.id} className={`border-b ${isDirector ? "border-[#F5F5F5]" : "border-[#E5E9EF]"} ${bodySecondary}`}>
+                  <td className={`px-2.5 py-2 font-semibold ${bodyStrong}`}>{p.name}</td>
+                  <td className="px-2.5 py-2">{p.createdBy?.name ?? p.createdBy?.email ?? "—"}</td>
+                  <td className="px-2.5 py-2 capitalize">{p.status}</td>
+                  <td className="px-2.5 py-2 text-[12px]">{p.approvalStatus ?? "—"}</td>
+                  <td className="px-2.5 py-2 text-right">
+                    <Link href={`/projects/${p.id}`} className={`text-[11px] font-bold ${accentLink} hover:underline`}>
                       View →
                     </Link>
                   </td>
@@ -579,7 +641,7 @@ export function DirectorOverviewDashboard({
               ))}
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={5} className={`px-2.5 py-6 text-center ${bodyMuted}`}>
                     No projects yet.
                   </td>
                 </tr>
@@ -591,35 +653,35 @@ export function DirectorOverviewDashboard({
 
       {directorDashboard?.teamCurrentFocus && directorDashboard.teamCurrentFocus.length > 0 && (
         <WorkspaceDashboardSection label="Team focus" roleKeys={roleKeys}>
-          <div className={`mt-3 overflow-x-auto ${neu.panelInset}`}>
-            <table className="min-w-full text-left text-sm">
+          <div className={`mt-2 overflow-x-auto ${neu.panelInset}`}>
+            <table className="min-w-full text-left text-[13px]">
               <thead>
-                <tr className="border-b border-[#E5E9EF] text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2">Person</th>
-                  <th className="px-3 py-2">Roles</th>
-                  <th className="px-3 py-2">Project</th>
-                  <th className="px-3 py-2">Note</th>
-                  <th className="px-3 py-2">Updated</th>
+                <tr className={`border-b ${isDirector ? "border-[#E1DFDD]" : "border-[#D6E4E4]"} text-[10px] font-bold uppercase tracking-wider ${bodyMuted}`}>
+                  <th className="px-2.5 py-2">Person</th>
+                  <th className="px-2.5 py-2">Roles</th>
+                  <th className="px-2.5 py-2">Project</th>
+                  <th className="px-2.5 py-2">Note</th>
+                  <th className="px-2.5 py-2">Updated</th>
                 </tr>
               </thead>
               <tbody>
                 {directorDashboard.teamCurrentFocus.map((row) => (
-                  <tr key={row.userId} className="border-b border-[#E5E9EF] text-slate-700">
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{row.name?.trim() || row.email}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">
+                  <tr key={row.userId} className={`border-b ${isDirector ? "border-[#F5F5F5]" : "border-[#E5E9EF]"} ${bodySecondary}`}>
+                    <td className={`px-2.5 py-2 font-semibold ${bodyStrong}`}>{row.name?.trim() || row.email}</td>
+                    <td className="px-2.5 py-2 text-[12px]">
                       {row.roleKeys.map((k) => ROLE_LABELS[k] ?? k).join(", ") || "—"}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-2.5 py-2">
                       {row.project ? (
-                        <Link href={`/projects/${row.project.id}`} className={`${accentLink} hover:underline`}>
+                        <Link href={`/projects/${row.project.id}`} className={`font-semibold ${accentLink} hover:underline`}>
                           {row.project.name}
                         </Link>
                       ) : (
-                        <span className="text-slate-500">Not set</span>
+                        <span className={bodyMuted}>Not set</span>
                       )}
                     </td>
-                    <td className="max-w-[14rem] truncate px-3 py-2.5 text-slate-400">{row.note?.trim() || "—"}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
+                    <td className="max-w-[14rem] truncate px-2.5 py-2">{row.note?.trim() || "—"}</td>
+                    <td className="whitespace-nowrap px-2.5 py-2 text-[11px]">
                       {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
                     </td>
                   </tr>
@@ -634,32 +696,32 @@ export function DirectorOverviewDashboard({
         (attention?.leadsPendingApproval?.length ?? 0) > 0 ||
         (attention?.approvalsPending?.length ?? 0) > 0) && (
         <WorkspaceDashboardSection label="What needs your attention" roleKeys={roleKeys}>
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <div className="mt-2 grid gap-2 lg:grid-cols-3">
             {unreadNotifications.length > 0 && (
               <Panel inset className="p-4">
-                <p className={`text-[10px] font-semibold uppercase tracking-wider ${chartAccent}`}>Notifications</p>
+                <p className={`text-[10px] font-bold uppercase tracking-wider ${chartAccent}`}>Notifications</p>
                 <ul className="mt-2 space-y-2">
                   {unreadNotifications.slice(0, 5).map((n) => (
-                    <li key={n.id} className={`${neu.listRow} text-sm text-slate-600`}>
+                    <li key={n.id} className={`${neu.listRow} text-sm ${bodySecondary}`}>
                       {(n.subject || n.body).slice(0, 72)}
                       {(n.subject || n.body).length > 72 ? "…" : ""}
                     </li>
                   ))}
                 </ul>
-                <Link href="/community" className={`mt-3 inline-block text-xs font-medium ${accentLink} hover:underline`}>
+                <Link href="/community" className={`mt-3 inline-block text-xs font-bold ${accentLink} hover:underline`}>
                   Open Community →
                 </Link>
               </Panel>
             )}
             {(attention?.leadsPendingApproval?.length ?? 0) > 0 && (
               <Panel inset className="p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/80">Leads</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#A68500]">Leads</p>
                 <ul className="mt-2 space-y-2">
                   {attention!.leadsPendingApproval!.slice(0, 5).map((l) => (
                     <li key={l.id}>
                       <Link
                         href={`/leads/${l.id}`}
-                        className={`${neu.listRow} block text-sm text-slate-600 ${variant === "admin" ? "hover:text-indigo-300" : "hover:text-sky-300"}`}
+                        className={`${neu.listRow} block text-sm ${bodySecondary} ${hoverLead}`}
                       >
                         {l.title}
                       </Link>
@@ -670,11 +732,11 @@ export function DirectorOverviewDashboard({
             )}
             {(attention?.approvalsPending?.length ?? 0) > 0 && (
               <Panel inset className="p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-400/80">Approvals</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#C50F1F]">Approvals</p>
                 <ul className="mt-2 space-y-2">
                   {attention!.approvalsPending!.slice(0, 5).map((a) => (
                     <li key={a.id}>
-                      <Link href="/approvals" className={`${neu.listRow} block text-sm text-slate-600`}>
+                      <Link href="/approvals" className={`${neu.listRow} block text-sm ${bodySecondary}`}>
                         {a.entityType} · {a.requester?.name ?? a.requester?.email ?? "requester"}
                       </Link>
                     </li>
@@ -689,38 +751,38 @@ export function DirectorOverviewDashboard({
       <div className="grid gap-6 xl:grid-cols-2">
         <WorkspaceDashboardSection label="Platform activity" roleKeys={roleKeys}>
           {directorSummaryFeed === null && !directorSummaryFeedFailed ? (
-            <p className="mt-2 text-sm text-slate-500">Loading activity…</p>
+            <p className={`mt-2 text-sm ${bodyMuted}`}>Loading activity…</p>
           ) : directorSummaryFeedFailed || !directorSummaryFeed ? (
-            <p className="mt-2 text-sm text-rose-300/90">Could not load activity feed.</p>
+            <p className="mt-2 text-sm font-medium text-[#C50F1F]">Could not load activity feed.</p>
           ) : (
             <div className={`mt-3 ${neu.panelInset} max-h-80 overflow-y-auto p-3`}>
-              <p className="mb-3 text-xs text-slate-500">
+              <p className={`mb-3 text-xs ${bodyMuted}`}>
                 Day {formatBriefingDate(directorSummaryFeed.dateKey)}
                 {directorSummaryFeed.aiDailyBrief ? (
-                  <span className="ml-2 text-emerald-400/90">· AI digest ready</span>
+                  <span className="ml-2 font-semibold text-[#0B6A0B]">· AI digest ready</span>
                 ) : (
-                  <span className="ml-2 text-amber-400/90">· Digest at {directorSummaryFeed.aiReportHourLocal}:00</span>
+                  <span className="ml-2 font-semibold text-[#A68500]">· Digest at {directorSummaryFeed.aiReportHourLocal}:00</span>
                 )}
               </p>
               {meaningfulActions.length === 0 ? (
-                <p className="text-sm text-slate-500">No significant platform events today yet (logins hidden).</p>
+                <p className={`text-sm ${bodyMuted}`}>No significant platform events today yet (logins hidden).</p>
               ) : (
                 <ul className="space-y-2">
                   {meaningfulActions.map((a) => (
                     <li key={a.id} className={`${neu.listRow} px-3 py-2`}>
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className={`text-xs font-medium ${accentSoft}`}>{a.type.replace(/_/g, " ")}</span>
-                        <span className="text-[10px] text-slate-500">
+                        <span className={`text-xs font-bold ${accentSoft}`}>{a.type.replace(/_/g, " ")}</span>
+                        <span className={`text-[10px] ${bodyMuted}`}>
                           {formatActionTime(a.createdAt, directorSummaryFeed.tz)}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-600">{a.summary}</p>
-                      {a.actorLabel ? <p className="mt-0.5 text-xs text-slate-500">{a.actorLabel}</p> : null}
+                      <p className={`mt-1 text-sm ${bodySecondary}`}>{a.summary}</p>
+                      {a.actorLabel ? <p className={`mt-0.5 text-xs ${bodyMuted}`}>{a.actorLabel}</p> : null}
                     </li>
                   ))}
                 </ul>
               )}
-              <Link href="/activity" className={`mt-3 inline-block text-xs font-medium ${accentLink} hover:underline`}>
+              <Link href="/activity" className={`mt-3 inline-block text-xs font-bold ${accentLink} hover:underline`}>
                 Full activity log →
               </Link>
             </div>
@@ -729,20 +791,20 @@ export function DirectorOverviewDashboard({
 
         <WorkspaceDashboardSection label="Daily AI summaries" roleKeys={roleKeys}>
           {directorAiBriefings === null ? (
-            <p className="mt-2 text-sm text-slate-500">Loading briefings…</p>
+            <p className={`mt-2 text-sm ${bodyMuted}`}>Loading briefings…</p>
           ) : directorAiBriefings.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">No AI summaries yet.</p>
+            <p className={`mt-2 text-sm ${bodyMuted}`}>No AI summaries yet.</p>
           ) : (
             <ul className={`mt-3 space-y-2 ${neu.panelInset} p-3`}>
               {directorAiBriefings.slice(0, 5).map((r) => (
                 <li key={r.id} className={`${neu.listRow} p-3`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className={`text-xs font-medium ${accentSoft}`}>{formatBriefingDate(r.dateKey)}</p>
-                    <Link href="/reports/ai" className={`text-[10px] font-medium ${accentLink} hover:underline`}>
+                    <p className={`text-xs font-bold ${accentSoft}`}>{formatBriefingDate(r.dateKey)}</p>
+                    <Link href="/reports/ai" className={`text-[10px] font-bold ${accentLink} hover:underline`}>
                       Open →
                     </Link>
                   </div>
-                  <p className="mt-1 text-sm font-medium text-slate-700">{r.subject}</p>
+                  <p className={`mt-1 text-sm font-semibold ${bodyStrong}`}>{r.subject}</p>
                   <DirectorBriefingPreview body={r.bodyPreview} className="mt-2" />
                 </li>
               ))}
@@ -750,7 +812,7 @@ export function DirectorOverviewDashboard({
           )}
           <Link
             href="/reports/ai"
-            className={`mt-2 inline-block text-xs text-slate-500 ${variant === "admin" ? "hover:text-indigo-400" : "hover:text-sky-400"}`}
+            className={`mt-2 inline-block text-xs font-medium ${bodyMuted} ${hoverAi}`}
           >
             All AI reports →
           </Link>
@@ -780,8 +842,8 @@ function ChartPanel({
 }) {
   return (
     <div className={neu.chartPanel}>
-      <h3 className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${accentClass}`}>{title}</h3>
-      <div className="mt-5 flex flex-1 flex-col items-center justify-center w-full">{children}</div>
+      <h3 className={`text-[11px] font-semibold tracking-wide ${accentClass}`}>{title}</h3>
+      <div className="mt-3 flex w-full flex-1 flex-col items-center justify-center">{children}</div>
     </div>
   );
 }

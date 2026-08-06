@@ -81,7 +81,7 @@ export function WorkspaceNavContent({
     case "developer":
       return wrap(<DeveloperSideNav />);
     case "director":
-      return wrap(<DirectorSideNav />);
+      return <DirectorSideNav onNavigate={onNavClick} />;
     case "admin":
       return wrap(<AdminSideNav />);
     case "client":
