@@ -378,11 +378,17 @@ model OrgEtimsConfig {
   taxpayerName    String?
   bhfId           String    @default("00")
   dvcSrlNo        String
-  /// Communication key from KRA selectInitOsdcInfo (null until initialized / token received)
+  /// Communication key from KRA /initialize (null until initialized)
   cmcKey          String?
   sdcId           String?
   mrcNo           String?
   dvcId           String?
+  /// GavaConnect Apigee app id (header apigee_app_id)
+  apigeeAppId     String?
+  /// GavaConnect OAuth consumer key (Basic auth username) — prefer env in production
+  consumerKey     String?
+  /// GavaConnect OAuth consumer secret — prefer env in production
+  consumerSecret  String?
   /// mock | sandbox | production
   mode            String    @default("mock")
   enabled         Boolean   @default(true)

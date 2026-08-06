@@ -3667,7 +3667,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
               sellerTin: DEFAULT_SELLER_TIN,
               sellerName: "CRES SOFTWARE LIMITED",
               note:
-                "Request a custom OSCU integration token from KRA for PIN P052570833B. Until then, mode=mock files invoices locally with mock SCU data."
+                "Sandbox uses GavaConnect (sbx.kra.go.ke): set consumer key/secret + apigee_app_id, then Initialize OSCU. Mode=mock files locally until credentials are ready."
             },
             hasCmcKey: Boolean(cfg.cmcKey)
           }
@@ -3692,6 +3692,9 @@ export default function financeRouter(prisma: PrismaClient): Router {
           bhfId?: string;
           dvcSrlNo?: string;
           cmcKey?: string | null;
+          apigeeAppId?: string | null;
+          consumerKey?: string | null;
+          consumerSecret?: string | null;
           mode?: string;
           enabled?: boolean;
           autoSubmit?: boolean;
@@ -3720,6 +3723,15 @@ export default function financeRouter(prisma: PrismaClient): Router {
             ...(body.dvcSrlNo != null ? { dvcSrlNo: String(body.dvcSrlNo).trim() } : {}),
             ...(body.cmcKey !== undefined
               ? { cmcKey: body.cmcKey ? String(body.cmcKey).trim() : null }
+              : {}),
+            ...(body.apigeeAppId !== undefined
+              ? { apigeeAppId: body.apigeeAppId ? String(body.apigeeAppId).trim() : null }
+              : {}),
+            ...(body.consumerKey !== undefined
+              ? { consumerKey: body.consumerKey ? String(body.consumerKey).trim() : null }
+              : {}),
+            ...(body.consumerSecret !== undefined
+              ? { consumerSecret: body.consumerSecret ? String(body.consumerSecret).trim() : null }
               : {}),
             ...(mode ? { mode } : {}),
             ...(body.enabled != null ? { enabled: Boolean(body.enabled) } : {}),

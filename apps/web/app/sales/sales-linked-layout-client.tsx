@@ -18,8 +18,10 @@ const SIDEBAR_STORAGE_KEY = "cresos.sales.sidebarOpen";
 
 function pageTitle(pathname: string | null): string {
   if (!pathname) return "Sales";
+  if (pathname.startsWith("/sales/crm")) return "CRM";
   if (pathname.startsWith("/leads")) return "Leads";
-  if (pathname.startsWith("/crm")) return "CRM";
+  if (pathname.startsWith("/crm")) return "Contacts";
+  if (pathname.startsWith("/schedule")) return "Tasks";
   if (pathname.startsWith("/reports")) return "Reports";
   if (pathname.startsWith("/sales/invoices")) return "Invoices";
   if (pathname.startsWith("/sales/messages")) return "Mails";
@@ -65,15 +67,15 @@ export function SalesLinkedLayoutClient({ children }: { children: React.ReactNod
       shellClassName={`${salesNeu.workspace} sales-fullscreen ${salesNeu.canvas}`}
       pageTitle={pageTitle(pathname)}
       fallbackHref="/sales"
-      renderPanel={({ toggleSidebar }) => (
+      renderPanel={({ toggleSidebar, closeSidebarMobile }) => (
         <WorkspaceAside
           title="Sales"
-          subtitle="Pipeline · delivery · revenue"
+          subtitle="CRM · pipeline · delivery"
           themeKey="sales"
           className="!h-full !w-full !max-w-none"
           headerAction={<SidePanelHamburgerButton open onClick={toggleSidebar} />}
         >
-          <SalesSideNav />
+          <SalesSideNav onNavigate={closeSidebarMobile} />
         </WorkspaceAside>
       )}
     >

@@ -1,11 +1,15 @@
 /**
- * KRA eTIMS OSCU client + invoice filing for Cres Dynamics / CRES SOFTWARE LIMITED.
+ * KRA eTIMS OSCU client via GavaConnect (Apigee).
  *
- * Endpoints (spec):
- *  - POST /selectInitOsdcInfo  — device init → cmcKey
- *  - POST /saveTrnsSalesOsdc   — file sales invoice
+ * Matches Postman collection eTIMS-OSCU-Integrator-Automated-Testing-SBX:
+ *  - GET  {tokenHost}/v1/token/generate?grant_type=client_credentials  (Basic)
+ *  - POST {oscuBase}/initialize
+ *  - POST {oscuBase}/sendSalesTransaction
  *
- * Modes: mock (local demo without KRA token) | sandbox | production
+ * Headers on OSCU calls: Authorization Bearer, apigee_app_id,
+ * and (except init) tin, bhfId, cmcKey.
+ *
+ * Modes: mock | sandbox | production
  */
 
 import type { PrismaClient, Invoice, InvoiceItem, Client, OrgEtimsConfig } from "@prisma/client";
@@ -15,8 +19,10 @@ export const DEFAULT_SELLER_TIN = "P052570833B";
 export const DEFAULT_SELLER_NAME = "CRES SOFTWARE LIMITED";
 export const DEFAULT_DVC_SRL = "CRESOSCU001";
 
-const SBX_BASE = "https://etims-api-sbx.kra.go.ke";
-const PROD_BASE = "https://etims-api.kra.go.ke";
+const SBX_OSCU_BASE = "https://sbx.kra.go.ke/etims-oscu/api/v1";
+const PROD_OSCU_BASE = "https://api.kra.go.ke/etims-oscu/api/v1";
+const SBX_TOKEN_URL = "https://sbx.kra.go.ke/v1/token/generate?grant_type=client_credentials";
+const PROD_TOKEN_URL = "https://api.kra.go.ke/v1/token/generate?grant_type=client_credentials";
 
 /** Kenya KRA PIN: letter + 9 digits + letter */
 export function isValidKenyaPin(pin: string | null | undefined): boolean {
@@ -61,9 +67,23 @@ export type EtimsSubmitResult = {
   raw?: unknown;
 };
 
+type GavaCreds = {
+  consumerKey: string;
+  consumerSecret: string;
+  apigeeAppId: string;
+};
+
+type TokenCache = { token: string; expiresAt: number };
+const tokenCacheByKey = new Map<string, TokenCache>();
+
 function baseUrlForMode(mode: EtimsMode): string {
   if (process.env.ETIMS_BASE_URL?.trim()) return process.env.ETIMS_BASE_URL.trim().replace(/\/$/, "");
-  return mode === "production" ? PROD_BASE : SBX_BASE;
+  return mode === "production" ? PROD_OSCU_BASE : SBX_OSCU_BASE;
+}
+
+function tokenUrlForMode(mode: EtimsMode): string {
+  if (process.env.ETIMS_TOKEN_URL?.trim()) return process.env.ETIMS_TOKEN_URL.trim();
+  return mode === "production" ? PROD_TOKEN_URL : SBX_TOKEN_URL;
 }
 
 function envMode(): EtimsMode {
@@ -73,11 +93,19 @@ function envMode(): EtimsMode {
   return "mock";
 }
 
+function resolveGavaCreds(cfg: OrgEtimsConfig): GavaCreds | null {
+  const consumerKey = (cfg.consumerKey || process.env.ETIMS_CONSUMER_KEY || "").trim();
+  const consumerSecret = (cfg.consumerSecret || process.env.ETIMS_CONSUMER_SECRET || "").trim();
+  const apigeeAppId = (cfg.apigeeAppId || process.env.ETIMS_APIGEE_APP_ID || "").trim();
+  if (!consumerKey || !consumerSecret || !apigeeAppId) return null;
+  return { consumerKey, consumerSecret, apigeeAppId };
+}
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-/** yyyyMMdd / yyyyMMddHHmmss in Africa/Nairobi-ish local server time */
+/** yyyyMMdd / yyyyMMddHHmmss in local server time */
 export function kraDateTimeParts(d = new Date()) {
   const y = d.getFullYear();
   const mo = pad2(d.getMonth() + 1);
@@ -120,21 +148,87 @@ export function computeTaxBuckets(
 
 function itemCodeFromDescription(desc: string, seq: number): string {
   const hash = createHash("sha1").update(desc).digest("hex").slice(0, 8).toUpperCase();
-  return `KE2NTXI${hash}${String(seq).padStart(2, "0")}`.slice(0, 20);
+  return `KE2NTBA${hash}${String(seq).padStart(2, "0")}`.slice(0, 20);
 }
 
-async function kraPost(
-  mode: EtimsMode,
-  path: string,
-  body: Record<string, unknown>
-): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
+function defaultItemClsCd(): string {
+  return (process.env.ETIMS_DEFAULT_ITEM_CLS_CD || "5020230101").trim().slice(0, 10);
+}
+
+async function getAccessToken(mode: EtimsMode, creds: GavaCreds): Promise<string> {
+  const cacheKey = `${mode}:${creds.consumerKey}`;
+  const cached = tokenCacheByKey.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 30_000) {
+    return cached.token;
+  }
+
+  const basic = Buffer.from(`${creds.consumerKey}:${creds.consumerSecret}`).toString("base64");
+  const res = await fetch(tokenUrlForMode(mode), {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      Accept: "application/json"
+    }
+  });
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await res.json()) as Record<string, unknown>;
+  } catch {
+    json = {};
+  }
+  const token = typeof json.access_token === "string" ? json.access_token : "";
+  if (!res.ok || !token) {
+    throw new Error(
+      `GavaConnect token failed (${res.status}): ${String(json.error_description || json.error || json.resultMsg || "no access_token")}`
+    );
+  }
+  const expiresIn = Number(json.expires_in) || 3600;
+  tokenCacheByKey.set(cacheKey, {
+    token,
+    expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000
+  });
+  return token;
+}
+
+type KraPostOpts = {
+  mode: EtimsMode;
+  path: string;
+  body: Record<string, unknown>;
+  creds: GavaCreds;
+  tin?: string;
+  bhfId?: string;
+  cmcKey?: string | null;
+  /** Init only needs apigee_app_id; sales needs tin/bhfId/cmcKey */
+  includeDeviceHeaders?: boolean;
+};
+
+async function kraPost({
+  mode,
+  path,
+  body,
+  creds,
+  tin,
+  bhfId,
+  cmcKey,
+  includeDeviceHeaders = true
+}: KraPostOpts): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
+  const token = await getAccessToken(mode, creds);
   const url = `${baseUrlForMode(mode)}${path.startsWith("/") ? path : `/${path}`}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+    apigee_app_id: creds.apigeeAppId
+  };
+  if (includeDeviceHeaders) {
+    if (tin) headers.tin = tin;
+    if (bhfId) headers.bhfId = bhfId;
+    if (cmcKey) headers.cmcKey = cmcKey;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    },
+    headers,
     body: JSON.stringify(body)
   });
   let json: Record<string, unknown> = {};
@@ -157,6 +251,9 @@ export type ResolvedEtimsConfig = {
   sdcId: string | null;
   mrcNo: string | null;
   dvcId: string | null;
+  apigeeAppId: string | null;
+  hasConsumerKey: boolean;
+  hasConsumerSecret: boolean;
   mode: EtimsMode;
   enabled: boolean;
   autoSubmit: boolean;
@@ -183,6 +280,9 @@ export async function ensureOrgEtimsConfig(
       bhfId: (process.env.ETIMS_BHF_ID || "00").slice(0, 2),
       dvcSrlNo: process.env.ETIMS_DVC_SRL_NO?.trim() || DEFAULT_DVC_SRL,
       cmcKey: process.env.ETIMS_CMC_KEY?.trim() || null,
+      apigeeAppId: process.env.ETIMS_APIGEE_APP_ID?.trim() || null,
+      consumerKey: process.env.ETIMS_CONSUMER_KEY?.trim() || null,
+      consumerSecret: process.env.ETIMS_CONSUMER_SECRET?.trim() || null,
       mode,
       enabled: process.env.ETIMS_ENABLED !== "false",
       autoSubmit: process.env.ETIMS_AUTO_SUBMIT !== "false",
@@ -193,6 +293,9 @@ export async function ensureOrgEtimsConfig(
 }
 
 export function toPublicConfig(c: OrgEtimsConfig): ResolvedEtimsConfig {
+  const envKey = Boolean(process.env.ETIMS_CONSUMER_KEY?.trim());
+  const envSecret = Boolean(process.env.ETIMS_CONSUMER_SECRET?.trim());
+  const envApp = process.env.ETIMS_APIGEE_APP_ID?.trim() || null;
   return {
     id: c.id,
     orgId: c.orgId,
@@ -204,6 +307,9 @@ export function toPublicConfig(c: OrgEtimsConfig): ResolvedEtimsConfig {
     sdcId: c.sdcId,
     mrcNo: c.mrcNo,
     dvcId: c.dvcId,
+    apigeeAppId: c.apigeeAppId || envApp,
+    hasConsumerKey: Boolean(c.consumerKey?.trim()) || envKey,
+    hasConsumerSecret: Boolean(c.consumerSecret?.trim()) || envSecret,
     mode: (c.mode as EtimsMode) || "mock",
     enabled: c.enabled,
     autoSubmit: c.autoSubmit,
@@ -236,27 +342,43 @@ export async function initializeEtimsDevice(
     });
     return {
       ok: true,
-      message: "Mock OSCU initialized (no KRA call). Switch mode to sandbox/production after you receive the integration token.",
+      message:
+        "Mock OSCU initialized (no KRA call). Set GavaConnect consumer key/secret + apigee_app_id and mode=sandbox to call sbx.kra.go.ke.",
       config: toPublicConfig(updated)
     };
   }
 
+  const creds = resolveGavaCreds(cfg);
+  if (!creds) {
+    const msg =
+      "Missing GavaConnect credentials (consumer key/secret and apigee_app_id). Set them on Finance → eTIMS or via ETIMS_CONSUMER_KEY / ETIMS_CONSUMER_SECRET / ETIMS_APIGEE_APP_ID.";
+    await prisma.orgEtimsConfig.update({
+      where: { orgId },
+      data: { lastError: msg, lastInitAt: new Date() }
+    });
+    return { ok: false, message: msg, config: toPublicConfig(cfg) };
+  }
+
   try {
-    const { ok, json } = await kraPost(mode, "/selectInitOsdcInfo", {
-      tin: cfg.tin,
-      bhfId: cfg.bhfId,
-      dvcSrlNo: cfg.dvcSrlNo
+    const { ok, json } = await kraPost({
+      mode,
+      path: "/initialize",
+      body: {
+        tin: cfg.tin,
+        bhfId: cfg.bhfId,
+        dvcSrlNo: cfg.dvcSrlNo
+      },
+      creds,
+      includeDeviceHeaders: false
     });
     const resultCd = String(json.resultCd ?? "");
-    const data = (json.data as Record<string, unknown> | undefined)?.info as
-      | Record<string, unknown>
-      | undefined;
-    const nested = (json.data as Record<string, unknown> | undefined) ?? {};
-    const info = data ?? nested;
+    const data = (json.data as Record<string, unknown> | undefined) ?? {};
+    const info = (data.info as Record<string, unknown> | undefined) ?? data;
 
     const cmcKey =
       (info.cmcKey as string | undefined) ||
       (json.cmcKey as string | undefined) ||
+      (data.cmcKey as string | undefined) ||
       process.env.ETIMS_CMC_KEY?.trim() ||
       null;
 
@@ -310,6 +432,7 @@ function buildSalesPayload(
 ) {
   const { salesDt, cfmDt } = kraDateTimeParts(issueDate);
   const rate = TAX_RATES[taxTyCd] ?? 16;
+  const itemClsCd = defaultItemClsCd();
 
   let taxblAmtA = 0,
     taxblAmtB = 0,
@@ -342,17 +465,17 @@ function buildSalesPayload(
       taxAmtB += bucket.tax;
     }
 
-    const spc = bucket.taxbl; // supply price / taxable
+    const spc = bucket.taxbl;
     const splyAmt = bucket.tot;
     return {
       itemSeq: idx + 1,
       itemCd: itemCodeFromDescription(it.description, idx + 1),
-      itemClsCd: "5020230101",
+      itemClsCd,
       itemNm: it.description.slice(0, 200),
       bcd: null,
       pkgUnitCd: "NT",
       pkg: 1,
-      qtyUnitCd: "U",
+      qtyUnitCd: "BA",
       qty: it.quantity,
       prc: money(it.unitPrice),
       splyAmt: money(splyAmt),
@@ -384,10 +507,8 @@ function buildSalesPayload(
   const totTaxAmt = money(taxAmtA + taxAmtB + taxAmtC + taxAmtD + taxAmtE);
   const totAmt = money(totTaxblAmt + totTaxAmt);
 
+  // Body matches Postman: tin/bhfId/cmcKey are headers, not body fields
   return {
-    tin: cfg.tin,
-    bhfId: cfg.bhfId,
-    cmcKey: cfg.cmcKey,
     invcNo,
     orgInvcNo: 0,
     custTin: buyerPin || null,
@@ -432,6 +553,7 @@ function buildSalesPayload(
       custTin: buyerPin || null,
       custMblNo: null,
       rptNo: invcNo,
+      rcptPbctDt: cfmDt,
       trdeNm: (cfg.taxpayerName || DEFAULT_SELLER_NAME).slice(0, 20),
       adrs: null,
       topMsg: "eTIMS Tax Invoice",
@@ -450,7 +572,7 @@ function mockSubmitResult(invcNo: number, cfg: OrgEtimsConfig): EtimsSubmitResul
     ok: true,
     status: "mock",
     resultCd: "000",
-    resultMsg: "Mock eTIMS filing succeeded (awaiting real OSCU token)",
+    resultMsg: "Mock eTIMS filing succeeded (awaiting GavaConnect sandbox credentials)",
     invcNo,
     sdcId: sdc,
     mrcNo: mrc,
@@ -512,7 +634,6 @@ export async function submitInvoiceToEtims(
   const mode = (cfg.mode as EtimsMode) || "mock";
   const taxTyCd = (cfg.defaultTaxTyCd || "B").toUpperCase().slice(0, 1);
 
-  // Allocate sequential eTIMS invcNo
   const updatedCfg = await prisma.orgEtimsConfig.update({
     where: { orgId },
     data: { lastInvcNo: { increment: 1 } }
@@ -525,17 +646,24 @@ export async function submitInvoiceToEtims(
     unitPrice: Number(it.unitPrice)
   }));
 
-  if (mode === "mock" || !cfg.cmcKey) {
+  const creds = resolveGavaCreds(cfg);
+  const canLive = mode !== "mock" && Boolean(cfg.cmcKey) && Boolean(creds);
+
+  if (!canLive) {
     const mock = mockSubmitResult(invcNo, updatedCfg);
     await persistEtimsResult(prisma, invoice.id, buyerPin, mock);
-    if (!cfg.cmcKey && mode !== "mock") {
-      await prisma.orgEtimsConfig.update({
-        where: { orgId },
-        data: {
-          lastError:
-            "No CMC key — filed in mock mode. Initialize OSCU after KRA issues the integration token."
-        }
-      });
+    if (mode !== "mock") {
+      const reason = !creds
+        ? "Missing GavaConnect credentials — filed in mock. Set consumer key/secret and apigee_app_id."
+        : !cfg.cmcKey
+          ? "No CMC key — filed in mock. Run Initialize OSCU after GavaConnect credentials are set."
+          : null;
+      if (reason) {
+        await prisma.orgEtimsConfig.update({
+          where: { orgId },
+          data: { lastError: reason }
+        });
+      }
     }
     return mock;
   }
@@ -552,7 +680,16 @@ export async function submitInvoiceToEtims(
   );
 
   try {
-    const { json } = await kraPost(mode, "/saveTrnsSalesOsdc", payload as unknown as Record<string, unknown>);
+    const { json } = await kraPost({
+      mode,
+      path: "/sendSalesTransaction",
+      body: payload as unknown as Record<string, unknown>,
+      creds: creds!,
+      tin: cfg.tin,
+      bhfId: cfg.bhfId,
+      cmcKey: cfg.cmcKey,
+      includeDeviceHeaders: true
+    });
     const resultCd = String(json.resultCd ?? "999");
     const resultMsg = String(json.resultMsg ?? "Unknown response");
     const data = (json.data as Record<string, unknown>) || {};

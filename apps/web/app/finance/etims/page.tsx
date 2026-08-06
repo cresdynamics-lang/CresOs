@@ -13,6 +13,9 @@ type EtimsConfig = {
   cmcKey: string | null;
   sdcId: string | null;
   mrcNo: string | null;
+  apigeeAppId: string | null;
+  hasConsumerKey: boolean;
+  hasConsumerSecret: boolean;
   mode: string;
   enabled: boolean;
   autoSubmit: boolean;
@@ -36,6 +39,9 @@ export default function FinanceEtimsPage() {
     bhfId: "00",
     dvcSrlNo: "CRESOSCU001",
     cmcKey: "",
+    apigeeAppId: "",
+    consumerKey: "",
+    consumerSecret: "",
     mode: "mock",
     enabled: true,
     autoSubmit: true,
@@ -63,6 +69,9 @@ export default function FinanceEtimsPage() {
         bhfId: c.bhfId,
         dvcSrlNo: c.dvcSrlNo,
         cmcKey: "",
+        apigeeAppId: c.apigeeAppId || "",
+        consumerKey: "",
+        consumerSecret: "",
         mode: c.mode || "mock",
         enabled: c.enabled,
         autoSubmit: c.autoSubmit,
@@ -91,6 +100,7 @@ export default function FinanceEtimsPage() {
         taxpayerName: form.taxpayerName,
         bhfId: form.bhfId,
         dvcSrlNo: form.dvcSrlNo,
+        apigeeAppId: form.apigeeAppId.trim() || null,
         mode: form.mode,
         enabled: form.enabled,
         autoSubmit: form.autoSubmit,
@@ -98,6 +108,8 @@ export default function FinanceEtimsPage() {
         vatInclusive: form.vatInclusive
       };
       if (form.cmcKey.trim()) body.cmcKey = form.cmcKey.trim();
+      if (form.consumerKey.trim()) body.consumerKey = form.consumerKey.trim();
+      if (form.consumerSecret.trim()) body.consumerSecret = form.consumerSecret.trim();
       const res = await apiFetch("/finance/etims/config", {
         method: "PUT",
         body: JSON.stringify(body)
@@ -142,8 +154,9 @@ export default function FinanceEtimsPage() {
         <p className={financeNeu.eyebrow}>Finance · compliance</p>
         <h1 className={`mt-0.5 ${financeNeu.titleSm}`}>eTIMS / OSCU</h1>
         <p className={`mt-2 max-w-2xl ${financeNeu.body}`}>
-          Auto-file tax invoices for CRES SOFTWARE LIMITED (PIN <span className="font-semibold text-[#242424]">P052570833B</span>).
-          Enter each buyer’s KRA PIN on the invoice (or save it on the client) so sales can be reported for iTax.
+          Auto-file tax invoices for CRES SOFTWARE LIMITED (PIN{" "}
+          <span className="font-semibold text-[#242424]">P052570833B</span>) via GavaConnect. Enter each buyer’s
+          KRA PIN on the invoice (or save it on the client).
         </p>
       </header>
 
@@ -186,7 +199,9 @@ export default function FinanceEtimsPage() {
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">Branch (bhfId)</span>
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
+                Branch (bhfId)
+              </span>
               <input
                 value={form.bhfId}
                 onChange={(e) => setForm((f) => ({ ...f, bhfId: e.target.value }))}
@@ -204,15 +219,56 @@ export default function FinanceEtimsPage() {
                 className={financeNeu.input}
               />
             </label>
+
             <label className="block sm:col-span-2">
               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
-                CMC / integration key {hasCmcKey ? "(stored — leave blank to keep)" : "(paste when KRA issues token)"}
+                Apigee app id (apigee_app_id)
+              </span>
+              <input
+                value={form.apigeeAppId}
+                onChange={(e) => setForm((f) => ({ ...f, apigeeAppId: e.target.value }))}
+                className={financeNeu.input}
+                placeholder="From GavaConnect / Postman {{apigee_app_id}}"
+                autoComplete="off"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
+                Consumer key{" "}
+                {config?.hasConsumerKey ? "(stored — leave blank to keep)" : "(GavaConnect Basic user)"}
+              </span>
+              <input
+                value={form.consumerKey}
+                onChange={(e) => setForm((f) => ({ ...f, consumerKey: e.target.value }))}
+                className={financeNeu.input}
+                placeholder={config?.hasConsumerKey ? "••••••••" : "Consumer key"}
+                autoComplete="off"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
+                Consumer secret{" "}
+                {config?.hasConsumerSecret ? "(stored — leave blank to keep)" : "(GavaConnect Basic password)"}
+              </span>
+              <input
+                type="password"
+                value={form.consumerSecret}
+                onChange={(e) => setForm((f) => ({ ...f, consumerSecret: e.target.value }))}
+                className={financeNeu.input}
+                placeholder={config?.hasConsumerSecret ? "••••••••" : "Consumer secret"}
+                autoComplete="new-password"
+              />
+            </label>
+
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#5B6472]">
+                CMC key {hasCmcKey ? "(stored — leave blank to keep)" : "(from Initialize / Postman)"}
               </span>
               <input
                 value={form.cmcKey}
                 onChange={(e) => setForm((f) => ({ ...f, cmcKey: e.target.value }))}
                 className={financeNeu.input}
-                placeholder={hasCmcKey ? "••••••••" : "From KRA OSCU approval / init response"}
+                placeholder={hasCmcKey ? "••••••••" : "From POST /initialize response"}
                 autoComplete="off"
               />
             </label>
@@ -224,8 +280,8 @@ export default function FinanceEtimsPage() {
                 className={financeNeu.input}
               >
                 <option value="mock">mock (local — no KRA)</option>
-                <option value="sandbox">sandbox (etims-api-sbx)</option>
-                <option value="production">production (etims-api)</option>
+                <option value="sandbox">sandbox (sbx.kra.go.ke GavaConnect)</option>
+                <option value="production">production (api.kra.go.ke)</option>
               </select>
             </label>
             <label className="block">
@@ -291,6 +347,13 @@ export default function FinanceEtimsPage() {
                 <dt className="text-[10px] uppercase text-[#5B6472]">CMC</dt>
                 <dd className="font-medium text-[#1A1D26]">{config.cmcKey || "not set"}</dd>
               </div>
+              <div className="sm:col-span-2">
+                <dt className="text-[10px] uppercase text-[#5B6472]">GavaConnect</dt>
+                <dd className="font-medium text-[#1A1D26]">
+                  {config.hasConsumerKey && config.hasConsumerSecret ? "key+secret set" : "credentials incomplete"}
+                  {config.apigeeAppId ? ` · app ${config.apigeeAppId.slice(0, 12)}…` : " · no apigee_app_id"}
+                </dd>
+              </div>
             </dl>
           ) : null}
 
@@ -307,15 +370,16 @@ export default function FinanceEtimsPage() {
           </div>
 
           <div className="rounded-xl border border-[#E5E9EF] bg-[#F4F7F9] p-4 text-sm text-[#5B6472]">
-            <p className="font-semibold text-[#1A1D26]">KRA support request (copy/paste)</p>
-            <p className="mt-2 whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#1A1D26]">
-              {`Subject: Request for Custom OSCU Integration Token - PIN P052570833B
-
-Hello eTIMS Support, we are CRES SOFTWARE LIMITED (PIN: P052570833B). We are building a custom-coded proprietary ERP and require an initial system integration token to clear our online OSCU Service Request submission.`}
-            </p>
+            <p className="font-semibold text-[#1A1D26]">Sandbox checklist</p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-[#1A1D26]">
+              <li>Import Postman env from <code className="text-xs">tools/etims/postman.environment.sbx.json</code></li>
+              <li>Paste consumer key/secret + apigee_app_id (or set them here / in API .env)</li>
+              <li>Run Access Token → Initialize in Postman, or click Initialize above in sandbox mode</li>
+              <li>Create a Finance invoice with buyer PIN — auto-file uses <code className="text-xs">/sendSalesTransaction</code></li>
+            </ol>
             <p className="mt-3">
-              After approval, paste the CMC/communication key above, set mode to <strong>sandbox</strong> then{" "}
-              <strong>production</strong>, and run <strong>Initialize OSCU device</strong>. New finance invoices will file to eTIMS automatically with each buyer’s PIN.
+              CLI verify (same as Postman):{" "}
+              <code className="text-xs">node tools/etims/verify-gavaconnect.mjs --sales</code>
             </p>
           </div>
         </form>

@@ -140,6 +140,7 @@ export class PDFGenerator {
     if (invoice.company?.email) leftBits.push(`Email: ${invoice.company.email}`);
     if (invoice.company?.phone) leftBits.push(`Phone: ${invoice.company.phone}`);
     if (invoice.company?.website) leftBits.push(`Website: ${invoice.company.website}`);
+    if (invoice.company?.tax_id) leftBits.push(`KRA PIN: ${invoice.company.tax_id}`);
     for (const line of leftBits) {
       this.doc.text(line, lx, leftY, { width: lw, lineGap: 1 });
       leftY = this.doc.y + 2;
@@ -205,6 +206,10 @@ export class PDFGenerator {
     }
     if (invoice.company.phone) {
       this.doc.text(invoice.company.phone, this.sideMargin, fromY, { width: fromW });
+      fromY = this.doc.y + 2;
+    }
+    if (invoice.company.tax_id) {
+      this.doc.text(`KRA PIN: ${invoice.company.tax_id}`, this.sideMargin, fromY, { width: fromW });
       fromY = this.doc.y + 2;
     }
     if (invoice.company.website) {
@@ -424,8 +429,8 @@ export class PDFGenerator {
     this.doc.fontSize(9).font('Helvetica');
     const lines = [
       `Pay within ${invoice.payment_terms.due_in_days} days of invoice date.`,
-      '☐ M-Pesa: Paybill 542542 | Account: 43869',
-      '☐ Bank Transfer: Bank: I & M Bank | Account Name: Cres Dynamics Ltd | Account No: 01207943936150 | Branch: Ongata Rongai',
+      '☐ M-Pesa: Paybill 542542 | Account: 01209982836350',
+      '☐ Bank Transfer: Bank: I & M Bank | Account Name: Cres Dynamics Ltd | Account No: 01209982836350 | Branch: Ongata Rongai',
       `Please use Invoice Number ${invoice.invoice_number} as your payment reference.`
     ];
     for (const line of lines) {

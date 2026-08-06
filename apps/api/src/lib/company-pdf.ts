@@ -4,6 +4,8 @@ export const CRES_DYNAMICS_PDF_COMPANY = {
   email: "info@cresdynamics.com",
   phone: "+254 743 869 564 / +254 708 805 496",
   website: "cresdynamics.com",
+  /** KRA PIN — CRES SOFTWARE LIMITED / Cres Dynamics Ltd */
+  tax_id: "P052570833B",
   address: {
     street: "Kivuli Towers, 3rd floor Westlands",
     city: "Nairobi",
