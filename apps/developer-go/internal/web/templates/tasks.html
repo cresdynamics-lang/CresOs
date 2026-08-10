@@ -5,24 +5,36 @@
 <section class="card">
   <div class="section-head">
     <h2>My tasks</h2>
-    <p class="muted">Update daily. Includes work assigned to you by sales or director on your projects.</p>
+    <p class="muted">Update daily. Blocked requires a reason. Comments notify the project thread.</p>
   </div>
   <ul class="task-board">
     {{range .Data}}
-    <li>
+    <li class="task-row">
       <div>
         <strong>{{.Title}}</strong>
         <span class="muted">{{.ProjectName}} · {{.Priority}}</span>
       </div>
       <span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span>
-      <form method="post" action="/tasks/{{.ID}}/status" class="status-form">
-        <select name="status" onchange="this.form.submit()">
+      <form method="post" action="/tasks/{{.ID}}/status" class="status-form stack-tight">
+        <select name="status">
           <option value="not_started" {{if or (eq .Status "todo") (eq .Status "not_started")}}selected{{end}}>To do</option>
           <option value="in_progress" {{if eq .Status "in_progress"}}selected{{end}}>In progress</option>
           <option value="waiting_response" {{if eq .Status "waiting_response"}}selected{{end}}>Waiting</option>
           <option value="blocked" {{if eq .Status "blocked"}}selected{{end}}>Blocked</option>
           <option value="done" {{if eq .Status "done"}}selected{{end}}>Done</option>
         </select>
+        <input name="blockedReason" maxlength="500" placeholder="Blocked reason (required if blocked)" />
+        <button type="submit">Save status</button>
+      </form>
+      <form method="post" action="/tasks/{{.ID}}/comments" class="status-form stack-tight">
+        <select name="type">
+          <option value="progress">Progress</option>
+          <option value="blocker">Blocker</option>
+          <option value="completion">Completion</option>
+          <option value="scope_issue">Scope</option>
+        </select>
+        <input name="body" required maxlength="2000" placeholder="Add a comment…" />
+        <button type="submit" class="ghost">Comment</button>
       </form>
     </li>
     {{else}}

@@ -1,0 +1,34 @@
+{{define "payments.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+<section class="card">
+  <div class="section-head">
+    <h2>Pending payments</h2>
+    <p class="muted">Acknowledge developer payments logged by finance.</p>
+  </div>
+  <table class="data">
+    <thead>
+      <tr><th>Description</th><th>Amount</th><th>Date</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td>{{if .Description}}{{.Description}}{{else}}Developer payment{{end}}</td>
+        <td><strong>{{printf "%.2f" .Amount}} {{.Currency}}</strong></td>
+        <td>{{date .SpentAt}}</td>
+        <td>
+          <form method="post" action="/payments/{{.ID}}/ack">
+            <button type="submit">Acknowledge</button>
+          </form>
+        </td>
+      </tr>
+      {{else}}
+      <tr><td colspan="4" class="muted">Nothing to acknowledge.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+{{template "shell-close" .}}
+{{end}}

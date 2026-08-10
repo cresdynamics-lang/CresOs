@@ -80,20 +80,36 @@
         <div class="panel-head">
           <h3>Contacts</h3>
         </div>
-        <table class="soft-table">
-          <thead><tr><th>Name</th><th>Email</th><th>Phone</th></tr></thead>
-          <tbody>
-            {{range .Contacts}}
-            <tr>
-              <td><strong>{{.Name}}</strong></td>
-              <td>{{.Email}}</td>
-              <td>{{.Phone}}</td>
-            </tr>
-            {{else}}
-            <tr><td colspan="3" class="muted">No contacts.</td></tr>
-            {{end}}
-          </tbody>
-        </table>
+        <form method="post" action="/crm/contacts" class="stack" style="margin-bottom:1rem;max-width:28rem">
+          <label>Name<input name="name" /></label>
+          <label>Email<input type="email" name="email" /></label>
+          <label>Phone<input name="phone" /></label>
+          <button type="submit">Add contact</button>
+        </form>
+        <form method="post" action="/crm/bulk-mail" class="stack" style="margin-bottom:1rem">
+          <h4 style="margin:0">Bulk mail</h4>
+          <label>Subject<input name="subject" required /></label>
+          <label>Body<textarea name="body" rows="3" required></textarea></label>
+          <table class="soft-table">
+            <thead><tr><th></th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+            <tbody>
+              {{range .Contacts}}
+              <tr>
+                <td>{{if .Email}}<input type="checkbox" name="contactId" value="{{.ID}}" />{{end}}</td>
+                <td><strong>{{.Name}}</strong></td>
+                <td>{{.Email}}</td>
+                <td>{{.Phone}}</td>
+                <td>
+                  <button formaction="/crm/contacts/{{.ID}}/delete" formmethod="post" type="submit" class="small">Delete</button>
+                </td>
+              </tr>
+              {{else}}
+              <tr><td colspan="5" class="muted">No contacts.</td></tr>
+              {{end}}
+            </tbody>
+          </table>
+          <button type="submit">Send to selected</button>
+        </form>
       </section>
 
       <section class="crm-panel panel" id="panel-deals">

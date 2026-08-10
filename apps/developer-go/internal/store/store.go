@@ -24,16 +24,18 @@ type KPI struct {
 }
 
 type ProjectSummary struct {
-	ID           string
-	Name         string
-	ManagerName  string
-	DueDate      *time.Time
-	Status       string
-	StatusLabel  string
-	Progress     int
-	TaskCount    int
-	DoneTasks    int
-	OverdueTasks int
+	ID               string
+	Name             string
+	ManagerName      string
+	DueDate          *time.Time
+	Status           string
+	StatusLabel      string
+	Progress         int
+	TaskCount        int
+	DoneTasks        int
+	OverdueTasks     int
+	AssignmentID     string
+	AssignmentStatus string
 }
 
 type TodayTask struct {
@@ -362,10 +364,12 @@ func (s *Store) ListProjectSummaries(ctx context.Context, orgID, userID string, 
 		SELECT p.id, p.name,
 		       COALESCE(pm.name, pm.email, owner.name, owner.email, 'Unassigned'),
 		       p."endDate", p.status,
-		       COALESCE(tot.n,0), COALESCE(done.n,0), COALESCE(od.n,0)
+		       COALESCE(tot.n,0), COALESCE(done.n,0), COALESCE(od.n,0),
+		       COALESCE(asg.id,''), COALESCE(asg.status,'')
 		FROM "Project" p
 		LEFT JOIN "User" owner ON owner.id = p."ownerUserId"
 		LEFT JOIN "User" pm ON pm.id = p."projectManagerUserId"
+		LEFT JOIN "ProjectDeveloperAssignment" asg ON asg."projectId"=p.id AND asg."userId"=$2
 		LEFT JOIN LATERAL (
 		  SELECT COUNT(*) n FROM "Task" t
 		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2
@@ -391,7 +395,7 @@ func (s *Store) ListProjectSummaries(ctx context.Context, orgID, userID string, 
 	var out []ProjectSummary
 	for rows.Next() {
 		var r ProjectSummary
-		if err := rows.Scan(&r.ID, &r.Name, &r.ManagerName, &r.DueDate, &r.Status, &r.TaskCount, &r.DoneTasks, &r.OverdueTasks); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.ManagerName, &r.DueDate, &r.Status, &r.TaskCount, &r.DoneTasks, &r.OverdueTasks, &r.AssignmentID, &r.AssignmentStatus); err != nil {
 			return nil, err
 		}
 		if r.TaskCount > 0 {
@@ -526,53 +530,7 @@ func (s *Store) developerHasProjectAccess(ctx context.Context, orgID, userID, pr
 }
 
 func (s *Store) UpdateTaskStatus(ctx context.Context, orgID, userID, taskID, status string) error {
-	status = strings.TrimSpace(strings.ToLower(status))
-	switch status {
-	case "todo":
-		status = "not_started"
-	}
-	allowed := map[string]bool{
-		"not_started": true, "in_progress": true, "waiting_response": true, "blocked": true, "done": true,
-	}
-	if !allowed[status] {
-		return fmt.Errorf("invalid status")
-	}
-
-	var projectID string
-	var assigneeID *string
-	err := s.DB.QueryRow(ctx, `
-		SELECT "projectId", "assigneeId" FROM "Task"
-		WHERE id=$1 AND "orgId"=$2 AND "deletedAt" IS NULL
-	`, taskID, orgID).Scan(&projectID, &assigneeID)
-	if err != nil {
-		return fmt.Errorf("task not found")
-	}
-
-	mine := assigneeID != nil && *assigneeID == userID
-	access, err := s.developerHasProjectAccess(ctx, orgID, userID, projectID)
-	if err != nil {
-		return err
-	}
-	if !mine && !access {
-		return fmt.Errorf("only an accepted developer on this project can update this task")
-	}
-
-	ct, err := s.DB.Exec(ctx, `
-		UPDATE "Task"
-		SET status=$1, "assigneeId"=$2, "updatedAt"=NOW()
-		WHERE id=$3 AND "orgId"=$4 AND "deletedAt" IS NULL
-	`, status, userID, taskID, orgID)
-	if err != nil {
-		return err
-	}
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("task not found")
-	}
-	_, _ = s.DB.Exec(ctx, `
-		INSERT INTO "EventLog" (id, "orgId", "actorId", type, "entityType", "entityId", metadata, "createdAt")
-		VALUES ($1,$2,$3,'task.status_updated','task',$4,jsonb_build_object('status',$5::text,'source','developer-go'),NOW())
-	`, cuid.New(), orgID, userID, taskID, status)
-	return nil
+	return s.UpdateTaskStatusFull(ctx, orgID, userID, taskID, status, "")
 }
 
 type ScheduleRow struct {

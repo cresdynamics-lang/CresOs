@@ -21,15 +21,15 @@ Go apps replace Next.js `/sales` and `/developer` workspaces. Shared Postgres + 
 
 ## Phase 2 — API / write paths (remaining)
 ### Sales
-- [ ] Lead create + detail
-- [ ] Contacts CRUD / bulk mail
-- [ ] Real Resend mail send
-- [ ] Report Q&A detail
+- [x] Lead create + detail
+- [x] Contacts CRUD / bulk mail
+- [ ] Real Resend mail send *(queues Notification + EventLog for Node worker)*
+- [x] Report Q&A detail
 
 ### Developer
-- [ ] Project accept/decline + detail
-- [ ] Task comments / blocked reason UI
-- [ ] Payment ack + reminder snooze
+- [x] Project accept/decline + detail
+- [x] Task comments / blocked reason UI
+- [x] Payment ack + reminder snooze
 
 ## Phase 3 — Cut over Next.js
 - [x] Sales/developer login → Go SSO (default URLs)
@@ -37,7 +37,7 @@ Go apps replace Next.js `/sales` and `/developer` workspaces. Shared Postgres + 
 - [x] Delete overview dashboard React components
 
 ## Phase 4 — Ship
-- [ ] Smoke both Go apps
+- [x] Smoke both Go apps
 - [ ] Commit + push
 
 ## DROP (out of Go v1)

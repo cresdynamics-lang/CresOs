@@ -5,24 +5,36 @@
 <section class="card">
   <div class="section-head">
     <h2>Assigned projects</h2>
-    <p class="muted">Sales and directors assign you — you update tasks and delivery, not create projects.</p>
+    <p class="muted">Sales and directors assign you — accept invitations, then update tasks and delivery.</p>
   </div>
   <table class="data">
     <thead>
-      <tr><th>Name</th><th>PM</th><th>Due</th><th>Status</th><th>Progress</th><th>Tasks</th></tr>
+      <tr><th>Name</th><th>PM</th><th>Due</th><th>Invite</th><th>Status</th><th>Progress</th><th></th></tr>
     </thead>
     <tbody>
       {{range .Data}}
       <tr>
-        <td><strong>{{.Name}}</strong></td>
+        <td><a href="/projects/{{.ID}}"><strong>{{.Name}}</strong></a></td>
         <td>{{.ManagerName}}</td>
         <td>{{datep .DueDate}}</td>
+        <td>
+          {{if eq .AssignmentStatus "pending"}}
+          <form method="post" action="/projects/assignments/{{.AssignmentID}}/respond" class="inline-actions">
+            <button type="submit" name="accept" value="1">Accept</button>
+            <button type="submit" name="accept" value="0" class="ghost">Decline</button>
+          </form>
+          {{else if .AssignmentStatus}}
+          <span class="st {{statusClass .AssignmentStatus}}">{{.AssignmentStatus}}</span>
+          {{else}}
+          <span class="muted">assigned</span>
+          {{end}}
+        </td>
         <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
         <td>{{.Progress}}%</td>
-        <td>{{.DoneTasks}}/{{.TaskCount}}</td>
+        <td><a class="link" href="/projects/{{.ID}}">Open</a></td>
       </tr>
       {{else}}
-      <tr><td colspan="6" class="muted">No projects assigned.</td></tr>
+      <tr><td colspan="7" class="muted">No projects assigned.</td></tr>
       {{end}}
     </tbody>
   </table>

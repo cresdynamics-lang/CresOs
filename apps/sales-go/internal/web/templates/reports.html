@@ -17,13 +17,15 @@
       <tbody>
         {{range .Data}}
         <tr>
-          <td>{{.Title}}</td>
+          <td><a href="/reports/{{.ID}}"><strong>{{.Title}}</strong></a></td>
           <td><span class="badge">{{.Status}}</span></td>
           <td>{{.ReviewStatus}}</td>
           <td>{{.AuthorName}}</td>
           <td>
             {{if eq .Status "draft"}}
             <form method="post" action="/reports/{{.ID}}/submit"><button type="submit" class="small">Submit</button></form>
+            {{else}}
+            <a class="link-quiet" href="/reports/{{.ID}}">Open</a>
             {{end}}
           </td>
         </tr>

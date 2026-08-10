@@ -84,11 +84,11 @@ func NewServer(cfg config.Config, a *auth.Service, st *store.Store) (*Server, er
 		},
 		"statusClass": func(label string) string {
 			switch strings.ToLower(label) {
-			case "completed", "approved", "ok", "pending":
+			case "completed", "approved", "ok", "accepted":
 				return "st-ok"
-			case "delayed", "warn", "to do", "viewed":
+			case "delayed", "warn", "to do", "viewed", "pending":
 				return "st-warn"
-			case "at risk", "in review", "bad", "blocked":
+			case "at risk", "in review", "bad", "blocked", "declined":
 				return "st-bad"
 			case "on going", "orange":
 				return "st-orange"
@@ -142,12 +142,18 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("GET /", s.withAuth(s.handleDashboard))
 	mux.HandleFunc("GET /projects", s.withAuth(s.handleProjects))
+	mux.HandleFunc("GET /projects/{id}", s.withAuth(s.handleProjectDetail))
+	mux.HandleFunc("POST /projects/assignments/{id}/respond", s.withAuth(s.handleAssignmentRespond))
 	mux.HandleFunc("GET /tasks", s.withAuth(s.handleTasks))
 	mux.HandleFunc("POST /tasks/{id}/status", s.withAuth(s.handleTaskStatus))
+	mux.HandleFunc("POST /tasks/{id}/comments", s.withAuth(s.handleTaskComment))
 	mux.HandleFunc("GET /schedule", s.withAuth(s.handleSchedule))
 	mux.HandleFunc("POST /schedule/{id}/complete", s.withAuth(s.handleScheduleComplete))
 	mux.HandleFunc("GET /reports", s.withAuth(s.handleReports))
 	mux.HandleFunc("POST /reports", s.withAuth(s.handleReportCreate))
+	mux.HandleFunc("GET /payments", s.withAuth(s.handlePayments))
+	mux.HandleFunc("POST /payments/{id}/ack", s.withAuth(s.handlePaymentAck))
+	mux.HandleFunc("POST /reminders/snooze", s.withAuth(s.handleReminderSnooze))
 	mux.HandleFunc("GET /performance", s.withAuth(s.handlePerformance))
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -286,6 +292,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	} else {
 		p.Data = d
 	}
+	if r.URL.Query().Get("ok") == "snooze" {
+		p.Flash = "Reminder snoozed."
+	}
 	s.render(w, "dashboard.html", p)
 }
 
@@ -298,7 +307,37 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	} else {
 		p.Data = rows
 	}
+	if r.URL.Query().Get("ok") != "" {
+		p.Flash = "Assignment updated."
+	}
+	if e := r.URL.Query().Get("err"); e != "" {
+		p.Error = e
+	}
 	s.render(w, "projects.html", p)
+}
+
+func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	d, err := s.Store.GetProjectDetail(r.Context(), c.OrgID, c.UserID, r.PathValue("id"))
+	p := s.basePage(r, "Project", "projects")
+	if err != nil {
+		p.Error = err.Error()
+	} else {
+		p.Data = d
+	}
+	s.render(w, "project-detail.html", p)
+}
+
+func (s *Server) handleAssignmentRespond(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	accept := r.FormValue("accept") != "0"
+	err := s.Store.RespondAssignment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), accept)
+	if err != nil {
+		http.Redirect(w, r, "/projects?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/projects?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
@@ -311,10 +350,10 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		p.Data = rows
 	}
 	if r.URL.Query().Get("ok") == "1" {
-		p.Flash = "Task status updated."
+		p.Flash = "Task updated."
 	}
 	if r.URL.Query().Get("err") != "" {
-		p.Error = "Could not update task — you must be assigned or an accepted developer on the project."
+		p.Error = "Could not update task — blocked reason required when marking blocked, or you need project access."
 	}
 	s.render(w, "tasks.html", p)
 }
@@ -322,12 +361,65 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	_ = r.ParseForm()
-	err := s.Store.UpdateTaskStatus(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), r.FormValue("status"))
+	err := s.Store.UpdateTaskStatusFull(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), r.FormValue("status"), r.FormValue("blockedReason"))
 	if err != nil {
 		http.Redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handleTaskComment(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	err := s.Store.AddTaskComment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), r.FormValue("body"), r.FormValue("type"))
+	if err != nil {
+		http.Redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handlePayments(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	rows, err := s.Store.ListPendingPayments(r.Context(), c.OrgID, c.UserID)
+	p := s.basePage(r, "Payments", "payments")
+	if err != nil {
+		p.Error = err.Error()
+	} else {
+		p.Data = rows
+	}
+	if r.URL.Query().Get("ok") == "1" {
+		p.Flash = "Payment acknowledged."
+	}
+	if r.URL.Query().Get("err") != "" {
+		p.Error = "Could not acknowledge payment."
+	}
+	s.render(w, "payments.html", p)
+}
+
+func (s *Server) handlePaymentAck(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	err := s.Store.AcknowledgePayment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"))
+	if err != nil {
+		http.Redirect(w, r, "/payments?err=1", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/payments?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handleReminderSnooze(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	until := time.Now().Add(30 * time.Minute)
+	switch r.FormValue("preset") {
+	case "1h":
+		until = time.Now().Add(time.Hour)
+	case "12h":
+		until = time.Now().Add(12 * time.Hour)
+	}
+	_ = s.Store.SnoozeReminder(r.Context(), c.OrgID, c.UserID, r.FormValue("key"), r.FormValue("label"), until)
+	http.Redirect(w, r, "/?ok=snooze", http.StatusSeeOther)
 }
 
 func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {

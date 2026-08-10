@@ -186,12 +186,21 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /community", s.withAuth(s.handleCommunity))
 	mux.HandleFunc("POST /community/chat", s.withAuth(s.handleCommunityChat))
 	mux.HandleFunc("GET /leads", s.withAuth(s.handleLeads))
+	mux.HandleFunc("POST /leads", s.withAuth(s.handleLeadCreate))
+	mux.HandleFunc("GET /leads/{id}", s.withAuth(s.handleLeadDetail))
+	mux.HandleFunc("POST /leads/{id}/status", s.withAuth(s.handleLeadStatus))
+	mux.HandleFunc("POST /leads/{id}/comments", s.withAuth(s.handleLeadComment))
 	mux.HandleFunc("GET /deals", s.withAuth(s.handleDeals))
 	mux.HandleFunc("GET /reports", s.withAuth(s.handleReports))
 	mux.HandleFunc("POST /reports", s.withAuth(s.handleReportCreate))
 	mux.HandleFunc("POST /reports/{id}/submit", s.withAuth(s.handleReportSubmit))
+	mux.HandleFunc("GET /reports/{id}", s.withAuth(s.handleReportDetail))
+	mux.HandleFunc("POST /reports/{id}/answer", s.withAuth(s.handleReportAnswer))
 	mux.HandleFunc("GET /messages", s.withAuth(s.handleMessages))
 	mux.HandleFunc("POST /messages", s.withAuth(s.handleMessageSend))
+	mux.HandleFunc("POST /crm/contacts", s.withAuth(s.handleContactCreate))
+	mux.HandleFunc("POST /crm/contacts/{id}/delete", s.withAuth(s.handleContactDelete))
+	mux.HandleFunc("POST /crm/bulk-mail", s.withAuth(s.handleBulkMail))
 	mux.HandleFunc("GET /follow-ups", s.withAuth(s.handleFollowUps))
 	mux.HandleFunc("POST /follow-ups/{id}/reach", s.withAuth(s.handleFollowUpReach))
 	mux.HandleFunc("POST /follow-ups/{id}/outreach", s.withAuth(s.handleFollowUpOutreach))
@@ -404,6 +413,12 @@ func (s *Server) handleCRM(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		p.Error = err.Error()
 	}
+	if ok := r.URL.Query().Get("ok"); ok != "" {
+		p.Flash = "CRM updated (" + ok + ")."
+	}
+	if e := r.URL.Query().Get("err"); e != "" {
+		p.Error = e
+	}
 	p.Data = map[string]any{
 		"Contacts":  contacts,
 		"Leads":     leads,
@@ -567,7 +582,63 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 	} else {
 		p.Data = rows
 	}
+	if r.URL.Query().Get("ok") == "1" {
+		p.Flash = "Lead created — pending director approval."
+	}
+	if e := r.URL.Query().Get("err"); e != "" {
+		p.Error = e
+	}
 	s.render(w, "leads.html", p)
+}
+
+func (s *Server) handleLeadCreate(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	id, err := s.Store.CreateLead(r.Context(), c.OrgID, c.UserID, r.FormValue("title"), r.FormValue("source"))
+	if err != nil {
+		http.Redirect(w, r, "/leads?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handleLeadDetail(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	d, err := s.Store.GetLead(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), auth.IsAdmin(c.RoleKeys))
+	p := s.basePage(r, "Lead", "leads")
+	if err != nil {
+		p.Error = err.Error()
+	} else {
+		p.Data = d
+	}
+	if r.URL.Query().Get("ok") != "" {
+		p.Flash = "Saved."
+	}
+	s.render(w, "lead-detail.html", p)
+}
+
+func (s *Server) handleLeadStatus(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	id := r.PathValue("id")
+	err := s.Store.UpdateLeadStatus(r.Context(), c.OrgID, c.UserID, id, r.FormValue("status"), auth.IsAdmin(c.RoleKeys))
+	if err != nil {
+		http.Redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handleLeadComment(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	id := r.PathValue("id")
+	err := s.Store.AddLeadComment(r.Context(), c.OrgID, c.UserID, id, r.FormValue("content"))
+	if err != nil {
+		http.Redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleDeals(w http.ResponseWriter, r *http.Request) {
@@ -618,28 +689,82 @@ func (s *Server) handleReportSubmit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/reports", http.StatusSeeOther)
 }
 
+func (s *Server) handleReportDetail(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	d, err := s.Store.GetReport(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), auth.IsAdmin(c.RoleKeys))
+	p := s.basePage(r, "Report", "reports")
+	if err != nil {
+		p.Error = err.Error()
+	} else {
+		p.Data = d
+	}
+	if r.URL.Query().Get("ok") != "" {
+		p.Flash = "Answer posted."
+	}
+	s.render(w, "report-detail.html", p)
+}
+
+func (s *Server) handleReportAnswer(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	id := r.PathValue("id")
+	err := s.Store.AddReportAnswer(r.Context(), c.OrgID, c.UserID, id, r.FormValue("parentId"), r.FormValue("content"))
+	if err != nil {
+		http.Redirect(w, r, "/reports/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/reports/"+id+"?ok=1", http.StatusSeeOther)
+}
+
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	p := s.basePage(r, "Mails", "messages")
-	p.Flash = r.URL.Query().Get("ok")
+	if r.URL.Query().Get("ok") != "" {
+		p.Flash = "Mail queued for delivery (Notification + EventLog — Node Resend worker can pick up queued email)."
+	}
+	if e := r.URL.Query().Get("err"); e != "" {
+		p.Error = e
+	}
 	s.render(w, "messages.html", p)
 }
 
 func (s *Server) handleMessageSend(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	to := strings.TrimSpace(r.FormValue("to"))
-	subject := strings.TrimSpace(r.FormValue("subject"))
-	body := strings.TrimSpace(r.FormValue("body"))
-	if to == "" || subject == "" || body == "" {
-		http.Redirect(w, r, "/messages?err=1", http.StatusSeeOther)
+	c := claimsFrom(r)
+	err := s.Store.QueueOutboundMail(r.Context(), c.OrgID, c.UserID, r.FormValue("to"), r.FormValue("subject"), r.FormValue("body"))
+	if err != nil {
+		http.Redirect(w, r, "/messages?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	// Persist as EventLog-style note for now; production email still flows via Node Resend stack.
+	http.Redirect(w, r, "/messages?ok=1", http.StatusSeeOther)
+}
+
+func (s *Server) handleContactCreate(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
-	_, _ = s.Auth.DB.Exec(r.Context(), `
-		INSERT INTO "EventLog" (id, "orgId", "actorId", type, "entityType", "entityId", metadata, "createdAt")
-		VALUES ($1, $2, $3, 'sales.mail.compose', 'mail', $4, $5::jsonb, NOW())
-	`, newEventID(), c.OrgID, c.UserID, to, fmt.Sprintf(`{"subject":%q}`, subject))
-	http.Redirect(w, r, "/messages?ok=queued", http.StatusSeeOther)
+	_ = r.ParseForm()
+	_, err := s.Store.CreateContact(r.Context(), c.OrgID, c.UserID, r.FormValue("name"), r.FormValue("email"), r.FormValue("phone"))
+	if err != nil {
+		http.Redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/crm?ok=contact", http.StatusSeeOther)
+}
+
+func (s *Server) handleContactDelete(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = s.Store.DeleteContact(r.Context(), c.OrgID, r.PathValue("id"))
+	http.Redirect(w, r, "/crm?ok=deleted", http.StatusSeeOther)
+}
+
+func (s *Server) handleBulkMail(w http.ResponseWriter, r *http.Request) {
+	c := claimsFrom(r)
+	_ = r.ParseForm()
+	ids := r.Form["contactId"]
+	n, err := s.Store.BulkQueueMail(r.Context(), c.OrgID, c.UserID, ids, r.FormValue("subject"), r.FormValue("body"))
+	if err != nil {
+		http.Redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/crm?ok=bulk"+fmt.Sprintf("%d", n), http.StatusSeeOther)
 }
 
 func (s *Server) handleFollowUps(w http.ResponseWriter, r *http.Request) {

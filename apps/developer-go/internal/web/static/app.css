@@ -276,12 +276,22 @@ a { color: inherit; text-decoration: none; }
 
 .task-board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.65rem; }
 .task-board li {
-  display: grid; grid-template-columns: 1fr auto auto; gap: 0.75rem; align-items: center;
+  display: grid; grid-template-columns: 1fr auto; gap: 0.65rem 0.75rem; align-items: start;
   padding: 0.75rem; border-radius: 0.9rem; background: #faf8f4;
 }
-.status-form select {
-  border: 1px solid #e5e0d6; border-radius: 999px; padding: 0.4rem 0.7rem; font: inherit; background: #fff;
+.task-board li.task-row { grid-template-columns: 1fr auto; }
+.task-board li .status-form { grid-column: 1 / -1; }
+.status-form select, .status-form input {
+  border: 1px solid #e5e0d6; border-radius: 0.65rem; padding: 0.4rem 0.7rem; font: inherit; background: #fff;
 }
+.stack-tight { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.inline-actions { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin: 0; }
+.inline-actions button, .status-form button, button.ghost {
+  border: 0; border-radius: 999px; padding: 0.35rem 0.75rem; font: inherit; font-weight: 700; cursor: pointer;
+  background: var(--orange); color: #fff;
+}
+button.ghost, .inline-actions .ghost { background: #efeae3; color: var(--ink); }
+.alert-row { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; justify-content: space-between; }
 
 .expect { margin: 0.75rem 0 0; padding-left: 1.1rem; color: #444; line-height: 1.55; }
 .alerts { display: flex; flex-direction: column; gap: 0.4rem; }

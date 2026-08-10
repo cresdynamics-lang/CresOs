@@ -44,6 +44,10 @@
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg></span>
         Reports
       </a>
+      <a class="{{if eq .Nav "payments"}}active{{end}}" href="/payments">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M4 10h16M8 14h3"/></svg></span>
+        Payments
+      </a>
       <a class="{{if eq .Nav "performance"}}active{{end}}" href="/performance">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
         Performance

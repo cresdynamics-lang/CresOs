@@ -1,6 +1,16 @@
 {{define "leads.html"}}
 {{template "head" .}}
 {{template "shell-open" .}}
+
+<section class="card" style="margin-bottom:0.85rem">
+  <h3>New lead</h3>
+  <form method="post" action="/leads" class="stack" style="max-width:28rem">
+    <label>Title<input name="title" required maxlength="200" placeholder="Prospect / opportunity title" /></label>
+    <label>Source<input name="source" maxlength="120" placeholder="referral, inbound, cold…" /></label>
+    <button type="submit">Create lead</button>
+  </form>
+</section>
+
 <section class="card">
   <div class="card-head"><h3>Leads</h3></div>
   <table>
@@ -8,7 +18,7 @@
     <tbody>
       {{range .Data}}
       <tr>
-        <td>{{.Title}}</td>
+        <td><a href="/leads/{{.ID}}"><strong>{{.Title}}</strong></a></td>
         <td><span class="badge">{{.Status}}</span></td>
         <td>{{.ApprovalStatus}}</td>
         <td>{{.Source}}</td>

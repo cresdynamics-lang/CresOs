@@ -698,3 +698,267 @@ func (s *Store) StartDirectChat(ctx context.Context, orgID, fromID, toID, messag
 	`, newID(), orgID, toID, message)
 	return convID, nil
 }
+
+func (s *Store) CreateLead(ctx context.Context, orgID, userID, title, source string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", fmt.Errorf("title is required")
+	}
+	id := newID()
+	_, err := s.DB.Exec(ctx, `
+		INSERT INTO "Lead" (id, "orgId", title, source, status, "ownerId", "approvalStatus", "createdAt", "updatedAt")
+		VALUES ($1,$2,$3,NULLIF($4,''),'new',$5,'pending_approval',NOW(),NOW())
+	`, id, orgID, title, strings.TrimSpace(source), userID)
+	if err != nil {
+		return "", err
+	}
+	_, _ = s.DB.Exec(ctx, `
+		INSERT INTO "Notification" (id, "orgId", channel, "to", subject, body, status, type, tier, "createdAt")
+		SELECT $1, $2, 'in_app', u.id, $3, $4, 'sent', 'lead.created', 'execution', NOW()
+		FROM "User" u
+		JOIN "UserRole" ur ON ur."userId"=u.id
+		JOIN "Role" r ON r.id=ur."roleId"
+		WHERE r."orgId"=$2 AND r.key IN ('director_admin','admin') AND u."deletedAt" IS NULL
+	`, newID(), orgID, "New lead created", fmt.Sprintf("Lead %q was added and is pending approval.", title))
+	return id, nil
+}
+
+func (s *Store) UpdateLeadStatus(ctx context.Context, orgID, userID, leadID, status string, isAdmin bool) error {
+	status = strings.TrimSpace(strings.ToLower(status))
+	allowed := map[string]bool{"new": true, "contacted": true, "qualified": true, "disqualified": true}
+	if !allowed[status] {
+		return fmt.Errorf("invalid status")
+	}
+	where := `id=$1 AND "orgId"=$2 AND "deletedAt" IS NULL`
+	args := []any{leadID, orgID, status}
+	if !isAdmin {
+		where += ` AND "ownerId"=$4`
+		args = append(args, userID)
+	}
+	ct, err := s.DB.Exec(ctx, fmt.Sprintf(`UPDATE "Lead" SET status=$3, "updatedAt"=NOW() WHERE %s`, where), args...)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("lead not found")
+	}
+	return nil
+}
+
+type LeadDetail struct {
+	LeadRow
+	Comments []LeadComment
+}
+
+type LeadComment struct {
+	ID         string
+	Content    string
+	AuthorName string
+	CreatedAt  time.Time
+}
+
+func (s *Store) GetLead(ctx context.Context, orgID, userID, leadID string, isAdmin bool) (*LeadDetail, error) {
+	where := `l.id=$1 AND l."orgId"=$2 AND l."deletedAt" IS NULL`
+	args := []any{leadID, orgID}
+	if !isAdmin {
+		where += ` AND l."ownerId"=$3`
+		args = append(args, userID)
+	}
+	var d LeadDetail
+	err := s.DB.QueryRow(ctx, `
+		SELECT l.id, l.title, l.status, l."approvalStatus", COALESCE(l.source,''),
+		       COALESCE(u.name, u.email, ''), l."createdAt"
+		FROM "Lead" l
+		LEFT JOIN "User" u ON u.id=l."ownerId"
+		WHERE `+where, args...).Scan(
+		&d.ID, &d.Title, &d.Status, &d.ApprovalStatus, &d.Source, &d.OwnerName, &d.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("lead not found")
+	}
+	rows, err := s.DB.Query(ctx, `
+		SELECT c.id, c.content, COALESCE(u.name, u.email, ''), c."createdAt"
+		FROM "LeadComment" c
+		JOIN "User" u ON u.id=c."authorId"
+		WHERE c."leadId"=$1 AND c."orgId"=$2
+		ORDER BY c."createdAt" ASC
+	`, leadID, orgID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c LeadComment
+			if rows.Scan(&c.ID, &c.Content, &c.AuthorName, &c.CreatedAt) == nil {
+				d.Comments = append(d.Comments, c)
+			}
+		}
+	}
+	return &d, nil
+}
+
+func (s *Store) AddLeadComment(ctx context.Context, orgID, userID, leadID, content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("comment required")
+	}
+	_, err := s.DB.Exec(ctx, `
+		INSERT INTO "LeadComment" (id, "leadId", "orgId", "authorId", content, "createdAt")
+		VALUES ($1,$2,$3,$4,$5,NOW())
+	`, newID(), leadID, orgID, userID, content)
+	return err
+}
+
+func (s *Store) CreateContact(ctx context.Context, orgID, userID, name, email, phone string) (string, error) {
+	email = strings.TrimSpace(email)
+	phone = strings.TrimSpace(phone)
+	name = strings.TrimSpace(name)
+	if email == "" && phone == "" {
+		return "", fmt.Errorf("email or phone required")
+	}
+	id := newID()
+	_, err := s.DB.Exec(ctx, `
+		INSERT INTO "CrmContact" (id, "orgId", email, phone, name, "addedById", "createdAt")
+		VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),$6,NOW())
+	`, id, orgID, email, phone, name, userID)
+	return id, err
+}
+
+func (s *Store) DeleteContact(ctx context.Context, orgID, contactID string) error {
+	ct, err := s.DB.Exec(ctx, `
+		UPDATE "CrmContact" SET "deletedAt"=NOW() WHERE id=$1 AND "orgId"=$2 AND "deletedAt" IS NULL
+	`, contactID, orgID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("contact not found")
+	}
+	return nil
+}
+
+func (s *Store) QueueOutboundMail(ctx context.Context, orgID, userID, to, subject, body string) error {
+	to = strings.TrimSpace(to)
+	subject = strings.TrimSpace(subject)
+	body = strings.TrimSpace(body)
+	if to == "" || subject == "" || body == "" {
+		return fmt.Errorf("to, subject, and body are required")
+	}
+	nid := newID()
+	_, err := s.DB.Exec(ctx, `
+		INSERT INTO "Notification" (id, "orgId", channel, "to", subject, body, status, type, tier, "createdAt")
+		VALUES ($1,$2,'email',$3,$4,$5,'queued','sales.mail.send','execution',NOW())
+	`, nid, orgID, to, subject, body)
+	if err != nil {
+		return err
+	}
+	_, _ = s.DB.Exec(ctx, `
+		INSERT INTO "EventLog" (id, "orgId", "actorId", type, "entityType", "entityId", metadata, "createdAt")
+		VALUES ($1,$2,$3,'sales.mail.send','notification',$4,
+		        jsonb_build_object('to',$5::text,'subject',$6::text,'notificationId',$4::text), NOW())
+	`, newID(), orgID, userID, nid, to, subject)
+	return nil
+}
+
+func (s *Store) BulkQueueMail(ctx context.Context, orgID, userID string, contactIDs []string, subject, body string) (int, error) {
+	subject = strings.TrimSpace(subject)
+	body = strings.TrimSpace(body)
+	if subject == "" || body == "" {
+		return 0, fmt.Errorf("subject and body required")
+	}
+	n := 0
+	for _, id := range contactIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		var email string
+		err := s.DB.QueryRow(ctx, `
+			SELECT COALESCE(email,'') FROM "CrmContact"
+			WHERE id=$1 AND "orgId"=$2 AND "deletedAt" IS NULL
+		`, id, orgID).Scan(&email)
+		if err != nil || email == "" {
+			continue
+		}
+		if s.QueueOutboundMail(ctx, orgID, userID, email, subject, body) == nil {
+			n++
+		}
+	}
+	if n == 0 {
+		return 0, fmt.Errorf("no contacts with email selected")
+	}
+	return n, nil
+}
+
+type ReportComment struct {
+	ID         string
+	Kind       string
+	Content    string
+	AuthorName string
+	CreatedAt  time.Time
+	ParentID   *string
+}
+
+type ReportDetail struct {
+	ReportRow
+	Body     string
+	Comments []ReportComment
+}
+
+func (s *Store) GetReport(ctx context.Context, orgID, userID, reportID string, isAdmin bool) (*ReportDetail, error) {
+	where := `r.id=$1 AND r."orgId"=$2`
+	args := []any{reportID, orgID}
+	if !isAdmin {
+		where += ` AND r."submittedById"=$3`
+		args = append(args, userID)
+	}
+	var d ReportDetail
+	err := s.DB.QueryRow(ctx, `
+		SELECT r.id, r.title, r.status, r."reviewStatus", r."submittedAt", r."createdAt",
+		       COALESCE(u.name, u.email, ''), r.body
+		FROM "SalesReport" r
+		JOIN "User" u ON u.id=r."submittedById"
+		WHERE `+where, args...).Scan(
+		&d.ID, &d.Title, &d.Status, &d.ReviewStatus, &d.SubmittedAt, &d.CreatedAt, &d.AuthorName, &d.Body,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("report not found")
+	}
+	rows, err := s.DB.Query(ctx, `
+		SELECT c.id, c.kind, c.content, COALESCE(u.name, u.email, ''), c."createdAt", c."parentId"
+		FROM "SalesReportComment" c
+		JOIN "User" u ON u.id=c."authorId"
+		WHERE c."reportId"=$1
+		ORDER BY c."createdAt" ASC
+	`, reportID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c ReportComment
+			if rows.Scan(&c.ID, &c.Kind, &c.Content, &c.AuthorName, &c.CreatedAt, &c.ParentID) == nil {
+				d.Comments = append(d.Comments, c)
+			}
+		}
+	}
+	return &d, nil
+}
+
+func (s *Store) AddReportAnswer(ctx context.Context, orgID, userID, reportID, parentID, content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("answer required")
+	}
+	var owner string
+	err := s.DB.QueryRow(ctx, `
+		SELECT "submittedById" FROM "SalesReport" WHERE id=$1 AND "orgId"=$2
+	`, reportID, orgID).Scan(&owner)
+	if err != nil {
+		return fmt.Errorf("report not found")
+	}
+	if owner != userID {
+		return fmt.Errorf("only the report author can answer")
+	}
+	_, err = s.DB.Exec(ctx, `
+		INSERT INTO "SalesReportComment" (id, "reportId", "authorId", kind, "parentId", content, "createdAt")
+		VALUES ($1,$2,$3,'response',NULLIF($4,''),$5,NOW())
+	`, newID(), reportID, userID, parentID, content)
+	return err
+}

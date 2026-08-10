@@ -1,0 +1,48 @@
+{{define "project-detail.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="card">
+  <div class="section-head">
+    <div>
+      <p class="muted"><a class="link" href="/projects">← Projects</a></p>
+      <h2>{{.Name}}</h2>
+      <p class="muted">PM {{.ManagerName}} · due {{datep .DueDate}} · {{.Progress}}% · {{.DoneTasks}}/{{.TaskCount}} tasks</p>
+    </div>
+    <span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span>
+  </div>
+  {{if eq .AssignmentStatus "pending"}}
+  <form method="post" action="/projects/assignments/{{.AssignmentID}}/respond" class="inline-actions" style="margin-bottom:1rem">
+    <button type="submit" name="accept" value="1">Accept invitation</button>
+    <button type="submit" name="accept" value="0" class="ghost">Decline</button>
+  </form>
+  {{else if .AssignmentStatus}}
+  <p class="muted" style="margin-bottom:1rem">Invitation: {{.AssignmentStatus}}</p>
+  {{end}}
+  {{if .Description}}
+  <p style="white-space:pre-wrap;margin:0 0 1rem">{{.Description}}</p>
+  {{end}}
+</section>
+
+<section class="card">
+  <div class="section-head"><h2>Tasks on this project</h2></div>
+  <ul class="task-board">
+    {{range .Tasks}}
+    <li>
+      <div>
+        <strong>{{.Title}}</strong>
+        <span class="muted">{{.Priority}} · due {{datep .DueDate}}</span>
+      </div>
+      <span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span>
+    </li>
+    {{else}}
+    <li class="muted">No tasks visible yet.</li>
+    {{end}}
+  </ul>
+  <p class="muted" style="margin-top:0.75rem"><a class="link" href="/tasks">Update statuses on Tasks</a></p>
+</section>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

@@ -5,7 +5,18 @@
 {{with .Data}}
 {{if .Alerts}}
 <div class="alerts">
-  {{range .Alerts}}<div class="alert-item">{{.}}</div>{{end}}
+  {{range .Alerts}}
+  <div class="alert-item alert-row">
+    <span>{{.}}</span>
+    <form method="post" action="/reminders/snooze" class="inline-actions">
+      <input type="hidden" name="key" value="daily_update" />
+      <input type="hidden" name="label" value="{{.}}" />
+      <button type="submit" name="preset" value="30m" class="ghost">Snooze 30m</button>
+      <button type="submit" name="preset" value="1h" class="ghost">1h</button>
+      <button type="submit" name="preset" value="12h" class="ghost">12h</button>
+    </form>
+  </div>
+  {{end}}
 </div>
 {{end}}
 
@@ -91,7 +102,7 @@
       <tbody>
         {{range .Projects}}
         <tr>
-          <td><strong>{{.Name}}</strong></td>
+          <td><a href="/projects/{{.ID}}"><strong>{{.Name}}</strong></a></td>
           <td>{{.ManagerName}}</td>
           <td>{{datep .DueDate}}</td>
           <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
