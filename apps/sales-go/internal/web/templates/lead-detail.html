@@ -16,8 +16,11 @@
       <select name="status">
         <option value="new" {{if eq .Status "new"}}selected{{end}}>new</option>
         <option value="contacted" {{if eq .Status "contacted"}}selected{{end}}>contacted</option>
+        <option value="waiting" {{if eq .Status "waiting"}}selected{{end}}>waiting</option>
+        <option value="scheduled" {{if eq .Status "scheduled"}}selected{{end}}>scheduled</option>
         <option value="qualified" {{if eq .Status "qualified"}}selected{{end}}>qualified</option>
         <option value="disqualified" {{if eq .Status "disqualified"}}selected{{end}}>disqualified</option>
+        <option value="closed" {{if eq .Status "closed"}}selected{{end}}>closed</option>
       </select>
     </label>
     <button type="submit">Update status</button>

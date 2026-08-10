@@ -39,6 +39,8 @@ Go apps replace Next.js `/sales` and `/developer` workspaces. Shared Postgres + 
 ## Phase 4 — Ship
 - [x] Smoke both Go apps
 - [x] Commit + push
+- [x] Align Go dashboard SQL/status labels with Prisma + Node (DealActivity types, lead statuses, project/task progress, revenue = paid, report focus escape, task write rules)
 
 ## DROP (out of Go v1)
 - Playbook rebuild, Approvals, Settings, full Community WS, AI focus-coach hard requirement
+- True Resend HTTP send (queues Notification + EventLog for Node worker)

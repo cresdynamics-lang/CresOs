@@ -150,11 +150,15 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string) (*Dashboard
 	for _, p := range projects {
 		total++
 		switch strings.ToLower(p.Status) {
-		case "completed", "done", "closed":
+		case "completed":
 			completed++
-		case "at_risk", "blocked", "delayed":
-			delayed++
-		default:
+		case "cancelled", "paused":
+			if p.OverdueTasks > 0 {
+				delayed++
+			} else {
+				ongoing++
+			}
+		default: // planned, active
 			if p.OverdueTasks > 0 {
 				delayed++
 			} else {
@@ -162,14 +166,8 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string) (*Dashboard
 			}
 		}
 	}
-	pct := 0
-	if total > 0 {
-		pct = int(float64(completed) / float64(total) * 100)
-	}
-	if total > 0 && completed == 0 && ongoing > 0 {
-		// Weighted by average delivery on assigned work
-		pct = perf.AvgProgress
-	}
+	// Match Node workProgressPercent: done / all assignee tasks
+	pct := perf.AvgProgress
 	d.Progress = ProgressBreakdown{
 		Percent: pct, Total: total, Completed: completed, Delayed: delayed, Ongoing: ongoing,
 	}
@@ -223,11 +221,28 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string) (*Dashboard
 	}
 
 	d.Charts.TaskMix = []ChartSlice{
-		{Label: "done", Value: perf.TasksDone30d},
-		{Label: "open", Value: perf.TasksOpen},
-		{Label: "overdue", Value: perf.OverdueTasks},
+		{Label: "to do", Value: 0},
+		{Label: "in progress", Value: 0},
+		{Label: "waiting", Value: 0},
 		{Label: "blocked", Value: perf.BlockedTasks},
+		{Label: "done", Value: 0},
 	}
+	_ = s.DB.QueryRow(ctx, `
+		SELECT
+		  COUNT(*) FILTER (WHERE status IN ('todo','not_started')),
+		  COUNT(*) FILTER (WHERE status='in_progress'),
+		  COUNT(*) FILTER (WHERE status='waiting_response'),
+		  COUNT(*) FILTER (WHERE status='blocked'),
+		  COUNT(*) FILTER (WHERE status='done')
+		FROM "Task"
+		WHERE "orgId"=$1 AND "assigneeId"=$2 AND "deletedAt" IS NULL
+	`, orgID, userID).Scan(
+		&d.Charts.TaskMix[0].Value,
+		&d.Charts.TaskMix[1].Value,
+		&d.Charts.TaskMix[2].Value,
+		&d.Charts.TaskMix[3].Value,
+		&d.Charts.TaskMix[4].Value,
+	)
 	var schedDone, schedPending int
 	_ = s.DB.QueryRow(ctx, `
 		SELECT
@@ -267,39 +282,36 @@ func (s *Store) hasTaskUpdateToday(ctx context.Context, orgID, userID string) (b
 
 func (s *Store) Performance(ctx context.Context, orgID, userID string) (*PerformanceSnapshot, error) {
 	p := &PerformanceSnapshot{}
+	var doneAll, totalAll int
 	err := s.DB.QueryRow(ctx, `
 		SELECT
 		  COUNT(*) FILTER (WHERE t.status='done' AND t."updatedAt" >= NOW() - INTERVAL '30 days'),
 		  COUNT(*) FILTER (WHERE t.status IN ('todo','not_started','in_progress','waiting_response','blocked')),
 		  COUNT(*) FILTER (WHERE t.status='blocked'),
-		  COUNT(*) FILTER (WHERE t."dueDate" < NOW() AND t.status NOT IN ('done','cancelled')),
+		  COUNT(*) FILTER (WHERE t."dueDate" < NOW() AND t.status <> 'done'),
 		  COALESCE(SUM(t."actualHours") FILTER (WHERE t."updatedAt" >= NOW() - INTERVAL '30 days'),0)::float8,
-		  COALESCE(SUM(t."estimatedHours") FILTER (WHERE t.status NOT IN ('done','cancelled')),0)::float8
+		  COALESCE(SUM(t."estimatedHours") FILTER (WHERE t.status <> 'done'),0)::float8,
+		  COUNT(*) FILTER (WHERE t.status='done'),
+		  COUNT(*)
 		FROM "Task" t
 		WHERE t."orgId"=$1 AND t."deletedAt" IS NULL AND t."assigneeId"=$2
 	`, orgID, userID).Scan(
 		&p.TasksDone30d, &p.TasksOpen, &p.BlockedTasks, &p.OverdueTasks, &p.HoursLogged30d, &p.HoursEstimated,
+		&doneAll, &totalAll,
 	)
 	if err != nil {
 		return nil, err
 	}
+	if totalAll > 0 {
+		p.AvgProgress = int(float64(doneAll) / float64(totalAll) * 100)
+	}
 
 	_ = s.DB.QueryRow(ctx, `
-		SELECT COUNT(*), COALESCE(AVG(
-		  CASE WHEN task_tot.n=0 THEN 0 ELSE (task_done.n::float8 / task_tot.n) * 100 END
-		),0)::int
+		SELECT COUNT(*)
 		FROM "Project" p
-		LEFT JOIN LATERAL (
-		  SELECT COUNT(*) n FROM "Task" t
-		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2
-		) task_tot ON true
-		LEFT JOIN LATERAL (
-		  SELECT COUNT(*) n FROM "Task" t
-		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2 AND t.status='done'
-		) task_done ON true
 		WHERE `+assignedProjectWhere+`
-		  AND lower(p.status) NOT IN ('completed','done','closed','cancelled')
-	`, orgID, userID).Scan(&p.ActiveProjects, &p.AvgProgress)
+		  AND p.status IN ('planned','active')
+	`, orgID, userID).Scan(&p.ActiveProjects)
 
 	p.ReportStreakDays = s.reportStreak(ctx, orgID, userID)
 	return p, nil
@@ -329,7 +341,8 @@ func (s *Store) reportStreak(ctx context.Context, orgID, userID string) int {
 	}
 	today := time.Now().Truncate(24 * time.Hour)
 	start := days[0].Truncate(24 * time.Hour)
-	if start.Before(today.Add(-24 * time.Hour)) {
+	// Node: streak is 0 unless there is a report for today.
+	if !start.Equal(today) {
 		return 0
 	}
 	streak := 1
@@ -365,6 +378,7 @@ func (s *Store) ListProjectSummaries(ctx context.Context, orgID, userID string, 
 		       COALESCE(pm.name, pm.email, owner.name, owner.email, 'Unassigned'),
 		       p."endDate", p.status,
 		       COALESCE(tot.n,0), COALESCE(done.n,0), COALESCE(od.n,0),
+		       COALESCE(ms_tot.n,0), COALESCE(ms_done.n,0),
 		       COALESCE(asg.id,''), COALESCE(asg.status,'')
 		FROM "Project" p
 		LEFT JOIN "User" owner ON owner.id = p."ownerUserId"
@@ -372,17 +386,25 @@ func (s *Store) ListProjectSummaries(ctx context.Context, orgID, userID string, 
 		LEFT JOIN "ProjectDeveloperAssignment" asg ON asg."projectId"=p.id AND asg."userId"=$2
 		LEFT JOIN LATERAL (
 		  SELECT COUNT(*) n FROM "Task" t
-		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2
+		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL
 		) tot ON true
 		LEFT JOIN LATERAL (
 		  SELECT COUNT(*) n FROM "Task" t
-		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2 AND t.status='done'
+		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t.status='done'
 		) done ON true
 		LEFT JOIN LATERAL (
 		  SELECT COUNT(*) n FROM "Task" t
-		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL AND t."assigneeId"=$2
-		    AND t."dueDate" < NOW() AND t.status NOT IN ('done','cancelled')
+		  WHERE t."projectId"=p.id AND t."deletedAt" IS NULL
+		    AND t."dueDate" < NOW() AND t.status <> 'done'
 		) od ON true
+		LEFT JOIN LATERAL (
+		  SELECT COUNT(*) n FROM "Milestone" m
+		  WHERE m."projectId"=p.id AND m."deletedAt" IS NULL
+		) ms_tot ON true
+		LEFT JOIN LATERAL (
+		  SELECT COUNT(*) n FROM "Milestone" m
+		  WHERE m."projectId"=p.id AND m."deletedAt" IS NULL AND m.status='completed'
+		) ms_done ON true
 		WHERE ` + assignedProjectWhere + `
 		ORDER BY p."updatedAt" DESC
 		LIMIT $3
@@ -395,10 +417,14 @@ func (s *Store) ListProjectSummaries(ctx context.Context, orgID, userID string, 
 	var out []ProjectSummary
 	for rows.Next() {
 		var r ProjectSummary
-		if err := rows.Scan(&r.ID, &r.Name, &r.ManagerName, &r.DueDate, &r.Status, &r.TaskCount, &r.DoneTasks, &r.OverdueTasks, &r.AssignmentID, &r.AssignmentStatus); err != nil {
+		var msTot, msDone int
+		if err := rows.Scan(&r.ID, &r.Name, &r.ManagerName, &r.DueDate, &r.Status, &r.TaskCount, &r.DoneTasks, &r.OverdueTasks, &msTot, &msDone, &r.AssignmentID, &r.AssignmentStatus); err != nil {
 			return nil, err
 		}
-		if r.TaskCount > 0 {
+		// Match Next.js developer-projects-view: milestones first, else all project tasks.
+		if msTot > 0 {
+			r.Progress = int(float64(msDone) / float64(msTot) * 100)
+		} else if r.TaskCount > 0 {
 			r.Progress = int(float64(r.DoneTasks) / float64(r.TaskCount) * 100)
 		}
 		r.StatusLabel, _ = mapProjectStatus(r.Status, r.OverdueTasks, r.Progress)
@@ -599,9 +625,21 @@ func (s *Store) CreateDeveloperReport(ctx context.Context, orgID, userID string,
 	in.Implemented = trim(in.Implemented)
 	in.Pending = trim(in.Pending)
 	in.NextPlan = trim(in.NextPlan)
-	bodyLen := len(in.WhatWorked) + len(in.Implemented) + len(in.NextPlan)
+	bodyLen := len(in.WhatWorked) + len(in.Blockers) + len(in.NeedsAttention) +
+		len(in.Implemented) + len(in.Pending) + len(in.NextPlan)
 	if bodyLen < 60 {
-		return fmt.Errorf("report needs more detail (at least ~60 characters across worked / implemented / next plan)")
+		return fmt.Errorf("report needs more detail (at least ~60 characters across all sections)")
+	}
+	var exists bool
+	_ = s.DB.QueryRow(ctx, `
+		SELECT EXISTS(
+		  SELECT 1 FROM "DeveloperReport"
+		  WHERE "orgId"=$1 AND "submittedById"=$2
+		    AND "reportDate" = date_trunc('day', NOW())
+		)
+	`, orgID, userID).Scan(&exists)
+	if exists {
+		return fmt.Errorf("you already submitted a developer report for today")
 	}
 	id := cuid.New()
 	_, err := s.DB.Exec(ctx, `
@@ -616,7 +654,18 @@ func (s *Store) CreateDeveloperReport(ctx context.Context, orgID, userID string,
 		)
 	`, id, orgID, userID, nullEmpty(in.WhatWorked), nullEmpty(in.Blockers), nullEmpty(in.NeedsAttention),
 		nullEmpty(in.Implemented), nullEmpty(in.Pending), nullEmpty(in.NextPlan))
-	return err
+	if err != nil {
+		return err
+	}
+	_, _ = s.DB.Exec(ctx, `
+		INSERT INTO "Notification" (id, "orgId", channel, "to", subject, body, status, type, tier, "createdAt")
+		SELECT $1, $2, 'in_app', u.id, $3, $4, 'sent', 'developer.report.submitted', 'execution', NOW()
+		FROM "User" u
+		JOIN "UserRole" ur ON ur."userId"=u.id
+		JOIN "Role" r ON r.id=ur."roleId"
+		WHERE r."orgId"=$2 AND r.key IN ('director_admin','admin') AND u."deletedAt" IS NULL
+	`, cuid.New(), orgID, "Developer report submitted", "A developer submitted today's progress report.")
+	return nil
 }
 
 func nullEmpty(s string) *string {
@@ -629,29 +678,40 @@ func nullEmpty(s string) *string {
 func mapProjectStatus(status string, overdue, progress int) (label, tone string) {
 	s := strings.ToLower(status)
 	switch {
-	case s == "completed" || s == "done" || s == "closed" || progress >= 100:
+	case s == "completed" || progress >= 100:
 		return "Completed", "ok"
-	case overdue > 0 || s == "delayed":
+	case s == "cancelled":
+		return "Cancelled", "bad"
+	case s == "paused":
+		return "Paused", "warn"
+	case overdue > 0:
 		return "Delayed", "warn"
-	case s == "at_risk" || s == "blocked":
-		return "At risk", "bad"
+	case s == "planned":
+		return "Planned", "neutral"
+	case s == "active":
+		return "Active", "orange"
 	default:
-		return "On going", "orange"
+		if s == "" {
+			return "Unknown", "neutral"
+		}
+		return strings.ToUpper(s[:1]) + s[1:], "neutral"
 	}
 }
 
 func mapTaskStatus(status string) string {
 	switch strings.ToLower(status) {
 	case "done":
-		return "Approved"
+		return "Done"
 	case "blocked":
-		return "In review"
+		return "Blocked"
 	case "waiting_response":
 		return "Waiting"
 	case "in_progress":
-		return "On going"
-	default:
+		return "In progress"
+	case "not_started", "todo":
 		return "To do"
+	default:
+		return status
 	}
 }
 

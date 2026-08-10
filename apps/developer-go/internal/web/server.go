@@ -84,13 +84,13 @@ func NewServer(cfg config.Config, a *auth.Service, st *store.Store) (*Server, er
 		},
 		"statusClass": func(label string) string {
 			switch strings.ToLower(label) {
-			case "completed", "approved", "ok", "accepted":
+			case "completed", "approved", "ok", "accepted", "done", "active":
 				return "st-ok"
-			case "delayed", "warn", "to do", "viewed", "pending":
+			case "delayed", "warn", "to do", "viewed", "pending", "paused", "planned":
 				return "st-warn"
-			case "at risk", "in review", "bad", "blocked", "declined":
+			case "at risk", "in review", "bad", "blocked", "declined", "cancelled":
 				return "st-bad"
-			case "on going", "orange":
+			case "on going", "orange", "in progress", "waiting":
 				return "st-orange"
 			default:
 				return "st-neutral"

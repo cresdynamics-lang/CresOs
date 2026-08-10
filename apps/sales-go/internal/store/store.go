@@ -249,7 +249,7 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string, isAdmin boo
 	_ = s.DB.QueryRow(ctx, `
 		SELECT COUNT(*) FROM "Project"
 		WHERE "orgId" = $1 AND "deletedAt" IS NULL
-		  AND lower(status) IN ('active','in_progress','planned')
+		  AND status IN ('active','planned')
 	`, orgID).Scan(&d.KPIs.ActiveProjects)
 
 	prows, _ := s.DB.Query(ctx, `
@@ -293,10 +293,12 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string, isAdmin boo
 	_ = s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM "Deal" WHERE "orgId"=$1 AND "deletedAt" IS NULL AND stage='won'`+wonOwner, wonArgs...).Scan(&d.KPIs.DealsClosed)
 	d.KPIs.WonDeals = d.KPIs.DealsClosed
 
+	// CRM writes follow_up|proposal|negotiation|close|lost; keep legacy call/meeting/… for old rows.
 	commSQL := `
 		SELECT COUNT(*) FROM "DealActivity" da
 		JOIN "Deal" d ON d.id = da."dealId"
-		WHERE da."orgId"=$1 AND da.type IN ('call','meeting','whatsapp','email','note') AND d."deletedAt" IS NULL`
+		WHERE da."orgId"=$1 AND d."deletedAt" IS NULL
+		  AND da.type IN ('follow_up','negotiation','close','lost','call','meeting','whatsapp','email','note')`
 	commArgs := []any{orgID}
 	if !isAdmin {
 		commSQL += ` AND d."ownerId"=$2`
@@ -358,7 +360,10 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string, isAdmin boo
 		SELECT MAX("submittedAt") FROM "SalesReport"
 		WHERE "orgId"=$1 AND "submittedById"=$2 AND status='submitted'
 	`, orgID, userID).Scan(&lastReport)
-	if lastReport == nil || time.Since(*lastReport) > 12*time.Hour {
+	var focusUpdated *time.Time
+	_ = s.DB.QueryRow(ctx, `SELECT "currentFocusUpdatedAt" FROM "User" WHERE id=$1`, userID).Scan(&focusUpdated)
+	focusFresh := focusUpdated != nil && time.Since(*focusUpdated) <= 12*time.Hour
+	if !focusFresh && (lastReport == nil || time.Since(*lastReport) > 12*time.Hour) {
 		d.Alerts.ReportReminderDue = true
 	}
 
@@ -385,7 +390,7 @@ func (s *Store) Dashboard(ctx context.Context, orgID, userID string, isAdmin boo
 	}
 
 	_ = s.DB.QueryRow(ctx, fmt.Sprintf(`
-		SELECT COALESCE(SUM(i."totalAmount"),0)::float8,
+		SELECT COALESCE(SUM(CASE WHEN i.status='paid' THEN i."totalAmount" ELSE 0 END),0)::float8,
 		       COALESCE(SUM(CASE WHEN i.status IN ('draft','sent','partial','overdue') THEN i."totalAmount" ELSE 0 END),0)::float8,
 		       COALESCE(MAX(i.currency),'KES')
 		FROM "Invoice" i WHERE %s

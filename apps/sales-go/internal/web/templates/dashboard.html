@@ -19,8 +19,8 @@
   <article><p class="lbl">Deals closed</p><p class="val">{{.KPIs.DealsClosed}}</p></article>
   <article><p class="lbl">Client comms</p><p class="val">{{.KPIs.ClientCommunications}}</p></article>
   <article><p class="lbl">Proposals sent</p><p class="val">{{.KPIs.ProposalsSent}}</p></article>
-  <article><p class="lbl">Follow-ups</p><p class="val">{{.KPIs.FollowUpsUpcoming}}</p></article>
-  <article class="hot"><p class="lbl">Invoice due</p><p class="val">{{.KPIs.CollectionOpen}}</p></article>
+  <article><p class="lbl">Lead follow-ups</p><p class="val">{{.KPIs.FollowUpsUpcoming}}</p></article>
+  <article class="hot"><p class="lbl">Collection open</p><p class="val">{{.KPIs.CollectionOpen}}</p></article>
 </div>
 
 <section class="chart-grid">
@@ -124,7 +124,7 @@
         <div>
           <p class="stat-title">Total Revenue</p>
           <p class="stat-value">{{compact .Currency .TotalRevenue}}</p>
-          <p class="stat-sub">Paid + open pipeline</p>
+          <p class="stat-sub">Paid invoices</p>
         </div>
       </div>
     </article>

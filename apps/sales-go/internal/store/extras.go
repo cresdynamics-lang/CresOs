@@ -114,7 +114,8 @@ func (s *Store) WorkPerformance(ctx context.Context, orgID, userID string) (*Wor
 	_ = s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM "Lead" WHERE "orgId"=$1 AND "ownerId"=$2 AND "deletedAt" IS NULL`, orgID, userID).Scan(&w.LeadsOwned)
 	_ = s.DB.QueryRow(ctx, `
 		SELECT COUNT(*) FROM "DealActivity" da JOIN "Deal" d ON d.id=da."dealId"
-		WHERE da."orgId"=$1 AND d."ownerId"=$2 AND da.type IN ('call','meeting','whatsapp','email','note')
+		WHERE da."orgId"=$1 AND d."ownerId"=$2
+		  AND da.type IN ('follow_up','negotiation','close','lost','call','meeting','whatsapp','email','note')
 	`, orgID, userID).Scan(&w.CommsLogged)
 	_ = s.DB.QueryRow(ctx, `
 		SELECT COUNT(*) FROM "DealActivity" da JOIN "Deal" d ON d.id=da."dealId"
@@ -725,7 +726,10 @@ func (s *Store) CreateLead(ctx context.Context, orgID, userID, title, source str
 
 func (s *Store) UpdateLeadStatus(ctx context.Context, orgID, userID, leadID, status string, isAdmin bool) error {
 	status = strings.TrimSpace(strings.ToLower(status))
-	allowed := map[string]bool{"new": true, "contacted": true, "qualified": true, "disqualified": true}
+	allowed := map[string]bool{
+		"new": true, "contacted": true, "qualified": true, "disqualified": true,
+		"waiting": true, "scheduled": true, "closed": true,
+	}
 	if !allowed[status] {
 		return fmt.Errorf("invalid status")
 	}

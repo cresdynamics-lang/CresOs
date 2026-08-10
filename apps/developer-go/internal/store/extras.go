@@ -90,10 +90,9 @@ func (s *Store) GetProjectDetail(ctx context.Context, orgID, userID, projectID s
 		FROM "Task" t
 		JOIN "Project" p ON p.id=t."projectId"
 		WHERE t."orgId"=$1 AND t."projectId"=$2 AND t."deletedAt" IS NULL
-		  AND (t."assigneeId"=$3 OR t."assigneeId" IS NULL)
 		ORDER BY t."updatedAt" DESC
 		LIMIT 40
-	`, orgID, projectID, userID)
+	`, orgID, projectID)
 	if err == nil {
 		defer trows.Close()
 		for trows.Next() {
@@ -123,26 +122,40 @@ func (s *Store) UpdateTaskStatusFull(ctx context.Context, orgID, userID, taskID,
 		return fmt.Errorf("blocked reason is required")
 	}
 	var projectID string
-	var assigneeID *string
+	var existingBR *string
 	err := s.DB.QueryRow(ctx, `
-		SELECT "projectId", "assigneeId" FROM "Task"
+		SELECT "projectId", "blockedReason" FROM "Task"
 		WHERE id=$1 AND "orgId"=$2 AND "deletedAt" IS NULL
-	`, taskID, orgID).Scan(&projectID, &assigneeID)
+	`, taskID, orgID).Scan(&projectID, &existingBR)
 	if err != nil {
 		return fmt.Errorf("task not found")
 	}
-	mine := assigneeID != nil && *assigneeID == userID
 	access, err := s.developerHasProjectAccess(ctx, orgID, userID, projectID)
 	if err != nil {
 		return err
 	}
-	if !mine && !access {
+	if !access {
 		return fmt.Errorf("only an accepted developer on this project can update this task")
 	}
-	br := strings.TrimSpace(blockedReason)
+	brIn := strings.TrimSpace(blockedReason)
+	if status == "done" && ((existingBR != nil && strings.TrimSpace(*existingBR) != "") || brIn != "") {
+		return fmt.Errorf("clear the blocked reason before marking done")
+	}
 	var brPtr *string
 	if status == "blocked" {
-		brPtr = &br
+		brPtr = &brIn
+	} else if status != "done" {
+		// Leaving blocked via UI clears the reason (status form does not keep it).
+		brPtr = nil
+	} else {
+		brPtr = existingBR
+	}
+	eventType := "task.updated"
+	switch status {
+	case "blocked":
+		eventType = "task.blocked"
+	case "done":
+		eventType = "task.completed"
 	}
 	_, err = s.DB.Exec(ctx, `
 		UPDATE "Task"
@@ -154,8 +167,8 @@ func (s *Store) UpdateTaskStatusFull(ctx context.Context, orgID, userID, taskID,
 	}
 	_, _ = s.DB.Exec(ctx, `
 		INSERT INTO "EventLog" (id, "orgId", "actorId", type, "entityType", "entityId", metadata, "createdAt")
-		VALUES ($1,$2,$3,'task.status_updated','task',$4,jsonb_build_object('status',$5::text,'source','developer-go'),NOW())
-	`, cuid.New(), orgID, userID, taskID, status)
+		VALUES ($1,$2,$3,$4,'task',$5,jsonb_build_object('status',$6::text,'source','developer-go'),NOW())
+	`, cuid.New(), orgID, userID, eventType, taskID, status)
 	return nil
 }
 
@@ -228,6 +241,7 @@ func (s *Store) AcknowledgePayment(ctx context.Context, orgID, userID, expenseID
 		UPDATE "Expense"
 		SET "developerAcknowledgedAt"=NOW(), "developerAcknowledgedById"=$1
 		WHERE id=$2 AND "orgId"=$3 AND "beneficiaryUserId"=$1
+		  AND category='developer_payment'
 		  AND "developerAcknowledgedAt" IS NULL AND "deletedAt" IS NULL
 	`, userID, expenseID, orgID)
 	if err != nil {
