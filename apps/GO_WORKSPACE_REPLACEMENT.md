@@ -38,7 +38,7 @@ Go apps replace Next.js `/sales` and `/developer` workspaces. Shared Postgres + 
 
 ## Phase 4 — Ship
 - [x] Smoke both Go apps
-- [ ] Commit + push
+- [x] Commit + push
 
 ## DROP (out of Go v1)
 - Playbook rebuild, Approvals, Settings, full Community WS, AI focus-coach hard requirement
