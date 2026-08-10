@@ -8,7 +8,7 @@
   {{range .Alerts}}
   <div class="alert-item alert-row">
     <span>{{.}}</span>
-    <form method="post" action="/reminders/snooze" class="inline-actions">
+    <form method="post" action="{{bp "/reminders/snooze"}}" class="inline-actions">
       <input type="hidden" name="key" value="daily_update" />
       <input type="hidden" name="label" value="{{.}}" />
       <button type="submit" name="preset" value="30m" class="ghost">Snooze 30m</button>
@@ -23,7 +23,7 @@
 {{if .Queue}}
 <div class="queue-strip">
   {{range .Queue}}
-  <a class="queue-chip {{.Tone}}" href="{{.Href}}"><strong>{{.Value}}</strong><span>{{.Label}}</span></a>
+  <a class="queue-chip {{.Tone}}" href="{{bp .Href}}"><strong>{{.Value}}</strong><span>{{.Label}}</span></a>
   {{end}}
 </div>
 {{end}}
@@ -93,7 +93,7 @@
   <article class="card">
     <div class="section-head">
       <h2>Project summary</h2>
-      <a class="link" href="/projects">Assigned only</a>
+      <a class="link" href="{{bp "/projects"}}">Assigned only</a>
     </div>
     <table class="data">
       <thead>
@@ -102,7 +102,7 @@
       <tbody>
         {{range .Projects}}
         <tr>
-          <td><a href="/projects/{{.ID}}"><strong>{{.Name}}</strong></a></td>
+          <td><a href="{{bp "/projects/" .ID}}"><strong>{{.Name}}</strong></a></td>
           <td>{{.ManagerName}}</td>
           <td>{{datep .DueDate}}</td>
           <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
@@ -159,7 +159,7 @@
       <li class="muted">No tasks for today — check with your PM.</li>
       {{end}}
     </ul>
-    <a class="link" href="/tasks">Open task board →</a>
+    <a class="link" href="{{bp "/tasks"}}">Open task board →</a>
   </article>
 
   <article class="card">

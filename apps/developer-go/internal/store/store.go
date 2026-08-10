@@ -359,9 +359,12 @@ func (s *Store) reportStreak(ctx context.Context, orgID, userID string) int {
 	return streak
 }
 
-// Matches Next.js developer project list: primary assignee or pending/accepted assignment.
+// Matches Next.js developer project list after director approval: primary assignee
+// or pending/accepted assignment on an approved project.
 const assignedProjectWhere = `
-		p."orgId"=$1 AND p."deletedAt" IS NULL AND (
+		p."orgId"=$1 AND p."deletedAt" IS NULL
+		AND p."approvalStatus"='approved'
+		AND (
 		  p."assignedDeveloperId" = $2
 		  OR EXISTS (
 		    SELECT 1 FROM "ProjectDeveloperAssignment" a

@@ -60,6 +60,10 @@ if [[ ! -f .env ]]; then
 DATABASE_URL=postgresql://cresos:cresos@db:5432/cresos
 JWT_SECRET=$(openssl rand -hex 32)
 NEXT_PUBLIC_API_URL=https://${CRESOS_DOMAIN}/api
+NEXT_PUBLIC_SALES_GO_URL=https://${CRESOS_DOMAIN}/w/sales
+NEXT_PUBLIC_DEVELOPER_GO_URL=https://${CRESOS_DOMAIN}/w/developer
+PUBLIC_WEB_URL=https://${CRESOS_DOMAIN}
+SECURE_COOKIE=true
 ENVEOF
 fi
 
@@ -70,6 +74,24 @@ else
   echo "NEXT_PUBLIC_API_URL=https://${CRESOS_DOMAIN}/api" >> .env
 fi
 
+if grep -q '^NEXT_PUBLIC_SALES_GO_URL=' .env; then
+  sed -i "s|^NEXT_PUBLIC_SALES_GO_URL=.*|NEXT_PUBLIC_SALES_GO_URL=https://${CRESOS_DOMAIN}/w/sales|" .env
+else
+  echo "NEXT_PUBLIC_SALES_GO_URL=https://${CRESOS_DOMAIN}/w/sales" >> .env
+fi
+if grep -q '^NEXT_PUBLIC_DEVELOPER_GO_URL=' .env; then
+  sed -i "s|^NEXT_PUBLIC_DEVELOPER_GO_URL=.*|NEXT_PUBLIC_DEVELOPER_GO_URL=https://${CRESOS_DOMAIN}/w/developer|" .env
+else
+  echo "NEXT_PUBLIC_DEVELOPER_GO_URL=https://${CRESOS_DOMAIN}/w/developer" >> .env
+fi
+if grep -q '^PUBLIC_WEB_URL=' .env; then
+  sed -i "s|^PUBLIC_WEB_URL=.*|PUBLIC_WEB_URL=https://${CRESOS_DOMAIN}|" .env
+else
+  echo "PUBLIC_WEB_URL=https://${CRESOS_DOMAIN}" >> .env
+fi
+if ! grep -q '^SECURE_COOKIE=' .env; then
+  echo "SECURE_COOKIE=true" >> .env
+fi
 # DB URL for in-compose Postgres service name `db`
 if grep -q '^DATABASE_URL=' .env; then
   sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://cresos:cresos@db:5432/cresos|' .env

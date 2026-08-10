@@ -155,6 +155,7 @@ func NewServer(cfg config.Config, a *auth.Service, st *store.Store) (*Server, er
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
+		"bp": cfg.Path,
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(assets, "templates/*.html")
 	if err != nil {
@@ -221,6 +222,15 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+
+func (s *Server) path(parts ...string) string {
+	return s.Cfg.Path(parts...)
+}
+
+func (s *Server) redirect(w http.ResponseWriter, r *http.Request, path string, code int) {
+	http.Redirect(w, r, s.Cfg.Path(path), code)
+}
+
 func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := ""
@@ -238,7 +248,7 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			s.redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		claims, err := s.Auth.ParseAndValidate(r.Context(), token)
@@ -247,8 +257,8 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: "/", MaxAge: -1})
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: s.Cfg.CookiePath(), MaxAge: -1})
+			s.redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
@@ -291,12 +301,12 @@ func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSSO(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		s.redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	claims, err := s.Auth.ParseAndValidate(r.Context(), token)
 	if err != nil {
-		http.Redirect(w, r, "/login?err=sso", http.StatusSeeOther)
+		s.redirect(w, r, "/login?err=sso", http.StatusSeeOther)
 		return
 	}
 	if !auth.HasRole(claims.RoleKeys, "sales") &&
@@ -310,7 +320,7 @@ func (s *Server) handleSSO(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.Cfg.CookieName,
 		Value:    token,
-		Path:     "/",
+		Path:     s.Cfg.CookiePath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   s.Cfg.SecureCookie,
@@ -320,7 +330,14 @@ func (s *Server) handleSSO(w http.ResponseWriter, r *http.Request) {
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/"
 	}
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	if bp := s.Cfg.BasePath; bp != "" {
+		if next == bp {
+			next = "/"
+		} else if strings.HasPrefix(next, bp+"/") {
+			next = strings.TrimPrefix(next, bp)
+		}
+	}
+	s.redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
@@ -335,22 +352,22 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.Cfg.CookieName,
 		Value:    token,
-		Path:     "/",
+		Path:     s.Cfg.CookiePath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   s.Cfg.SecureCookie,
 		MaxAge:   3600,
 	})
 	_ = user
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	s.redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c := claimsFrom(r); c != nil {
 		s.Auth.RevokeSession(r.Context(), c.SessionID)
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: "/", MaxAge: -1})
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: s.Cfg.CookiePath(), MaxAge: -1})
+	s.redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func (s *Server) basePage(r *http.Request, title, nav string) pageData {
@@ -473,10 +490,10 @@ func (s *Server) handleInvoiceCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	_, number, err := s.Store.CreateSalesInvoice(r.Context(), c.OrgID, c.UserID, in, auth.IsAdmin(c.RoleKeys))
 	if err != nil {
-		http.Redirect(w, r, "/invoices?err="+url.QueryEscape(err.Error())+"#new-invoice", http.StatusSeeOther)
+		s.redirect(w, r, "/invoices?err="+url.QueryEscape(err.Error())+"#new-invoice", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/invoices?ok="+url.QueryEscape(number), http.StatusSeeOther)
+	s.redirect(w, r, "/invoices?ok="+url.QueryEscape(number), http.StatusSeeOther)
 }
 
 func parseFormMoney(s string) float64 {
@@ -490,6 +507,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	rows, err := s.Store.ListProjectDelivery(r.Context(), c.OrgID, c.UserID, auth.IsAdmin(c.RoleKeys))
 	clients, _ := s.Store.ListClientOptions(r.Context(), c.OrgID)
+	devs, _ := s.Store.ListAssignableDevelopers(r.Context(), c.OrgID)
 	p := s.basePage(r, "Projects", "projects")
 	if err != nil {
 		p.Error = err.Error()
@@ -498,9 +516,11 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 		p.Flash = "Project \"" + r.URL.Query().Get("ok") + "\" created — pending director approval."
 	}
 	p.Data = map[string]any{
-		"Projects":  rows,
-		"Clients":   clients,
-		"FormError": r.URL.Query().Get("err"),
+		"Projects":   rows,
+		"Clients":    clients,
+		"Developers": devs,
+		"FormError":  r.URL.Query().Get("err"),
+		"WebURL":     s.Cfg.PublicWebURL,
 	}
 	s.render(w, "projects.html", p)
 }
@@ -509,24 +529,25 @@ func (s *Server) handleProjectCreate(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	_ = r.ParseForm()
 	in := store.ProjectCreateInput{
-		Name:              r.FormValue("name"),
-		Type:              r.FormValue("type"),
-		ClientID:          r.FormValue("clientId"),
-		ClientOrOwnerName: r.FormValue("clientOrOwnerName"),
-		Phone:             r.FormValue("phone"),
-		Email:             r.FormValue("email"),
-		Price:             r.FormValue("price"),
-		ProjectDetails:    r.FormValue("projectDetails"),
-		SuccessCriteria:   r.FormValue("successCriteria"),
-		StartDate:         r.FormValue("startDate"),
-		EndDate:           r.FormValue("endDate"),
+		Name:                r.FormValue("name"),
+		Type:                r.FormValue("type"),
+		ClientID:            r.FormValue("clientId"),
+		ClientOrOwnerName:   r.FormValue("clientOrOwnerName"),
+		Phone:               r.FormValue("phone"),
+		Email:               r.FormValue("email"),
+		Price:               r.FormValue("price"),
+		ProjectDetails:      r.FormValue("projectDetails"),
+		SuccessCriteria:     r.FormValue("successCriteria"),
+		StartDate:           r.FormValue("startDate"),
+		EndDate:             r.FormValue("endDate"),
+		AssignedDeveloperID: r.FormValue("assignedDeveloperId"),
 	}
 	_, name, err := s.Store.CreateSalesProject(r.Context(), c.OrgID, c.UserID, in)
 	if err != nil {
-		http.Redirect(w, r, "/projects?err="+url.QueryEscape(err.Error())+"#new-project", http.StatusSeeOther)
+		s.redirect(w, r, "/projects?err="+url.QueryEscape(err.Error())+"#new-project", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/projects?ok="+url.QueryEscape(name), http.StatusSeeOther)
+	s.redirect(w, r, "/projects?ok="+url.QueryEscape(name), http.StatusSeeOther)
 }
 
 func (s *Server) handlePerformance(w http.ResponseWriter, r *http.Request) {
@@ -567,10 +588,10 @@ func (s *Server) handleCommunityChat(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	_, err := s.Store.StartDirectChat(r.Context(), c.OrgID, c.UserID, r.FormValue("participantId"), r.FormValue("message"))
 	if err != nil {
-		http.Redirect(w, r, "/community?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/community?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/community?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/community?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
@@ -596,10 +617,10 @@ func (s *Server) handleLeadCreate(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	id, err := s.Store.CreateLead(r.Context(), c.OrgID, c.UserID, r.FormValue("title"), r.FormValue("source"))
 	if err != nil {
-		http.Redirect(w, r, "/leads?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/leads?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleLeadDetail(w http.ResponseWriter, r *http.Request) {
@@ -623,10 +644,10 @@ func (s *Server) handleLeadStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := s.Store.UpdateLeadStatus(r.Context(), c.OrgID, c.UserID, id, r.FormValue("status"), auth.IsAdmin(c.RoleKeys))
 	if err != nil {
-		http.Redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleLeadComment(w http.ResponseWriter, r *http.Request) {
@@ -635,10 +656,10 @@ func (s *Server) handleLeadComment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := s.Store.AddLeadComment(r.Context(), c.OrgID, c.UserID, id, r.FormValue("content"))
 	if err != nil {
-		http.Redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/leads/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/leads/"+id+"?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleDeals(w http.ResponseWriter, r *http.Request) {
@@ -671,22 +692,22 @@ func (s *Server) handleReportCreate(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 	body := strings.TrimSpace(r.FormValue("body"))
 	if title == "" || body == "" {
-		http.Redirect(w, r, "/reports?err=missing", http.StatusSeeOther)
+		s.redirect(w, r, "/reports?err=missing", http.StatusSeeOther)
 		return
 	}
 	_, err := s.Store.CreateReport(r.Context(), c.OrgID, c.UserID, title, body)
 	if err != nil {
-		http.Redirect(w, r, "/reports?err=create", http.StatusSeeOther)
+		s.redirect(w, r, "/reports?err=create", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/reports", http.StatusSeeOther)
+	s.redirect(w, r, "/reports", http.StatusSeeOther)
 }
 
 func (s *Server) handleReportSubmit(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	id := r.PathValue("id")
 	_ = s.Store.SubmitReport(r.Context(), c.OrgID, c.UserID, id, auth.IsAdmin(c.RoleKeys))
-	http.Redirect(w, r, "/reports", http.StatusSeeOther)
+	s.redirect(w, r, "/reports", http.StatusSeeOther)
 }
 
 func (s *Server) handleReportDetail(w http.ResponseWriter, r *http.Request) {
@@ -710,10 +731,10 @@ func (s *Server) handleReportAnswer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := s.Store.AddReportAnswer(r.Context(), c.OrgID, c.UserID, id, r.FormValue("parentId"), r.FormValue("content"))
 	if err != nil {
-		http.Redirect(w, r, "/reports/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/reports/"+id+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/reports/"+id+"?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/reports/"+id+"?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -732,10 +753,10 @@ func (s *Server) handleMessageSend(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	err := s.Store.QueueOutboundMail(r.Context(), c.OrgID, c.UserID, r.FormValue("to"), r.FormValue("subject"), r.FormValue("body"))
 	if err != nil {
-		http.Redirect(w, r, "/messages?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/messages?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/messages?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/messages?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleContactCreate(w http.ResponseWriter, r *http.Request) {
@@ -743,16 +764,16 @@ func (s *Server) handleContactCreate(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	_, err := s.Store.CreateContact(r.Context(), c.OrgID, c.UserID, r.FormValue("name"), r.FormValue("email"), r.FormValue("phone"))
 	if err != nil {
-		http.Redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/crm?ok=contact", http.StatusSeeOther)
+	s.redirect(w, r, "/crm?ok=contact", http.StatusSeeOther)
 }
 
 func (s *Server) handleContactDelete(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	_ = s.Store.DeleteContact(r.Context(), c.OrgID, r.PathValue("id"))
-	http.Redirect(w, r, "/crm?ok=deleted", http.StatusSeeOther)
+	s.redirect(w, r, "/crm?ok=deleted", http.StatusSeeOther)
 }
 
 func (s *Server) handleBulkMail(w http.ResponseWriter, r *http.Request) {
@@ -761,10 +782,10 @@ func (s *Server) handleBulkMail(w http.ResponseWriter, r *http.Request) {
 	ids := r.Form["contactId"]
 	n, err := s.Store.BulkQueueMail(r.Context(), c.OrgID, c.UserID, ids, r.FormValue("subject"), r.FormValue("body"))
 	if err != nil {
-		http.Redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/crm?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/crm?ok=bulk"+fmt.Sprintf("%d", n), http.StatusSeeOther)
+	s.redirect(w, r, "/crm?ok=bulk"+fmt.Sprintf("%d", n), http.StatusSeeOther)
 }
 
 func (s *Server) handleFollowUps(w http.ResponseWriter, r *http.Request) {
@@ -800,10 +821,10 @@ func (s *Server) handleFollowUpReach(w http.ResponseWriter, r *http.Request) {
 	note := strings.TrimSpace(r.FormValue("clientNote"))
 	err := s.Store.MarkCollectionReached(r.Context(), c.OrgID, c.UserID, id, note, auth.IsLeadership(c.RoleKeys))
 	if err != nil {
-		http.Redirect(w, r, "/follow-ups?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/follow-ups?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/follow-ups?ok=reached", http.StatusSeeOther)
+	s.redirect(w, r, "/follow-ups?ok=reached", http.StatusSeeOther)
 }
 
 func (s *Server) handleFollowUpOutreach(w http.ResponseWriter, r *http.Request) {
@@ -813,10 +834,10 @@ func (s *Server) handleFollowUpOutreach(w http.ResponseWriter, r *http.Request) 
 	msg := strings.TrimSpace(r.FormValue("message"))
 	err := s.Store.AddCollectionOutreach(r.Context(), c.OrgID, c.UserID, id, msg, auth.IsLeadership(c.RoleKeys))
 	if err != nil {
-		http.Redirect(w, r, "/follow-ups?err="+url.QueryEscape(err.Error())+"#task-"+id, http.StatusSeeOther)
+		s.redirect(w, r, "/follow-ups?err="+url.QueryEscape(err.Error())+"#task-"+id, http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/follow-ups?ok=outreach#task-"+id, http.StatusSeeOther)
+	s.redirect(w, r, "/follow-ups?ok=outreach#task-"+id, http.StatusSeeOther)
 }
 
 func (s *Server) apiCollectionTasks(w http.ResponseWriter, r *http.Request) {

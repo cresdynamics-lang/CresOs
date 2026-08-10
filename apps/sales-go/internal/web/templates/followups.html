@@ -50,7 +50,7 @@
     <p class="muted" style="margin:0 0 0.75rem">No outreach logged yet — still cold. Use the suggested message or write your own.</p>
     {{end}}
 
-    <form class="reach-form" method="post" action="/follow-ups/{{.ID}}/outreach">
+    <form class="reach-form" method="post" action="{{bp "/follow-ups/" .ID "/outreach"}}">
       <label>Log outreach (client still cold)
         <textarea name="message" required rows="4" placeholder="Paste or edit the message you sent…">{{.OutreachHint}}</textarea>
       </label>
@@ -58,7 +58,7 @@
     </form>
   </div>
 
-  <form class="reach-form" method="post" action="/follow-ups/{{.ID}}/reach" style="margin-top:1rem">
+  <form class="reach-form" method="post" action="{{bp "/follow-ups/" .ID "/reach"}}" style="margin-top:1rem">
     <label>What did the client say when you reached them?
       <textarea name="clientNote" required placeholder="Payment date promised, objection, contact person, next step…"></textarea>
     </label>

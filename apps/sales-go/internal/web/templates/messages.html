@@ -4,7 +4,7 @@
 <section class="card narrow">
   <h3>Compose mail</h3>
   <p class="muted">Queues an email Notification + EventLog for the Node mail worker / Resend pipeline.</p>
-  <form method="post" action="/messages" class="stack">
+  <form method="post" action="{{bp "/messages"}}" class="stack">
     <label>To<input type="email" name="to" required /></label>
     <label>Subject<input name="subject" required maxlength="200" /></label>
     <label>Body<textarea name="body" rows="8" required></textarea></label>

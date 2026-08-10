@@ -57,7 +57,7 @@
     </div>
   </div>
   {{if .FormError}}<div class="alert danger">{{.FormError}}</div>{{end}}
-  <form class="stack inv-form" method="post" action="/projects">
+  <form class="stack inv-form" method="post" action="{{bp "/projects"}}">
     <div class="grid-2">
       <label>Project name *
         <input name="name" required placeholder="e.g. Acme Retail Platform" />
@@ -91,6 +91,14 @@
       <label>Start date<input type="date" name="startDate" /></label>
     </div>
     <label>End date<input type="date" name="endDate" /></label>
+    <label>Assign developer
+      <select name="assignedDeveloperId">
+        <option value="">Assign after approval…</option>
+        {{range .Developers}}
+        <option value="{{.ID}}">{{.Name}}</option>
+        {{end}}
+      </select>
+    </label>
     <label>Project details
       <textarea name="projectDetails" rows="3" placeholder="Scope, deliverables, context for PM and director…"></textarea>
     </label>
@@ -99,6 +107,13 @@
     </label>
     <button type="submit">Create &amp; submit for approval</button>
   </form>
+  {{if .WebURL}}
+  <p class="muted" style="margin-top:0.85rem">
+    Need AI-assisted scope → milestones → tasks?
+    <a class="link-quiet" href="{{.WebURL}}/projects" target="_blank" rel="noopener">Open project planner on CresOS</a>
+    (director/sales with multi-role; after login you’ll return here).
+  </p>
+  {{end}}
 </article>
 {{end}}
 

@@ -115,6 +115,7 @@ func NewServer(cfg config.Config, a *auth.Service, st *store.Store) (*Server, er
 			return make([]struct{}, n)
 		},
 		"add": func(a, b int) int { return a + b },
+		"bp": cfg.Path,
 		"trunc": func(s string, n int) string {
 			r := []rune(s)
 			if len(r) <= n {
@@ -162,6 +163,15 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+
+func (s *Server) path(parts ...string) string {
+	return s.Cfg.Path(parts...)
+}
+
+func (s *Server) redirect(w http.ResponseWriter, r *http.Request, path string, code int) {
+	http.Redirect(w, r, s.Cfg.Path(path), code)
+}
+
 func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(s.Cfg.CookieName)
@@ -170,13 +180,13 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			token = c.Value
 		}
 		if token == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			s.redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		claims, err := s.Auth.ParseAndValidate(r.Context(), token)
 		if err != nil {
-			http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: "/", MaxAge: -1})
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: s.Cfg.CookiePath(), MaxAge: -1})
+			s.redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		if !auth.HasDeveloperAccess(claims.RoleKeys) {
@@ -247,40 +257,47 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = user
 	http.SetCookie(w, &http.Cookie{
-		Name: s.Cfg.CookieName, Value: token, Path: "/", HttpOnly: true,
+		Name: s.Cfg.CookieName, Value: token, Path: s.Cfg.CookiePath(), HttpOnly: true,
 		SameSite: http.SameSiteLaxMode, Secure: s.Cfg.SecureCookie, MaxAge: 3600,
 	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	s.redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) handleSSO(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		s.redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	claims, err := s.Auth.ParseAndValidate(r.Context(), token)
 	if err != nil || !auth.HasDeveloperAccess(claims.RoleKeys) {
-		http.Redirect(w, r, "/login?err=sso", http.StatusSeeOther)
+		s.redirect(w, r, "/login?err=sso", http.StatusSeeOther)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: s.Cfg.CookieName, Value: token, Path: "/", HttpOnly: true,
+		Name: s.Cfg.CookieName, Value: token, Path: s.Cfg.CookiePath(), HttpOnly: true,
 		SameSite: http.SameSiteLaxMode, Secure: s.Cfg.SecureCookie, MaxAge: 3600,
 	})
 	next := r.URL.Query().Get("next")
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/"
 	}
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	if bp := s.Cfg.BasePath; bp != "" {
+		if next == bp {
+			next = "/"
+		} else if strings.HasPrefix(next, bp+"/") {
+			next = strings.TrimPrefix(next, bp)
+		}
+	}
+	s.redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c := claimsFrom(r); c != nil {
 		s.Auth.RevokeSession(r.Context(), c.SessionID)
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: "/", MaxAge: -1})
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.SetCookie(w, &http.Cookie{Name: s.Cfg.CookieName, Value: "", Path: s.Cfg.CookiePath(), MaxAge: -1})
+	s.redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -334,10 +351,10 @@ func (s *Server) handleAssignmentRespond(w http.ResponseWriter, r *http.Request)
 	accept := r.FormValue("accept") != "0"
 	err := s.Store.RespondAssignment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), accept)
 	if err != nil {
-		http.Redirect(w, r, "/projects?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/projects?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/projects?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/projects?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
@@ -363,10 +380,10 @@ func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	err := s.Store.UpdateTaskStatusFull(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), r.FormValue("status"), r.FormValue("blockedReason"))
 	if err != nil {
-		http.Redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
+		s.redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleTaskComment(w http.ResponseWriter, r *http.Request) {
@@ -374,10 +391,10 @@ func (s *Server) handleTaskComment(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	err := s.Store.AddTaskComment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"), r.FormValue("body"), r.FormValue("type"))
 	if err != nil {
-		http.Redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
+		s.redirect(w, r, "/tasks?err=1", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/tasks?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handlePayments(w http.ResponseWriter, r *http.Request) {
@@ -402,10 +419,10 @@ func (s *Server) handlePaymentAck(w http.ResponseWriter, r *http.Request) {
 	c := claimsFrom(r)
 	err := s.Store.AcknowledgePayment(r.Context(), c.OrgID, c.UserID, r.PathValue("id"))
 	if err != nil {
-		http.Redirect(w, r, "/payments?err=1", http.StatusSeeOther)
+		s.redirect(w, r, "/payments?err=1", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/payments?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/payments?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleReminderSnooze(w http.ResponseWriter, r *http.Request) {
@@ -419,7 +436,7 @@ func (s *Server) handleReminderSnooze(w http.ResponseWriter, r *http.Request) {
 		until = time.Now().Add(12 * time.Hour)
 	}
 	_ = s.Store.SnoozeReminder(r.Context(), c.OrgID, c.UserID, r.FormValue("key"), r.FormValue("label"), until)
-	http.Redirect(w, r, "/?ok=snooze", http.StatusSeeOther)
+	s.redirect(w, r, "/?ok=snooze", http.StatusSeeOther)
 }
 
 func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
@@ -452,10 +469,10 @@ func (s *Server) handleReportCreate(w http.ResponseWriter, r *http.Request) {
 		NextPlan:       r.FormValue("nextPlan"),
 	})
 	if err != nil {
-		http.Redirect(w, r, "/reports?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.redirect(w, r, "/reports?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/reports?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/reports?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleSchedule(w http.ResponseWriter, r *http.Request) {
@@ -477,10 +494,10 @@ func (s *Server) handleScheduleComplete(w http.ResponseWriter, r *http.Request) 
 	c := claimsFrom(r)
 	err := s.Store.CompleteScheduleItem(r.Context(), c.OrgID, c.UserID, r.PathValue("id"))
 	if err != nil {
-		http.Redirect(w, r, "/schedule?err=1", http.StatusSeeOther)
+		s.redirect(w, r, "/schedule?err=1", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/schedule?ok=1", http.StatusSeeOther)
+	s.redirect(w, r, "/schedule?ok=1", http.StatusSeeOther)
 }
 
 func (s *Server) handlePerformance(w http.ResponseWriter, r *http.Request) {

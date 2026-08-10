@@ -4,7 +4,7 @@
 
 <section class="card" style="margin-bottom:0.85rem">
   <h3>New lead</h3>
-  <form method="post" action="/leads" class="stack" style="max-width:28rem">
+  <form method="post" action="{{bp "/leads"}}" class="stack" style="max-width:28rem">
     <label>Title<input name="title" required maxlength="200" placeholder="Prospect / opportunity title" /></label>
     <label>Source<input name="source" maxlength="120" placeholder="referral, inbound, cold…" /></label>
     <button type="submit">Create lead</button>
@@ -18,7 +18,7 @@
     <tbody>
       {{range .Data}}
       <tr>
-        <td><a href="/leads/{{.ID}}"><strong>{{.Title}}</strong></a></td>
+        <td><a href="{{bp "/leads/" .ID}}"><strong>{{.Title}}</strong></a></td>
         <td><span class="badge">{{.Status}}</span></td>
         <td>{{.ApprovalStatus}}</td>
         <td>{{.Source}}</td>

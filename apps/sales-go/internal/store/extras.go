@@ -407,17 +407,46 @@ func (s *Store) CreateSalesInvoice(ctx context.Context, orgID, userID string, in
 }
 
 type ProjectCreateInput struct {
-	Name              string
-	Type              string // demo | project
-	ClientID          string
-	ClientOrOwnerName string
-	Phone             string
-	Email             string
-	Price             string
-	ProjectDetails    string
-	SuccessCriteria   string
-	StartDate         string
-	EndDate           string
+	Name                 string
+	Type                 string // demo | project
+	ClientID             string
+	ClientOrOwnerName    string
+	Phone                string
+	Email                string
+	Price                string
+	ProjectDetails       string
+	SuccessCriteria      string
+	StartDate            string
+	EndDate              string
+	AssignedDeveloperID  string
+}
+
+type DeveloperOption struct {
+	ID   string
+	Name string
+}
+
+func (s *Store) ListAssignableDevelopers(ctx context.Context, orgID string) ([]DeveloperOption, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT DISTINCT u.id, COALESCE(NULLIF(u.name,''), u.email)
+		FROM "User" u
+		JOIN "UserRole" ur ON ur."userId"=u.id
+		JOIN "Role" r ON r.id=ur."roleId"
+		WHERE r."orgId"=$1 AND r.key='developer' AND u."deletedAt" IS NULL
+		ORDER BY 2
+	`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DeveloperOption
+	for rows.Next() {
+		var d DeveloperOption
+		if rows.Scan(&d.ID, &d.Name) == nil {
+			out = append(out, d)
+		}
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) CreateSalesProject(ctx context.Context, orgID, userID string, in ProjectCreateInput) (string, string, error) {
@@ -470,21 +499,33 @@ func (s *Store) CreateSalesProject(ctx context.Context, orgID, userID string, in
 			id, "orgId", name, status, priority, "ownerUserId", "createdByUserId",
 			"clientId", "startDate", "endDate", type, "clientOrOwnerName", phone, email,
 			price, "projectDetails", "successCriteria", "approvalStatus",
+			"assignedDeveloperId",
 			"financeProjectSeq", "financeRefYear", "nextInvoiceOrdinal",
 			"managementActive", "amountReceived", "createdAt", "updatedAt"
 		) VALUES (
 			$1,$2,$3,'planned','medium',$4,$4,
 			NULLIF($5,''),$6,$7,$8,NULLIF($9,''),NULLIF($10,''),NULLIF($11,''),
 			$12,NULLIF($13,''),NULLIF($14,''),'pending_approval',
-			$15,$16,1,
+			NULLIF($15,''),
+			$16,$17,1,
 			false,0,NOW(),NOW()
 		)
 	`, id, orgID, name, userID,
 		clientID, start, end, typ, strings.TrimSpace(in.ClientOrOwnerName), strings.TrimSpace(in.Phone), strings.TrimSpace(in.Email),
 		price, strings.TrimSpace(in.ProjectDetails), strings.TrimSpace(in.SuccessCriteria),
+		strings.TrimSpace(in.AssignedDeveloperID),
 		seq, refYear)
 	if err != nil {
 		return "", "", err
+	}
+	if devID := strings.TrimSpace(in.AssignedDeveloperID); devID != "" {
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO "ProjectDeveloperAssignment" (
+				id, "orgId", "projectId", "userId", status, "invitedById", "createdAt"
+			) VALUES ($1,$2,$3,$4,'pending',$5,NOW())
+			ON CONFLICT ("projectId", "userId") DO UPDATE
+			SET status='pending', "invitedById"=EXCLUDED."invitedById"
+		`, newID(), orgID, id, devID, userID)
 	}
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO "EventLog" (id, "orgId", "actorId", type, "entityType", "entityId", metadata, "createdAt")

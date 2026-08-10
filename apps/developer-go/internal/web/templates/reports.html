@@ -7,7 +7,7 @@
     <h2>Submit today’s report</h2>
     <p class="muted">Visible to directors / PMs — keep it concrete (min ~60 chars across key fields).</p>
   </div>
-  <form method="post" action="/reports" class="report-form">
+  <form method="post" action="{{bp "/reports"}}" class="report-form">
     <label>What worked
       <textarea name="whatWorked" rows="3" required placeholder="What moved forward today…"></textarea>
     </label>

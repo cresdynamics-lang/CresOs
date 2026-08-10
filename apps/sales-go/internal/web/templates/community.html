@@ -58,7 +58,7 @@
       <button type="button" class="meatball" data-close-modal aria-label="Close">✕</button>
     </div>
     {{if .FormError}}<div class="alert danger">{{.FormError}}</div>{{end}}
-    <form class="stack inv-form" method="post" action="/community/chat">
+    <form class="stack inv-form" method="post" action="{{bp "/community/chat"}}">
       <label>Teammate
         <select name="participantId" required>
           <option value="">Select someone…</option>

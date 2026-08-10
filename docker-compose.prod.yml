@@ -1,14 +1,14 @@
 # Production overlay — use on the droplet:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 #
-# API and web bind to loopback only (Nginx is the sole public entry).
+# API, web, and Go workspaces bind to loopback only (Nginx is the sole public entry).
 # Postgres stays on the internal Docker network (no host port).
 
 services:
   db:
     ports: !reset []
 
-  # Base compose already binds api/web to 127.0.0.1; listed here for documentation.
+  # Base compose already binds to 127.0.0.1; listed here for documentation.
   api:
     ports:
       - "127.0.0.1:4000:4000"
@@ -16,3 +16,19 @@ services:
   web:
     ports:
       - "127.0.0.1:3000:3000"
+
+  sales-go:
+    ports:
+      - "127.0.0.1:4100:4100"
+    environment:
+      BASE_PATH: /w/sales
+      SECURE_COOKIE: "true"
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://cresos.cresdynamics.com}
+
+  developer-go:
+    ports:
+      - "127.0.0.1:4200:4200"
+    environment:
+      BASE_PATH: /w/developer
+      SECURE_COOKIE: "true"
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://cresos.cresdynamics.com}

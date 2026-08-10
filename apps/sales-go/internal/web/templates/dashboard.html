@@ -6,7 +6,7 @@
 {{if .Queue}}
 <div class="queue-strip">
   {{range .Queue}}
-  <a class="queue-chip {{.Tone}}" href="{{.Href}}">
+  <a class="queue-chip {{.Tone}}" href="{{bp .Href}}">
     <strong>{{.Value}}</strong>
     <span>{{.Label}}</span>
   </a>
@@ -146,11 +146,11 @@
         </div>
       </div>
       <ul class="pulse-list">
-        {{if .Alerts.ReportReminderDue}}<li><i class="dot bad"></i><a href="/reports">Submit today’s sales report</a></li>{{end}}
-        <li><i class="dot bad"></i><a href="/invoices">{{.Alerts.OverdueInvoices}} overdue invoices</a></li>
-        <li><i class="dot warn"></i><a href="/follow-ups">{{.Alerts.CollectionOpen}} collection follow-ups</a></li>
-        <li><i class="dot ok"></i><a href="/leads">{{.Alerts.LeadsPendingApproval}} leads pending</a></li>
-        <li><i class="dot ok"></i><a href="/deals">{{.Alerts.DealsInProspect}} deals in prospect</a></li>
+        {{if .Alerts.ReportReminderDue}}<li><i class="dot bad"></i><a href="{{bp "/reports"}}">Submit today’s sales report</a></li>{{end}}
+        <li><i class="dot bad"></i><a href="{{bp "/invoices"}}">{{.Alerts.OverdueInvoices}} overdue invoices</a></li>
+        <li><i class="dot warn"></i><a href="{{bp "/follow-ups"}}">{{.Alerts.CollectionOpen}} collection follow-ups</a></li>
+        <li><i class="dot ok"></i><a href="{{bp "/leads"}}">{{.Alerts.LeadsPendingApproval}} leads pending</a></li>
+        <li><i class="dot ok"></i><a href="{{bp "/deals"}}">{{.Alerts.DealsInProspect}} deals in prospect</a></li>
       </ul>
     </article>
   </div>
@@ -159,7 +159,7 @@
     <div class="panel-head">
       <h3>Invoice due · collection</h3>
       <div class="panel-actions">
-        <a class="link-quiet" href="/follow-ups">Open follow-ups</a>
+        <a class="link-quiet" href="{{bp "/follow-ups"}}">Open follow-ups</a>
       </div>
     </div>
     <div class="table-wrap">
@@ -204,7 +204,7 @@
   <article class="panel panel--invoices">
     <div class="panel-head">
       <h3>Recent invoices</h3>
-      <a class="link-quiet" href="/invoices">View all</a>
+      <a class="link-quiet" href="{{bp "/invoices"}}">View all</a>
     </div>
     <div class="table-wrap">
       <table class="soft-table">

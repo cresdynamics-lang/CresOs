@@ -27,16 +27,16 @@
       <section class="crm-panel panel" id="panel-mails">
         <div class="panel-head">
           <h3>Mails</h3>
-          <a class="link-quiet" href="/messages">Open compose</a>
+          <a class="link-quiet" href="{{bp "/messages"}}">Open compose</a>
         </div>
         <p class="lede" style="margin:0">Compose client emails from Messages. Use this toggle to jump into mail without leaving CRM context.</p>
-        <a class="btn-lime" href="/messages" style="margin-top:0.85rem;display:inline-flex">Compose mail</a>
+        <a class="btn-lime" href="{{bp "/messages"}}" style="margin-top:0.85rem;display:inline-flex">Compose mail</a>
       </section>
 
       <section class="crm-panel panel" id="panel-invoices">
         <div class="panel-head">
           <h3>Invoices</h3>
-          <a class="link-quiet" href="/invoices">View all</a>
+          <a class="link-quiet" href="{{bp "/invoices"}}">View all</a>
         </div>
         <table class="soft-table">
           <thead><tr><th>Number</th><th>Client</th><th>Status</th><th>Amount</th></tr></thead>
@@ -58,7 +58,7 @@
       <section class="crm-panel panel" id="panel-leads">
         <div class="panel-head">
           <h3>Leads</h3>
-          <a class="link-quiet" href="/leads">View all</a>
+          <a class="link-quiet" href="{{bp "/leads"}}">View all</a>
         </div>
         <table class="soft-table">
           <thead><tr><th>Title</th><th>Status</th><th>Owner</th></tr></thead>
@@ -80,13 +80,13 @@
         <div class="panel-head">
           <h3>Contacts</h3>
         </div>
-        <form method="post" action="/crm/contacts" class="stack" style="margin-bottom:1rem;max-width:28rem">
+        <form method="post" action="{{bp "/crm/contacts"}}" class="stack" style="margin-bottom:1rem;max-width:28rem">
           <label>Name<input name="name" /></label>
           <label>Email<input type="email" name="email" /></label>
           <label>Phone<input name="phone" /></label>
           <button type="submit">Add contact</button>
         </form>
-        <form method="post" action="/crm/bulk-mail" class="stack" style="margin-bottom:1rem">
+        <form method="post" action="{{bp "/crm/bulk-mail"}}" class="stack" style="margin-bottom:1rem">
           <h4 style="margin:0">Bulk mail</h4>
           <label>Subject<input name="subject" required /></label>
           <label>Body<textarea name="body" rows="3" required></textarea></label>
@@ -100,7 +100,7 @@
                 <td>{{.Email}}</td>
                 <td>{{.Phone}}</td>
                 <td>
-                  <button formaction="/crm/contacts/{{.ID}}/delete" formmethod="post" type="submit" class="small">Delete</button>
+                  <button formaction="{{bp "/crm/contacts/" .ID "/delete"}}" formmethod="post" type="submit" class="small">Delete</button>
                 </td>
               </tr>
               {{else}}
@@ -115,7 +115,7 @@
       <section class="crm-panel panel" id="panel-deals">
         <div class="panel-head">
           <h3>Deals</h3>
-          <a class="link-quiet" href="/deals">View all</a>
+          <a class="link-quiet" href="{{bp "/deals"}}">View all</a>
         </div>
         <table class="soft-table">
           <thead><tr><th>Title</th><th>Stage</th><th>Value</th><th>Owner</th></tr></thead>
@@ -137,7 +137,7 @@
       <section class="crm-panel panel" id="panel-followups">
         <div class="panel-head">
           <h3>Follow-ups · cold</h3>
-          <a class="link-quiet" href="/follow-ups">Open board</a>
+          <a class="link-quiet" href="{{bp "/follow-ups"}}">Open board</a>
         </div>
         <p class="panel-sub" style="margin-top:0">Unreached invoice collection — outreach history lives on the follow-ups page.</p>
         <table class="soft-table">
@@ -160,10 +160,10 @@
       <section class="crm-panel panel" id="panel-more">
         <div class="panel-head"><h3>More</h3></div>
         <div class="chips">
-          <a class="chip" href="/reports">Reports</a>
-          <a class="chip" href="/projects">Projects</a>
-          <a class="chip" href="/community">Community</a>
-          <a class="chip" href="/performance">Performance</a>
+          <a class="chip" href="{{bp "/reports"}}">Reports</a>
+          <a class="chip" href="{{bp "/projects"}}">Projects</a>
+          <a class="chip" href="{{bp "/community"}}">Community</a>
+          <a class="chip" href="{{bp "/performance"}}">Performance</a>
         </div>
       </section>
     </div>

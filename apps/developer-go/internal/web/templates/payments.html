@@ -18,7 +18,7 @@
         <td><strong>{{printf "%.2f" .Amount}} {{.Currency}}</strong></td>
         <td>{{date .SpentAt}}</td>
         <td>
-          <form method="post" action="/payments/{{.ID}}/ack">
+          <form method="post" action="{{bp "/payments/" .ID "/ack"}}">
             <button type="submit">Acknowledge</button>
           </form>
         </td>

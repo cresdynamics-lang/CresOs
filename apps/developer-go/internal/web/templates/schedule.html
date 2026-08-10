@@ -18,7 +18,7 @@
       <span class="st st-ok">Done</span>
       {{else}}
       <span class="st st-warn">{{.Status}}</span>
-      <form method="post" action="/schedule/{{.ID}}/complete">
+      <form method="post" action="{{bp "/schedule/" .ID "/complete"}}">
         <button type="submit" class="btn-orange">Complete</button>
       </form>
       {{end}}

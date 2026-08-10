@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@450;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="{{bp "/static/app.css"}}" />
 </head>
 <body>
 {{end}}
@@ -24,36 +24,36 @@
       </div>
     </div>
     <nav>
-      <a class="{{if eq .Nav "dashboard"}}active{{end}}" href="/">
+      <a class="{{if eq .Nav "dashboard"}}active{{end}}" href="{{bp "/"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg></span>
         Dashboard
       </a>
-      <a class="{{if eq .Nav "projects"}}active{{end}}" href="/projects">
+      <a class="{{if eq .Nav "projects"}}active{{end}}" href="{{bp "/projects"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v12H4z"/><path d="M8 7V5h8v2"/></svg></span>
         Projects
       </a>
-      <a class="{{if eq .Nav "tasks"}}active{{end}}" href="/tasks">
+      <a class="{{if eq .Nav "tasks"}}active{{end}}" href="{{bp "/tasks"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
         Tasks
       </a>
-      <a class="{{if eq .Nav "schedule"}}active{{end}}" href="/schedule">
+      <a class="{{if eq .Nav "schedule"}}active{{end}}" href="{{bp "/schedule"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span>
         Schedule
       </a>
-      <a class="{{if eq .Nav "reports"}}active{{end}}" href="/reports">
+      <a class="{{if eq .Nav "reports"}}active{{end}}" href="{{bp "/reports"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg></span>
         Reports
       </a>
-      <a class="{{if eq .Nav "payments"}}active{{end}}" href="/payments">
+      <a class="{{if eq .Nav "payments"}}active{{end}}" href="{{bp "/payments"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M4 10h16M8 14h3"/></svg></span>
         Payments
       </a>
-      <a class="{{if eq .Nav "performance"}}active{{end}}" href="/performance">
+      <a class="{{if eq .Nav "performance"}}active{{end}}" href="{{bp "/performance"}}">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
         Performance
       </a>
     </nav>
-    <form class="logout" method="post" action="/logout">
+    <form class="logout" method="post" action="{{bp "/logout"}}">
       <button type="submit" title="Sign out">Sign out</button>
     </form>
   </aside>

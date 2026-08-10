@@ -4,7 +4,7 @@
 <section class="grid-2">
   <section class="card">
     <h3>New draft report</h3>
-    <form method="post" action="/reports" class="stack">
+    <form method="post" action="{{bp "/reports"}}" class="stack">
       <label>Title<input name="title" required maxlength="200" /></label>
       <label>Body<textarea name="body" rows="6" required></textarea></label>
       <button type="submit">Save draft</button>
@@ -17,15 +17,15 @@
       <tbody>
         {{range .Data}}
         <tr>
-          <td><a href="/reports/{{.ID}}"><strong>{{.Title}}</strong></a></td>
+          <td><a href="{{bp "/reports/" .ID}}"><strong>{{.Title}}</strong></a></td>
           <td><span class="badge">{{.Status}}</span></td>
           <td>{{.ReviewStatus}}</td>
           <td>{{.AuthorName}}</td>
           <td>
             {{if eq .Status "draft"}}
-            <form method="post" action="/reports/{{.ID}}/submit"><button type="submit" class="small">Submit</button></form>
+            <form method="post" action="{{bp "/reports/" .ID "/submit"}}"><button type="submit" class="small">Submit</button></form>
             {{else}}
-            <a class="link-quiet" href="/reports/{{.ID}}">Open</a>
+            <a class="link-quiet" href="{{bp "/reports/" .ID}}">Open</a>
             {{end}}
           </td>
         </tr>

@@ -9,9 +9,9 @@
       <h3>{{.Title}}</h3>
       <p class="panel-sub">{{.ApprovalStatus}} · {{.Source}} · {{.OwnerName}} · {{date .CreatedAt}}</p>
     </div>
-    <a class="link-quiet" href="/leads">All leads</a>
+    <a class="link-quiet" href="{{bp "/leads"}}">All leads</a>
   </div>
-  <form method="post" action="/leads/{{.ID}}/status" class="stack" style="max-width:16rem;margin-top:0.75rem">
+  <form method="post" action="{{bp "/leads/" .ID "/status"}}" class="stack" style="max-width:16rem;margin-top:0.75rem">
     <label>Status
       <select name="status">
         <option value="new" {{if eq .Status "new"}}selected{{end}}>new</option>
@@ -36,7 +36,7 @@
     <li class="muted">No comments yet.</li>
     {{end}}
   </ul>
-  <form method="post" action="/leads/{{.ID}}/comments" class="stack">
+  <form method="post" action="{{bp "/leads/" .ID "/comments"}}" class="stack">
     <label>Add note<textarea name="content" rows="3" required></textarea></label>
     <button type="submit">Post comment</button>
   </form>

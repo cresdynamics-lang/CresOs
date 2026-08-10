@@ -1,6 +1,10 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+	"strings"
+)
 
 type Config struct {
 	Port         string
@@ -9,9 +13,12 @@ type Config struct {
 	CookieName   string
 	AppName      string
 	SecureCookie bool
+	BasePath     string
+	PublicWebURL string
 }
 
 func Load() Config {
+	base := strings.TrimRight(getenv("BASE_PATH", ""), "/")
 	return Config{
 		Port:         getenv("PORT", "4200"),
 		DatabaseURL:  getenv("DATABASE_URL", "postgresql://cresos:cresos@localhost:5435/cresos"),
@@ -19,6 +26,8 @@ func Load() Config {
 		CookieName:   getenv("COOKIE_NAME", "cresos_developer_token"),
 		AppName:      getenv("APP_NAME", "CresOS Developer"),
 		SecureCookie: getenv("SECURE_COOKIE", "false") == "true",
+		BasePath:     base,
+		PublicWebURL: strings.TrimRight(getenv("PUBLIC_WEB_URL", ""), "/"),
 	}
 }
 
@@ -27,4 +36,41 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func (c Config) PortInt() int {
+	n, err := strconv.Atoi(c.Port)
+	if err != nil {
+		return 4200
+	}
+	return n
+}
+
+func (c Config) Path(parts ...string) string {
+	p := strings.Join(parts, "")
+	if p == "" {
+		p = "/"
+	}
+	q := ""
+	if i := strings.IndexByte(p, '?'); i >= 0 {
+		q = p[i:]
+		p = p[:i]
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	if c.BasePath == "" {
+		return p + q
+	}
+	if p == "/" {
+		return c.BasePath + "/" + q
+	}
+	return c.BasePath + p + q
+}
+
+func (c Config) CookiePath() string {
+	if c.BasePath == "" {
+		return "/"
+	}
+	return c.BasePath
 }

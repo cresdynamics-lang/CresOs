@@ -1,19 +1,23 @@
 /**
  * Go workspace handoff URLs.
- * Defaults point at local sales-go / developer-go; override via env in deploy.
+ * Production nginx serves them under /w/sales and /w/developer on the same host.
+ * Local defaults hit sales-go :4100 / developer-go :4200 directly.
  */
 export function salesGoBaseUrl(): string {
-  const u = (process.env.NEXT_PUBLIC_SALES_GO_URL ?? "http://localhost:4100").trim().replace(/\/+$/, "");
-  return u;
+  const u = (process.env.NEXT_PUBLIC_SALES_GO_URL ?? "").trim().replace(/\/+$/, "");
+  if (u) return u;
+  return "http://localhost:4100";
 }
 
 export function developerGoBaseUrl(): string {
-  const u = (process.env.NEXT_PUBLIC_DEVELOPER_GO_URL ?? "http://localhost:4200").trim().replace(/\/+$/, "");
-  return u;
+  const u = (process.env.NEXT_PUBLIC_DEVELOPER_GO_URL ?? "").trim().replace(/\/+$/, "");
+  if (u) return u;
+  return "http://localhost:4200";
 }
 
 export function goSsoUrl(base: string, accessToken: string, nextPath = "/"): string {
-  const url = new URL("/sso", base.endsWith("/") ? base : `${base}/`);
+  const root = base.replace(/\/+$/, "");
+  const url = new URL(`${root}/sso`);
   url.searchParams.set("token", accessToken);
   if (nextPath && nextPath !== "/") {
     url.searchParams.set("next", nextPath);

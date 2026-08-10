@@ -33,7 +33,7 @@ services:
     environment:
       # Use host Postgres when compose `db` is not running (e.g. existing cresos-db-1 on :5435)
       DATABASE_URL: ${DATABASE_URL:-postgresql://cresos:cresos@host.docker.internal:5435/cresos}
-      JWT_SECRET: ${CRESOS_DOCKER_JWT_SECRET:-local-docker-jwt-secret-change-me-32ch}
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-me-32ch}
       PORT: "4000"
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_API_KEY_SECONDARY: ${GROQ_API_KEY_SECONDARY:-}
@@ -87,13 +87,63 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_SALES_GO_URL: ${NEXT_PUBLIC_SALES_GO_URL:-http://localhost:4100}
+        NEXT_PUBLIC_DEVELOPER_GO_URL: ${NEXT_PUBLIC_DEVELOPER_GO_URL:-http://localhost:4200}
     ports:
       - "127.0.0.1:3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_SALES_GO_URL: ${NEXT_PUBLIC_SALES_GO_URL:-http://localhost:4100}
+      NEXT_PUBLIC_DEVELOPER_GO_URL: ${NEXT_PUBLIC_DEVELOPER_GO_URL:-http://localhost:4200}
     depends_on:
       api:
         condition: service_started
+
+  sales-go:
+    restart: unless-stopped
+    build:
+      context: ./apps/sales-go
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:4100:4100"
+    environment:
+      PORT: "4100"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cresos:cresos@host.docker.internal:5435/cresos}
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-me-32ch}
+      COOKIE_NAME: cresos_sales_token
+      APP_NAME: CresOS Sales
+      BASE_PATH: ${SALES_GO_BASE_PATH:-}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-}
+      SECURE_COOKIE: ${SECURE_COOKIE:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  developer-go:
+    restart: unless-stopped
+    build:
+      context: ./apps/developer-go
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:4200:4200"
+    environment:
+      PORT: "4200"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cresos:cresos@host.docker.internal:5435/cresos}
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-me-32ch}
+      COOKIE_NAME: cresos_developer_token
+      APP_NAME: CresOS Developer
+      BASE_PATH: ${DEVELOPER_GO_BASE_PATH:-}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-}
+      SECURE_COOKIE: ${SECURE_COOKIE:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
 
 volumes:
   cresos_pg:

@@ -14,12 +14,12 @@
     <tbody>
       {{range .Data}}
       <tr>
-        <td><a href="/projects/{{.ID}}"><strong>{{.Name}}</strong></a></td>
+        <td><a href="{{bp "/projects/" .ID}}"><strong>{{.Name}}</strong></a></td>
         <td>{{.ManagerName}}</td>
         <td>{{datep .DueDate}}</td>
         <td>
           {{if eq .AssignmentStatus "pending"}}
-          <form method="post" action="/projects/assignments/{{.AssignmentID}}/respond" class="inline-actions">
+          <form method="post" action="{{bp "/projects/assignments/" .AssignmentID "/respond"}}" class="inline-actions">
             <button type="submit" name="accept" value="1">Accept</button>
             <button type="submit" name="accept" value="0" class="ghost">Decline</button>
           </form>
@@ -31,7 +31,7 @@
         </td>
         <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
         <td>{{.Progress}}%</td>
-        <td><a class="link" href="/projects/{{.ID}}">Open</a></td>
+        <td><a class="link" href="{{bp "/projects/" .ID}}">Open</a></td>
       </tr>
       {{else}}
       <tr><td colspan="7" class="muted">No projects assigned.</td></tr>

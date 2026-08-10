@@ -7,7 +7,11 @@ FROM node:20-bookworm-slim AS build
 WORKDIR /app
 ENV NODE_ENV=production
 ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_SALES_GO_URL
+ARG NEXT_PUBLIC_DEVELOPER_GO_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SALES_GO_URL=$NEXT_PUBLIC_SALES_GO_URL
+ENV NEXT_PUBLIC_DEVELOPER_GO_URL=$NEXT_PUBLIC_DEVELOPER_GO_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
@@ -18,6 +22,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SALES_GO_URL=$NEXT_PUBLIC_SALES_GO_URL
+ENV NEXT_PUBLIC_DEVELOPER_GO_URL=$NEXT_PUBLIC_DEVELOPER_GO_URL
 
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.mjs ./next.config.mjs
@@ -27,4 +33,3 @@ COPY --from=build /app/public ./public
 
 EXPOSE 3000
 CMD ["npm","run","start","--","-p","3000"]
-

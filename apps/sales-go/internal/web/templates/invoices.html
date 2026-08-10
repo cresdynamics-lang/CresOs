@@ -41,7 +41,7 @@
       <button type="button" class="meatball" data-close-modal aria-label="Close">✕</button>
     </div>
     {{if .FormError}}<div class="alert danger">{{.FormError}}</div>{{end}}
-    <form class="stack inv-form" method="post" action="/invoices">
+    <form class="stack inv-form" method="post" action="{{bp "/invoices"}}">
       <div class="grid-2">
         <label>Client
           <select name="clientId" required>
