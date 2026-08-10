@@ -1,0 +1,92 @@
+{{define "followups.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+<section class="hero tight">
+  <p class="eyebrow">CRM · Collection</p>
+  <h1>Invoice due follow-ups</h1>
+  <p class="lede">Cold means still unreached. Log every outreach attempt here so the message trail repeats for that client until you mark them reached.</p>
+</section>
+
+{{range .Data}}
+<article class="panel followup-card {{if .Cold}}is-cold{{end}}" id="task-{{.ID}}" style="margin-bottom:0.85rem">
+  <div class="panel-head">
+    <div>
+      <h3>{{.InvoiceNo}} · {{.ClientName}}</h3>
+      <p class="panel-sub">
+        Due {{date .DueAt}}
+        · {{money .Currency .InvoiceAmt}}
+        · {{.AssigneeName}}
+        {{if .ProjectName}} · {{.ProjectName}}{{end}}
+      </p>
+    </div>
+    <div class="followup-badges">
+      {{if .Cold}}<span class="status warn">cold</span>{{end}}
+      <span class="status {{statusTone .Status}}">{{.Status}}</span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 0.85rem">
+    {{if .ClientPhone}}Phone {{.ClientPhone}} · {{end}}
+    {{if .ClientEmail}}{{.ClientEmail}}{{end}}
+    · source {{.Source}}
+  </p>
+
+  {{if .Cold}}
+  <div class="outreach-block">
+    <div class="panel-head" style="margin-bottom:0.5rem">
+      <h3 style="font-size:0.95rem">Outreach trail</h3>
+      <span class="muted">{{len .Notes}} sent</span>
+    </div>
+    {{if .Notes}}
+    <ol class="outreach-thread">
+      {{range .Notes}}
+      <li>
+        <div class="outreach-meta">{{.AuthorName}} · {{date .CreatedAt}}</div>
+        <p class="outreach-body">{{.Content}}</p>
+      </li>
+      {{end}}
+    </ol>
+    {{else}}
+    <p class="muted" style="margin:0 0 0.75rem">No outreach logged yet — still cold. Use the suggested message or write your own.</p>
+    {{end}}
+
+    <form class="reach-form" method="post" action="/follow-ups/{{.ID}}/outreach">
+      <label>Log outreach (client still cold)
+        <textarea name="message" required rows="4" placeholder="Paste or edit the message you sent…">{{.OutreachHint}}</textarea>
+      </label>
+      <button type="submit" class="btn-ghost">Save outreach message</button>
+    </form>
+  </div>
+
+  <form class="reach-form" method="post" action="/follow-ups/{{.ID}}/reach" style="margin-top:1rem">
+    <label>What did the client say when you reached them?
+      <textarea name="clientNote" required placeholder="Payment date promised, objection, contact person, next step…"></textarea>
+    </label>
+    <button type="submit">Mark reached &amp; notify leadership</button>
+  </form>
+  {{else}}
+  {{if .Notes}}
+  <ol class="outreach-thread">
+    {{range .Notes}}
+    <li>
+      <div class="outreach-meta">{{.AuthorName}} · {{date .CreatedAt}}</div>
+      <p class="outreach-body">{{.Content}}</p>
+    </li>
+    {{end}}
+  </ol>
+  {{else if .ClientNote}}
+  <p class="lede" style="margin:0 0 0.75rem"><strong>Latest note:</strong> {{.ClientNote}}</p>
+  {{end}}
+  {{if .ReachedAt}}
+  <p class="muted" style="margin-top:0.75rem">Reached {{datep .ReachedAt}}</p>
+  {{end}}
+  {{end}}
+</article>
+{{else}}
+<article class="panel">
+  <p class="muted">No collection tasks yet. Creating an invoice (sales or finance) assigns sales with a due timeline automatically.</p>
+</article>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

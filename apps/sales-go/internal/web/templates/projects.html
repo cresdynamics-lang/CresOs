@@ -1,0 +1,106 @@
+{{define "projects.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow" style="margin-bottom:0.35rem">Project management · delivery</p>
+      <h3>Project performance</h3>
+      <p class="panel-sub">Progress, speed, milestones, and client remarks — ready for client feedback.</p>
+    </div>
+    <a class="btn-lime" href="#new-project">New project</a>
+  </div>
+
+  {{range .Projects}}
+  <article class="panel" style="margin:0.85rem 0 0; padding:1rem 0 0; border-radius:0; box-shadow:none; border-top:1px solid var(--line)">
+    <div class="panel-head">
+      <div>
+        <h3>{{.Name}}</h3>
+        <p class="panel-sub">{{.ClientName}} · {{.Status}} · {{.Priority}}
+          {{if .PMName}} · PM {{.PMName}}{{end}}
+          {{if .DevName}} · Dev {{.DevName}}{{end}}
+        </p>
+      </div>
+      <span class="status {{statusTone .Status}}">{{.Progress}}%</span>
+    </div>
+    <div class="work-strip" style="margin-bottom:0.75rem">
+      <article><p class="lbl">Milestones</p><p class="val">{{.MilestonesDone}}/{{.MilestonesTotal}}</p></article>
+      <article><p class="lbl">Tasks</p><p class="val">{{.TasksDone}}/{{.TasksTotal}}</p></article>
+      <article><p class="lbl">Est hours</p><p class="val">{{printf "%.0f" .EstHours}}</p></article>
+      <article><p class="lbl">Actual hours</p><p class="val">{{printf "%.0f" .ActualHours}}</p></article>
+      <article><p class="lbl">Speed</p><p class="val">{{if gt .EstHours 0.0}}{{printf "%.2fx" .SpeedRatio}}{{else}}—{{end}}</p></article>
+      <article class="hot"><p class="lbl">Client remarks</p><p class="val">{{.ClientRemarks}}</p></article>
+    </div>
+    <div class="progress-track" aria-hidden="true"><i style="width:{{.Progress}}%"></i></div>
+    <p class="muted" style="margin:0.65rem 0 0">
+      Received {{money .CurrencyHint .AmountReceived}}
+      {{if gt .Price 0.0}} / {{money .CurrencyHint .Price}}{{end}}
+      {{if .StartDate}} · start {{datep .StartDate}}{{end}}
+      {{if .EndDate}} · end {{datep .EndDate}}{{end}}
+    </p>
+    {{if .LatestRemark}}
+    <p class="lede" style="margin-top:0.55rem"><strong>Latest client remark:</strong> {{.LatestRemark}}</p>
+    {{end}}
+  </article>
+  {{else}}
+  <p class="muted" style="margin-top:0.85rem">No projects linked to your sales ownership yet.</p>
+  {{end}}
+</section>
+
+<article class="panel" id="new-project" style="margin-top:0.9rem">
+  <div class="panel-head">
+    <div>
+      <h3>New project</h3>
+      <p class="panel-sub">Same sales create flow as before — submitted for director approval (demo or project).</p>
+    </div>
+  </div>
+  {{if .FormError}}<div class="alert danger">{{.FormError}}</div>{{end}}
+  <form class="stack inv-form" method="post" action="/projects">
+    <div class="grid-2">
+      <label>Project name *
+        <input name="name" required placeholder="e.g. Acme Retail Platform" />
+      </label>
+      <label>Type *
+        <select name="type" required>
+          <option value="project">Project</option>
+          <option value="demo">Demo</option>
+        </select>
+      </label>
+    </div>
+    <div class="grid-2">
+      <label>Link existing client
+        <select name="clientId">
+          <option value="">Optional…</option>
+          {{range .Clients}}
+          <option value="{{.ID}}">{{.Name}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label>Client / project owner name
+        <input name="clientOrOwnerName" placeholder="If no client record yet" />
+      </label>
+    </div>
+    <div class="grid-2">
+      <label>Phone<input type="tel" name="phone" /></label>
+      <label>Email<input type="email" name="email" /></label>
+    </div>
+    <div class="grid-2">
+      <label>Price (optional for demo)<input name="price" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+      <label>Start date<input type="date" name="startDate" /></label>
+    </div>
+    <label>End date<input type="date" name="endDate" /></label>
+    <label>Project details
+      <textarea name="projectDetails" rows="3" placeholder="Scope, deliverables, context for PM and director…"></textarea>
+    </label>
+    <label>Success criteria
+      <textarea name="successCriteria" rows="2" placeholder="How we know this project succeeded…"></textarea>
+    </label>
+    <button type="submit">Create &amp; submit for approval</button>
+  </form>
+</article>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

@@ -1,0 +1,159 @@
+{{define "crm.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow" style="margin-bottom:0.35rem">Sales</p>
+      <h3>CRM</h3>
+      <p class="panel-sub">Toggle sections like the side panel — expand one activity at a time.</p>
+    </div>
+  </div>
+
+  <div class="crm-layout">
+    <div class="crm-toggles">
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-mails" aria-expanded="false">Mails</button>
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-invoices" aria-expanded="false">Invoices</button>
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-leads" aria-expanded="false">Leads</button>
+      <button type="button" class="crm-toggle active" data-panel-toggle="panel-contacts" aria-expanded="true">Contacts</button>
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-deals" aria-expanded="false">Deals</button>
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-followups" aria-expanded="false">Follow-ups</button>
+      <button type="button" class="crm-toggle" data-panel-toggle="panel-more" aria-expanded="false">More</button>
+    </div>
+
+    <div class="crm-panels">
+      <section class="crm-panel panel" id="panel-mails">
+        <div class="panel-head">
+          <h3>Mails</h3>
+          <a class="link-quiet" href="/messages">Open compose</a>
+        </div>
+        <p class="lede" style="margin:0">Compose client emails from Messages. Use this toggle to jump into mail without leaving CRM context.</p>
+        <a class="btn-lime" href="/messages" style="margin-top:0.85rem;display:inline-flex">Compose mail</a>
+      </section>
+
+      <section class="crm-panel panel" id="panel-invoices">
+        <div class="panel-head">
+          <h3>Invoices</h3>
+          <a class="link-quiet" href="/invoices">View all</a>
+        </div>
+        <table class="soft-table">
+          <thead><tr><th>Number</th><th>Client</th><th>Status</th><th>Amount</th></tr></thead>
+          <tbody>
+            {{range .Invoices}}
+            <tr>
+              <td><strong>{{.Number}}</strong></td>
+              <td>{{.ClientName}}</td>
+              <td><span class="status {{statusTone .Status}}">{{.Status}}</span></td>
+              <td>{{money .Currency .TotalAmount}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4" class="muted">No invoices.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="crm-panel panel" id="panel-leads">
+        <div class="panel-head">
+          <h3>Leads</h3>
+          <a class="link-quiet" href="/leads">View all</a>
+        </div>
+        <table class="soft-table">
+          <thead><tr><th>Title</th><th>Status</th><th>Owner</th></tr></thead>
+          <tbody>
+            {{range .Leads}}
+            <tr>
+              <td><strong>{{.Title}}</strong></td>
+              <td><span class="status {{statusTone .Status}}">{{.Status}}</span></td>
+              <td>{{.OwnerName}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="3" class="muted">No leads.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="crm-panel panel open" id="panel-contacts">
+        <div class="panel-head">
+          <h3>Contacts</h3>
+        </div>
+        <table class="soft-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th></tr></thead>
+          <tbody>
+            {{range .Contacts}}
+            <tr>
+              <td><strong>{{.Name}}</strong></td>
+              <td>{{.Email}}</td>
+              <td>{{.Phone}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="3" class="muted">No contacts.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="crm-panel panel" id="panel-deals">
+        <div class="panel-head">
+          <h3>Deals</h3>
+          <a class="link-quiet" href="/deals">View all</a>
+        </div>
+        <table class="soft-table">
+          <thead><tr><th>Title</th><th>Stage</th><th>Value</th><th>Owner</th></tr></thead>
+          <tbody>
+            {{range .Deals}}
+            <tr>
+              <td><strong>{{.Title}}</strong></td>
+              <td><span class="status {{statusTone .Stage}}">{{.Stage}}</span></td>
+              <td>{{printf "%.2f" .Value}}</td>
+              <td>{{.OwnerName}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4" class="muted">No deals.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="crm-panel panel" id="panel-followups">
+        <div class="panel-head">
+          <h3>Follow-ups · cold</h3>
+          <a class="link-quiet" href="/follow-ups">Open board</a>
+        </div>
+        <p class="panel-sub" style="margin-top:0">Unreached invoice collection — outreach history lives on the follow-ups page.</p>
+        <table class="soft-table">
+          <thead><tr><th>Invoice</th><th>Client</th><th>Due</th><th>Outreach</th></tr></thead>
+          <tbody>
+            {{range .FollowUps}}
+            <tr>
+              <td><strong>{{.InvoiceNo}}</strong></td>
+              <td>{{.ClientName}}</td>
+              <td>{{date .DueAt}}</td>
+              <td>{{len .Notes}} msgs</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4" class="muted">No cold follow-ups.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="crm-panel panel" id="panel-more">
+        <div class="panel-head"><h3>More</h3></div>
+        <div class="chips">
+          <a class="chip" href="/reports">Reports</a>
+          <a class="chip" href="/projects">Projects</a>
+          <a class="chip" href="/community">Community</a>
+          <a class="chip" href="/performance">Performance</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

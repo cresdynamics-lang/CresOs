@@ -1,0 +1,54 @@
+{{define "reports.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+<section class="card" style="margin-bottom:1rem">
+  <div class="section-head">
+    <h2>Submit today’s report</h2>
+    <p class="muted">Visible to directors / PMs — keep it concrete (min ~60 chars across key fields).</p>
+  </div>
+  <form method="post" action="/reports" class="report-form">
+    <label>What worked
+      <textarea name="whatWorked" rows="3" required placeholder="What moved forward today…"></textarea>
+    </label>
+    <label>Implemented
+      <textarea name="implemented" rows="2" placeholder="Shipped / merged / delivered…"></textarea>
+    </label>
+    <label>Pending
+      <textarea name="pending" rows="2" placeholder="Still in flight…"></textarea>
+    </label>
+    <label>Blockers
+      <textarea name="blockers" rows="2" placeholder="What’s stuck…"></textarea>
+    </label>
+    <label>Needs attention
+      <textarea name="needsAttention" rows="2" placeholder="Escalate to PM / director…"></textarea>
+    </label>
+    <label>Next plan
+      <textarea name="nextPlan" rows="2" required placeholder="Tomorrow’s focus…"></textarea>
+    </label>
+    <button type="submit" class="btn-orange">Submit report</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>Recent reports</h2>
+  </div>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Summary</th><th>Review</th></tr></thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td>{{date .ReportDate}}</td>
+        <td>{{.Title}}</td>
+        <td><span class="st {{statusClass .Status}}">{{.Status}}</span></td>
+      </tr>
+      {{else}}
+      <tr><td colspan="3" class="muted">No reports yet.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+{{template "shell-close" .}}
+{{end}}

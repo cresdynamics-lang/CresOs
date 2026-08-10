@@ -1,0 +1,48 @@
+{{define "performance.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="hero tight">
+  <p class="eyebrow">HR · Sales performance</p>
+  <h1>{{.UserName}}</h1>
+  <p class="lede">
+    {{if .JobTitle}}{{.JobTitle}} · {{end}}{{.EmploymentType}}
+    {{if .ReportsTo}} · reports to {{.ReportsTo}}{{end}}
+    · synced with HR employment profile and sales activity.
+  </p>
+</section>
+
+<div class="work-strip">
+  <article><p class="lbl">Report streak (14d)</p><p class="val">{{.StreakDays}}</p></article>
+  <article><p class="lbl">Deals closed</p><p class="val">{{.DealsWon}}</p></article>
+  <article><p class="lbl">Active deals</p><p class="val">{{.DealsActive}}</p></article>
+  <article><p class="lbl">Client comms</p><p class="val">{{.CommsLogged}}</p></article>
+  <article><p class="lbl">Proposals</p><p class="val">{{.ProposalsSent}}</p></article>
+  <article class="hot"><p class="lbl">Collection done</p><p class="val">{{.CollectionDone}}</p></article>
+</div>
+
+<div class="grid-2">
+  <article class="panel">
+    <div class="panel-head"><h3>HR profile</h3></div>
+    <ul class="pulse-list">
+      <li><i class="dot ok"></i>Status · {{.Status}}</li>
+      <li><i class="dot ok"></i>Email · {{.Email}}</li>
+      <li><i class="dot ok"></i>Hire date · {{if .HireDate}}{{datep .HireDate}}{{else}}—{{end}}</li>
+      <li><i class="dot warn"></i>Open collections · {{.CollectionOpen}}</li>
+    </ul>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><h3>Sales workload</h3></div>
+    <ul class="pulse-list">
+      <li><i class="dot ok"></i>Leads owned · {{.LeadsOwned}}</li>
+      <li><i class="dot ok"></i>Projects owned · {{.ProjectsOwned}}</li>
+      <li><i class="dot ok"></i>Invoices owned · {{.InvoicesOwned}}</li>
+      <li><i class="dot warn"></i>Reports draft / submitted / checked · {{.ReportsDraft}} / {{.ReportsSubmitted}} / {{.ReportsChecked}}</li>
+    </ul>
+  </article>
+</div>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

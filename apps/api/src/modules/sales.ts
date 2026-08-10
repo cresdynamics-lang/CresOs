@@ -7,6 +7,10 @@ import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-numb
 import { deliverSalesInvoiceEmail } from "../lib/invoice-email";
 import { validateInvoiceClientProject } from "../lib/project-payment-sync";
 import { logEmailSent } from "./admin-activity";
+import {
+  escalateInvoiceToSales,
+  markCollectionReached
+} from "../lib/invoice-collection";
 
 /** Avoid Invalid Date from empty due-date strings (same as finance). */
 function parseInvoiceDueDate(raw: string | undefined | null): Date | null {
@@ -114,7 +118,13 @@ export default function salesRouter(prisma: PrismaClient): Router {
           deals,
           projects,
           leadsThisWeek,
-          leadsPendingApproval
+          leadsPendingApproval,
+          clientCount,
+          dealsClosedCount,
+          clientCommsCount,
+          proposalsSentCount,
+          followUpsUpcoming,
+          collectionOpen
         ] = await Promise.all([
           prisma.invoice.count({ where: base }),
           prisma.invoice.count({ where: outstandingWhere }),
@@ -164,6 +174,47 @@ export default function salesRouter(prisma: PrismaClient): Router {
               approvalStatus: "pending_approval",
               ...(isAdmin ? {} : { ownerId: userId })
             }
+          }),
+          prisma.client.count({ where: { orgId, deletedAt: null } }),
+          prisma.deal.count({
+            where: {
+              orgId,
+              deletedAt: null,
+              stage: "won",
+              ...(isAdmin ? {} : { ownerId: userId })
+            }
+          }),
+          prisma.dealActivity.count({
+            where: {
+              orgId,
+              type: { in: ["call", "meeting", "whatsapp", "email", "note"] },
+              ...(isAdmin
+                ? {}
+                : { deal: { ownerId: userId, deletedAt: null } })
+            }
+          }),
+          prisma.dealActivity.count({
+            where: {
+              orgId,
+              type: "proposal",
+              ...(isAdmin
+                ? {}
+                : { deal: { ownerId: userId, deletedAt: null } })
+            }
+          }),
+          prisma.leadFollowUp.count({
+            where: {
+              orgId,
+              scheduledAt: { gte: new Date() },
+              ...(isAdmin ? {} : { assignedToId: userId })
+            }
+          }),
+          prisma.invoiceCollectionTask.count({
+            where: {
+              orgId,
+              status: "open",
+              ...(isAdmin ? {} : { assignedToId: userId })
+            }
           })
         ]);
 
@@ -208,7 +259,13 @@ export default function salesRouter(prisma: PrismaClient): Router {
               leadsThisWeek,
               activeDeals,
               wonDeals,
-              activeProjects: projects.filter((p) => ["planned", "active"].includes(p.status)).length
+              activeProjects: projects.filter((p) => ["planned", "active"].includes(p.status)).length,
+              clients: clientCount,
+              dealsClosed: dealsClosedCount,
+              clientCommunications: clientCommsCount,
+              proposalsSent: proposalsSentCount,
+              followUpsUpcoming: followUpsUpcoming,
+              collectionOpen: collectionOpen
             },
             charts: {
               invoicesByStatus: invoiceStatusGroups.map((g) => ({
@@ -222,7 +279,8 @@ export default function salesRouter(prisma: PrismaClient): Router {
               outstandingInvoices,
               overdueInvoices,
               leadsPendingApproval,
-              dealsInProspect: dealsByStage.prospect ?? 0
+              dealsInProspect: dealsByStage.prospect ?? 0,
+              collectionOpen
             },
             recentInvoices
           }
@@ -427,6 +485,17 @@ export default function salesRouter(prisma: PrismaClient): Router {
               tier: "financial"
             }))
           });
+        }
+
+        try {
+          await escalateInvoiceToSales(prisma, {
+            orgId,
+            invoiceId: result.id,
+            escalatedById: userId,
+            source: "invoice_created"
+          });
+        } catch (escErr) {
+          console.error("escalateInvoiceToSales after sales invoice create:", escErr);
         }
 
         const full = await prisma.invoice.findUnique({
@@ -666,6 +735,203 @@ export default function salesRouter(prisma: PrismaClient): Router {
         console.error("Error fetching projects:", error);
         res.status(500).json({
           error: "Failed to fetch projects",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.get(
+    "/collection-tasks",
+    requireRoles([
+      ROLE_KEYS.sales,
+      ROLE_KEYS.admin,
+      ROLE_KEYS.finance,
+      ROLE_KEYS.director
+    ]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const roles = req.auth!.roleKeys;
+        const canSeeAll =
+          roles.includes(ROLE_KEYS.admin) ||
+          roles.includes(ROLE_KEYS.finance) ||
+          roles.includes(ROLE_KEYS.director);
+
+        const tasks = await prisma.invoiceCollectionTask.findMany({
+          where: {
+            orgId,
+            ...(canSeeAll ? {} : { assignedToId: userId })
+          },
+          include: {
+            assignedTo: { select: { id: true, name: true, email: true } },
+            escalatedBy: { select: { id: true, name: true, email: true } },
+            invoice: {
+              select: {
+                id: true,
+                number: true,
+                status: true,
+                currency: true,
+                totalAmount: true,
+                dueDate: true,
+                client: { select: { id: true, name: true, email: true, phone: true } },
+                project: { select: { id: true, name: true } }
+              }
+            },
+            notes: {
+              orderBy: { createdAt: "desc" },
+              take: 5,
+              include: { author: { select: { id: true, name: true, email: true } } }
+            }
+          },
+          orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+          take: 100
+        });
+
+        res.json({
+          success: true,
+          data: tasks.map((t) => ({
+            id: t.id,
+            status: t.status,
+            source: t.source,
+            dueAt: t.dueAt.toISOString(),
+            reachedAt: t.reachedAt?.toISOString() ?? null,
+            clientNote: t.clientNote,
+            createdAt: t.createdAt.toISOString(),
+            assignedTo: t.assignedTo,
+            escalatedBy: t.escalatedBy,
+            invoice: {
+              ...t.invoice,
+              totalAmount: Number(t.invoice.totalAmount)
+            },
+            notes: t.notes.map((n) => ({
+              id: n.id,
+              content: n.content,
+              createdAt: n.createdAt.toISOString(),
+              author: n.author
+            }))
+          }))
+        });
+      } catch (error) {
+        console.error("Error fetching collection tasks:", error);
+        res.status(500).json({
+          error: "Failed to fetch collection tasks",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.post(
+    "/collection-tasks/:id/reach",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+        const clientNote = String((req.body as { clientNote?: string })?.clientNote ?? "");
+        const taskId = String(req.params.id);
+        const updated = await markCollectionReached(prisma, {
+          orgId,
+          taskId,
+          actorUserId: userId,
+          clientNote,
+          isAdmin
+        });
+        res.json({ success: true, data: { id: updated.id, status: updated.status } });
+      } catch (error) {
+        const err = error as { code?: string; message?: string };
+        if (err.code === "NOTE_REQUIRED") {
+          res.status(400).json({ error: "Client note required", message: err.message });
+          return;
+        }
+        if (err.code === "NOT_FOUND") {
+          res.status(404).json({ error: "Not found", message: err.message });
+          return;
+        }
+        console.error("Error marking collection reached:", error);
+        res.status(500).json({
+          error: "Failed to mark reached",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.post(
+    "/collection-tasks/:id/notes",
+    requireRoles([ROLE_KEYS.sales, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const isAdmin = req.auth!.roleKeys.includes(ROLE_KEYS.admin);
+        const content = String((req.body as { content?: string })?.content ?? "").trim();
+        if (!content) {
+          res.status(400).json({ error: "Note required" });
+          return;
+        }
+        const taskId = String(req.params.id);
+        const task = await prisma.invoiceCollectionTask.findFirst({
+          where: {
+            id: taskId,
+            orgId,
+            ...(isAdmin ? {} : { assignedToId: userId })
+          },
+          include: {
+            invoice: { select: { number: true } },
+            assignedTo: { select: { name: true, email: true } }
+          }
+        });
+        if (!task) {
+          res.status(404).json({ error: "Not found" });
+          return;
+        }
+        const note = await prisma.invoiceCollectionNote.create({
+          data: { orgId, taskId: task.id, authorId: userId, content }
+        });
+        await prisma.invoiceCollectionTask.update({
+          where: { id: task.id },
+          data: { clientNote: content }
+        });
+        const salesName = task.assignedTo.name?.trim() || task.assignedTo.email;
+        await prisma.notification.createMany({
+          data: (
+            await prisma.user.findMany({
+              where: {
+                deletedAt: null,
+                roles: {
+                  some: {
+                    role: {
+                      orgId,
+                      key: { in: [ROLE_KEYS.admin, ROLE_KEYS.finance, ROLE_KEYS.director] }
+                    }
+                  }
+                }
+              },
+              select: { id: true }
+            })
+          ).map((u) => ({
+            orgId,
+            channel: "in_app" as const,
+            to: u.id,
+            subject: `Collection note · ${task.invoice.number}`,
+            body: `${salesName}: ${content}`,
+            status: "sent",
+            type: "invoice.collection.note",
+            tier: "financial"
+          }))
+        });
+        res.status(201).json({
+          success: true,
+          data: { id: note.id, content: note.content, createdAt: note.createdAt.toISOString() }
+        });
+      } catch (error) {
+        console.error("Error adding collection note:", error);
+        res.status(500).json({
+          error: "Failed to add note",
           message: error instanceof Error ? error.message : "Unknown error"
         });
       }

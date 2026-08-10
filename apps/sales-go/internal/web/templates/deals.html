@@ -1,0 +1,24 @@
+{{define "deals.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+<section class="card">
+  <div class="card-head"><h3>Deals</h3></div>
+  <table>
+    <thead><tr><th>Title</th><th>Stage</th><th>Value</th><th>Owner</th><th>Created</th></tr></thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td>{{.Title}}</td>
+        <td><span class="badge">{{.Stage}}</span></td>
+        <td>{{money "USD" .Value}}</td>
+        <td>{{.OwnerName}}</td>
+        <td>{{date .CreatedAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="5" class="muted">No deals.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{template "shell-close" .}}
+{{end}}

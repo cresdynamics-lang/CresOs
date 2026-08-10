@@ -1,0 +1,32 @@
+{{define "projects.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+<section class="card">
+  <div class="section-head">
+    <h2>Assigned projects</h2>
+    <p class="muted">Sales and directors assign you — you update tasks and delivery, not create projects.</p>
+  </div>
+  <table class="data">
+    <thead>
+      <tr><th>Name</th><th>PM</th><th>Due</th><th>Status</th><th>Progress</th><th>Tasks</th></tr>
+    </thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td><strong>{{.Name}}</strong></td>
+        <td>{{.ManagerName}}</td>
+        <td>{{datep .DueDate}}</td>
+        <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
+        <td>{{.Progress}}%</td>
+        <td>{{.DoneTasks}}/{{.TaskCount}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6" class="muted">No projects assigned.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+{{template "shell-close" .}}
+{{end}}

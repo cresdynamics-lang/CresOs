@@ -1,0 +1,25 @@
+{{define "leads.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+<section class="card">
+  <div class="card-head"><h3>Leads</h3></div>
+  <table>
+    <thead><tr><th>Title</th><th>Status</th><th>Approval</th><th>Source</th><th>Owner</th><th>Created</th></tr></thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td>{{.Title}}</td>
+        <td><span class="badge">{{.Status}}</span></td>
+        <td>{{.ApprovalStatus}}</td>
+        <td>{{.Source}}</td>
+        <td>{{.OwnerName}}</td>
+        <td>{{date .CreatedAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6" class="muted">No leads.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{template "shell-close" .}}
+{{end}}

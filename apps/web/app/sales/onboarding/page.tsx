@@ -1,7 +1,18 @@
 "use client";
 
-import { OnboardingConsole } from "../../../components/onboarding/onboarding-console";
+import { useEffect } from "react";
+import { useAuth } from "../../auth-context";
+import { goSsoUrl, salesGoBaseUrl } from "../../../lib/go-workspace";
 
-export default function SalesPlaybookPage() {
-  return <OnboardingConsole />;
+export default function SalesOnboardingRedirect() {
+  const { auth, hydrated } = useAuth();
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!auth.accessToken) {
+      window.location.replace("/login");
+      return;
+    }
+    window.location.replace(goSsoUrl(salesGoBaseUrl(), auth.accessToken, "/"));
+  }, [hydrated, auth.accessToken]);
+  return <p className="p-8 text-sm text-neutral-500">Redirecting to Sales workspace…</p>;
 }

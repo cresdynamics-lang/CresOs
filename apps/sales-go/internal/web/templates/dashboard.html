@@ -1,0 +1,246 @@
+{{define "dashboard.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+{{if .Queue}}
+<div class="queue-strip">
+  {{range .Queue}}
+  <a class="queue-chip {{.Tone}}" href="{{.Href}}">
+    <strong>{{.Value}}</strong>
+    <span>{{.Label}}</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
+
+<div class="work-strip">
+  <article><p class="lbl">Clients</p><p class="val">{{.KPIs.Clients}}</p></article>
+  <article><p class="lbl">Deals closed</p><p class="val">{{.KPIs.DealsClosed}}</p></article>
+  <article><p class="lbl">Client comms</p><p class="val">{{.KPIs.ClientCommunications}}</p></article>
+  <article><p class="lbl">Proposals sent</p><p class="val">{{.KPIs.ProposalsSent}}</p></article>
+  <article><p class="lbl">Follow-ups</p><p class="val">{{.KPIs.FollowUpsUpcoming}}</p></article>
+  <article class="hot"><p class="lbl">Invoice due</p><p class="val">{{.KPIs.CollectionOpen}}</p></article>
+</div>
+
+<section class="chart-grid">
+  <article class="panel">
+    <div class="panel-head"><h3>Invoices by status</h3></div>
+    <div class="pie-wrap">
+      <div class="pie" style="background:{{pieConic .Charts.Invoices}}"></div>
+      <ul class="pie-legend">
+        {{$t := sumSlices .Charts.Invoices}}
+        {{range .Charts.Invoices}}
+        <li><span>{{.Label}}</span><strong>{{.Value}}</strong> <em>{{pct .Value $t}}%</em></li>
+        {{else}}
+        <li class="muted">No invoice data</li>
+        {{end}}
+      </ul>
+    </div>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><h3>Deals by stage</h3></div>
+    <div class="pie-wrap">
+      <div class="pie" style="background:{{pieConic .Charts.Deals}}"></div>
+      <ul class="pie-legend">
+        {{$t := sumSlices .Charts.Deals}}
+        {{range .Charts.Deals}}
+        <li><span>{{.Label}}</span><strong>{{.Value}}</strong> <em>{{pct .Value $t}}%</em></li>
+        {{else}}
+        <li class="muted">No deals</li>
+        {{end}}
+      </ul>
+    </div>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><h3>Projects by status</h3></div>
+    <div class="bars">
+      {{$t := sumSlices .Charts.Projects}}
+      {{range .Charts.Projects}}
+      <div class="bar-row">
+        <span>{{.Label}}</span>
+        <div class="track"><i style="width:{{pct .Value $t}}%"></i></div>
+        <strong>{{.Value}}</strong>
+      </div>
+      {{else}}
+      <p class="muted">No projects</p>
+      {{end}}
+    </div>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><h3>This week · schedule</h3></div>
+    <div class="vbars">
+      {{range .Charts.Tasks}}
+      <div class="vbar">
+        <div class="vbar-col" style="--h:{{if gt .Value 0}}{{pct .Value 8}}{{else}}8{{end}}%"></div>
+        <strong>{{.Value}}</strong>
+        <span>{{.Label}}</span>
+      </div>
+      {{else}}
+      <p class="muted">No schedule items</p>
+      {{end}}
+    </div>
+  </article>
+</section>
+
+<section class="ov-grid">
+  <article class="panel panel--chart">
+    <div class="panel-head">
+      <h3>Sales Performance</h3>
+      <div class="panel-actions">
+        <button type="button" class="pill-select" disabled>Monthly</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="swatch sales"></i>Sales</span>
+      <span><i class="swatch insight"></i>Insight</span>
+    </div>
+    <div class="dot-chart" aria-label="Monthly sales performance">
+      <div class="dot-chart__y">
+        <span>{{.ChartMaxLabel}}</span>
+        <span></span>
+        <span>0</span>
+      </div>
+      <div class="dot-chart__plot">
+        {{range .Monthly}}
+        <div class="dot-col" title="{{.Label}} — Sales: {{printf "%.0f" .Sales}}, Insight: {{printf "%.0f" .Insight}}">
+          <div class="dot-stack">
+            {{range seq .InsightDots}}<i class="bead insight"></i>{{end}}
+            {{range seq .SalesDots}}<i class="bead sales"></i>{{end}}
+          </div>
+          <span class="dot-label">{{.Label}}</span>
+        </div>
+        {{else}}
+        <p class="muted">No performance data yet.</p>
+        {{end}}
+      </div>
+    </div>
+  </article>
+
+  <div class="ov-side">
+    <article class="stat-card">
+      <div class="stat-card__meta">
+        <div class="stat-ico money" aria-hidden="true"></div>
+        <div>
+          <p class="stat-title">Total Revenue</p>
+          <p class="stat-value">{{compact .Currency .TotalRevenue}}</p>
+          <p class="stat-sub">Paid + open pipeline</p>
+        </div>
+      </div>
+    </article>
+    <article class="stat-card">
+      <div class="stat-card__meta">
+        <div class="stat-ico box" aria-hidden="true"></div>
+        <div>
+          <p class="stat-title">Outstanding</p>
+          <p class="stat-value">{{compact .Currency .OutstandingAmt}}</p>
+          <p class="stat-sub">{{.Stats.Outstanding}} open invoices</p>
+        </div>
+      </div>
+    </article>
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>Priority actions</h3>
+          <p class="panel-sub">Aligned with your sales queue</p>
+        </div>
+      </div>
+      <ul class="pulse-list">
+        {{if .Alerts.ReportReminderDue}}<li><i class="dot bad"></i><a href="/reports">Submit today’s sales report</a></li>{{end}}
+        <li><i class="dot bad"></i><a href="/invoices">{{.Alerts.OverdueInvoices}} overdue invoices</a></li>
+        <li><i class="dot warn"></i><a href="/follow-ups">{{.Alerts.CollectionOpen}} collection follow-ups</a></li>
+        <li><i class="dot ok"></i><a href="/leads">{{.Alerts.LeadsPendingApproval}} leads pending</a></li>
+        <li><i class="dot ok"></i><a href="/deals">{{.Alerts.DealsInProspect}} deals in prospect</a></li>
+      </ul>
+    </article>
+  </div>
+
+  <article class="panel panel--table">
+    <div class="panel-head">
+      <h3>Invoice due · collection</h3>
+      <div class="panel-actions">
+        <a class="link-quiet" href="/follow-ups">Open follow-ups</a>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="soft-table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Client</th>
+            <th>Timeline</th>
+            <th>Owner</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .OpenCollections}}
+          <tr>
+            <td>
+              <div class="row-entity">
+                <span class="thumb">{{initials .ClientName}}</span>
+                <div>
+                  <strong>{{.InvoiceNo}}</strong>
+                  <small>{{money .Currency .InvoiceAmt}}</small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <strong class="cell-strong">{{.ClientName}}</strong>
+              <small class="cell-muted">{{if .ClientPhone}}{{.ClientPhone}}{{else}}{{.ClientEmail}}{{end}}</small>
+            </td>
+            <td><strong>{{date .DueAt}}</strong></td>
+            <td>{{.AssigneeName}}</td>
+            <td><span class="status warn">{{.Status}}</span></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No open collection escalations.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel panel--invoices">
+    <div class="panel-head">
+      <h3>Recent invoices</h3>
+      <a class="link-quiet" href="/invoices">View all</a>
+    </div>
+    <div class="table-wrap">
+      <table class="soft-table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Client</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .RecentInvoices}}
+          <tr>
+            <td>
+              <div class="row-entity">
+                <span class="thumb">{{initials .ClientName}}</span>
+                <div>
+                  <strong>{{.Number}}</strong>
+                  <small>{{if .ProjectName}}{{.ProjectName}}{{else}}Invoice{{end}}</small>
+                </div>
+              </div>
+            </td>
+            <td>{{.ClientName}}</td>
+            <td><strong>{{money .Currency .TotalAmount}}</strong></td>
+            <td><span class="status {{statusTone .Status}}">{{.Status}}</span></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No invoices yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

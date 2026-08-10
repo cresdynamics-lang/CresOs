@@ -28,6 +28,7 @@ import financeAssistantRouter from "./finance-assistant";
 const INVOICE_PDF_COMPANY = CRES_DYNAMICS_PDF_COMPANY;
 import { allocateInvoiceNumberForCreate } from "../services/invoice/invoice-number";
 import { billableMonthsUtc, ymKey } from "../lib/management-billing";
+import { escalateInvoiceToSales } from "../lib/invoice-collection";
 import {
   recalcOrgProjectReceipts,
   recalcProjectAmountReceived,
@@ -1122,6 +1123,7 @@ export default function financeRouter(prisma: PrismaClient): Router {
     requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
     async (req, res) => {
       const orgId = req.auth!.orgId;
+      const userId = req.auth!.userId;
       const { clientId, projectId, issueDate, dueDate, currency, items, notes, buyerKraPin } =
         req.body as {
           clientId: string;
@@ -1299,6 +1301,17 @@ export default function financeRouter(prisma: PrismaClient): Router {
           updatedAt: result.updatedAt
         };
 
+        try {
+          await escalateInvoiceToSales(prisma, {
+            orgId,
+            invoiceId: result.id,
+            escalatedById: userId,
+            source: "invoice_created"
+          });
+        } catch (escErr) {
+          console.error("escalateInvoiceToSales after finance invoice create:", escErr);
+        }
+
         res.status(201).json({
           success: true,
           data: {
@@ -1327,30 +1340,51 @@ export default function financeRouter(prisma: PrismaClient): Router {
         }
         if (e instanceof Prisma.PrismaClientKnownRequestError) {
           if (e.code === "P2002") {
-            res.status(409).json({
-              error: "Duplicate invoice number",
-              message:
-                "An invoice with this number already exists for this project. Try again in a moment or contact support."
-            });
+            console.error("POST /finance/invoices Prisma:", e.code, e.message);
+            res.status(409).json({ error: "Invoice number conflict", message: e.message });
             return;
           }
-          console.error("POST /finance/invoices Prisma:", e.code, e.message);
-          res.status(500).json({
-            error: "Failed to create invoice",
-            message: e.message
-          });
-          return;
-        }
-        if (e instanceof Prisma.PrismaClientValidationError) {
-          res.status(400).json({
-            error: "Invalid invoice data",
-            message: e.message
-          });
-          return;
         }
         console.error("POST /finance/invoices:", e);
         res.status(500).json({
           error: "Failed to create invoice",
+          message: e instanceof Error ? e.message : "Unknown error"
+        });
+      }
+    }
+  );
+
+  router.post(
+    "/invoices/:id/escalate-collection",
+    requireRoles([ROLE_KEYS.finance, ROLE_KEYS.admin]),
+    async (req, res) => {
+      try {
+        const orgId = req.auth!.orgId;
+        const userId = req.auth!.userId;
+        const id = req.params.id;
+        const invoice = await prisma.invoice.findFirst({
+          where: { id, orgId, deletedAt: null },
+          select: { id: true, number: true, status: true }
+        });
+        if (!invoice) {
+          res.status(404).json({ error: "Invoice not found" });
+          return;
+        }
+        const result = await escalateInvoiceToSales(prisma, {
+          orgId,
+          invoiceId: invoice.id,
+          escalatedById: userId,
+          source: "finance_escalate"
+        });
+        res.json({
+          success: true,
+          message: `Escalated ${invoice.number} to sales with collection timeline.`,
+          data: result
+        });
+      } catch (e) {
+        console.error("POST /finance/invoices/:id/escalate-collection", e);
+        res.status(500).json({
+          error: "Failed to escalate",
           message: e instanceof Error ? e.message : "Unknown error"
         });
       }

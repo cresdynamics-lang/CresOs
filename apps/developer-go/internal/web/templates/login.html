@@ -1,0 +1,20 @@
+{{define "login.html"}}
+{{template "head" .}}
+<div class="login-wrap">
+  <form class="login-card" method="post" action="/login">
+    <p class="eyebrow">Cres Dynamics</p>
+    <h1>Developer workspace</h1>
+    <p class="lede">Delivery, tasks, reports, and performance — aligned with PM and director.</p>
+    {{if .Error}}<p class="banner bad">{{.Error}}</p>{{end}}
+    <label>Email
+      <input type="email" name="email" required autocomplete="username" placeholder="wilson.developer@cresdynamics.com" />
+    </label>
+    <label>Password
+      <input type="password" name="password" required autocomplete="current-password" />
+    </label>
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+</body>
+</html>
+{{end}}

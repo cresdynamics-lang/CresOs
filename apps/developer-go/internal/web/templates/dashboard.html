@@ -1,0 +1,177 @@
+{{define "dashboard.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+{{if .Alerts}}
+<div class="alerts">
+  {{range .Alerts}}<div class="alert-item">{{.}}</div>{{end}}
+</div>
+{{end}}
+
+{{if .Queue}}
+<div class="queue-strip">
+  {{range .Queue}}
+  <a class="queue-chip {{.Tone}}" href="{{.Href}}"><strong>{{.Value}}</strong><span>{{.Label}}</span></a>
+  {{end}}
+</div>
+{{end}}
+
+<section class="chart-grid">
+  <article class="card">
+    <h2>Task mix</h2>
+    <div class="pie-wrap">
+      <div class="pie" style="background:{{pieConic .Charts.TaskMix}}"></div>
+      <ul class="pie-legend">
+        {{$t := sumSlices .Charts.TaskMix}}
+        {{range .Charts.TaskMix}}
+        <li><span>{{.Label}}</span><strong>{{.Value}}</strong></li>
+        {{end}}
+      </ul>
+    </div>
+  </article>
+  <article class="card">
+    <h2>Week schedule</h2>
+    <div class="vbars">
+      {{range .Charts.ScheduleWeek}}
+      <div class="vbar">
+        <div class="vbar-col" style="--h:{{if gt .Value 0}}{{pct .Value 8}}{{else}}8{{end}}%"></div>
+        <strong>{{.Value}}</strong>
+        <span>{{.Label}}</span>
+      </div>
+      {{end}}
+    </div>
+  </article>
+  <article class="card">
+    <h2>Project progress</h2>
+    <div class="bars">
+      {{range .Charts.Projects}}
+      <div class="bar-row">
+        <span title="{{.Label}}">{{trunc .Label 12}}</span>
+        <div class="track"><i style="width:{{.Value}}%"></i></div>
+        <strong>{{.Value}}%</strong>
+      </div>
+      {{else}}
+      <p class="muted">No assigned projects</p>
+      {{end}}
+    </div>
+  </article>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <h2>Overview</h2>
+    <span class="pill-mute">Last 30 days</span>
+  </div>
+  <div class="kpi-grid">
+    {{range .KPIs}}
+    <article class="kpi-card">
+      <div class="kpi-ico {{.Icon}}"></div>
+      <div>
+        <p class="kpi-label">{{.Label}}</p>
+        <p class="kpi-value">{{.Value}}</p>
+        <p class="kpi-trend {{.Tone}}">{{.TrendLabel}}</p>
+        <p class="kpi-sub">{{.Sub}}</p>
+      </div>
+    </article>
+    {{end}}
+  </div>
+</section>
+
+<section class="mid-grid">
+  <article class="card">
+    <div class="section-head">
+      <h2>Project summary</h2>
+      <a class="link" href="/projects">Assigned only</a>
+    </div>
+    <table class="data">
+      <thead>
+        <tr><th>Name</th><th>Project manager</th><th>Due date</th><th>Status</th><th>Progress</th></tr>
+      </thead>
+      <tbody>
+        {{range .Projects}}
+        <tr>
+          <td><strong>{{.Name}}</strong></td>
+          <td>{{.ManagerName}}</td>
+          <td>{{datep .DueDate}}</td>
+          <td><span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span></td>
+          <td>
+            <div class="ring" style="--p:{{.Progress}}">
+              <span>{{.Progress}}%</span>
+            </div>
+          </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5" class="muted">No assigned projects yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </article>
+
+  <article class="card gauge-card">
+    <h2>Overall Progress</h2>
+    <div class="gauge" style="--deg:{{progressDeg .Progress.Percent}}deg">
+      <div class="gauge-inner">
+        <strong>{{.Progress.Percent}}%</strong>
+        <span>Completed</span>
+      </div>
+    </div>
+    <ul class="gauge-legend">
+      <li><span>Total projects</span><strong>{{.Progress.Total}}</strong></li>
+      <li class="ok"><span>Completed</span><strong>{{.Progress.Completed}}</strong></li>
+      <li class="warn"><span>Delayed</span><strong>{{.Progress.Delayed}}</strong></li>
+      <li class="orange"><span>On going</span><strong>{{.Progress.Ongoing}}</strong></li>
+    </ul>
+  </article>
+</section>
+
+<section class="mid-grid bottom">
+  <article class="card">
+    <div class="section-head">
+      <h2>Today task</h2>
+      <div class="tabs">
+        <span class="tab active">All</span>
+        <span class="tab">Important</span>
+      </div>
+    </div>
+    <ul class="task-list">
+      {{range .TodayTasks}}
+      <li class="{{if .Done}}done{{end}}">
+        <span class="check {{if .Done}}on{{end}}"></span>
+        <div>
+          <strong>{{.Title}}</strong>
+          <span class="muted">{{.ProjectName}}</span>
+        </div>
+        <span class="st {{statusClass .StatusLabel}}">{{.StatusLabel}}</span>
+      </li>
+      {{else}}
+      <li class="muted">No tasks for today — check with your PM.</li>
+      {{end}}
+    </ul>
+    <a class="link" href="/tasks">Open task board →</a>
+  </article>
+
+  <article class="card">
+    <div class="section-head">
+      <h2>Projects Workload</h2>
+      <span class="pill-mute">Open tasks</span>
+    </div>
+    <div class="workload">
+      {{range .Workload}}
+      <div class="wl-col">
+        <div class="wl-stack">
+          {{range repeat .Count}}<span class="dot"></span>{{end}}
+          <span class="bubble {{.Accent}}">{{printf "%02d" .Count}}</span>
+        </div>
+        <span class="wl-name">{{.Name}}</span>
+      </div>
+      {{else}}
+      <p class="muted">No open workload yet.</p>
+      {{end}}
+    </div>
+  </article>
+</section>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

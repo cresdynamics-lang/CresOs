@@ -1,0 +1,33 @@
+{{define "schedule.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+<section class="card">
+  <div class="section-head">
+    <h2>Personal schedule</h2>
+    <p class="muted">Meetings, calls, and reminders — separate from project task status.</p>
+  </div>
+  <ul class="task-board">
+    {{range .Data}}
+    <li>
+      <div>
+        <strong>{{.Title}}</strong>
+        <span class="muted">{{.Type}} · {{date .ScheduledAt}}</span>
+      </div>
+      {{if .Completed}}
+      <span class="st st-ok">Done</span>
+      {{else}}
+      <span class="st st-warn">{{.Status}}</span>
+      <form method="post" action="/schedule/{{.ID}}/complete">
+        <button type="submit" class="btn-orange">Complete</button>
+      </form>
+      {{end}}
+    </li>
+    {{else}}
+    <li class="muted">No schedule items this week.</li>
+    {{end}}
+  </ul>
+</section>
+
+{{template "shell-close" .}}
+{{end}}

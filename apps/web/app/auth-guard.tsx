@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { resolveHomeRouteForUser } from "../lib/resolve-home-route";
+import { resolveExternalGoHome } from "../lib/go-workspace";
 import { useAuth } from "./auth-context";
 import { AppShell } from "./app-shell";
 import { NavigationHistoryProvider } from "../components/navigation/navigation-history";
@@ -31,9 +32,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
     if (mustRedirectToDashboard) {
+      const goHome = resolveExternalGoHome(auth.roleKeys, auth.accessToken);
+      if (goHome) {
+        window.location.replace(goHome);
+        return;
+      }
       router.replace(resolveHomeRouteForUser(auth.roleKeys));
     }
-  }, [hydrated, mustRedirectToLogin, mustRedirectToDashboard, router, auth.roleKeys]);
+  }, [hydrated, mustRedirectToLogin, mustRedirectToDashboard, router, auth.roleKeys, auth.accessToken]);
 
   if (!hydrated) {
     return (

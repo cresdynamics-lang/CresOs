@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { resolveHomeRouteForUser } from "../../lib/resolve-home-route";
+import { resolveExternalGoHome } from "../../lib/go-workspace";
 
 function apiBase(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
@@ -183,6 +184,11 @@ export default function LoginPage() {
         orgName: org?.name ?? null,
         orgSlug: org?.slug ?? null
       });
+      const goHome = resolveExternalGoHome(roleKeys, data.accessToken);
+      if (goHome) {
+        window.location.assign(goHome);
+        return;
+      }
       const isClientOnly =
         roleKeys.includes("client") &&
         !roleKeys.some((r: string) =>

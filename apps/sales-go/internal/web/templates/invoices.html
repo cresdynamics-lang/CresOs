@@ -1,0 +1,88 @@
+{{define "invoices.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h3>Sales invoices</h3>
+      <p class="panel-sub">Issue invoices linked to your projects — finance is notified and collection escalates to follow-ups.</p>
+    </div>
+    <button type="button" class="btn-lime" data-open-modal="invoice-modal">New invoice</button>
+  </div>
+  <div class="table-wrap">
+    <table class="soft-table">
+      <thead><tr><th>Number</th><th>Client</th><th>Project</th><th>Status</th><th>Amount</th><th>Issued</th><th>Due</th></tr></thead>
+      <tbody>
+        {{range .Invoices}}
+        <tr>
+          <td><strong>{{.Number}}</strong></td>
+          <td>{{.ClientName}}</td>
+          <td>{{.ProjectName}}</td>
+          <td><span class="status {{statusTone .Status}}">{{.Status}}</span></td>
+          <td>{{money .Currency .TotalAmount}}</td>
+          <td>{{date .IssueDate}}</td>
+          <td>{{datep .DueDate}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="7" class="muted">No invoices yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="modal{{if .FormError}} open{{end}}" id="invoice-modal" aria-hidden="{{if .FormError}}false{{else}}true{{end}}"{{if .FormError}} data-auto-open="1"{{end}}>
+  <div class="modal__backdrop" data-close-modal></div>
+  <div class="modal__window panel" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
+    <div class="panel-head">
+      <h3 id="invoice-modal-title">New invoice</h3>
+      <button type="button" class="meatball" data-close-modal aria-label="Close">✕</button>
+    </div>
+    {{if .FormError}}<div class="alert danger">{{.FormError}}</div>{{end}}
+    <form class="stack inv-form" method="post" action="/invoices">
+      <div class="grid-2">
+        <label>Client
+          <select name="clientId" required>
+            <option value="">Select client…</option>
+            {{range .Clients}}
+            <option value="{{.ID}}">{{.Name}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label>Project
+          <select name="projectId" required>
+            <option value="">Select project…</option>
+            {{range .Projects}}
+            <option value="{{.ID}}" data-client="{{.ClientID}}">{{.Name}}</option>
+            {{end}}
+          </select>
+        </label>
+      </div>
+      <div class="grid-2">
+        <label>Issue date<input type="date" name="issueDate" /></label>
+        <label>Due date<input type="date" name="dueDate" /></label>
+      </div>
+      <div class="grid-2">
+        <label>Currency<input name="currency" value="KES" /></label>
+        <label>Notes<input name="notes" placeholder="Optional client-facing notes" /></label>
+      </div>
+      <div class="line-grid">
+        <label>Line 1 description<input name="desc1" required placeholder="Service / item" /></label>
+        <label>Qty<input name="qty1" type="number" min="1" value="1" required /></label>
+        <label>Unit price<input name="price1" required placeholder="0.00" /></label>
+      </div>
+      <div class="line-grid">
+        <label>Line 2 description<input name="desc2" placeholder="Optional" /></label>
+        <label>Qty<input name="qty2" type="number" min="1" value="1" /></label>
+        <label>Unit price<input name="price2" placeholder="0.00" /></label>
+      </div>
+      <button type="submit">Create &amp; escalate to follow-ups</button>
+    </form>
+  </div>
+</div>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}

@@ -1,0 +1,87 @@
+{{define "head"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{if .Title}}{{.Title}} · {{end}}{{.AppName}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@450;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+{{end}}
+
+{{define "shell-open"}}
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <strong>CresOS</strong>
+        <span>Developer</span>
+      </div>
+    </div>
+    <nav>
+      <a class="{{if eq .Nav "dashboard"}}active{{end}}" href="/">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg></span>
+        Dashboard
+      </a>
+      <a class="{{if eq .Nav "projects"}}active{{end}}" href="/projects">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v12H4z"/><path d="M8 7V5h8v2"/></svg></span>
+        Projects
+      </a>
+      <a class="{{if eq .Nav "tasks"}}active{{end}}" href="/tasks">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
+        Tasks
+      </a>
+      <a class="{{if eq .Nav "schedule"}}active{{end}}" href="/schedule">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span>
+        Schedule
+      </a>
+      <a class="{{if eq .Nav "reports"}}active{{end}}" href="/reports">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg></span>
+        Reports
+      </a>
+      <a class="{{if eq .Nav "performance"}}active{{end}}" href="/performance">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span>
+        Performance
+      </a>
+    </nav>
+    <form class="logout" method="post" action="/logout">
+      <button type="submit" title="Sign out">Sign out</button>
+    </form>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <h1>{{.Title}}</h1>
+      <label class="search">
+        <span class="sr-only">Search</span>
+        <input type="search" placeholder="Search for anything…" disabled />
+      </label>
+      <div class="top-right">
+        <span class="bell" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 13 6 9Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
+        </span>
+        <div class="user-chip">
+          <span class="avatar">{{.UserInitial}}</span>
+          <div>
+            <strong>{{.UserName}}</strong>
+            <span>{{.UserTitle}}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+    {{if .Flash}}<div class="banner ok">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="banner bad">{{.Error}}</div>{{end}}
+    <div class="content">
+{{end}}
+
+{{define "shell-close"}}
+    </div>
+  </div>
+</div>
+</body>
+</html>
+{{end}}

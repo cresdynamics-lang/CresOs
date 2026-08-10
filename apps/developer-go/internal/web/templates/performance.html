@@ -1,0 +1,24 @@
+{{define "performance.html"}}
+{{template "head" .}}
+{{template "shell-open" .}}
+
+{{with .Data}}
+<section class="kpi-grid">
+  <article class="kpi-card"><div class="kpi-ico revenue"></div><div><p class="kpi-label">Report streak</p><p class="kpi-value">{{.ReportStreakDays}}d</p><p class="kpi-sub">Consecutive daily reports</p></div></article>
+  <article class="kpi-card"><div class="kpi-ico projects"></div><div><p class="kpi-label">Avg delivery</p><p class="kpi-value">{{.AvgProgress}}%</p><p class="kpi-sub">{{.ActiveProjects}} active projects</p></div></article>
+  <article class="kpi-card"><div class="kpi-ico time"></div><div><p class="kpi-label">Hours (30d)</p><p class="kpi-value">{{printf "%.0f" .HoursLogged30d}}</p><p class="kpi-sub">Est. open {{printf "%.0f" .HoursEstimated}}h</p></div></article>
+  <article class="kpi-card"><div class="kpi-ico resources"></div><div><p class="kpi-label">Throughput</p><p class="kpi-value">{{.TasksDone30d}}</p><p class="kpi-sub">{{.TasksOpen}} open · {{.OverdueTasks}} overdue · {{.BlockedTasks}} blocked</p></div></article>
+</section>
+<section class="card" style="margin-top:1rem">
+  <h2>Cres Dynamics developer expectations</h2>
+  <ul class="expect">
+    <li>Own assigned tasks — move status as work progresses; flag blockers early.</li>
+    <li>File a daily developer report so directors and PMs can support you.</li>
+    <li>Keep delivery progress moving on accepted project assignments.</li>
+    <li>Log actual hours on tasks so capacity planning stays honest.</li>
+  </ul>
+</section>
+{{end}}
+
+{{template "shell-close" .}}
+{{end}}
